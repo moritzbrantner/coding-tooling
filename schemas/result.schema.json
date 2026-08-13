@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/coding-tooling/result.schema.json",
+  "title": "coding-tooling result envelope",
+  "type": "object",
+  "required": ["schemaVersion", "operation", "status", "durationMs", "data", "diagnostics"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "operation": {
+      "type": "string",
+      "enum": ["inspect", "check", "affected", "doctor"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["passed", "failed", "unavailable", "error"]
+    },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "data": {
+      "type": "object"
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "path": { "type": "string" },
+          "line": { "type": "integer", "minimum": 1 },
+          "column": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
