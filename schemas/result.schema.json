@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coding-tooling.local/schemas/result.schema.json",
+  "title": "coding-tooling check result",
+  "type": "object",
+  "required": ["schemaVersion", "capability", "status", "exitCode", "durationMs", "component", "componentPath", "command", "stdout", "stderr"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "capability": { "type": "string" },
+    "status": { "enum": ["passed", "failed", "unavailable"] },
+    "exitCode": { "type": ["integer", "null"] },
+    "durationMs": { "type": "integer", "minimum": 0 },
+    "component": { "type": "string" },
+    "componentPath": { "type": "string" },
+    "command": { "type": "array", "items": { "type": "string" } },
+    "stdout": { "type": "string" },
+    "stderr": { "type": "string" }
+  },
+  "additionalProperties": false
+}

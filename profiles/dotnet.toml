@@ -1,0 +1,12 @@
+id = "dotnet"
+language = "csharp"
+runtime = "dotnet"
+
+[capabilities.format]
+command = ["dotnet", "format", "--verify-no-changes"]
+
+[capabilities.build]
+command = ["dotnet", "build"]
+
+[capabilities."test:unit"]
+command = ["dotnet", "test"]
