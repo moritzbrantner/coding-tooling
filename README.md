@@ -56,6 +56,9 @@ test
 test:unit
 test:integration
 test:e2e
+dependencies:audit
+benchmark
+benchmark:smoke
 ```
 
 For JavaScript/TypeScript components, v0.2 uses declared package scripts instead of inventing commands. For Rust and .NET it exposes conservative built-in commands where the meaning is mechanically clear.
@@ -115,7 +118,10 @@ Public repositories cannot consume this private Action. They should continue to 
 and repository-local commands.
 
 Copy `.coding-tooling.example.json` to `.coding-tooling.json` when a consumer needs custom
-validation tiers.
+validation tiers. The example includes a `dependency-update` tier that runs the universally required
+build and test evidence plus repository-declared dependency audit, integration, end-to-end, and smoke
+benchmark capabilities when available. Renovate and Dependabot remain proposal mechanisms; they do
+not bypass this repository-owned tier.
 
 This repository validates itself through the same composite Action in
 `.github/workflows/validate.yml`, keeping local and CI behavior on one deterministic entry point.

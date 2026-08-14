@@ -37,6 +37,9 @@ const scriptCandidates: Record<Capability, string[]> = {
   "test:unit": ["test:unit", "test"],
   "test:integration": ["test:integration"],
   "test:e2e": ["test:e2e"],
+  "dependencies:audit": ["dependencies:audit", "audit:dependencies"],
+  benchmark: ["benchmark", "bench"],
+  "benchmark:smoke": ["benchmark:smoke", "bench:smoke"],
 };
 
 export function loadConfig(root: string, configuredPath = ".coding-tooling.json"): ToolingConfig {
@@ -47,6 +50,7 @@ export function loadConfig(root: string, configuredPath = ".coding-tooling.json"
     throw new Error(`${configuredPath} must use schemaVersion 1`);
   for (const values of Object.values(value.tiers ?? {})) validateCapabilities(values);
   validateCapabilities(value.requiredCapabilities ?? []);
+  validateCapabilities(value.optionalCapabilities ?? []);
   return value;
 }
 
@@ -166,13 +170,19 @@ export function planChecks(options: {
   if (options.component && components.length === 0)
     throw new Error(`Unknown component: ${options.component}`);
   const checks: PlannedCheck[] = [];
-  const missing: { capability: Capability; component: string }[] = [];
+  const optionalCapabilities = new Set(config.optionalCapabilities ?? []);
+  const missing: { capability: Capability; component: string; optional: boolean }[] = [];
   for (const component of components) {
     for (const capability of selected) {
       const command = component.capabilities[capability];
       if (command)
         checks.push({ capability, component: component.name, path: component.path, command });
-      else missing.push({ capability, component: component.name });
+      else
+        missing.push({
+          capability,
+          component: component.name,
+          optional: optionalCapabilities.has(capability),
+        });
     }
   }
   return {
@@ -213,7 +223,7 @@ export function runPlan(options: {
       ? "error"
       : results.some((result) => result.status === "failed")
         ? "failed"
-        : options.strict && plan.missing.length > 0
+        : options.strict && plan.missing.some((item) => !item.optional)
           ? "unavailable"
           : "passed";
     return envelope(
@@ -222,7 +232,7 @@ export function runPlan(options: {
       started,
       { ...plan, root, strict: Boolean(options.strict), results },
       plan.missing.map((item) => ({
-        code: "capability-unavailable",
+        code: item.optional ? "optional-capability-unavailable" : "capability-unavailable",
         message: `${item.capability} is unavailable for ${item.component}`,
       })),
     );

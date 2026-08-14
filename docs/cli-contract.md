@@ -24,6 +24,9 @@ test
 test:unit
 test:integration
 test:e2e
+dependencies:audit
+benchmark
+benchmark:smoke
 ```
 
 A capability name describes semantics, not an ecosystem command. The implementation maps it to a repository-declared or mechanically safe command.
@@ -156,10 +159,18 @@ Expected `data` fields:
 `run` executes that exact plan and can write the complete result envelope to `--report`.
 
 The optional `.coding-tooling.json` defines repository tiers, a profile, required capabilities,
-and convention references. It contains no GitHub-specific behavior, so local agents and GitHub
-Actions execute the same deterministic validation contract.
+optional capabilities, and convention references. It contains no GitHub-specific behavior, so local
+agents and GitHub Actions execute the same deterministic validation contract.
 
-`--strict` makes unavailable selected capabilities fail the run.
+`--strict` makes unavailable selected capabilities fail the run unless they are listed in
+`optionalCapabilities`. This lets a shared dependency-update tier request integration, end-to-end,
+dependency-audit, and benchmark evidence where repositories declare it without pretending those
+capabilities exist everywhere.
+
+Dependency-update workflows should use a repository-owned `dependency-update` tier. Bot metadata
+determines when to request that tier; `coding-tooling` remains bot-independent and executes the same
+tier locally or in CI. A `benchmark:smoke` or `benchmark` script owns base-versus-candidate
+measurement and should emit its comparison as normal command output and/or a repository artifact.
 
 ## Boundary with orchestration
 

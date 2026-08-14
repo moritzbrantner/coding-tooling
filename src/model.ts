@@ -7,6 +7,9 @@ export const capabilities = [
   "test:unit",
   "test:integration",
   "test:e2e",
+  "dependencies:audit",
+  "benchmark",
+  "benchmark:smoke",
 ] as const;
 
 export type Capability = (typeof capabilities)[number];
@@ -40,6 +43,7 @@ export type ToolingConfig = {
   profile?: string;
   tiers?: Record<string, Capability[]>;
   requiredCapabilities?: Capability[];
+  optionalCapabilities?: Capability[];
   conventionRefs?: string[];
 };
 
