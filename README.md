@@ -119,3 +119,5 @@ validation tiers.
 
 This repository validates itself through the same composite Action in
 `.github/workflows/validate.yml`, keeping local and CI behavior on one deterministic entry point.
+Its committed `bun.lock` makes that self-check exercise the Action's default frozen installation
+path as well.
