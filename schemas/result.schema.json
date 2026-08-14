@@ -14,8 +14,13 @@
       "type": "string",
       "enum": ["passed", "failed", "unavailable", "error"]
     },
-    "durationMs": { "type": "integer", "minimum": 0 },
-    "data": { "type": "object" },
+    "durationMs": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "data": {
+      "type": "object"
+    },
     "diagnostics": {
       "type": "array",
       "items": {
