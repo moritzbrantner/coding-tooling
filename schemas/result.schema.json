@@ -8,7 +8,7 @@
     "schemaVersion": { "const": 1 },
     "operation": {
       "type": "string",
-      "enum": ["inspect", "check", "affected", "doctor"]
+      "enum": ["inspect", "check", "affected", "doctor", "cli"]
     },
     "status": {
       "type": "string",
