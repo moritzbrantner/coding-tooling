@@ -21,10 +21,26 @@ build
 test
 test:unit
 test:integration
+test:component
+storybook:build
+test:storybook
 test:e2e
+audit:lighthouse
+benchmark
+benchmark:compare
 ```
 
 A capability name describes semantics, not an ecosystem command. The implementation maps it to a repository-declared or mechanically safe command.
+
+The machine-readable definitions in [`../capabilities/catalog.json`](../capabilities/catalog.json) also declare:
+
+- progressive tier: `fast`, `focused`, `integration`, `system`, or `performance`,
+- repository script candidates,
+- default failure-artifact paths,
+- whether the capability is opt-in,
+- whether an explicit baseline is required.
+
+`audit:lighthouse` accepts compatible Lighthouse and Unlighthouse implementations. `benchmark:compare` requires baseline and candidate results that satisfy [`../schemas/benchmark-report.schema.json`](../schemas/benchmark-report.schema.json). Performance budgets satisfy [`../schemas/performance-budget.schema.json`](../schemas/performance-budget.schema.json).
 
 ## JSON envelope
 

@@ -53,10 +53,42 @@ build
 test
 test:unit
 test:integration
+test:component
+storybook:build
+test:storybook
 test:e2e
+audit:lighthouse
+benchmark
+benchmark:compare
 ```
 
 For JavaScript/TypeScript components, v0.1 uses declared package scripts instead of inventing commands. For Rust and .NET it exposes conservative built-in commands where the meaning is mechanically clear.
+
+## Capability catalog and validation tiers
+
+The machine-readable catalog lives at [`capabilities/catalog.json`](capabilities/catalog.json). It maps repository-declared script names to semantic capabilities, progressive validation tiers, expected artifacts, opt-in cost, and baseline requirements.
+
+```text
+fast static checks
+    ↓
+focused behavior tests
+    ↓
+integration + Storybook build
+    ↓
+Storybook accessibility + Playwright
+    ↓
+Lighthouse + benchmark comparison
+```
+
+The tool reports availability and results. Repository conventions and the development loop decide which applicable tiers are required. Lighthouse and expensive benchmarks are opt-in until a reviewed baseline promotes them to a blocking gate.
+
+Capability family contracts:
+
+- [`capabilities/automated-tests/`](capabilities/automated-tests/)
+- [`capabilities/storybook/`](capabilities/storybook/)
+- [`capabilities/playwright/`](capabilities/playwright/)
+- [`capabilities/lighthouse/`](capabilities/lighthouse/)
+- [`capabilities/benchmarks/`](capabilities/benchmarks/)
 
 ## Design rules
 

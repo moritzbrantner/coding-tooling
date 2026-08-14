@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "capabilities": [
+    {
+      "name": "format:check",
+      "kind": "static",
+      "tier": "fast",
+      "scriptCandidates": ["format:check", "lint:format"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "lint",
+      "kind": "static",
+      "tier": "fast",
+      "scriptCandidates": ["lint"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "typecheck",
+      "kind": "static",
+      "tier": "fast",
+      "scriptCandidates": ["typecheck"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "build",
+      "kind": "build",
+      "tier": "integration",
+      "scriptCandidates": ["build"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "test",
+      "kind": "test",
+      "tier": "focused",
+      "scriptCandidates": ["test"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "test:unit",
+      "kind": "test",
+      "tier": "focused",
+      "scriptCandidates": ["test:unit"],
+      "defaultArtifacts": ["coverage"],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "test:integration",
+      "kind": "test",
+      "tier": "integration",
+      "scriptCandidates": ["test:integration"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "test:component",
+      "kind": "test",
+      "tier": "integration",
+      "scriptCandidates": ["test:component"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "storybook:build",
+      "kind": "build",
+      "tier": "integration",
+      "scriptCandidates": ["storybook:build"],
+      "defaultArtifacts": ["storybook-static"],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "test:storybook",
+      "kind": "test",
+      "tier": "system",
+      "scriptCandidates": ["test:storybook", "test:storybook:a11y"],
+      "defaultArtifacts": ["storybook-static", ".generated/storybook"],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "test:e2e",
+      "kind": "test",
+      "tier": "system",
+      "scriptCandidates": ["test:e2e"],
+      "defaultArtifacts": ["test-results", "playwright-report"],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "audit:lighthouse",
+      "kind": "audit",
+      "tier": "performance",
+      "scriptCandidates": ["audit:lighthouse", "test:unlighthouse", "bench:unlighthouse"],
+      "defaultArtifacts": [".lighthouseci", ".generated/unlighthouse"],
+      "optIn": true,
+      "baselineRequired": true
+    },
+    {
+      "name": "benchmark",
+      "kind": "benchmark",
+      "tier": "performance",
+      "scriptCandidates": ["benchmark", "bench", "bench:ci"],
+      "defaultArtifacts": [".generated/benchmarks"],
+      "optIn": true,
+      "baselineRequired": false
+    },
+    {
+      "name": "benchmark:compare",
+      "kind": "benchmark",
+      "tier": "performance",
+      "scriptCandidates": ["benchmark:compare", "bench:compare"],
+      "defaultArtifacts": [".generated/benchmarks"],
+      "optIn": true,
+      "baselineRequired": true
+    }
+  ]
+}
