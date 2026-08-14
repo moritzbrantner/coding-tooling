@@ -460,7 +460,9 @@ export function affected(
 }
 
 function manifestFiles(root: string, manifestPath: string): string[] {
-  const path = resolve(manifestPath);
+  const path = isAbsolute(manifestPath)
+    ? resolve(manifestPath)
+    : resolve(root, manifestPath);
   const value = JSON.parse(readFileSync(path, "utf8")) as
     | string[]
     | { files?: string[]; changedFiles?: string[] };
