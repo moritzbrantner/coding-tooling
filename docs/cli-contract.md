@@ -55,6 +55,8 @@ Every command invoked with \`--json\` returns exactly one JSON object:
 
 The JSON status remains canonical.
 
+Invalid CLI usage uses operation \`cli\`, status \`error\`, and exit code 2.
+
 ## \`inspect\`
 
 \`inspect\` performs non-mutating discovery of repository structure, manifests, lockfiles, declared scripts, and mechanically safe ecosystem capabilities.
