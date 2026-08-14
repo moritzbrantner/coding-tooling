@@ -107,10 +107,15 @@ an immutable tag or commit:
 
 The Action executes the same CLI used locally and writes
 `.artifacts/coding-tooling/report.json`. It deliberately does not check out the consumer repository;
-the caller owns checkout, permissions, and the surrounding job.
+the caller owns checkout, permissions, and the surrounding job. By default it installs consumer
+dependencies from `bun.lock`, `bun.lockb`, or `package-lock.json`; callers that already installed
+dependencies can set `install-mode: none`.
 
 Public repositories cannot consume this private Action. They should continue to use public actions
 and repository-local commands.
 
 Copy `.coding-tooling.example.json` to `.coding-tooling.json` when a consumer needs custom
 validation tiers.
+
+This repository validates itself through the same composite Action in
+`.github/workflows/validate.yml`, keeping local and CI behavior on one deterministic entry point.
