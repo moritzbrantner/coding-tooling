@@ -22,8 +22,14 @@ jobs:
         run: bun install
       - name: Format sources for diagnostics
         run: bun run format:write
-      - name: Print formatting diff
-        run: git diff --no-ext-diff -- package.json src tests
+      - name: Print formatted sources
+        run: |
+          for file in package.json src/cli.ts src/core.ts src/model.ts src/shared.ts tests/core.test.ts; do
+            echo "FORMATTED_BEGIN:$file"
+            base64 -w0 "$file"
+            echo
+            echo "FORMATTED_END:$file"
+          done
       - name: Validate through the local Action
         uses: ./
         with:
