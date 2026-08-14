@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "profile": "dependency-update/typescript-app",
+  "tiers": {
+    "dependency-update": [
+      "format:check",
+      "lint",
+      "typecheck",
+      "build",
+      "test:unit",
+      "test:integration",
+      "test:e2e",
+      "dependencies:audit",
+      "benchmark:smoke"
+    ]
+  },
+  "requiredCapabilities": ["lint", "typecheck", "test:unit", "build"],
+  "optionalCapabilities": ["test:integration", "test:e2e", "dependencies:audit", "benchmark:smoke"],
+  "conventionRefs": ["AGENT-001", "AGENT-007", "TEST-002", "CI-001", "CI-003"]
+}

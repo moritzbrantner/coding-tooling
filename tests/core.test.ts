@@ -64,14 +64,23 @@ describe("coding-tooling plans", () => {
           ],
         },
         optionalCapabilities: ["test:integration", "benchmark:smoke"],
+        capabilityCommands: {
+          ".": {
+            "benchmark:smoke": ["bun", "run", "bench:smoke"],
+          },
+        },
       }),
     );
 
     const plan = planChecks({ root, tier: "dependency-update" });
-    expect(plan.checks.map((check) => check.capability)).toEqual(["lint", "dependencies:audit"]);
+    expect(plan.checks.map((check) => check.capability)).toEqual([
+      "lint",
+      "dependencies:audit",
+      "benchmark:smoke",
+    ]);
+    expect(plan.checks.at(-1)?.command).toEqual(["bun", "run", "bench:smoke"]);
     expect(plan.missing).toEqual([
       { capability: "test:integration", component: "fixture", optional: true },
-      { capability: "benchmark:smoke", component: "fixture", optional: true },
     ]);
   });
 });

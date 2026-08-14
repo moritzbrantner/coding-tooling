@@ -51,6 +51,20 @@ export function loadConfig(root: string, configuredPath = ".coding-tooling.json"
   for (const values of Object.values(value.tiers ?? {})) validateCapabilities(values);
   validateCapabilities(value.requiredCapabilities ?? []);
   validateCapabilities(value.optionalCapabilities ?? []);
+  for (const [selector, commands] of Object.entries(value.capabilityCommands ?? {})) {
+    if (!selector.trim()) throw new Error("capabilityCommands selectors must not be empty");
+    for (const [capability, command] of Object.entries(commands)) {
+      validateCapabilities([capability]);
+      if (
+        !Array.isArray(command) ||
+        command.length === 0 ||
+        command.some((part) => typeof part !== "string" || !part)
+      )
+        throw new Error(
+          `capabilityCommands.${selector}.${capability} must be a non-empty argv array`,
+        );
+    }
+  }
   return value;
 }
 
@@ -161,7 +175,7 @@ export function planChecks(options: {
   const selected = config.tiers?.[options.tier] ?? defaultTiers[options.tier];
   if (!selected) throw new Error(`Unknown tier: ${options.tier}`);
   validateCapabilities(selected);
-  const components = discoverComponents(root).filter(
+  const components = applyCapabilityCommands(discoverComponents(root), config).filter(
     (component) =>
       !options.component ||
       component.name === options.component ||
@@ -192,6 +206,17 @@ export function planChecks(options: {
     missing,
     conventionRefs: config.conventionRefs ?? [],
   };
+}
+
+function applyCapabilityCommands(components: Component[], config: ToolingConfig): Component[] {
+  return components.map((component) => ({
+    ...component,
+    capabilities: {
+      ...component.capabilities,
+      ...(config.capabilityCommands?.[component.name] ?? {}),
+      ...(config.capabilityCommands?.[component.path] ?? {}),
+    },
+  }));
 }
 
 export function runPlan(options: {

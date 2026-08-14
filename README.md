@@ -123,6 +123,11 @@ build and test evidence plus repository-declared dependency audit, integration, 
 benchmark capabilities when available. Renovate and Dependabot remain proposal mechanisms; they do
 not bypass this repository-owned tier.
 
+Starter dependency-update configurations live under [`profiles/dependency-update/`](profiles/dependency-update/).
+Copy the closest profile into a Consumer Repository as `.coding-tooling.json`, then add
+`capabilityCommands` for repository-specific Rust Criterion, cargo-audit, .NET audit, or
+BenchmarkDotNet entrypoints. Commands are argv arrays and never run through a shell.
+
 This repository validates itself through the same composite Action in
 `.github/workflows/validate.yml`, keeping local and CI behavior on one deterministic entry point.
 Its committed `bun.lock` makes that self-check exercise the Action's default frozen installation

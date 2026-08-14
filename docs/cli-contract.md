@@ -172,6 +172,24 @@ determines when to request that tier; `coding-tooling` remains bot-independent a
 tier locally or in CI. A `benchmark:smoke` or `benchmark` script owns base-versus-candidate
 measurement and should emit its comparison as normal command output and/or a repository artifact.
 
+Repositories may map semantic capabilities to explicit argv arrays without embedding shell syntax:
+
+```json
+{
+  "capabilityCommands": {
+    ".": {
+      "dependencies:audit": ["cargo", "audit"],
+      "benchmark:smoke": ["cargo", "bench", "--locked", "--bench", "smoke"]
+    }
+  }
+}
+```
+
+A selector is a discovered component name or repository-relative component path; path mappings take
+precedence. Commands are executed without a shell. This is the Rust/.NET escape hatch for
+repository-specific audit projects, BenchmarkDotNet entrypoints, Criterion benches, or other
+declared evidence that cannot be inferred safely from ecosystem defaults.
+
 ## Boundary with orchestration
 
 This CLI does not create agent runs, retry models, schedule work, choose candidate branches, or own worktree lifecycle. Those concerns belong to the outer orchestrator.

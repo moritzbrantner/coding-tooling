@@ -44,6 +44,7 @@ export type ToolingConfig = {
   tiers?: Record<string, Capability[]>;
   requiredCapabilities?: Capability[];
   optionalCapabilities?: Capability[];
+  capabilityCommands?: Record<string, Partial<Record<Capability, string[]>>>;
   conventionRefs?: string[];
 };
 
