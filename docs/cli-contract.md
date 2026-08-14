@@ -43,31 +43,124 @@ Every command invoked with `--json` returns exactly one JSON object:
 }
 ```
 
-`status` is one of `passed`, `failed`, `unavailable`, or `error`. A missing capability is not a
-passing check, and an environment failure is not a product-code failure.
+`status` is one of:
 
-Exit codes are `0` for passed, `1` for failed, `2` for unavailable or invalid CLI usage, and `3`
-for tooling or environment errors. The JSON status remains canonical.
+- `passed`: the requested deterministic operation completed successfully.
+- `failed`: the operation ran and found a failing condition.
+- `unavailable`: the requested capability is not defined for the selected scope.
+- `error`: the operation could not be performed because tooling or the environment failed.
 
-## Discovery and individual checks
+Do not encode `unavailable` as `passed` and do not treat an environment/tool failure as a product-code failure.
 
-`inspect` performs mechanical discovery only. It may inspect repository structure, manifests,
-lockfiles, and declared scripts. `check` executes one declared capability without silently mutating
-source. `affected` maps a Git baseline to changed files and components. `doctor` reports whether the
-deterministic toolchain can operate and never repairs implicitly.
+## Exit codes
 
-## Plans and runs
+```text
+0  passed
+1  failed
+2  unavailable or invalid CLI usage
+3  tooling/environment error
+```
+
+The JSON `status` remains the canonical machine-readable meaning; exit codes exist for shell and CI composition.
+
+## `inspect`
+
+`inspect` performs mechanical discovery only. It may inspect repository structure, manifests, lockfiles, declared scripts, and other deterministic metadata.
+
+It must not modify the repository.
+
+Expected `data` fields:
+
+```json
+{
+  "root": "/repo",
+  "technologies": ["typescript", "react", "vite"],
+  "components": [
+    {
+      "name": "frontend",
+      "path": ".",
+      "kind": "package",
+      "technologies": ["typescript", "react", "vite"],
+      "capabilities": {
+        "lint": ["bun", "run", "lint"]
+      }
+    }
+  ]
+}
+```
+
+## `check`
+
+`check` executes one declared deterministic validation capability.
+
+A check must not silently mutate source code. Verification capabilities such as `format:check` are separate from future explicit mutation commands.
+
+Expected `data` fields:
+
+```json
+{
+  "capability": "typecheck",
+  "results": [
+    {
+      "component": "frontend",
+      "path": ".",
+      "command": ["bun", "run", "typecheck"],
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 321
+    }
+  ]
+}
+```
+
+## `affected`
+
+`affected` reports facts derived from a Git baseline and repository structure. It does not decide agent policy.
+
+Expected `data` fields:
+
+```json
+{
+  "base": "HEAD",
+  "changedFiles": ["src/example.ts"],
+  "affectedComponents": ["frontend"],
+  "recommendedCapabilities": ["format:check", "lint", "typecheck", "test:unit"]
+}
+```
+
+`recommendedCapabilities` is a deterministic mapping from changed scope to available capabilities. The development-loop skill still decides how far validation should progress.
+
+## `doctor`
+
+`doctor` diagnoses whether the deterministic toolchain can operate. It may check repository access, Git state, file permissions, and required runtimes.
+
+Expected `data` fields:
+
+```json
+{
+  "checks": [
+    {
+      "name": "git",
+      "status": "passed",
+      "message": "git is available"
+    }
+  ]
+}
+```
+
+`doctor` is diagnostic by default. Any future repair operation must be explicit and separately named; diagnostics must not silently change permissions or configuration.
+
+## `plan` and `run`
 
 `plan` resolves a named validation tier into semantic capability executions without running them.
 `run` executes that exact plan and can write the complete result envelope to `--report`.
 
-The optional `.coding-tooling.json` file defines repository tiers, a profile name, required
-capabilities, and convention references. It contains no GitHub-specific behavior, so local agent
-runs and GitHub Actions execute the same deterministic validation contract.
+The optional `.coding-tooling.json` defines repository tiers, a profile, required capabilities,
+and convention references. It contains no GitHub-specific behavior, so local agents and GitHub
+Actions execute the same deterministic validation contract.
 
-`--strict` makes unavailable capabilities fail the run. Failed checks and tool errors always fail.
+`--strict` makes unavailable selected capabilities fail the run.
 
 ## Boundary with orchestration
 
-This CLI does not create agent runs, retry models, schedule work, choose candidate branches, or own
-worktree lifecycle. Those concerns belong to the outer orchestrator.
+This CLI does not create agent runs, retry models, schedule work, choose candidate branches, or own worktree lifecycle. Those concerns belong to the outer orchestrator.
