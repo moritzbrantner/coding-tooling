@@ -68,10 +68,7 @@ describe("coding-tooling plans", () => {
     );
 
     const plan = planChecks({ root, tier: "dependency-update" });
-    expect(plan.checks.map((check) => check.capability)).toEqual([
-      "lint",
-      "dependencies:audit",
-    ]);
+    expect(plan.checks.map((check) => check.capability)).toEqual(["lint", "dependencies:audit"]);
     expect(plan.missing).toEqual([
       { capability: "test:integration", component: "fixture", optional: true },
       { capability: "benchmark:smoke", component: "fixture", optional: true },
