@@ -8,19 +8,14 @@
     "schemaVersion": { "const": 1 },
     "operation": {
       "type": "string",
-      "enum": ["inspect", "check", "affected", "doctor"]
+      "enum": ["inspect", "check", "affected", "doctor", "plan", "run"]
     },
     "status": {
       "type": "string",
       "enum": ["passed", "failed", "unavailable", "error"]
     },
-    "durationMs": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "data": {
-      "type": "object"
-    },
+    "durationMs": { "type": "integer", "minimum": 0 },
+    "data": { "type": "object" },
     "diagnostics": {
       "type": "array",
       "items": {

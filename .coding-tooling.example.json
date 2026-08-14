@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "profile": "typescript-react",
+  "tiers": {
+    "fast": ["format:check", "lint", "typecheck", "test:unit", "build"],
+    "integration": ["test:integration"],
+    "e2e": ["test:e2e"]
+  },
+  "requiredCapabilities": ["lint", "typecheck", "test:unit"],
+  "conventionRefs": ["AGENT-001", "AGENT-007", "TEST-002"]
+}

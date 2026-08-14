@@ -6,31 +6,20 @@ This repository contains mechanical operations that should not require an LLM to
 
 ## Responsibility boundary
 
-`coding-tooling` answers questions such as:
+`coding-tooling` discovers repository components and validation capabilities, maps changed files to
+components, executes declared checks, and diagnoses whether the environment can run them. It does
+not choose tasks, reason about implementations, manage worktrees or agents, or decide whether one
+candidate is semantically better than another.
 
-- What kind of repository/components are present?
-- Which validation capabilities are available?
-- Which files/components changed relative to a baseline?
-- How do I run a declared validation capability?
-- Is the local environment able to run those capabilities?
-
-It deliberately does **not** decide:
-
-- what task to implement,
-- how an agent should reason through a development task,
-- when to create or destroy worktrees,
-- when to spawn/retry agents,
-- whether one candidate is semantically better than another.
-
-Those concerns belong to conventions/skills, outer orchestration, and evaluation tooling respectively.
-
-## v0.1 commands
+## Commands
 
 ```bash
-coding-tooling inspect [--json]
-coding-tooling check <capability> [--component <name>] [--json]
-coding-tooling affected [--base <git-ref>] [--json]
-coding-tooling doctor [--json]
+coding-tooling inspect --json
+coding-tooling check lint --json
+coding-tooling affected --base main --json
+coding-tooling doctor --json
+coding-tooling plan --tier fast --json
+coding-tooling run --tier fast --report .artifacts/coding-tooling/report.json --strict --json
 ```
 
 Run directly during development with Bun:
@@ -39,24 +28,32 @@ Run directly during development with Bun:
 bun src/cli.ts inspect --json
 ```
 
-## Capabilities
+Stable capabilities are `format:check`, `lint`, `typecheck`, `build`, `test`, `test:unit`,
+`test:integration`, and `test:e2e`. JavaScript and TypeScript components use declared package
+scripts. Rust and .NET components use conservative built-in commands where semantics are clear.
 
-Capabilities are stable semantic names; concrete commands are repository-specific.
+## Private GitHub Action
 
-Current names:
+The repository root is also a composite GitHub Action for private repositories owned by the same
+GitHub account. Give consumer repositories access under **Settings → Actions → General → Access**,
+then pin an immutable tag or commit:
 
-```text
-format:check
-lint
-typecheck
-build
-test
-test:unit
-test:integration
-test:e2e
+```yaml
+- uses: moritzbrantner/coding-tooling@coding-tooling-v0.2.0
+  with:
+    tier: fast
+    strict: true
 ```
 
-For JavaScript/TypeScript components, v0.1 uses declared package scripts instead of inventing commands. For Rust and .NET it exposes conservative built-in commands where the meaning is mechanically clear.
+The Action executes the same CLI used locally and writes
+`.artifacts/coding-tooling/report.json`. It deliberately does not check out the consumer repository;
+the caller owns checkout, permissions, and the surrounding job.
+
+Public repositories cannot consume this private Action. They should continue to use public actions
+and repository-local commands.
+
+Copy `.coding-tooling.example.json` to `.coding-tooling.json` when a consumer needs to customize its
+`fast`, `integration`, `e2e`, or `full` tiers.
 
 ## Design rules
 
@@ -64,28 +61,15 @@ For JavaScript/TypeScript components, v0.1 uses declared package scripts instead
 2. Machine-readable output is a first-class interface.
 3. Checks must not silently mutate source code.
 4. A missing capability is different from a failed capability.
-5. Repository policy stays outside this repository. This tool reports capabilities/results; agent workflows decide when to use them.
-6. Outer agent lifecycle/orchestration stays outside this repository.
-7. Prefer repository-declared commands over guessed ecosystem defaults when semantics could differ.
+5. Repository policy and agent lifecycle stay outside this repository.
+6. Prefer repository-declared commands over guessed ecosystem defaults.
 
-## Relationship to the other repositories
+## Landscape
 
-```text
-coding-agent-conventions
-  conventions + development-loop skill
-              │
-              ▼
-          coding agent
-              │
-              ▼
-        coding-tooling
-   deterministic operations
+- `coding-agent-conventions` defines what and why.
+- `coding-tooling` provides deterministic execution.
+- `reusable-workflows` adapts that execution to GitHub Actions.
+- `agent-loop-orchestrator` owns local run lifecycle.
+- `moonlight` evaluates baselines and candidates.
 
-agent-loop-setup
-  outer lifecycle/orchestration
-
-moonlight
-  baseline/candidate evaluation
-```
-
-`coding-tooling` must remain usable without any of the other repositories.
+`coding-tooling` remains usable without any of the other repositories.
