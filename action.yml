@@ -25,6 +25,10 @@ inputs:
     description: Bun version used to execute coding-tooling.
     required: false
     default: 1.3.14
+  install-mode:
+    description: Install dependencies from a supported lockfile automatically, or skip installation.
+    required: false
+    default: auto
 
 outputs:
   report-path:
@@ -38,6 +42,26 @@ runs:
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       with:
         bun-version: ${{ inputs.bun-version }}
+    - name: Install consumer dependencies
+      shell: bash
+      env:
+        INPUT_INSTALL_MODE: ${{ inputs.install-mode }}
+      run: |
+        if [[ "$INPUT_INSTALL_MODE" == "none" ]]; then
+          exit 0
+        fi
+        if [[ "$INPUT_INSTALL_MODE" != "auto" ]]; then
+          echo "::error::install-mode must be 'auto' or 'none'"
+          exit 2
+        fi
+        if [[ -f bun.lock || -f bun.lockb ]]; then
+          bun install --frozen-lockfile
+        elif [[ -f package-lock.json ]]; then
+          npm ci
+        elif [[ -f package.json ]]; then
+          echo "::error::package.json exists without bun.lock, bun.lockb, or package-lock.json. Commit a supported lockfile or install dependencies explicitly and set install-mode: none."
+          exit 2
+        fi
     - name: Run coding-tooling
       id: run
       shell: bash
