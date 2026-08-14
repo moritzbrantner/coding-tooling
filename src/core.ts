@@ -12,7 +12,14 @@ import {
   type ResultStatus,
   type ToolingConfig,
 } from "./model.ts";
-import { commandAvailable, readJson, relativePosix, repositoryRoot, runCommand, walkFiles } from "./shared.ts";
+import {
+  commandAvailable,
+  readJson,
+  relativePosix,
+  repositoryRoot,
+  runCommand,
+  walkFiles,
+} from "./shared.ts";
 
 type PackageManifest = {
   name?: string;
@@ -36,7 +43,8 @@ export function loadConfig(root: string, configuredPath = ".coding-tooling.json"
   const path = join(root, configuredPath);
   if (!existsSync(path)) return { schemaVersion: 1 };
   const value = readJson<ToolingConfig>(path);
-  if (!value || value.schemaVersion !== 1) throw new Error(`${configuredPath} must use schemaVersion 1`);
+  if (!value || value.schemaVersion !== 1)
+    throw new Error(`${configuredPath} must use schemaVersion 1`);
   for (const values of Object.values(value.tiers ?? {})) validateCapabilities(values);
   validateCapabilities(value.requiredCapabilities ?? []);
   return value;
@@ -44,7 +52,8 @@ export function loadConfig(root: string, configuredPath = ".coding-tooling.json"
 
 function validateCapabilities(values: readonly string[]): void {
   for (const value of values) {
-    if (!capabilities.includes(value as Capability)) throw new Error(`Unknown capability: ${value}`);
+    if (!capabilities.includes(value as Capability))
+      throw new Error(`Unknown capability: ${value}`);
   }
 }
 
@@ -94,7 +103,8 @@ export function discoverComponents(root = repositoryRoot()): Component[] {
   for (const file of files.filter((path) => path.endsWith(".sln") || path.endsWith(".csproj"))) {
     const directory = dirname(file);
     const path = relativePosix(root, directory);
-    if (components.some((component) => component.path === path && component.kind === "dotnet")) continue;
+    if (components.some((component) => component.path === path && component.kind === "dotnet"))
+      continue;
     const target = basename(file);
     components.push({
       name: path === "." ? basename(root) : basename(directory),
@@ -110,40 +120,77 @@ export function discoverComponents(root = repositoryRoot()): Component[] {
     });
   }
 
-  return components.sort((left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name));
+  return components.sort(
+    (left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name),
+  );
 }
 
-function packageCapabilities(root: string, directory: string, scripts: Record<string, string>): Partial<Record<Capability, string[]>> {
-  const manager = existsSync(join(directory, "bun.lock")) || existsSync(join(directory, "bun.lockb")) || existsSync(join(root, "bun.lock")) || existsSync(join(root, "bun.lockb")) ? "bun" : "npm";
+function packageCapabilities(
+  root: string,
+  directory: string,
+  scripts: Record<string, string>,
+): Partial<Record<Capability, string[]>> {
+  const manager =
+    existsSync(join(directory, "bun.lock")) ||
+    existsSync(join(directory, "bun.lockb")) ||
+    existsSync(join(root, "bun.lock")) ||
+    existsSync(join(root, "bun.lockb"))
+      ? "bun"
+      : "npm";
   const result: Partial<Record<Capability, string[]>> = {};
   for (const capability of capabilities) {
     const script = scriptCandidates[capability].find((candidate) => candidate in scripts);
-    if (script) result[capability] = manager === "bun" ? ["bun", "run", script] : ["npm", "run", script];
+    if (script)
+      result[capability] = manager === "bun" ? ["bun", "run", script] : ["npm", "run", script];
   }
   return result;
 }
 
-export function planChecks(options: { root?: string; tier: string; component?: string; configPath?: string }) {
+export function planChecks(options: {
+  root?: string;
+  tier: string;
+  component?: string;
+  configPath?: string;
+}) {
   const root = options.root ?? repositoryRoot();
   const config = loadConfig(root, options.configPath);
   const selected = config.tiers?.[options.tier] ?? defaultTiers[options.tier];
   if (!selected) throw new Error(`Unknown tier: ${options.tier}`);
   validateCapabilities(selected);
-  const components = discoverComponents(root).filter((component) => !options.component || component.name === options.component || component.path === options.component);
-  if (options.component && components.length === 0) throw new Error(`Unknown component: ${options.component}`);
+  const components = discoverComponents(root).filter(
+    (component) =>
+      !options.component ||
+      component.name === options.component ||
+      component.path === options.component,
+  );
+  if (options.component && components.length === 0)
+    throw new Error(`Unknown component: ${options.component}`);
   const checks: PlannedCheck[] = [];
   const missing: { capability: Capability; component: string }[] = [];
   for (const component of components) {
     for (const capability of selected) {
       const command = component.capabilities[capability];
-      if (command) checks.push({ capability, component: component.name, path: component.path, command });
+      if (command)
+        checks.push({ capability, component: component.name, path: component.path, command });
       else missing.push({ capability, component: component.name });
     }
   }
-  return { profile: config.profile, tier: options.tier, checks, missing, conventionRefs: config.conventionRefs ?? [] };
+  return {
+    profile: config.profile,
+    tier: options.tier,
+    checks,
+    missing,
+    conventionRefs: config.conventionRefs ?? [],
+  };
 }
 
-export function runPlan(options: { root?: string; tier: string; component?: string; configPath?: string; strict?: boolean }): ResultEnvelope<Record<string, unknown>> {
+export function runPlan(options: {
+  root?: string;
+  tier: string;
+  component?: string;
+  configPath?: string;
+  strict?: boolean;
+}): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const root = options.root ?? repositoryRoot();
   try {
@@ -174,10 +221,15 @@ export function runPlan(options: { root?: string; tier: string; component?: stri
       status,
       started,
       { ...plan, root, strict: Boolean(options.strict), results },
-      plan.missing.map((item) => ({ code: "capability-unavailable", message: `${item.capability} is unavailable for ${item.component}` })),
+      plan.missing.map((item) => ({
+        code: "capability-unavailable",
+        message: `${item.capability} is unavailable for ${item.component}`,
+      })),
     );
   } catch (error) {
-    return envelope("run", "error", started, { root, tier: options.tier }, [{ code: "invalid-run", message: error instanceof Error ? error.message : String(error) }]);
+    return envelope("run", "error", started, { root, tier: options.tier }, [
+      { code: "invalid-run", message: error instanceof Error ? error.message : String(error) },
+    ]);
   }
 }
 
@@ -196,31 +248,81 @@ export function inspect(root = repositoryRoot()): ResultEnvelope<Record<string, 
   });
 }
 
-export function check(root: string, capability: Capability, component?: string): ResultEnvelope<Record<string, unknown>> {
+export function check(
+  root: string,
+  capability: Capability,
+  component?: string,
+): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
-  const selected = discoverComponents(root).filter((item) => !component || item.name === component || item.path === component);
-  const checks = selected.flatMap((item) => item.capabilities[capability] ? [{ capability, component: item.name, path: item.path, command: item.capabilities[capability]! }] : []);
-  if (checks.length === 0) return envelope("check", "unavailable", started, { capability, results: [] }, [{ code: "capability-unavailable", message: `${capability} is unavailable` }]);
+  const selected = discoverComponents(root).filter(
+    (item) => !component || item.name === component || item.path === component,
+  );
+  const checks = selected.flatMap((item) =>
+    item.capabilities[capability]
+      ? [
+          {
+            capability,
+            component: item.name,
+            path: item.path,
+            command: item.capabilities[capability]!,
+          },
+        ]
+      : [],
+  );
+  if (checks.length === 0)
+    return envelope("check", "unavailable", started, { capability, results: [] }, [
+      { code: "capability-unavailable", message: `${capability} is unavailable` },
+    ]);
   const results = checks.map((item) => {
-    const result = runCommand(item.command[0], item.command.slice(1), item.path === "." ? root : join(root, item.path));
-    return { ...item, status: result.error ? "error" : result.status === 0 ? "passed" : "failed", exitCode: result.status, stdout: result.stdout, stderr: result.stderr, error: result.error };
+    const result = runCommand(
+      item.command[0],
+      item.command.slice(1),
+      item.path === "." ? root : join(root, item.path),
+    );
+    return {
+      ...item,
+      status: result.error ? "error" : result.status === 0 ? "passed" : "failed",
+      exitCode: result.status,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      error: result.error,
+    };
   });
-  const status = results.some((item) => item.status === "error") ? "error" : results.some((item) => item.status === "failed") ? "failed" : "passed";
+  const status = results.some((item) => item.status === "error")
+    ? "error"
+    : results.some((item) => item.status === "failed")
+      ? "failed"
+      : "passed";
   return envelope("check", status, started, { capability, results });
 }
 
 export function affected(root: string, base = "HEAD"): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const result = runCommand("git", ["diff", "--name-only", `${base}...HEAD`], root);
-  if (result.status !== 0) return envelope("affected", "error", started, { base, changedFiles: [], affectedComponents: [] }, [{ code: "git-diff-failed", message: result.stderr || `Could not compare ${base}` }]);
+  if (result.status !== 0)
+    return envelope(
+      "affected",
+      "error",
+      started,
+      { base, changedFiles: [], affectedComponents: [] },
+      [{ code: "git-diff-failed", message: result.stderr || `Could not compare ${base}` }],
+    );
   const changedFiles = result.stdout.split(/\r?\n/).filter(Boolean);
   const components = discoverComponents(root);
-  const affectedComponents = components.filter((component) => component.path === "." ? changedFiles.length > 0 : changedFiles.some((path) => path === component.path || path.startsWith(`${component.path}/`)));
+  const affectedComponents = components.filter((component) =>
+    component.path === "."
+      ? changedFiles.length > 0
+      : changedFiles.some(
+          (path) => path === component.path || path.startsWith(`${component.path}/`),
+        ),
+  );
   return envelope("affected", "passed", started, {
     base,
     changedFiles,
     affectedComponents: affectedComponents.map((component) => component.name),
-    recommendedCapabilities: [...new Set(affectedComponents.flatMap((component) => Object.keys(component.capabilities)))].sort(),
+    recommendedCapabilities: [
+      ...new Set(affectedComponents.flatMap((component) => Object.keys(component.capabilities))),
+    ].sort(),
   });
 }
 
@@ -228,21 +330,53 @@ export function doctor(root = repositoryRoot()): ResultEnvelope<Record<string, u
   const started = Date.now();
   const checks = ["git", "bun"].map((name) => {
     const available = commandAvailable(name);
-    return { name, status: available ? "passed" : "unavailable", message: available ? `${name} is available` : `${name} is unavailable` };
+    return {
+      name,
+      status: available ? "passed" : "unavailable",
+      message: available ? `${name} is available` : `${name} is unavailable`,
+    };
   });
-  return envelope("doctor", checks.some((item) => item.status === "unavailable") ? "unavailable" : "passed", started, { root, checks });
+  return envelope(
+    "doctor",
+    checks.some((item) => item.status === "unavailable") ? "unavailable" : "passed",
+    started,
+    { root, checks },
+  );
 }
 
-export function planEnvelope(root: string, tier: string, component?: string, configPath?: string): ResultEnvelope<Record<string, unknown>> {
+export function planEnvelope(
+  root: string,
+  tier: string,
+  component?: string,
+  configPath?: string,
+): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   try {
     const plan = planChecks({ root, tier, component, configPath });
-    return envelope("plan", plan.checks.length > 0 ? "passed" : "unavailable", started, { root, ...plan });
+    return envelope("plan", plan.checks.length > 0 ? "passed" : "unavailable", started, {
+      root,
+      ...plan,
+    });
   } catch (error) {
-    return envelope("plan", "error", started, { root, tier }, [{ code: "invalid-plan", message: error instanceof Error ? error.message : String(error) }]);
+    return envelope("plan", "error", started, { root, tier }, [
+      { code: "invalid-plan", message: error instanceof Error ? error.message : String(error) },
+    ]);
   }
 }
 
-function envelope(operation: ResultEnvelope<Record<string, unknown>>["operation"], status: ResultStatus, started: number, data: Record<string, unknown>, diagnostics: Diagnostic[] = []): ResultEnvelope<Record<string, unknown>> {
-  return { schemaVersion: 1, operation, status, durationMs: Date.now() - started, data, diagnostics };
+function envelope(
+  operation: ResultEnvelope<Record<string, unknown>>["operation"],
+  status: ResultStatus,
+  started: number,
+  data: Record<string, unknown>,
+  diagnostics: Diagnostic[] = [],
+): ResultEnvelope<Record<string, unknown>> {
+  return {
+    schemaVersion: 1,
+    operation,
+    status,
+    durationMs: Date.now() - started,
+    data,
+    diagnostics,
+  };
 }

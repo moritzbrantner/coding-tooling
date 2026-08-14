@@ -20,16 +20,6 @@ jobs:
           bun-version: 1.3.14
       - name: Bootstrap action dependencies
         run: bun install
-      - name: Format sources for diagnostics
-        run: bun run format:write
-      - name: Print formatted sources
-        run: |
-          for file in package.json src/cli.ts src/core.ts src/model.ts src/shared.ts tests/core.test.ts; do
-            echo "FORMATTED_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "FORMATTED_END:$file"
-          done
       - name: Validate through the local Action
         uses: ./
         with:

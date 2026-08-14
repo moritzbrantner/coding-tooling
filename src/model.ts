@@ -54,13 +54,5 @@ export const defaultTiers: Record<string, Capability[]> = {
   fast: ["format:check", "lint", "typecheck", "test:unit", "build"],
   integration: ["test:integration"],
   e2e: ["test:e2e"],
-  full: [
-    "format:check",
-    "lint",
-    "typecheck",
-    "test:unit",
-    "test:integration",
-    "test:e2e",
-    "build",
-  ],
+  full: ["format:check", "lint", "typecheck", "test:unit", "test:integration", "test:e2e", "build"],
 };

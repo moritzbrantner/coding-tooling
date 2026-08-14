@@ -64,8 +64,16 @@ export function main(argv = process.argv.slice(2)): number {
   } else if (command === "plan" || command === "run") {
     const tier = stringOption(options, "tier");
     if (!tier) return usage();
-    const common = { root, tier, component: stringOption(options, "component"), configPath: stringOption(options, "config") };
-    result = command === "plan" ? planEnvelope(root, tier, common.component, common.configPath) : runPlan({ ...common, strict: Boolean(options.strict) });
+    const common = {
+      root,
+      tier,
+      component: stringOption(options, "component"),
+      configPath: stringOption(options, "config"),
+    };
+    result =
+      command === "plan"
+        ? planEnvelope(root, tier, common.component, common.configPath)
+        : runPlan({ ...common, strict: Boolean(options.strict) });
     const report = stringOption(options, "report");
     if (report) writeReport(result, resolve(root, report));
   } else return usage();
