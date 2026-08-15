@@ -35,6 +35,15 @@ describe("coding-tooling plans", () => {
     expect(component.capabilities.lint).toEqual(["npm", "run", "lint"]);
   });
 
+  test("does not discover fixture manifests as repository components", () => {
+    const root = repository();
+    const fixture = join(root, "fixtures", "sample");
+    mkdirSync(fixture, { recursive: true });
+    writeFileSync(join(fixture, "package.json"), JSON.stringify({ name: "fixture-sample" }));
+
+    expect(discoverComponents(root).map((component) => component.name)).toEqual(["fixture"]);
+  });
+
   test("creates a deterministic fast plan and reports missing capabilities", () => {
     const root = repository();
     const plan = planChecks({ root, tier: "fast" });
