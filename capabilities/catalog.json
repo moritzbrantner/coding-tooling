@@ -117,15 +117,6 @@
       "defaultArtifacts": [".generated/benchmarks"],
       "optIn": true,
       "baselineRequired": false
-    },
-    {
-      "name": "benchmark:compare",
-      "kind": "benchmark",
-      "tier": "performance",
-      "scriptCandidates": ["benchmark:compare", "bench:compare"],
-      "defaultArtifacts": [".generated/benchmarks"],
-      "optIn": true,
-      "baselineRequired": true
     }
   ]
 }
