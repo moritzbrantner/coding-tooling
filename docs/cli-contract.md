@@ -4,16 +4,16 @@ The CLI is a deterministic interface for humans, CI, coding agents, and higher-l
 
 ## Commands
 
-```bash
-coding-tooling inspect [--json]
-coding-tooling check <capability> [--component <name>] [--json]
-coding-tooling affected [--base <git-ref>] [--json]
-coding-tooling doctor [--json]
-```
+\`\`\`bash
+coding-tooling inspect [--root <path>] [--json]
+coding-tooling check <capability> [--component <name>] [--root <path>] [--json]
+coding-tooling affected [--base <git-ref> | --change-manifest <file>] [--root <path>] [--json]
+coding-tooling doctor [--root <path>] [--json]
+\`\`\`
 
 ## Stable capability names
 
-```text
+\`\`\`text
 format:check
 lint
 typecheck
@@ -22,132 +22,61 @@ test
 test:unit
 test:integration
 test:e2e
-```
+gate:final
+\`\`\`
 
-A capability name describes semantics, not an ecosystem command. The implementation maps it to a repository-declared or mechanically safe command.
+\`gate:final\` is available only when a component declares a \`check\` script. It represents the complete applicable pre-handoff gate. Changed-surface recommendations are intentionally narrower and do not include it.
 
 ## JSON envelope
 
-Every command invoked with `--json` returns exactly one JSON object:
+Every command invoked with \`--json\` returns exactly one JSON object:
 
-```json
+\`\`\`json
 {
-  "schemaVersion": 1,
-  "operation": "check",
-  "status": "passed",
-  "durationMs": 123,
-  "data": {},
-  "diagnostics": []
+"schemaVersion": 1,
+"operation": "check",
+"status": "passed",
+"durationMs": 123,
+"data": {},
+"diagnostics": []
 }
-```
+\`\`\`
 
-`status` is one of:
-
-- `passed`: the requested deterministic operation completed successfully.
-- `failed`: the operation ran and found a failing condition.
-- `unavailable`: the requested capability is not defined for the selected scope.
-- `error`: the operation could not be performed because tooling or the environment failed.
-
-Do not encode `unavailable` as `passed` and do not treat an environment/tool failure as a product-code failure.
+\`status\` is one of \`passed\`, \`failed\`, \`unavailable\`, or \`error\`. Do not encode an unavailable capability as passed and do not treat an environment/tool failure as a product-code failure.
 
 ## Exit codes
 
-```text
-0  passed
-1  failed
-2  unavailable or invalid CLI usage
-3  tooling/environment error
-```
+\`\`\`text
+0 passed
+1 failed
+2 unavailable or invalid CLI usage
+3 tooling/environment error
+\`\`\`
 
-The JSON `status` remains the canonical machine-readable meaning; exit codes exist for shell and CI composition.
+The JSON status remains canonical.
 
-## `inspect`
+Invalid CLI usage uses operation \`cli\`, status \`error\`, and exit code 2.
 
-`inspect` performs mechanical discovery only. It may inspect repository structure, manifests, lockfiles, declared scripts, and other deterministic metadata.
+## \`inspect\`
 
-It must not modify the repository.
+\`inspect\` performs non-mutating discovery of repository structure, manifests, lockfiles, declared scripts, and mechanically safe ecosystem capabilities.
 
-Expected `data` fields:
+## \`check\`
 
-```json
-{
-  "root": "/repo",
-  "technologies": ["typescript", "react", "vite"],
-  "components": [
-    {
-      "name": "frontend",
-      "path": ".",
-      "kind": "package",
-      "technologies": ["typescript", "react", "vite"],
-      "capabilities": {
-        "lint": ["bun", "run", "lint"]
-      }
-    }
-  ]
-}
-```
+\`check\` executes one deterministic validation capability. Results include component, path, argv command, status, exit code, duration, stdout, and stderr. Verification capabilities such as \`format:check\` are separate from explicit mutation commands.
 
-## `check`
+## \`affected\`
 
-`check` executes one declared deterministic validation capability.
+\`affected\` accepts either a Git baseline or an explicit change manifest. The options are mutually exclusive.
 
-A check must not silently mutate source code. Verification capabilities such as `format:check` are separate from future explicit mutation commands.
+A change manifest may be a JSON array of repository-relative paths or an object with a \`files\` (or \`changedFiles\`) array. Paths outside the repository are rejected. This lets a writer such as \`local-refactor\` identify exactly the files it owns without conflating them with a pre-existing dirty worktree.
 
-Expected `data` fields:
+\`recommendedCapabilities\` is deterministic early feedback. The development workflow still decides validation progression and must run the complete applicable final gate before handoff.
 
-```json
-{
-  "capability": "typecheck",
-  "results": [
-    {
-      "component": "frontend",
-      "path": ".",
-      "command": ["bun", "run", "typecheck"],
-      "status": "passed",
-      "exitCode": 0,
-      "durationMs": 321
-    }
-  ]
-}
-```
+## \`doctor\`
 
-## `affected`
-
-`affected` reports facts derived from a Git baseline and repository structure. It does not decide agent policy.
-
-Expected `data` fields:
-
-```json
-{
-  "base": "HEAD",
-  "changedFiles": ["src/example.ts"],
-  "affectedComponents": ["frontend"],
-  "recommendedCapabilities": ["format:check", "lint", "typecheck", "test:unit"]
-}
-```
-
-`recommendedCapabilities` is a deterministic mapping from changed scope to available capabilities. The development-loop skill still decides how far validation should progress.
-
-## `doctor`
-
-`doctor` diagnoses whether the deterministic toolchain can operate. It may check repository access, Git state, file permissions, and required runtimes.
-
-Expected `data` fields:
-
-```json
-{
-  "checks": [
-    {
-      "name": "git",
-      "status": "passed",
-      "message": "git is available"
-    }
-  ]
-}
-```
-
-`doctor` is diagnostic by default. Any future repair operation must be explicit and separately named; diagnostics must not silently change permissions or configuration.
+\`doctor\` diagnoses repository access, Git, and runtimes required by discovered capabilities. It does not repair or mutate the environment.
 
 ## Boundary with orchestration
 
-This CLI does not create agent runs, retry models, schedule work, choose candidate branches, or own worktree lifecycle. Those concerns belong to the outer orchestrator.
+This CLI does not create agent runs, retry models, schedule work, choose candidate branches, or own worktree lifecycle.
