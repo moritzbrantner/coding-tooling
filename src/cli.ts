@@ -33,10 +33,7 @@ export function parseArgs(args: string[]): Parsed {
     }
     const keys: Record<
       string,
-      keyof Pick<
-        Parsed,
-        "root" | "component" | "base" | "changeManifest"
-      >
+      keyof Pick<Parsed, "root" | "component" | "base" | "changeManifest">
     > = {
       "--root": "root",
       "--component": "component",
@@ -65,9 +62,7 @@ export function execute(args: string[]): {
   const started = Date.now();
   try {
     const parsed = parseArgs(args);
-    const inspection = inspectRepository(
-      parsed.root || process.cwd(),
-    );
+    const inspection = inspectRepository(parsed.root || process.cwd());
     let result: Envelope<object>;
     if (parsed.operation === "inspect") {
       result = envelope("inspect", started, "passed", inspection);
@@ -81,9 +76,7 @@ export function execute(args: string[]): {
       result = runCheck(inspection, capability, parsed.component);
     } else if (parsed.operation === "affected") {
       if (parsed.base && parsed.changeManifest) {
-        throw new Error(
-          "--base and --change-manifest are mutually exclusive",
-        );
+        throw new Error("--base and --change-manifest are mutually exclusive");
       }
       result = affected(inspection, {
         base: parsed.base,
@@ -92,9 +85,7 @@ export function execute(args: string[]): {
     } else if (parsed.operation === "doctor") {
       result = doctor(inspection);
     } else {
-      throw new Error(
-        "Usage: coding-tooling <inspect|check|affected|doctor> [options]",
-      );
+      throw new Error("Usage: coding-tooling <inspect|check|affected|doctor> [options]");
     }
     return {
       result,
@@ -105,8 +96,7 @@ export function execute(args: string[]): {
     const result = envelope("cli", started, "error", {}, [
       {
         code: "invalid-usage",
-        message:
-          error instanceof Error ? error.message : String(error),
+        message: error instanceof Error ? error.message : String(error),
       },
     ]);
     return {
@@ -118,13 +108,7 @@ export function execute(args: string[]): {
 }
 
 function exitCode(status: Status): number {
-  return status === "passed"
-    ? 0
-    : status === "failed"
-      ? 1
-      : status === "unavailable"
-        ? 2
-        : 3;
+  return status === "passed" ? 0 : status === "failed" ? 1 : status === "unavailable" ? 2 : 3;
 }
 
 function render(result: Envelope<object>): string {
@@ -132,9 +116,7 @@ function render(result: Envelope<object>): string {
     return result.operation + ": passed";
   }
   return (
-    result.diagnostics
-      .map((diagnostic) => diagnostic.message)
-      .join("\n") ||
+    result.diagnostics.map((diagnostic) => diagnostic.message).join("\n") ||
     result.operation + ": " + result.status
   );
 }
@@ -142,9 +124,7 @@ function render(result: Envelope<object>): string {
 if (import.meta.main) {
   const execution = execute(process.argv.slice(2));
   process.stdout.write(
-    execution.json
-      ? JSON.stringify(execution.result) + "\n"
-      : render(execution.result) + "\n",
+    execution.json ? JSON.stringify(execution.result) + "\n" : render(execution.result) + "\n",
   );
   process.exitCode = execution.exitCode;
 }

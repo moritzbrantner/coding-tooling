@@ -33,12 +33,12 @@ Every command invoked with \`--json\` returns exactly one JSON object:
 
 \`\`\`json
 {
-  "schemaVersion": 1,
-  "operation": "check",
-  "status": "passed",
-  "durationMs": 123,
-  "data": {},
-  "diagnostics": []
+"schemaVersion": 1,
+"operation": "check",
+"status": "passed",
+"durationMs": 123,
+"data": {},
+"diagnostics": []
 }
 \`\`\`
 
@@ -47,10 +47,10 @@ Every command invoked with \`--json\` returns exactly one JSON object:
 ## Exit codes
 
 \`\`\`text
-0  passed
-1  failed
-2  unavailable or invalid CLI usage
-3  tooling/environment error
+0 passed
+1 failed
+2 unavailable or invalid CLI usage
+3 tooling/environment error
 \`\`\`
 
 The JSON status remains canonical.

@@ -1,13 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-  sep,
-} from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   commandAvailable,
   pathName,
@@ -84,9 +76,7 @@ export function inspectRepository(input = process.cwd()): Inspection {
   const files = walkFiles(root);
   const components: Component[] = [];
 
-  for (const manifestPath of files.filter(
-    (path) => basename(path) === "package.json",
-  )) {
+  for (const manifestPath of files.filter((path) => basename(path) === "package.json")) {
     const manifest = readJson<PackageManifest>(manifestPath);
     if (!manifest) continue;
     const componentRoot = dirname(manifestPath);
@@ -99,14 +89,11 @@ export function inspectRepository(input = process.cwd()): Inspection {
     });
   }
 
-  for (const manifestPath of files.filter(
-    (path) => basename(path) === "Cargo.toml",
-  )) {
+  for (const manifestPath of files.filter((path) => basename(path) === "Cargo.toml")) {
     const componentRoot = dirname(manifestPath);
     const contents = readFileSync(manifestPath, "utf8");
     const name =
-      /^name\s*=\s*["']([^"']+)["']/m.exec(contents)?.[1] ||
-      pathName(componentRoot) + "-rust";
+      /^name\s*=\s*["']([^"']+)["']/m.exec(contents)?.[1] || pathName(componentRoot) + "-rust";
     components.push({
       name,
       path: relativePosix(root, componentRoot),
@@ -114,14 +101,7 @@ export function inspectRepository(input = process.cwd()): Inspection {
       technologies: ["rust"],
       capabilities: {
         "format:check": ["cargo", "fmt", "--all", "--", "--check"],
-        lint: [
-          "cargo",
-          "clippy",
-          "--all-targets",
-          "--",
-          "-D",
-          "warnings",
-        ],
+        lint: ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"],
         typecheck: ["cargo", "check", "--all-targets"],
         build: ["cargo", "build", "--all-targets"],
         test: ["cargo", "test"],
@@ -129,9 +109,7 @@ export function inspectRepository(input = process.cwd()): Inspection {
     });
   }
 
-  for (const projectPath of files.filter((path) =>
-    path.endsWith(".csproj"),
-  )) {
+  for (const projectPath of files.filter((path) => path.endsWith(".csproj"))) {
     const componentRoot = dirname(projectPath);
     const project = basename(projectPath);
     components.push({
@@ -140,12 +118,7 @@ export function inspectRepository(input = process.cwd()): Inspection {
       kind: "dotnet",
       technologies: ["dotnet"],
       capabilities: {
-        "format:check": [
-          "dotnet",
-          "format",
-          project,
-          "--verify-no-changes",
-        ],
+        "format:check": ["dotnet", "format", project, "--verify-no-changes"],
         build: ["dotnet", "build", project],
         typecheck: ["dotnet", "build", project],
         test: ["dotnet", "test", project],
@@ -155,35 +128,23 @@ export function inspectRepository(input = process.cwd()): Inspection {
 
   components.sort(
     (a, b) =>
-      a.path.localeCompare(b.path) ||
-      a.kind.localeCompare(b.kind) ||
-      a.name.localeCompare(b.name),
+      a.path.localeCompare(b.path) || a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name),
   );
   disambiguateNames(components);
   return {
     root,
-    technologies: [
-      ...new Set(
-        components.flatMap((component) => component.technologies),
-      ),
-    ].sort(),
+    technologies: [...new Set(components.flatMap((component) => component.technologies))].sort(),
     components,
   };
 }
 
-function packageTechnologies(
-  manifest: PackageManifest,
-  root: string,
-): string[] {
+function packageTechnologies(manifest: PackageManifest, root: string): string[] {
   const dependencies = {
     ...manifest.dependencies,
     ...manifest.devDependencies,
   };
   const technologies = new Set<string>(["javascript"]);
-  if (
-    dependencies.typescript ||
-    existsSync(join(root, "tsconfig.json"))
-  ) {
+  if (dependencies.typescript || existsSync(join(root, "tsconfig.json"))) {
     technologies.add("typescript");
   }
   if (dependencies.react || dependencies["react-dom"]) {
@@ -216,10 +177,7 @@ function packageCapabilities(
   }
   if (scripts["format:check"]) {
     capabilities["format:check"] = command("format:check");
-  } else if (
-    scripts.format &&
-    /(^|\s)--check(?:\s|$)/.test(scripts.format)
-  ) {
+  } else if (scripts.format && /(^|\s)--check(?:\s|$)/.test(scripts.format)) {
     capabilities["format:check"] = command("format");
   }
   return capabilities;
@@ -233,18 +191,14 @@ function packageCommand(
   const declared = manifest.packageManager?.split("@")[0];
   const manager =
     declared ||
-    (existsSync(join(root, "bun.lock")) ||
-    existsSync(join(repository, "bun.lock"))
+    (existsSync(join(root, "bun.lock")) || existsSync(join(repository, "bun.lock"))
       ? "bun"
-      : existsSync(join(root, "pnpm-lock.yaml")) ||
-          existsSync(join(repository, "pnpm-lock.yaml"))
+      : existsSync(join(root, "pnpm-lock.yaml")) || existsSync(join(repository, "pnpm-lock.yaml"))
         ? "pnpm"
-        : existsSync(join(root, "yarn.lock")) ||
-            existsSync(join(repository, "yarn.lock"))
+        : existsSync(join(root, "yarn.lock")) || existsSync(join(repository, "yarn.lock"))
           ? "yarn"
           : "npm");
-  return (script) =>
-    manager === "yarn" ? [manager, script] : [manager, "run", script];
+  return (script) => (manager === "yarn" ? [manager, script] : [manager, "run", script]);
 }
 
 function disambiguateNames(components: Component[]): void {
@@ -266,65 +220,41 @@ export function runCheck(
 ): Envelope<{ capability: string; results: object[] }> {
   const started = Date.now();
   if (!capabilityOrder.includes(capability as Capability)) {
-    return envelope(
-      "check",
-      started,
-      "unavailable",
-      { capability, results: [] },
-      [
-        {
-          code: "unknown-capability",
-          message: "Unknown capability: " + capability,
-        },
-      ],
-    );
+    return envelope("check", started, "unavailable", { capability, results: [] }, [
+      {
+        code: "unknown-capability",
+        message: "Unknown capability: " + capability,
+      },
+    ]);
   }
   const components = selectedComponent
-    ? inspection.components.filter(
-        (component) => component.name === selectedComponent,
-      )
+    ? inspection.components.filter((component) => component.name === selectedComponent)
     : inspection.components;
   if (selectedComponent && components.length === 0) {
-    return envelope(
-      "check",
-      started,
-      "unavailable",
-      { capability, results: [] },
-      [
-        {
-          code: "unknown-component",
-          message: "Unknown component: " + selectedComponent,
-        },
-      ],
-    );
+    return envelope("check", started, "unavailable", { capability, results: [] }, [
+      {
+        code: "unknown-component",
+        message: "Unknown component: " + selectedComponent,
+      },
+    ]);
   }
   const runnable = components.filter(
     (component) => component.capabilities[capability as Capability],
   );
   if (runnable.length === 0) {
-    return envelope(
-      "check",
-      started,
-      "unavailable",
-      { capability, results: [] },
-      [
-        {
-          code: "capability-unavailable",
-          message:
-            "Capability " +
-            capability +
-            " is not declared for the selected scope.",
-        },
-      ],
-    );
+    return envelope("check", started, "unavailable", { capability, results: [] }, [
+      {
+        code: "capability-unavailable",
+        message: "Capability " + capability + " is not declared for the selected scope.",
+      },
+    ]);
   }
 
   const results: object[] = [];
   let status: Status = "passed";
   const diagnostics: Diagnostic[] = [];
   for (const component of runnable) {
-    const command =
-      component.capabilities[capability as Capability]!;
+    const command = component.capabilities[capability as Capability]!;
     const commandStarted = Date.now();
     if (!commandAvailable(command[0])) {
       status = "error";
@@ -349,16 +279,9 @@ export function runCheck(
     const result = runCommand(
       command[0],
       command.slice(1),
-      join(
-        inspection.root,
-        component.path === "." ? "" : component.path,
-      ),
+      join(inspection.root, component.path === "." ? "" : component.path),
     );
-    const resultStatus = result.error
-      ? "error"
-      : result.status === 0
-        ? "passed"
-        : "failed";
+    const resultStatus = result.error ? "error" : result.status === 0 ? "passed" : "failed";
     if (resultStatus === "error") status = "error";
     else if (resultStatus === "failed" && status === "passed") {
       status = "failed";
@@ -374,13 +297,7 @@ export function runCheck(
       stderr: result.stderr,
     });
   }
-  return envelope(
-    "check",
-    started,
-    status,
-    { capability, results },
-    diagnostics,
-  );
+  return envelope("check", started, status, { capability, results }, diagnostics);
 }
 
 export function affected(
@@ -410,27 +327,14 @@ export function affected(
       .map((component) => component.name);
     const available = new Set(
       inspection.components
-        .filter((component) =>
-          affectedComponents.includes(component.name),
-        )
-        .flatMap(
-          (component) =>
-            Object.keys(component.capabilities) as Capability[],
-        ),
+        .filter((component) => affectedComponents.includes(component.name))
+        .flatMap((component) => Object.keys(component.capabilities) as Capability[]),
     );
     const recommended = (
-      [
-        "format:check",
-        "lint",
-        "typecheck",
-        "test:unit",
-        "test",
-      ] as Capability[]
+      ["format:check", "lint", "typecheck", "test:unit", "test"] as Capability[]
     ).filter((capability) => available.has(capability));
     return envelope("affected", started, "passed", {
-      base: options.changeManifest
-        ? null
-        : options.base || "HEAD",
+      base: options.changeManifest ? null : options.base || "HEAD",
       changeManifest: options.changeManifest || null,
       changedFiles,
       affectedComponents,
@@ -451,8 +355,7 @@ export function affected(
       [
         {
           code: "affected-failed",
-          message:
-            error instanceof Error ? error.message : String(error),
+          message: error instanceof Error ? error.message : String(error),
         },
       ],
     );
@@ -460,39 +363,22 @@ export function affected(
 }
 
 function manifestFiles(root: string, manifestPath: string): string[] {
-  const path = isAbsolute(manifestPath)
-    ? resolve(manifestPath)
-    : resolve(root, manifestPath);
+  const path = isAbsolute(manifestPath) ? resolve(manifestPath) : resolve(root, manifestPath);
   const value = JSON.parse(readFileSync(path, "utf8")) as
     | string[]
     | { files?: string[]; changedFiles?: string[] };
-  const files = Array.isArray(value)
-    ? value
-    : value.files || value.changedFiles;
-  if (
-    !files ||
-    !files.every((file) => typeof file === "string")
-  ) {
-    throw new Error(
-      "Change manifest must be an array of paths or an object with a files array.",
-    );
+  const files = Array.isArray(value) ? value : value.files || value.changedFiles;
+  if (!files || !files.every((file) => typeof file === "string")) {
+    throw new Error("Change manifest must be an array of paths or an object with a files array.");
   }
-  return [
-    ...new Set(
-      files.map((file) => normalizeChangedPath(root, file)),
-    ),
-  ].sort();
+  return [...new Set(files.map((file) => normalizeChangedPath(root, file)))].sort();
 }
 
 function normalizeChangedPath(root: string, file: string): string {
-  const absolute = isAbsolute(file)
-    ? resolve(file)
-    : resolve(root, file);
+  const absolute = isAbsolute(file) ? resolve(file) : resolve(root, file);
   const rel = relative(root, absolute);
   if (rel === ".." || rel.startsWith(".." + sep)) {
-    throw new Error(
-      "Change manifest path is outside the repository: " + file,
-    );
+    throw new Error("Change manifest path is outside the repository: " + file);
   }
   return rel.split(sep).join("/");
 }
@@ -500,29 +386,15 @@ function normalizeChangedPath(root: string, file: string): string {
 function gitChangedFiles(root: string, base: string): string[] {
   const diff = runCommand(
     "git",
-    [
-      "diff",
-      "--name-only",
-      "--diff-filter=ACMRTUXB",
-      base,
-      "--",
-    ],
+    ["diff", "--name-only", "--diff-filter=ACMRTUXB", base, "--"],
     root,
   );
   if (diff.status !== 0) {
-    throw new Error(
-      diff.stderr.trim() || "git diff failed for base " + base,
-    );
+    throw new Error(diff.stderr.trim() || "git diff failed for base " + base);
   }
-  const untracked = runCommand(
-    "git",
-    ["ls-files", "--others", "--exclude-standard"],
-    root,
-  );
+  const untracked = runCommand("git", ["ls-files", "--others", "--exclude-standard"], root);
   if (untracked.status !== 0) {
-    throw new Error(
-      untracked.stderr.trim() || "git ls-files failed",
-    );
+    throw new Error(untracked.stderr.trim() || "git ls-files failed");
   }
   return [
     ...new Set(
@@ -534,9 +406,7 @@ function gitChangedFiles(root: string, base: string): string[] {
   ].sort();
 }
 
-export function doctor(
-  inspection: Inspection,
-): Envelope<{ checks: object[] }> {
+export function doctor(inspection: Inspection): Envelope<{ checks: object[] }> {
   const started = Date.now();
   const checks: Array<{
     name: string;
@@ -546,26 +416,19 @@ export function doctor(
   checks.push({
     name: "repository",
     status:
-      existsSync(inspection.root) &&
-      statSync(inspection.root).isDirectory()
-        ? "passed"
-        : "failed",
+      existsSync(inspection.root) && statSync(inspection.root).isDirectory() ? "passed" : "failed",
     message: "repository root: " + inspection.root,
   });
   const gitAvailable = commandAvailable("git");
   checks.push({
     name: "git",
     status: gitAvailable ? "passed" : "failed",
-    message: gitAvailable
-      ? "git is available"
-      : "git is unavailable",
+    message: gitAvailable ? "git is available" : "git is unavailable",
   });
   const runtimes = [
     ...new Set(
       inspection.components.flatMap((component) =>
-        Object.values(component.capabilities).map(
-          (command) => command![0],
-        ),
+        Object.values(component.capabilities).map((command) => command![0]),
       ),
     ),
   ].sort();
@@ -574,17 +437,13 @@ export function doctor(
     checks.push({
       name: runtime,
       status: available ? "passed" : "failed",
-      message: available
-        ? runtime + " is available"
-        : runtime + " is unavailable",
+      message: available ? runtime + " is available" : runtime + " is unavailable",
     });
   }
   return envelope(
     "doctor",
     started,
-    checks.every((check) => check.status === "passed")
-      ? "passed"
-      : "failed",
+    checks.every((check) => check.status === "passed") ? "passed" : "failed",
     { checks },
   );
 }

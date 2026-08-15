@@ -102,11 +102,7 @@ export function pathName(path: string): string {
   return basename(path) || basename(dirname(path));
 }
 
-export function findNearestFile(
-  start: string,
-  root: string,
-  names: string[],
-): string | undefined {
+export function findNearestFile(start: string, root: string, names: string[]): string | undefined {
   let current = resolve(start);
   const boundary = resolve(root);
 
