@@ -20,9 +20,10 @@ It deliberately does **not** decide:
 - how an agent should reason through a development task,
 - when to create or destroy worktrees,
 - when to spawn/retry agents,
+- how runtime measurements are captured or normalized,
 - whether one candidate is semantically better than another.
 
-Those concerns belong to conventions/skills, outer orchestration, and evaluation tooling respectively.
+Those concerns belong to conventions/skills, outer orchestration, evidence collectors, and evaluation tooling respectively.
 
 ## Commands
 
@@ -63,6 +64,8 @@ benchmark:smoke
 
 For JavaScript/TypeScript components, v0.2 uses declared package scripts instead of inventing commands. For Rust and .NET it exposes conservative built-in commands where the meaning is mechanically clear.
 
+External deterministic tools may also be wired through `capabilityCommands`. For example, a repository may expose a `runtime-profiler capture` invocation as its `benchmark` capability. `coding-tooling` invokes that declared command but leaves profiler bundle semantics to `runtime-profiler`; see [`capabilities/benchmarks/README.md`](capabilities/benchmarks/README.md).
+
 ## Capability catalog
 
 The machine-readable [capability catalog](capabilities/catalog.json) and its family contracts describe broader validation tiers, artifact conventions, opt-in performance work, and baseline requirements. They remain declarative metadata; the executable capability vocabulary is the v0.2 list above.
@@ -75,27 +78,43 @@ The machine-readable [capability catalog](capabilities/catalog.json) and its fam
 4. A missing capability is different from a failed capability.
 5. Repository policy stays outside this repository. This tool reports capabilities/results; agent workflows decide when to use them.
 6. Outer agent lifecycle/orchestration stays outside this repository.
-7. Prefer repository-declared commands over guessed ecosystem defaults when semantics could differ.
+7. Evidence-collector internals and evaluator semantics stay outside this repository.
+8. Prefer repository-declared commands over guessed ecosystem defaults when semantics could differ.
 
 ## Relationship to the other repositories
 
 ```text
-coding-agent-conventions
-  conventions + development-loop skill
-              │
-              ▼
-          coding agent
-              │
-              ▼
-        coding-tooling
-   deterministic operations
-
-agent-loop-setup
-  outer lifecycle/orchestration
-
-moonlight
-  baseline/candidate evaluation
+agent-contracts
+  neutral interchange contracts
+             │
+             ├──────────────────────────────┐
+             │                              │
+coding-agent-conventions          agent-loop-orchestrator
+  policy + development loop       scheduling + durable run state
+             │                              │
+             ▼                              ▼
+         coding agent ───────────────► coding-tooling
+                                      deterministic operations
+                                               │
+                          declared capability  │
+                                               ▼
+                                      runtime-profiler
+                                      runtime evidence
+                                               │
+                                               ▼
+                                           Moonlight
+                                      evaluation/comparison
 ```
+
+The arrows describe collaboration, not package dependencies:
+
+- `agent-contracts` owns cross-repository envelopes such as evidence, check results, and evaluation results;
+- `coding-tooling` owns deterministic repository discovery and execution;
+- `runtime-profiler` owns runtime capture and immutable profiler bundles;
+- Moonlight owns baseline/candidate evaluation;
+- `agent-loop-orchestrator` decides when these components run and stores their neutral outputs;
+- `coding-agent-conventions` defines policy for how agents use the results;
+- `agent-loop-setup` may compose/install worker procedures but is not a source of tooling semantics.
 
 `coding-tooling` must remain usable without any of the other repositories.
 
@@ -129,8 +148,8 @@ not bypass this repository-owned tier.
 
 Starter dependency-update configurations live under [`profiles/dependency-update/`](profiles/dependency-update/).
 Copy the closest profile into a Consumer Repository as `.coding-tooling.json`, then add
-`capabilityCommands` for repository-specific Rust Criterion, cargo-audit, .NET audit, or
-BenchmarkDotNet entrypoints. Commands are argv arrays and never run through a shell.
+`capabilityCommands` for repository-specific Rust Criterion, cargo-audit, .NET audit, BenchmarkDotNet,
+or runtime-profiler entrypoints. Commands are argv arrays and never run through a shell.
 
 This repository validates itself through the same composite Action in
 `.github/workflows/validate.yml`, keeping local and CI behavior on one deterministic entry point.
