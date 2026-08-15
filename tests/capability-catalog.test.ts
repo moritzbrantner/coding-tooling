@@ -39,11 +39,11 @@ describe("capability catalog", () => {
     }
   });
 
-  test("marks comparison and Lighthouse gates as baseline-dependent", () => {
+  test("keeps cross-candidate benchmark comparison outside tooling", () => {
     const byName = new Map(catalog.capabilities.map((capability) => [capability.name, capability]));
 
     expect(byName.get("audit:lighthouse")?.baselineRequired).toBe(true);
-    expect(byName.get("benchmark:compare")?.baselineRequired).toBe(true);
     expect(byName.get("benchmark")?.baselineRequired).toBe(false);
+    expect(byName.has("benchmark:compare")).toBe(false);
   });
 });
