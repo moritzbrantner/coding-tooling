@@ -1,0 +1,12 @@
+{
+  "name": "fixture-bun-typescript",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "devDependencies": { "typescript": "7.0.2" },
+  "scripts": {
+    "format": "echo format",
+    "lint": "echo lint",
+    "typecheck": "echo typecheck",
+    "test": "echo test"
+  }
+}

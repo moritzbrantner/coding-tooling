@@ -1,0 +1,27 @@
+id = "react-vite"
+language = "typescript"
+runtime = "bun"
+
+[capabilities.format]
+command = ["bun", "run", "format"]
+requires_script = "format"
+
+[capabilities.lint]
+command = ["bun", "run", "lint"]
+requires_script = "lint"
+
+[capabilities.typecheck]
+command = ["bun", "run", "typecheck"]
+requires_script = "typecheck"
+
+[capabilities.build]
+command = ["bun", "run", "build"]
+requires_script = "build"
+
+[capabilities."test:unit"]
+command = ["bun", "run", "test"]
+requires_script = "test"
+
+[capabilities."test:e2e"]
+command = ["bun", "run", "test:e2e"]
+requires_script = "test:e2e"

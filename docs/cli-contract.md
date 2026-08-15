@@ -5,10 +5,10 @@ The CLI is a deterministic interface for humans, CI, coding agents, and higher-l
 ## Commands
 
 ```bash
-coding-tooling inspect [--json]
-coding-tooling check <capability> [--component <name>] [--json]
-coding-tooling affected [--base <git-ref>] [--json]
-coding-tooling doctor [--json]
+coding-tooling inspect [--root <path>] [--json]
+coding-tooling check <capability> [--component <name>] [--root <path>] [--json]
+coding-tooling affected [--base <git-ref> | --change-manifest <file>] [--root <path>] [--json]
+coding-tooling doctor [--root <path>] [--json]
 ```
 
 ## Stable capability names
@@ -28,9 +28,12 @@ test:e2e
 audit:lighthouse
 benchmark
 benchmark:compare
+gate:final
 ```
 
 A capability name describes semantics, not an ecosystem command. The implementation maps it to a repository-declared or mechanically safe command.
+
+`gate:final` is available only when a component declares a `check` script. It represents the complete applicable pre-handoff gate. Changed-surface recommendations are intentionally narrower and do not include it.
 
 The machine-readable definitions in [`../capabilities/catalog.json`](../capabilities/catalog.json) also declare:
 
@@ -129,7 +132,9 @@ Expected `data` fields:
 
 ## `affected`
 
-`affected` reports facts derived from a Git baseline and repository structure. It does not decide agent policy.
+`affected` reports facts derived from a Git baseline, an explicit change manifest, and repository structure. It does not decide agent policy.
+
+A change manifest may be a JSON array of repository-relative paths or an object with a `files` (or `changedFiles`) array. Paths outside the repository are rejected. This lets a caller identify exactly the files it owns without conflating them with a pre-existing dirty worktree.
 
 Expected `data` fields:
 

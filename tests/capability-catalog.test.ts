@@ -17,10 +17,7 @@ type Catalog = {
 };
 
 const catalog = JSON.parse(
-  readFileSync(
-    new URL("../capabilities/catalog.json", import.meta.url),
-    "utf8",
-  ),
+  readFileSync(new URL("../capabilities/catalog.json", import.meta.url), "utf8"),
 ) as Catalog;
 
 describe("capability catalog", () => {
@@ -33,30 +30,17 @@ describe("capability catalog", () => {
   });
 
   test("declares deterministic script candidates and valid tiers", () => {
-    const tiers = new Set([
-      "fast",
-      "focused",
-      "integration",
-      "system",
-      "performance",
-    ]);
+    const tiers = new Set(["fast", "focused", "integration", "system", "performance"]);
 
     for (const capability of catalog.capabilities) {
       expect(capability.scriptCandidates.length).toBeGreaterThan(0);
-      expect(new Set(capability.scriptCandidates).size).toBe(
-        capability.scriptCandidates.length,
-      );
+      expect(new Set(capability.scriptCandidates).size).toBe(capability.scriptCandidates.length);
       expect(tiers.has(capability.tier)).toBe(true);
     }
   });
 
   test("marks comparison and Lighthouse gates as baseline-dependent", () => {
-    const byName = new Map(
-      catalog.capabilities.map((capability) => [
-        capability.name,
-        capability,
-      ]),
-    );
+    const byName = new Map(catalog.capabilities.map((capability) => [capability.name, capability]));
 
     expect(byName.get("audit:lighthouse")?.baselineRequired).toBe(true);
     expect(byName.get("benchmark:compare")?.baselineRequired).toBe(true);

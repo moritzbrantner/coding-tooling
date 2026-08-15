@@ -60,7 +60,10 @@ test:e2e
 audit:lighthouse
 benchmark
 benchmark:compare
+gate:final
 ```
+
+`gate:final` maps only to a repository-declared `check` script. It is the complete applicable gate before handoff; `affected` recommendations remain early feedback and never replace it.
 
 For JavaScript/TypeScript components, v0.1 uses declared package scripts instead of inventing commands. For Rust and .NET it exposes conservative built-in commands where the meaning is mechanically clear.
 
