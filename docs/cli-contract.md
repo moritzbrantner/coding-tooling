@@ -5,10 +5,12 @@ The CLI is a deterministic interface for humans, CI, coding agents, and higher-l
 ## Commands
 
 ```bash
-coding-tooling inspect [--root <path>] [--json]
-coding-tooling check <capability> [--component <name>] [--root <path>] [--json]
-coding-tooling affected [--base <git-ref> | --change-manifest <file>] [--root <path>] [--json]
-coding-tooling doctor [--root <path>] [--json]
+coding-tooling inspect [--json]
+coding-tooling check <capability> [--component <name>] [--json]
+coding-tooling affected [--base <git-ref>] [--json]
+coding-tooling doctor [--json]
+coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
+coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
 ```
 
 ## Stable capability names
@@ -21,29 +23,15 @@ build
 test
 test:unit
 test:integration
-test:component
-storybook:build
-test:storybook
 test:e2e
-audit:lighthouse
+dependencies:audit
 benchmark
-benchmark:compare
-gate:final
+benchmark:smoke
 ```
 
 A capability name describes semantics, not an ecosystem command. The implementation maps it to a repository-declared or mechanically safe command.
 
-`gate:final` is available only when a component declares a `check` script. It represents the complete applicable pre-handoff gate. Changed-surface recommendations are intentionally narrower and do not include it.
-
-The machine-readable definitions in [`../capabilities/catalog.json`](../capabilities/catalog.json) also declare:
-
-- progressive tier: `fast`, `focused`, `integration`, `system`, or `performance`,
-- repository script candidates,
-- default failure-artifact paths,
-- whether the capability is opt-in,
-- whether an explicit baseline is required.
-
-`audit:lighthouse` accepts compatible Lighthouse and Unlighthouse implementations. `benchmark:compare` requires baseline and candidate results that satisfy [`../schemas/benchmark-report.schema.json`](../schemas/benchmark-report.schema.json). Performance budgets satisfy [`../schemas/performance-budget.schema.json`](../schemas/performance-budget.schema.json).
+The [capability catalog](../capabilities/catalog.json) separately records broader validation tiers, artifact conventions, and baseline requirements. It is declarative metadata; the executable capability vocabulary is the list above.
 
 ## JSON envelope
 
@@ -132,9 +120,7 @@ Expected `data` fields:
 
 ## `affected`
 
-`affected` reports facts derived from a Git baseline, an explicit change manifest, and repository structure. It does not decide agent policy.
-
-A change manifest may be a JSON array of repository-relative paths or an object with a `files` (or `changedFiles`) array. Paths outside the repository are rejected. This lets a caller identify exactly the files it owns without conflating them with a pre-existing dirty worktree.
+`affected` reports facts derived from a Git baseline and repository structure. It does not decide agent policy.
 
 Expected `data` fields:
 
@@ -168,6 +154,43 @@ Expected `data` fields:
 ```
 
 `doctor` is diagnostic by default. Any future repair operation must be explicit and separately named; diagnostics must not silently change permissions or configuration.
+
+## `plan` and `run`
+
+`plan` resolves a named validation tier into semantic capability executions without running them.
+`run` executes that exact plan and can write the complete result envelope to `--report`.
+
+The optional `.coding-tooling.json` defines repository tiers, a profile, required capabilities,
+optional capabilities, and convention references. It contains no GitHub-specific behavior, so local
+agents and GitHub Actions execute the same deterministic validation contract.
+
+`--strict` makes unavailable selected capabilities fail the run unless they are listed in
+`optionalCapabilities`. This lets a shared dependency-update tier request integration, end-to-end,
+dependency-audit, and benchmark evidence where repositories declare it without pretending those
+capabilities exist everywhere.
+
+Dependency-update workflows should use a repository-owned `dependency-update` tier. Bot metadata
+determines when to request that tier; `coding-tooling` remains bot-independent and executes the same
+tier locally or in CI. A `benchmark:smoke` or `benchmark` script owns base-versus-candidate
+measurement and should emit its comparison as normal command output and/or a repository artifact.
+
+Repositories may map semantic capabilities to explicit argv arrays without embedding shell syntax:
+
+```json
+{
+  "capabilityCommands": {
+    ".": {
+      "dependencies:audit": ["cargo", "audit"],
+      "benchmark:smoke": ["cargo", "bench", "--locked", "--bench", "smoke"]
+    }
+  }
+}
+```
+
+A selector is a discovered component name or repository-relative component path; path mappings take
+precedence. Commands are executed without a shell. This is the Rust/.NET escape hatch for
+repository-specific audit projects, BenchmarkDotNet entrypoints, Criterion benches, or other
+declared evidence that cannot be inferred safely from ecosystem defaults.
 
 ## Boundary with orchestration
 

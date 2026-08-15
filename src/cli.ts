@@ -1,130 +1,85 @@
 #!/usr/bin/env bun
-import {
-  affected,
-  doctor,
-  envelope,
-  inspectRepository,
-  runCheck,
-  type Envelope,
-  type Status,
-} from "./tooling.ts";
 
-type Parsed = {
-  operation: string;
-  positional: string[];
-  json: boolean;
-  root?: string;
-  component?: string;
-  base?: string;
-  changeManifest?: string;
-};
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
-export function parseArgs(args: string[]): Parsed {
-  const parsed: Parsed = {
-    operation: args[0] || "",
-    positional: [],
-    json: false,
-  };
-  for (let index = 1; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--json") {
-      parsed.json = true;
+import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
+import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
+import { repositoryRoot } from "./shared.ts";
+
+type Options = Record<string, string | boolean>;
+
+function parse(argv: string[]): { command?: string; positional: string[]; options: Options } {
+  const [command, ...rest] = argv;
+  const positional: string[] = [];
+  const options: Options = {};
+  for (let index = 0; index < rest.length; index += 1) {
+    const value = rest[index];
+    if (!value.startsWith("--")) {
+      positional.push(value);
       continue;
     }
-    const keys: Record<
-      string,
-      keyof Pick<Parsed, "root" | "component" | "base" | "changeManifest">
-    > = {
-      "--root": "root",
-      "--component": "component",
-      "--base": "base",
-      "--change-manifest": "changeManifest",
-    };
-    const key = keys[arg];
-    if (key) {
-      const value = args[++index];
-      if (!value) throw new Error("Missing value for " + arg);
-      parsed[key] = value;
-    } else if (arg.startsWith("--")) {
-      throw new Error("Unknown option: " + arg);
-    } else {
-      parsed.positional.push(arg);
+    const key = value.slice(2);
+    const next = rest[index + 1];
+    if (!next || next.startsWith("--")) options[key] = true;
+    else {
+      options[key] = next;
+      index += 1;
     }
   }
-  return parsed;
+  return { command, positional, options };
 }
 
-export function execute(args: string[]): {
-  result: Envelope<object>;
-  json: boolean;
-  exitCode: number;
-} {
-  const started = Date.now();
-  try {
-    const parsed = parseArgs(args);
-    const inspection = inspectRepository(parsed.root || process.cwd());
-    let result: Envelope<object>;
-    if (parsed.operation === "inspect") {
-      result = envelope("inspect", started, "passed", inspection);
-    } else if (parsed.operation === "check") {
-      const capability = parsed.positional[0];
-      if (!capability || parsed.positional.length > 1) {
-        throw new Error(
-          "Usage: coding-tooling check <capability> [--component <name>] [--root <path>] [--json]",
-        );
-      }
-      result = runCheck(inspection, capability, parsed.component);
-    } else if (parsed.operation === "affected") {
-      if (parsed.base && parsed.changeManifest) {
-        throw new Error("--base and --change-manifest are mutually exclusive");
-      }
-      result = affected(inspection, {
-        base: parsed.base,
-        changeManifest: parsed.changeManifest,
-      });
-    } else if (parsed.operation === "doctor") {
-      result = doctor(inspection);
-    } else {
-      throw new Error("Usage: coding-tooling <inspect|check|affected|doctor> [options]");
-    }
-    return {
-      result,
-      json: parsed.json,
-      exitCode: exitCode(result.status),
-    };
-  } catch (error) {
-    const result = envelope("cli", started, "error", {}, [
-      {
-        code: "invalid-usage",
-        message: error instanceof Error ? error.message : String(error),
-      },
-    ]);
-    return {
-      result,
-      json: args.includes("--json"),
-      exitCode: 2,
-    };
-  }
+function stringOption(options: Options, name: string): string | undefined {
+  const value = options[name];
+  return typeof value === "string" ? value : undefined;
 }
 
-function exitCode(status: Status): number {
+function exitCode(status: ResultEnvelope<Record<string, unknown>>["status"]): number {
   return status === "passed" ? 0 : status === "failed" ? 1 : status === "unavailable" ? 2 : 3;
 }
 
-function render(result: Envelope<object>): string {
-  if (result.status === "passed") {
-    return result.operation + ": passed";
-  }
-  return (
-    result.diagnostics.map((diagnostic) => diagnostic.message).join("\n") ||
-    result.operation + ": " + result.status
-  );
+function usage(): never {
+  console.error(`Usage:
+  coding-tooling inspect [--json]
+  coding-tooling check <capability> [--component <name>] [--json]
+  coding-tooling affected [--base <git-ref>] [--json]
+  coding-tooling doctor [--json]
+  coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
+  coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]`);
+  process.exit(2);
 }
 
-if (import.meta.main) {
-  const execution = execute(process.argv.slice(2));
-  process.stdout.write(
-    execution.json ? JSON.stringify(execution.result) + "\n" : render(execution.result) + "\n",
-  );
-  process.exitCode = execution.exitCode;
+export function main(argv = process.argv.slice(2)): number {
+  const { command, positional, options } = parse(argv);
+  const root = repositoryRoot();
+  let result: ResultEnvelope<Record<string, unknown>>;
+  if (command === "inspect") result = inspect(root);
+  else if (command === "doctor") result = doctor(root);
+  else if (command === "affected") result = affected(root, stringOption(options, "base") ?? "HEAD");
+  else if (command === "check") {
+    const capability = positional[0] as Capability | undefined;
+    if (!capability || !capabilities.includes(capability)) return usage();
+    result = check(root, capability, stringOption(options, "component"));
+  } else if (command === "plan" || command === "run") {
+    const tier = stringOption(options, "tier");
+    if (!tier) return usage();
+    const common = {
+      root,
+      tier,
+      component: stringOption(options, "component"),
+      configPath: stringOption(options, "config"),
+    };
+    result =
+      command === "plan"
+        ? planEnvelope(root, tier, common.component, common.configPath)
+        : runPlan({ ...common, strict: Boolean(options.strict) });
+    const report = stringOption(options, "report");
+    if (report) writeReport(result, resolve(root, report));
+  } else return usage();
+  console.log(JSON.stringify(result, null, options.json ? 0 : 2));
+  return exitCode(result.status);
 }
+
+const entry = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : "";
+if (import.meta.url === entry) process.exitCode = main();

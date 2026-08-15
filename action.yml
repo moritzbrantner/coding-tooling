@@ -1,0 +1,83 @@
+name: Run private coding tooling
+description: Run a version-pinned coding-tooling validation tier and publish its machine-readable report.
+
+inputs:
+  tier:
+    description: Validation tier from .coding-tooling.json or the built-in defaults.
+    required: true
+  component:
+    description: Optional component name or repository-relative path.
+    required: false
+    default: ""
+  config:
+    description: Repository-relative configuration path.
+    required: false
+    default: .coding-tooling.json
+  report-path:
+    description: Repository-relative JSON report path.
+    required: false
+    default: .artifacts/coding-tooling/report.json
+  strict:
+    description: Fail when a selected capability is unavailable.
+    required: false
+    default: "true"
+  bun-version:
+    description: Bun version used to execute coding-tooling.
+    required: false
+    default: 1.3.14
+  install-mode:
+    description: Install dependencies from a supported lockfile automatically, or skip installation.
+    required: false
+    default: auto
+
+outputs:
+  report-path:
+    description: Path to the machine-readable validation report.
+    value: ${{ steps.run.outputs.report-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: ${{ inputs.bun-version }}
+    - name: Install consumer dependencies
+      shell: bash
+      env:
+        INPUT_INSTALL_MODE: ${{ inputs.install-mode }}
+      run: |
+        if [[ "$INPUT_INSTALL_MODE" == "none" ]]; then
+          exit 0
+        fi
+        if [[ "$INPUT_INSTALL_MODE" != "auto" ]]; then
+          echo "::error::install-mode must be 'auto' or 'none'"
+          exit 2
+        fi
+        if [[ -f bun.lock || -f bun.lockb ]]; then
+          bun install --frozen-lockfile
+        elif [[ -f package-lock.json ]]; then
+          npm ci
+        elif [[ -f package.json ]]; then
+          echo "::error::package.json exists without bun.lock, bun.lockb, or package-lock.json. Commit a supported lockfile or install dependencies explicitly and set install-mode: none."
+          exit 2
+        fi
+    - name: Run coding-tooling
+      id: run
+      shell: bash
+      env:
+        INPUT_TIER: ${{ inputs.tier }}
+        INPUT_COMPONENT: ${{ inputs.component }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_REPORT_PATH: ${{ inputs.report-path }}
+        INPUT_STRICT: ${{ inputs.strict }}
+      run: |
+        args=(run --tier "$INPUT_TIER" --config "$INPUT_CONFIG" --report "$INPUT_REPORT_PATH" --json)
+        if [[ -n "$INPUT_COMPONENT" ]]; then
+          args+=(--component "$INPUT_COMPONENT")
+        fi
+        if [[ "$INPUT_STRICT" == "true" ]]; then
+          args+=(--strict)
+        fi
+        bun "${{ github.action_path }}/src/cli.ts" "${args[@]}"
+        echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "profile": "coding-tooling-self",
+  "tiers": {
+    "self": ["format:check", "lint", "typecheck", "test:unit"]
+  },
+  "requiredCapabilities": ["format:check", "lint", "typecheck", "test:unit"],
+  "conventionRefs": ["AGENT-001", "AGENT-007", "CI-001"]
+}

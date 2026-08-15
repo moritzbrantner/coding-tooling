@@ -60,6 +60,7 @@ const ignoredDirectories = new Set([
   "bin",
   "build",
   "dist",
+  "fixtures",
   "node_modules",
   "obj",
   "target",

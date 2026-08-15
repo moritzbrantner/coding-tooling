@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "profile": "typescript-react",
+  "tiers": {
+    "fast": ["format:check", "lint", "typecheck", "test:unit", "build"],
+    "integration": ["test:integration"],
+    "e2e": ["test:e2e"],
+    "dependency-update": [
+      "format:check",
+      "lint",
+      "typecheck",
+      "build",
+      "test:unit",
+      "test:integration",
+      "test:e2e",
+      "dependencies:audit",
+      "benchmark:smoke"
+    ]
+  },
+  "requiredCapabilities": ["lint", "typecheck", "test:unit", "build"],
+  "conventionRefs": ["AGENT-001", "AGENT-007", "TEST-002", "CI-001", "CI-003"],
+  "optionalCapabilities": ["test:integration", "test:e2e", "dependencies:audit", "benchmark:smoke"]
+}

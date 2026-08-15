@@ -24,13 +24,15 @@ It deliberately does **not** decide:
 
 Those concerns belong to conventions/skills, outer orchestration, and evaluation tooling respectively.
 
-## v0.1 commands
+## Commands
 
 ```bash
 coding-tooling inspect [--json]
 coding-tooling check <capability> [--component <name>] [--json]
 coding-tooling affected [--base <git-ref>] [--json]
 coding-tooling doctor [--json]
+coding-tooling plan --tier fast [--json]
+coding-tooling run --tier fast --report .artifacts/coding-tooling/report.json --strict --json
 ```
 
 Run directly during development with Bun:
@@ -53,45 +55,17 @@ build
 test
 test:unit
 test:integration
-test:component
-storybook:build
-test:storybook
 test:e2e
-audit:lighthouse
+dependencies:audit
 benchmark
-benchmark:compare
-gate:final
+benchmark:smoke
 ```
 
-`gate:final` maps only to a repository-declared `check` script. It is the complete applicable gate before handoff; `affected` recommendations remain early feedback and never replace it.
+For JavaScript/TypeScript components, v0.2 uses declared package scripts instead of inventing commands. For Rust and .NET it exposes conservative built-in commands where the meaning is mechanically clear.
 
-For JavaScript/TypeScript components, v0.1 uses declared package scripts instead of inventing commands. For Rust and .NET it exposes conservative built-in commands where the meaning is mechanically clear.
+## Capability catalog
 
-## Capability catalog and validation tiers
-
-The machine-readable catalog lives at [`capabilities/catalog.json`](capabilities/catalog.json). It maps repository-declared script names to semantic capabilities, progressive validation tiers, expected artifacts, opt-in cost, and baseline requirements.
-
-```text
-fast static checks
-    ↓
-focused behavior tests
-    ↓
-integration + Storybook build
-    ↓
-Storybook accessibility + Playwright
-    ↓
-Lighthouse + benchmark comparison
-```
-
-The tool reports availability and results. Repository conventions and the development loop decide which applicable tiers are required. Lighthouse and expensive benchmarks are opt-in until a reviewed baseline promotes them to a blocking gate.
-
-Capability family contracts:
-
-- [`capabilities/automated-tests/`](capabilities/automated-tests/)
-- [`capabilities/storybook/`](capabilities/storybook/)
-- [`capabilities/playwright/`](capabilities/playwright/)
-- [`capabilities/lighthouse/`](capabilities/lighthouse/)
-- [`capabilities/benchmarks/`](capabilities/benchmarks/)
+The machine-readable [capability catalog](capabilities/catalog.json) and its family contracts describe broader validation tiers, artifact conventions, opt-in performance work, and baseline requirements. They remain declarative metadata; the executable capability vocabulary is the v0.2 list above.
 
 ## Design rules
 
@@ -124,3 +98,41 @@ moonlight
 ```
 
 `coding-tooling` must remain usable without any of the other repositories.
+
+## Private GitHub Action
+
+The repository root is a composite GitHub Action for private repositories owned by the same GitHub
+account. Give those repositories access under **Settings → Actions → General → Access**, then pin
+an immutable tag or commit:
+
+```yaml
+- uses: moritzbrantner/coding-tooling@coding-tooling-v0.2.0
+  with:
+    tier: fast
+    strict: true
+```
+
+The Action executes the same CLI used locally and writes
+`.artifacts/coding-tooling/report.json`. It deliberately does not check out the consumer repository;
+the caller owns checkout, permissions, and the surrounding job. By default it installs consumer
+dependencies from `bun.lock`, `bun.lockb`, or `package-lock.json`; callers that already installed
+dependencies can set `install-mode: none`.
+
+Public repositories cannot consume this private Action. They should continue to use public actions
+and repository-local commands.
+
+Copy `.coding-tooling.example.json` to `.coding-tooling.json` when a consumer needs custom
+validation tiers. The example includes a `dependency-update` tier that runs the universally required
+build and test evidence plus repository-declared dependency audit, integration, end-to-end, and smoke
+benchmark capabilities when available. Renovate and Dependabot remain proposal mechanisms; they do
+not bypass this repository-owned tier.
+
+Starter dependency-update configurations live under [`profiles/dependency-update/`](profiles/dependency-update/).
+Copy the closest profile into a Consumer Repository as `.coding-tooling.json`, then add
+`capabilityCommands` for repository-specific Rust Criterion, cargo-audit, .NET audit, or
+BenchmarkDotNet entrypoints. Commands are argv arrays and never run through a shell.
+
+This repository validates itself through the same composite Action in
+`.github/workflows/validate.yml`, keeping local and CI behavior on one deterministic entry point.
+Its committed `bun.lock` makes that self-check exercise the Action's default frozen installation
+path as well.
