@@ -1,13 +1,15 @@
 # Benchmark capabilities
 
-Stable names:
+Executable semantic names:
 
-- `benchmark` — run a declared focused benchmark suite and emit machine-readable results.
-- `benchmark:compare` — compare baseline and candidate results using committed thresholds.
+- `benchmark` — run a declared focused benchmark or runtime-evidence scenario.
+- `benchmark:smoke` — run a bounded, inexpensive performance smoke scenario when a repository declares one.
 
-Recognized Bun script candidates include `bench`, `bench:ci`, and `bench:compare`. Other ecosystems may declare an explicit adapter without changing the semantic name.
+Recognized Bun script candidates include `benchmark`, `bench`, `benchmark:smoke`, and `bench:smoke`. Other ecosystems may declare an explicit adapter without changing the semantic name.
 
-Benchmark results must satisfy `../../schemas/benchmark-report.schema.json`. Each result records its unit, direction, central value, sample count, environment, and thresholds. Comparison fails only when both relative and absolute regression limits are exceeded.
+`coding-tooling` does **not** own a baseline/candidate `benchmark:compare` capability. Cross-candidate comparison belongs to an evaluator such as Moonlight. Repository-local benchmark frameworks may still contain their own comparison scripts, but exposing those as a landscape-level semantic comparison capability would duplicate evaluator responsibility.
+
+Where a repository emits the generic benchmark report format, results should satisfy `../../schemas/benchmark-report.schema.json`. Each result records its unit, direction, central value, sample count, environment, and thresholds. Native evidence producers may instead emit their own versioned artifact contracts and expose them to the wider landscape through neutral evidence references.
 
 Benchmarks are opt-in by default because they are more expensive and hardware-sensitive than focused tests.
 
