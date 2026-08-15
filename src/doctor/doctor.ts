@@ -34,7 +34,8 @@ function checkGitIndex(root: string): DoctorCheck {
 }
 
 function checkBunLock(componentRoot: string): DoctorCheck {
-  const hasLock = existsSync(join(componentRoot, "bun.lock")) || existsSync(join(componentRoot, "bun.lockb"));
+  const hasLock =
+    existsSync(join(componentRoot, "bun.lock")) || existsSync(join(componentRoot, "bun.lockb"));
   return hasLock
     ? { name: "bun:lockfile", status: "passed", message: `Bun lockfile found in ${componentRoot}` }
     : {
@@ -56,11 +57,14 @@ export function doctorRepository(start = process.cwd()): DoctorResult {
 
   const bunComponents = inspection.components.filter((component) => component.runtime === "bun");
   for (const component of bunComponents) {
-    const componentRoot = component.path === "." ? inspection.root : join(inspection.root, component.path);
+    const componentRoot =
+      component.path === "." ? inspection.root : join(inspection.root, component.path);
     checks.push(checkBunLock(componentRoot));
   }
 
-  const deduplicated = [...new Map(checks.map((check) => [`${check.name}:${check.message}`, check])).values()];
+  const deduplicated = [
+    ...new Map(checks.map((check) => [`${check.name}:${check.message}`, check])).values(),
+  ];
   return {
     schemaVersion: 1,
     root: inspection.root,

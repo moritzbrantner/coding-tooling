@@ -13,9 +13,6 @@ describe("resolveCheckPlan", () => {
 
   test("plans both components in a mixed repository", () => {
     const plan = resolveCheckPlan(join(fixtures, "mixed"), "test:unit");
-    expect(plan.map((item) => item.component)).toEqual([
-      "root:react-vite",
-      "src-tauri:rust",
-    ]);
+    expect(plan.map((item) => item.component)).toEqual(["root:react-vite", "src-tauri:rust"]);
   });
 });

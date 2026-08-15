@@ -1,13 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { getProfile } from "../profiles/index.ts";
 import { capabilityOrder, type Component, type Inspection } from "../types.ts";
-import {
-  findRepositoryRoot,
-  hasAnyFile,
-  hasDotnetProject,
-  listDirectories,
-} from "../shared/paths.ts";
+import { hasAnyFile, hasDotnetProject, listDirectories } from "../shared/paths.ts";
 
 interface PackageJson {
   packageManager?: string;
@@ -76,7 +71,7 @@ function componentName(repositoryRoot: string, directory: string, profileId: str
 }
 
 export function inspectRepository(start = process.cwd()): Inspection {
-  const root = findRepositoryRoot(start) ?? start;
+  const root = resolve(start);
   const components: Component[] = [];
 
   for (const directory of listDirectories(root, 2)) {

@@ -1,103 +1,91 @@
 # coding-tooling
 
-Deterministic repository operations for humans, CI, and coding agents.
+Deterministic repository tooling for humans, CI, and coding agents.
 
-`coding-tooling` is the execution layer below agent policy and orchestration. It answers four questions without requiring an LLM:
+This repository contains mechanical operations that should not require an LLM to rediscover or reinterpret them on every task.
 
-1. **inspect** — what kind of repository/components are present?
-2. **check** — how do I run a named deterministic capability?
-3. **affected** — what changed and which validation capabilities are relevant?
-4. **doctor** — can the repository and required runtimes be used safely?
+## Responsibility boundary
 
-The tool deliberately does **not** decide agent policy, spawn agents, or compare baseline/candidate runs.
+`coding-tooling` answers questions such as:
 
-## Requirements
+- What kind of repository/components are present?
+- Which validation capabilities are available?
+- Which files/components changed relative to a baseline?
+- How do I run a declared validation capability?
+- Is the local environment able to run those capabilities?
 
-- Bun 1.3+
-- Git
-- Additional runtimes only when detected by a profile (`cargo`, `dotnet`)
+It deliberately does **not** decide:
 
-## Local setup
+- what task to implement,
+- how an agent should reason through a development task,
+- when to create or destroy worktrees,
+- when to spawn/retry agents,
+- whether one candidate is semantically better than another.
+
+Those concerns belong to conventions/skills, outer orchestration, and evaluation tooling respectively.
+
+## v0.1 commands
 
 ```bash
-bun install
-bun link
-coding-tooling inspect
+coding-tooling inspect [--json]
+coding-tooling check <capability> [--component <name>] [--json]
+coding-tooling affected [--base <git-ref>] [--json]
+coding-tooling doctor [--json]
 ```
 
-## CLI
+Run directly during development with Bun:
 
 ```bash
-coding-tooling inspect
-coding-tooling inspect --json
-
-coding-tooling check typecheck
-coding-tooling check test:unit
-coding-tooling check              # all available checks, in deterministic order
-coding-tooling check --json
-
-coding-tooling affected
-coding-tooling affected --base origin/main --json
-
-coding-tooling doctor
-coding-tooling doctor --json
+bun src/cli.ts inspect --json
 ```
-
-All commands accept `--cwd PATH`.
 
 ## Capabilities
 
-The stable v0.1 capability vocabulary is:
+Capabilities are stable semantic names; concrete commands are repository-specific.
 
-- `format`
-- `lint`
-- `typecheck`
-- `build`
-- `test:unit`
-- `test:integration`
-- `test:e2e`
+Current names:
 
-A capability is only advertised when the detected component can actually provide it. For Bun profiles, script-backed capabilities are omitted when the corresponding `package.json` script is absent.
-
-## Profiles
-
-Profiles live in `profiles/` and describe deterministic commands, not policy.
-
-| Profile | Runtime | Example commands |
-| --- | --- | --- |
-| `bun-typescript` | Bun | package scripts for format/lint/typecheck/build/test |
-| `react-vite` | Bun | package scripts, including optional `test:e2e` |
-| `rust` | Cargo | `cargo fmt`, `clippy`, `check`, `build`, `test` |
-| `dotnet` | .NET | `dotnet format`, `build`, `test` |
-
-Detection supports multiple components. A Tauri-like repository can therefore expose a React/Vite root component and a Rust `src-tauri` component at the same time.
-
-## Machine-readable contracts
-
-JSON output uses `schemaVersion: 1`. Initial schemas are stored in `schemas/inspection.schema.json` and `schemas/result.schema.json`.
-
-The intended consumers are:
-
-- local developers
-- CI
-- coding agents
-- an agent-loop orchestrator
-- differential/evidence tooling such as Moonlight
-
-## Design boundary
-
-- **coding-agent-conventions**: policy — what should be done and why
-- **coding-tooling**: deterministic execution — how to inspect/check/diagnose
-- **agent loop**: orchestration — when to call which capability
-- **Moonlight**: evidence/comparison — whether candidate behavior differs from baseline
-
-## Development
-
-```bash
-bun run format
-bun run lint
-bun run typecheck
-bun test
+```text
+format:check
+lint
+typecheck
+build
+test
+test:unit
+test:integration
+test:e2e
 ```
 
-Fixtures in `fixtures/` model the repository shapes this tool is expected to understand. Add a fixture when adding a new project/profile family.
+For JavaScript/TypeScript components, v0.1 uses declared package scripts instead of inventing commands. For Rust and .NET it exposes conservative built-in commands where the meaning is mechanically clear.
+
+## Design rules
+
+1. Deterministic operations only; no LLM calls.
+2. Machine-readable output is a first-class interface.
+3. Checks must not silently mutate source code.
+4. A missing capability is different from a failed capability.
+5. Repository policy stays outside this repository. This tool reports capabilities/results; agent workflows decide when to use them.
+6. Outer agent lifecycle/orchestration stays outside this repository.
+7. Prefer repository-declared commands over guessed ecosystem defaults when semantics could differ.
+
+## Relationship to the other repositories
+
+```text
+coding-agent-conventions
+  conventions + development-loop skill
+              │
+              ▼
+          coding agent
+              │
+              ▼
+        coding-tooling
+   deterministic operations
+
+agent-loop-setup
+  outer lifecycle/orchestration
+
+moonlight
+  baseline/candidate evaluation
+```
+
+`coding-tooling` must remain usable without any of the other repositories.

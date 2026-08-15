@@ -3,7 +3,15 @@
   "$id": "https://coding-tooling.local/schemas/inspection.schema.json",
   "title": "coding-tooling inspection",
   "type": "object",
-  "required": ["schemaVersion", "root", "languages", "runtimes", "profiles", "capabilities", "components"],
+  "required": [
+    "schemaVersion",
+    "root",
+    "languages",
+    "runtimes",
+    "profiles",
+    "capabilities",
+    "components"
+  ],
   "properties": {
     "schemaVersion": { "const": 1 },
     "root": { "type": "string" },

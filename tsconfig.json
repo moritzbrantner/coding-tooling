@@ -1,15 +1,13 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
-    "module": "Preserve",
-    "moduleResolution": "bundler",
-    "moduleDetection": "force",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true,
-    "types": ["bun"]
+    "allowImportingTsExtensions": true,
+    "types": ["bun"],
+    "skipLibCheck": true
   },
-  "include": ["src", "tests"]
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

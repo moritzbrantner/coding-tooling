@@ -2,10 +2,10 @@
   "name": "coding-tooling",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "bin": {
     "coding-tooling": "./src/cli.ts"
   },
+  "type": "module",
   "scripts": {
     "format": "oxfmt --check .",
     "format:write": "oxfmt .",

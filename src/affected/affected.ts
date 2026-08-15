@@ -25,7 +25,7 @@ export function recommendCapabilities(files: string[]): Capability[] {
       ["format", "lint", "typecheck", "test:unit"].forEach((capability) =>
         recommended.add(capability as Capability),
       );
-    } else if (/\.rs$/.test(file)) {
+    } else if (file.endsWith(".rs")) {
       ["format", "lint", "typecheck", "test:unit"].forEach((capability) =>
         recommended.add(capability as Capability),
       );
@@ -57,7 +57,10 @@ function changedFiles(root: string, base?: string): string[] {
   }
 
   if (result.exitCode !== 0 || !result.stdout) return [];
-  return result.stdout.split("\n").filter(Boolean).map((file) => file.replaceAll("\\", "/"));
+  return result.stdout
+    .split("\n")
+    .filter(Boolean)
+    .map((file) => file.replaceAll("\\", "/"));
 }
 
 function matchingComponents(files: string[], components: Component[]): Component[] {
@@ -68,7 +71,10 @@ function matchingComponents(files: string[], components: Component[]): Component
       if (component.path === ".") return true;
       return file === component.path || file.startsWith(`${component.path}/`);
     });
-    const maxDepth = Math.max(0, ...candidates.map((component) => component.path.split("/").length));
+    const maxDepth = Math.max(
+      0,
+      ...candidates.map((component) => component.path.split("/").length),
+    );
     for (const component of candidates) {
       const depth = component.path === "." ? 0 : component.path.split("/").length;
       if (depth === maxDepth) matched.set(component.name, component);

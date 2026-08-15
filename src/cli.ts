@@ -55,25 +55,29 @@ function parseCapability(value: string | undefined): Capability | undefined {
 switch (command) {
   case "inspect": {
     const result = inspectRepository(cwd());
-    flag("--json") ? printJson(result) : printInspection(result);
+    if (flag("--json")) printJson(result);
+    else printInspection(result);
     break;
   }
   case "check": {
     const capability = parseCapability(args[1]);
     const result = runChecks(cwd(), capability);
-    flag("--json") ? printJson(result) : printChecks(result);
+    if (flag("--json")) printJson(result);
+    else printChecks(result);
     if (result.length === 0) process.exit(2);
     if (result.some((item) => item.status === "failed")) process.exit(1);
     break;
   }
   case "affected": {
     const result = affectedRepository(cwd(), option("--base"));
-    flag("--json") ? printJson(result) : printAffected(result);
+    if (flag("--json")) printJson(result);
+    else printAffected(result);
     break;
   }
   case "doctor": {
     const result = doctorRepository(cwd());
-    flag("--json") ? printJson(result) : printDoctor(result);
+    if (flag("--json")) printJson(result);
+    else printDoctor(result);
     if (result.status === "failed") process.exit(1);
     break;
   }
