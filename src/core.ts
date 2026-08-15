@@ -213,8 +213,8 @@ function applyCapabilityCommands(components: Component[], config: ToolingConfig)
     ...component,
     capabilities: {
       ...component.capabilities,
-      ...(config.capabilityCommands?.[component.name] ?? {}),
-      ...(config.capabilityCommands?.[component.path] ?? {}),
+      ...config.capabilityCommands?.[component.name],
+      ...config.capabilityCommands?.[component.path],
     },
   }));
 }

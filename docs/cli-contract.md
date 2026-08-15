@@ -31,6 +31,8 @@ benchmark:smoke
 
 A capability name describes semantics, not an ecosystem command. The implementation maps it to a repository-declared or mechanically safe command.
 
+The [capability catalog](../capabilities/catalog.json) separately records broader validation tiers, artifact conventions, and baseline requirements. It is declarative metadata; the executable capability vocabulary is the list above.
+
 ## JSON envelope
 
 Every command invoked with `--json` returns exactly one JSON object:

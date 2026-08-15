@@ -63,6 +63,10 @@ benchmark:smoke
 
 For JavaScript/TypeScript components, v0.2 uses declared package scripts instead of inventing commands. For Rust and .NET it exposes conservative built-in commands where the meaning is mechanically clear.
 
+## Capability catalog
+
+The machine-readable [capability catalog](capabilities/catalog.json) and its family contracts describe broader validation tiers, artifact conventions, opt-in performance work, and baseline requirements. They remain declarative metadata; the executable capability vocabulary is the v0.2 list above.
+
 ## Design rules
 
 1. Deterministic operations only; no LLM calls.

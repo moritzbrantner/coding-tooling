@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coding-tooling.local/schemas/inspection.schema.json",
+  "title": "coding-tooling inspection",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "root",
+    "languages",
+    "runtimes",
+    "profiles",
+    "capabilities",
+    "components"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "root": { "type": "string" },
+    "languages": { "type": "array", "items": { "type": "string" } },
+    "runtimes": { "type": "array", "items": { "type": "string" } },
+    "profiles": { "type": "array", "items": { "type": "string" } },
+    "capabilities": { "type": "object", "additionalProperties": { "type": "boolean" } },
+    "components": { "type": "array", "items": { "type": "object" } }
+  },
+  "additionalProperties": false
+}
