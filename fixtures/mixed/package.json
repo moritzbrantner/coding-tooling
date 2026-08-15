@@ -1,0 +1,8 @@
+{
+  "name": "fixture-mixed",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "dependencies": { "react": "19.0.0", "vite": "7.0.0" },
+  "devDependencies": { "typescript": "7.0.2" },
+  "scripts": { "typecheck": "echo typecheck", "test": "echo test" }
+}

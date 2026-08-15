@@ -1,0 +1,18 @@
+id = "rust"
+language = "rust"
+runtime = "cargo"
+
+[capabilities.format]
+command = ["cargo", "fmt", "--check"]
+
+[capabilities.lint]
+command = ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+
+[capabilities.typecheck]
+command = ["cargo", "check"]
+
+[capabilities.build]
+command = ["cargo", "build"]
+
+[capabilities."test:unit"]
+command = ["cargo", "test"]
