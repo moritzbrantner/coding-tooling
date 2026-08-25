@@ -29,7 +29,10 @@ function escapeToml(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
-function loadConfig(root: string, configPath?: string): { path: string; config: SourceDependencyConfig } {
+function loadConfig(
+  root: string,
+  configPath?: string,
+): { path: string; config: SourceDependencyConfig } {
   const path = resolve(root, configPath ?? defaultConfigPath);
   const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<SourceDependencyConfig>;
   if (parsed.schemaVersion !== 1 || !parsed.cargo || !Array.isArray(parsed.cargo.patches)) {
@@ -48,7 +51,8 @@ function loadConfig(root: string, configPath?: string): { path: string; config: 
 
 function localRevision(path: string): string {
   const result = spawnSync("git", ["-C", path, "rev-parse", "HEAD"], { encoding: "utf8" });
-  if (result.status !== 0) throw new Error(`Cannot read Git revision for local source dependency: ${path}`);
+  if (result.status !== 0)
+    throw new Error(`Cannot read Git revision for local source dependency: ${path}`);
   return result.stdout.trim();
 }
 
@@ -68,14 +72,17 @@ function renderPatch(root: string, patch: CargoSourcePatch): string {
   return `"${escapeToml(patch.package)}" = { git = "${escapeToml(patch.git)}", rev = "${escapeToml(patch.rev)}" }`;
 }
 
-export function renderSourceDependencies(root: string, configPath?: string): {
+export function renderSourceDependencies(
+  root: string,
+  configPath?: string,
+): {
   configPath: string;
   cargoConfigPath: string;
   content: string;
   packages: string[];
 } {
   const loaded = loadConfig(root, configPath);
-  const patches = [...loaded.config.cargo.patches].sort((left, right) =>
+  const patches = loaded.config.cargo.patches.toSorted((left, right) =>
     left.package.localeCompare(right.package),
   );
   const cargoConfigPath = resolve(root, loaded.config.cargo.configPath ?? defaultCargoConfigPath);
@@ -97,8 +104,10 @@ export function sourceDependencies(
   try {
     const loaded = loadConfig(root, configPath);
     const cargoConfigPath = resolve(root, loaded.config.cargo.configPath ?? defaultCargoConfigPath);
-    const packages = loaded.config.cargo.patches.map((patch) => patch.package).sort();
-    const existing = existsSync(cargoConfigPath) ? readFileSync(cargoConfigPath, "utf8") : undefined;
+    const packages = loaded.config.cargo.patches.map((patch) => patch.package).toSorted();
+    const existing = existsSync(cargoConfigPath)
+      ? readFileSync(cargoConfigPath, "utf8")
+      : undefined;
     const managed = existing?.startsWith(generatedHeader) ?? false;
 
     if (action === "deactivate") {
@@ -119,7 +128,9 @@ export function sourceDependencies(
     const rendered = renderSourceDependencies(root, configPath);
     if (action === "activate") {
       if (existing !== undefined && !managed) {
-        throw new Error(`Refusing to overwrite unmanaged Cargo config: ${rendered.cargoConfigPath}`);
+        throw new Error(
+          `Refusing to overwrite unmanaged Cargo config: ${rendered.cargoConfigPath}`,
+        );
       }
       mkdirSync(dirname(rendered.cargoConfigPath), { recursive: true });
       writeFileSync(rendered.cargoConfigPath, rendered.content);
