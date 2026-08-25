@@ -23,7 +23,7 @@ export type Diagnostic = {
 
 export type ResultEnvelope<T extends Record<string, unknown>> = {
   schemaVersion: 1;
-  operation: "inspect" | "check" | "affected" | "doctor" | "plan" | "run";
+  operation: "inspect" | "check" | "affected" | "doctor" | "plan" | "run" | "source-deps";
   status: ResultStatus;
   durationMs: number;
   data: T;
