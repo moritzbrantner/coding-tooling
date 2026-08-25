@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
 import { repositoryRoot } from "./shared.ts";
+import { sourceDependencies } from "./source-deps.ts";
 
 type Options = Record<string, string | boolean>;
 
@@ -46,7 +47,8 @@ function usage(): never {
   coding-tooling affected [--base <git-ref>] [--json]
   coding-tooling doctor [--json]
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
-  coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]`);
+  coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
+  coding-tooling source-deps <activate|status|deactivate> [--config <path>] [--json]`);
   process.exit(2);
 }
 
@@ -76,6 +78,10 @@ export function main(argv = process.argv.slice(2)): number {
         : runPlan({ ...common, strict: Boolean(options.strict) });
     const report = stringOption(options, "report");
     if (report) writeReport(result, resolve(root, report));
+  } else if (command === "source-deps") {
+    const action = positional[0];
+    if (action !== "activate" && action !== "status" && action !== "deactivate") return usage();
+    result = sourceDependencies(root, action, stringOption(options, "config"));
   } else return usage();
   console.log(JSON.stringify(result, null, options.json ? 0 : 2));
   return exitCode(result.status);
