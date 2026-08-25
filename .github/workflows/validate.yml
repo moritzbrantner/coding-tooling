@@ -20,15 +20,10 @@ jobs:
           bun-version: 1.3.14
       - name: Bootstrap action dependencies
         run: bun install
-      - name: Print formatter output
+      - name: Print formatter diff
         run: |
           bun run format:write
-          for file in README.md src/source-deps.ts tests/source-deps.test.ts; do
-            echo "FORMATTED_BEGIN:$file"
-            base64 -w0 "$file"
-            echo
-            echo "FORMATTED_END:$file"
-          done
+          git diff -- README.md src/source-deps.ts tests/source-deps.test.ts
       - name: Print generated lockfile
         run: |
           echo "LOCKFILE_BEGIN"
