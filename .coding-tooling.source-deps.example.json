@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "cargo": {
+    "patches": [
+      {
+        "package": "example-package",
+        "git": "https://github.com/example/capability-repository",
+        "rev": "0123456789abcdef0123456789abcdef01234567",
+        "localPath": "../capability-repository/crates/example-package"
+      }
+    ]
+  }
+}
