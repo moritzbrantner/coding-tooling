@@ -95,26 +95,36 @@ export function sourceDependencies(
 ): ResultEnvelope<Record<string, unknown>> {
   const started = performance.now();
   try {
-    const rendered = renderSourceDependencies(root, configPath);
-    const existing = existsSync(rendered.cargoConfigPath)
-      ? readFileSync(rendered.cargoConfigPath, "utf8")
-      : undefined;
+    const loaded = loadConfig(root, configPath);
+    const cargoConfigPath = resolve(root, loaded.config.cargo.configPath ?? defaultCargoConfigPath);
+    const packages = loaded.config.cargo.patches.map((patch) => patch.package).sort();
+    const existing = existsSync(cargoConfigPath) ? readFileSync(cargoConfigPath, "utf8") : undefined;
     const managed = existing?.startsWith(generatedHeader) ?? false;
 
+    if (action === "deactivate") {
+      if (existing !== undefined && !managed) {
+        throw new Error(`Refusing to remove unmanaged Cargo config: ${cargoConfigPath}`);
+      }
+      if (managed) rmSync(cargoConfigPath);
+      return {
+        schemaVersion: 1,
+        operation: "source-deps",
+        status: "passed",
+        durationMs: Math.round(performance.now() - started),
+        data: { action, active: false, configPath: loaded.path, cargoConfigPath, packages },
+        diagnostics: [],
+      };
+    }
+
+    const rendered = renderSourceDependencies(root, configPath);
     if (action === "activate") {
       if (existing !== undefined && !managed) {
         throw new Error(`Refusing to overwrite unmanaged Cargo config: ${rendered.cargoConfigPath}`);
       }
       mkdirSync(dirname(rendered.cargoConfigPath), { recursive: true });
       writeFileSync(rendered.cargoConfigPath, rendered.content);
-    } else if (action === "deactivate") {
-      if (existing !== undefined && !managed) {
-        throw new Error(`Refusing to remove unmanaged Cargo config: ${rendered.cargoConfigPath}`);
-      }
-      if (managed) rmSync(rendered.cargoConfigPath);
     }
 
-    const active = action === "activate" ? true : action === "deactivate" ? false : managed;
     return {
       schemaVersion: 1,
       operation: "source-deps",
@@ -122,7 +132,7 @@ export function sourceDependencies(
       durationMs: Math.round(performance.now() - started),
       data: {
         action,
-        active,
+        active: action === "activate" ? true : managed,
         configPath: rendered.configPath,
         cargoConfigPath: rendered.cargoConfigPath,
         packages: rendered.packages,
