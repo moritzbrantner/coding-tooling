@@ -82,7 +82,7 @@ export function renderSourceDependencies(
   packages: string[];
 } {
   const loaded = loadConfig(root, configPath);
-  const patches = loaded.config.cargo.patches.toSorted((left, right) =>
+  const patches = [...loaded.config.cargo.patches].sort((left, right) =>
     left.package.localeCompare(right.package),
   );
   const cargoConfigPath = resolve(root, loaded.config.cargo.configPath ?? defaultCargoConfigPath);
@@ -104,7 +104,7 @@ export function sourceDependencies(
   try {
     const loaded = loadConfig(root, configPath);
     const cargoConfigPath = resolve(root, loaded.config.cargo.configPath ?? defaultCargoConfigPath);
-    const packages = loaded.config.cargo.patches.map((patch) => patch.package).toSorted();
+    const packages = loaded.config.cargo.patches.map((patch) => patch.package).sort();
     const existing = existsSync(cargoConfigPath)
       ? readFileSync(cargoConfigPath, "utf8")
       : undefined;
