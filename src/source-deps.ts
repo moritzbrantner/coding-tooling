@@ -19,6 +19,7 @@ type SourceDependencyConfig = {
   schemaVersion: 1;
   cargo: {
     configPath?: string;
+    localOnly?: boolean;
     patches: CargoSourcePatch[];
   };
 };
@@ -43,6 +44,9 @@ function loadConfig(
     if (!patch.package || !patch.git || !patch.rev) {
       throw new Error(`Every Cargo source patch requires package, git, and rev: ${path}`);
     }
+    if (parsed.cargo.localOnly && !patch.localPath) {
+      throw new Error(`Local-only source patch ${patch.package} requires localPath: ${path}`);
+    }
     if (seen.has(patch.package)) throw new Error(`Duplicate Cargo source patch: ${patch.package}`);
     seen.add(patch.package);
   }
@@ -56,7 +60,7 @@ function localRevision(path: string): string {
   return result.stdout.trim();
 }
 
-function renderPatch(root: string, patch: CargoSourcePatch): string {
+function renderPatch(root: string, patch: CargoSourcePatch, localOnly: boolean): string {
   if (patch.localPath) {
     const localPath = resolve(root, patch.localPath);
     if (existsSync(localPath)) {
@@ -67,6 +71,11 @@ function renderPatch(root: string, patch: CargoSourcePatch): string {
         );
       }
       return `"${escapeToml(patch.package)}" = { path = "${escapeToml(localPath)}" }`;
+    }
+    if (localOnly) {
+      throw new Error(
+        `Local source dependency ${patch.package} is missing at ${localPath}; local-only source mode never fetches repository sources`,
+      );
     }
   }
   return `"${escapeToml(patch.package)}" = { git = "${escapeToml(patch.git)}", rev = "${escapeToml(patch.rev)}" }`;
@@ -80,18 +89,21 @@ export function renderSourceDependencies(
   cargoConfigPath: string;
   content: string;
   packages: string[];
+  localOnly: boolean;
 } {
   const loaded = loadConfig(root, configPath);
   const patches = [...loaded.config.cargo.patches].sort((left, right) =>
     left.package.localeCompare(right.package),
   );
   const cargoConfigPath = resolve(root, loaded.config.cargo.configPath ?? defaultCargoConfigPath);
-  const body = patches.map((patch) => renderPatch(root, patch)).join("\n");
+  const localOnly = loaded.config.cargo.localOnly ?? false;
+  const body = patches.map((patch) => renderPatch(root, patch, localOnly)).join("\n");
   return {
     configPath: loaded.path,
     cargoConfigPath,
     content: `${generatedHeader}\n[patch.crates-io]\n${body}\n`,
     packages: patches.map((patch) => patch.package),
+    localOnly,
   };
 }
 
@@ -105,6 +117,7 @@ export function sourceDependencies(
     const loaded = loadConfig(root, configPath);
     const cargoConfigPath = resolve(root, loaded.config.cargo.configPath ?? defaultCargoConfigPath);
     const packages = loaded.config.cargo.patches.map((patch) => patch.package).sort();
+    const localOnly = loaded.config.cargo.localOnly ?? false;
     const existing = existsSync(cargoConfigPath)
       ? readFileSync(cargoConfigPath, "utf8")
       : undefined;
@@ -120,7 +133,14 @@ export function sourceDependencies(
         operation: "source-deps",
         status: "passed",
         durationMs: Math.round(performance.now() - started),
-        data: { action, active: false, configPath: loaded.path, cargoConfigPath, packages },
+        data: {
+          action,
+          active: false,
+          configPath: loaded.path,
+          cargoConfigPath,
+          packages,
+          resolution: localOnly ? "local-only" : "local-or-git",
+        },
         diagnostics: [],
       };
     }
@@ -147,6 +167,7 @@ export function sourceDependencies(
         configPath: rendered.configPath,
         cargoConfigPath: rendered.cargoConfigPath,
         packages: rendered.packages,
+        resolution: rendered.localOnly ? "local-only" : "local-or-git",
       },
       diagnostics: [],
     };
