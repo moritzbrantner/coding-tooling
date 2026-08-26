@@ -1,4 +1,11 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -30,11 +37,49 @@ function repository(): string {
   return root;
 }
 
+function localOnlyRepository(): { root: string; source: string; revision: string } {
+  const workspace = mkdtempSync(join(tmpdir(), "coding-tooling-local-source-deps-"));
+  const root = join(workspace, "consumer");
+  const source = join(workspace, "source");
+  mkdirSync(root);
+  mkdirSync(source);
+  expect(spawnSync("git", ["init", "--initial-branch=main", source]).status).toBe(0);
+  expect(
+    spawnSync("git", ["-C", source, "config", "user.email", "test@example.com"]).status,
+  ).toBe(0);
+  expect(spawnSync("git", ["-C", source, "config", "user.name", "Test"]).status).toBe(0);
+  writeFileSync(join(source, "README.md"), "source\n");
+  expect(spawnSync("git", ["-C", source, "add", "README.md"]).status).toBe(0);
+  expect(spawnSync("git", ["-C", source, "commit", "-m", "source"]).status).toBe(0);
+  const revision = spawnSync("git", ["-C", source, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+  }).stdout.trim();
+  writeFileSync(
+    join(root, ".coding-tooling.source-deps.json"),
+    JSON.stringify({
+      schemaVersion: 1,
+      cargo: {
+        localOnly: true,
+        patches: [
+          {
+            package: "local-package",
+            git: "https://github.com/example/source.git",
+            rev: revision,
+            localPath: "../source",
+          },
+        ],
+      },
+    }),
+  );
+  return { root, source, revision };
+}
+
 describe("source dependency mode", () => {
   test("renders deterministic exact-revision Cargo patches", () => {
     const root = repository();
     const rendered = renderSourceDependencies(root);
     expect(rendered.packages).toEqual(["a-package", "z-package"]);
+    expect(rendered.localOnly).toBe(false);
     expect(rendered.content).toContain("[patch.crates-io]");
     expect(rendered.content.indexOf('"a-package"')).toBeLessThan(
       rendered.content.indexOf('"z-package"'),
@@ -55,5 +100,38 @@ describe("source dependency mode", () => {
     const deactivated = sourceDependencies(root, "deactivate");
     expect(deactivated.status).toBe("passed");
     expect(existsSync(cargoConfig)).toBe(false);
+  });
+
+  test("local-only mode uses an exact sibling checkout", () => {
+    const { root, source } = localOnlyRepository();
+    const rendered = renderSourceDependencies(root);
+    expect(rendered.localOnly).toBe(true);
+    expect(rendered.content).toContain(`path = "${source}"`);
+    expect(rendered.content).not.toContain("git =");
+
+    const activated = sourceDependencies(root, "activate");
+    expect(activated.status).toBe("passed");
+    expect(activated.data.resolution).toBe("local-only");
+  });
+
+  test("local-only mode never falls back to Git when the sibling checkout is missing", () => {
+    const { root, source } = localOnlyRepository();
+    spawnSync("rm", ["-rf", source]);
+
+    const activated = sourceDependencies(root, "activate");
+    expect(activated.status).toBe("error");
+    expect(activated.diagnostics[0]?.message).toContain("local-only source mode never fetches");
+    expect(existsSync(join(root, ".cargo", "config.toml"))).toBe(false);
+  });
+
+  test("local-only mode rejects a sibling checkout at the wrong revision", () => {
+    const { root, source, revision } = localOnlyRepository();
+    writeFileSync(join(source, "README.md"), "changed\n");
+    expect(spawnSync("git", ["-C", source, "add", "README.md"]).status).toBe(0);
+    expect(spawnSync("git", ["-C", source, "commit", "-m", "changed"]).status).toBe(0);
+
+    const activated = sourceDependencies(root, "activate");
+    expect(activated.status).toBe("error");
+    expect(activated.diagnostics[0]?.message).toContain(`expected ${revision}`);
   });
 });
