@@ -51,7 +51,7 @@ function localOnlyRepository(): { root: string; source: string; revision: string
   writeFileSync(
     join(root, ".coding-tooling.source-deps.json"),
     JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
       cargo: {
         localOnly: true,
         patches: [
@@ -106,6 +106,18 @@ describe("source dependency mode", () => {
     const activated = sourceDependencies(root, "activate");
     expect(activated.status).toBe("passed");
     expect(activated.data.resolution).toBe("local-only");
+  });
+
+  test("local-only mode requires the versioned config schema", () => {
+    const { root } = localOnlyRepository();
+    const configPath = join(root, ".coding-tooling.source-deps.json");
+    const config = JSON.parse(readFileSync(configPath, "utf8"));
+    config.schemaVersion = 1;
+    writeFileSync(configPath, JSON.stringify(config));
+
+    const activated = sourceDependencies(root, "activate");
+    expect(activated.status).toBe("error");
+    expect(activated.diagnostics[0]?.message).toContain("requires schemaVersion 2");
   });
 
   test("local-only mode never falls back to Git when the sibling checkout is missing", () => {
