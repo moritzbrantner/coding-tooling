@@ -16,7 +16,7 @@ type CargoSourcePatch = {
 };
 
 type SourceDependencyConfig = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   cargo: {
     configPath?: string;
     localOnly?: boolean;
@@ -36,8 +36,17 @@ function loadConfig(
 ): { path: string; config: SourceDependencyConfig } {
   const path = resolve(root, configPath ?? defaultConfigPath);
   const parsed = JSON.parse(readFileSync(path, "utf8")) as Partial<SourceDependencyConfig>;
-  if (parsed.schemaVersion !== 1 || !parsed.cargo || !Array.isArray(parsed.cargo.patches)) {
+  if (
+    (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2) ||
+    !parsed.cargo ||
+    !Array.isArray(parsed.cargo.patches)
+  ) {
     throw new Error(`Invalid source dependency config: ${path}`);
+  }
+  if (parsed.cargo.localOnly && parsed.schemaVersion !== 2) {
+    throw new Error(
+      `Local-only source dependency config requires schemaVersion 2 so older tooling cannot silently fall back to remote Git: ${path}`,
+    );
   }
   const seen = new Set<string>();
   for (const patch of parsed.cargo.patches) {
