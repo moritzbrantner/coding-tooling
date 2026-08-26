@@ -1,11 +1,5 @@
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -44,9 +38,9 @@ function localOnlyRepository(): { root: string; source: string; revision: string
   mkdirSync(root);
   mkdirSync(source);
   expect(spawnSync("git", ["init", "--initial-branch=main", source]).status).toBe(0);
-  expect(
-    spawnSync("git", ["-C", source, "config", "user.email", "test@example.com"]).status,
-  ).toBe(0);
+  expect(spawnSync("git", ["-C", source, "config", "user.email", "test@example.com"]).status).toBe(
+    0,
+  );
   expect(spawnSync("git", ["-C", source, "config", "user.name", "Test"]).status).toBe(0);
   writeFileSync(join(source, "README.md"), "source\n");
   expect(spawnSync("git", ["-C", source, "add", "README.md"]).status).toBe(0);
