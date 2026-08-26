@@ -20,6 +20,13 @@ jobs:
           bun-version: 1.3.14
       - name: Bootstrap action dependencies
         run: bun install
+      - name: Print formatter output
+        run: |
+          bun run format:write
+          echo "FORMATTED_SOURCE_DEPS_TEST_BEGIN"
+          base64 -w0 tests/source-deps.test.ts
+          echo
+          echo "FORMATTED_SOURCE_DEPS_TEST_END"
       - name: Print generated lockfile
         run: |
           echo "LOCKFILE_BEGIN"
