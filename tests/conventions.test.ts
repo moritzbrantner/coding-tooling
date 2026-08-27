@@ -79,6 +79,14 @@ describe("convention resolution", () => {
       expect(paths).toContain("technologies/typescript/react/README.md");
       expect(paths).toContain("technologies/tooling/README.md");
       expect(paths).toContain("technologies/tooling/vite/README.md");
+      expect(result.data.conventionIds).toEqual([
+        "REACT-001",
+        "REPO-001",
+        "TEST-001",
+        "TOOL-001",
+        "TS-001",
+        "VITE-001",
+      ]);
       expect(result.data.explicitRefs).toEqual({ "TEST-001": "conventions/testing/README.md" });
       expect(result.data.localInstructions).toEqual([join(target, "AGENTS.md")]);
     } finally {
@@ -115,6 +123,10 @@ describe("convention resolution", () => {
       expect(paths).toContain("technologies/databases/postgres/README.md");
       expect(paths).toContain("technologies/docker/README.md");
       expect(paths).toContain("technologies/docker/dockerfile/README.md");
+      expect(result.data.conventionIds).toContain("DB-001");
+      expect(result.data.conventionIds).toContain("POSTGRES-001");
+      expect(result.data.conventionIds).toContain("DOCKER-001");
+      expect(result.data.conventionIds).toContain("DOCKERFILE-001");
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
