@@ -1,0 +1,13 @@
+name = "minimal"
+capabilities = [
+  "general/grilling",
+  "general/grill-with-docs",
+  "general/domain-modeling",
+  "general/to-spec",
+  "general/implement",
+  "general/tdd",
+  "general/refactor",
+  "general/code-review",
+  "general/standards-review",
+  "general/spec-review",
+]

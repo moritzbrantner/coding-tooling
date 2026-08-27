@@ -1,0 +1,20 @@
+name = "standard"
+extends = "minimal"
+capabilities = [
+  "general/to-tickets",
+  "general/reconcile-tickets",
+  "general/review-and-fix",
+  "general/diagnosing-bugs",
+  "general/fix-bug",
+  "general/diagnosing-performance",
+  "general/optimize-performance",
+  "general/prototype",
+  "general/codebase-design",
+  "general/architecture-review",
+  "general/improve-codebase-architecture",
+  "general/intake-assessment",
+  "general/triage",
+  "general/conflict-resolution",
+  "general/resolve-merge-conflicts",
+  "general/choose-workflow",
+]
