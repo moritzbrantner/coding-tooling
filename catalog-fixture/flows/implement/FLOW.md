@@ -23,12 +23,17 @@ flow:
           kind: invoke
           capability: "general/tdd"
           output: "green-implementation"
-      else: []
+      else:
+        - id: approved-non-tdd-change
+          kind: action
+          action: "runtime.apply-approved-change"
+          optional: true
+          fallback: "agent"
     - id: refactor-inspection
       kind: invoke
       capability: "general/refactor"
       inputs:
-        baseline: "green-implementation-or-current-change"
+        baseline: "green-implementation-or-approved-non-tdd-change"
       output: "refactor-result"
     - id: verify
       kind: action
