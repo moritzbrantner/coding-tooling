@@ -195,9 +195,7 @@ function repositoryTechnologies(root: string): string[] {
     }
   }
 
-  if (
-    files.some((path) => basename(path) === "bun.lock" || basename(path) === "bun.lockb")
-  ) {
+  if (files.some((path) => basename(path) === "bun.lock" || basename(path) === "bun.lockb")) {
     technologies.add("tooling");
   }
 
@@ -294,6 +292,11 @@ export function resolveConventions(
       addFile(files, source.root, path, "explicit-ref");
     }
 
+    const selectedPaths = new Set(files.keys());
+    const selectedConventionIds = [...ids.entries()]
+      .filter(([, path]) => selectedPaths.has(path))
+      .map(([id]) => id)
+      .sort();
     const localInstructions = ["AGENTS.md", "CLAUDE.md"]
       .filter((path) => existsSync(join(root, path)))
       .map((path) => join(root, path));
@@ -313,6 +316,7 @@ export function resolveConventions(
         sourceRevision: revision(source.root),
         technologies,
         files: [...files.values()],
+        conventionIds: selectedConventionIds,
         explicitRefs: resolvedRefs,
         localInstructions,
         precedence: ["repository-local", "technology", "general", "principle"],
