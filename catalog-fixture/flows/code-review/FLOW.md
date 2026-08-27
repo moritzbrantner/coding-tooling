@@ -1,7 +1,7 @@
 ---
 id: "general/code-review"
 name: "code-review"
-description: "Run standards and specification review as separate read-only axes."
+description: "Run standards review and, when applicable, specification review as separate read-only axes."
 kind: "flow"
 maturity: "stable"
 entry-point: true
@@ -18,10 +18,17 @@ flow:
           kind: invoke
           capability: "general/standards-review"
           output: "standards-findings"
-        - id: spec
-          kind: invoke
-          capability: "general/spec-review"
-          output: "spec-findings"
+        - id: spec-if-applicable
+          kind: branch
+          condition:
+            source: "review-context.has-spec-or-ticket"
+            equals: true
+          then:
+            - id: spec
+              kind: invoke
+              capability: "general/spec-review"
+              output: "spec-findings"
+          else: []
 extensions: {}
 ---
 # Validation fixture
