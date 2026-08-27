@@ -55,6 +55,9 @@ export type ToolingConfig = {
   optionalCapabilities?: Capability[];
   capabilityCommands?: Record<string, Partial<Record<Capability, string[]>>>;
   conventionRefs?: string[];
+  conventionProfile?: string;
+  conventionScopes?: string[];
+  conventionExceptions?: Array<{ id: string; reason: string }>;
 };
 
 export type PlannedCheck = {
