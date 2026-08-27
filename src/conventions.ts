@@ -31,6 +31,10 @@ type ConventionCatalog = {
   general: string[];
   scopes: Record<string, { path: string; parents?: string[] }>;
   profiles: Record<string, { scopes: string[]; refs?: string[]; extends?: string[] }>;
+};
+
+type ConventionIdCatalog = {
+  schemaVersion: 1;
   conventionIds: Record<string, string>;
 };
 
@@ -211,6 +215,13 @@ function conventionCatalog(root: string): ConventionCatalog | undefined {
   return catalog;
 }
 
+function conventionIdCatalog(root: string): Map<string, string> {
+  const catalog = readJson<ConventionIdCatalog>(join(root, "convention-ids.json"));
+  if (!catalog) return conventionIds(root);
+  if (catalog.schemaVersion !== 1) throw new Error("convention-ids.json must use schemaVersion 1");
+  return new Map(Object.entries(catalog.conventionIds));
+}
+
 export function buildConventionCatalog(root: string): ConventionCatalog {
   const source = readJson<ConventionCatalogSource>(join(root, "catalog.source.json"));
   if (!source || source.schemaVersion !== 1)
@@ -221,7 +232,7 @@ export function buildConventionCatalog(root: string): ConventionCatalog {
   }
   for (const profile of Object.keys(source.profiles)) {
     try {
-      const catalog = { ...source, principles: [], general: [], conventionIds: {} };
+      const catalog = { ...source, principles: [], general: [] };
       const resolved = resolveProfile(catalog, profile);
       expandScopes(catalog, resolved.scopes);
     } catch (error) {
@@ -240,6 +251,12 @@ export function buildConventionCatalog(root: string): ConventionCatalog {
     profiles: Object.fromEntries(
       Object.entries(source.profiles).sort(([left], [right]) => left.localeCompare(right)),
     ),
+  };
+}
+
+export function buildConventionIdCatalog(root: string): ConventionIdCatalog {
+  return {
+    schemaVersion: 1,
     conventionIds: Object.fromEntries(
       [...conventionIds(root)].sort(([left], [right]) => left.localeCompare(right)),
     ),
@@ -283,27 +300,36 @@ export function catalogConventions(
     if (options.write && options.check)
       throw new Error("Use only one of --write or --check for conventions catalog");
     const catalog = buildConventionCatalog(root);
-    const content = `${JSON.stringify(catalog)}\n`;
-    const path = join(root, "catalog.json");
-    if (options.write) writeFileSync(path, content);
-    const current = existsSync(path) ? readFileSync(path, "utf8") : undefined;
-    const matches = current === content;
+    const idCatalog = buildConventionIdCatalog(root);
+    const outputs = [
+      { path: join(root, "catalog.json"), content: `${JSON.stringify(catalog)}\n` },
+      {
+        path: join(root, "convention-ids.json"),
+        content: `${JSON.stringify(idCatalog)}\n`,
+      },
+    ];
+    if (options.write) for (const output of outputs) writeFileSync(output.path, output.content);
+    const matches = outputs.every(
+      ({ path, content }) => existsSync(path) && readFileSync(path, "utf8") === content,
+    );
     const diagnostics: Diagnostic[] = [];
     if (options.check && !matches)
       diagnostics.push({
         code: "conventions-catalog-stale",
-        message: "catalog.json does not match catalog.source.json and current convention files",
-        path,
+        message:
+          "catalog.json or convention-ids.json does not match catalog.source.json and current convention files",
+        path: root,
       });
     return envelope(
       diagnostics.length > 0 ? "failed" : "passed",
       started,
       {
         root,
-        path,
+        paths: outputs.map(({ path }) => path),
         matches,
         wrote: Boolean(options.write),
         catalog,
+        idCatalog,
       },
       diagnostics,
     );
@@ -461,9 +487,7 @@ export function resolveConventions(
       if (path) addFile(files, source.root, path, "technology");
     }
 
-    const ids = catalog
-      ? new Map(Object.entries(catalog.conventionIds))
-      : conventionIds(source.root);
+    const ids = conventionIdCatalog(source.root);
     const resolvedRefs: Record<string, string> = {};
     const missingRefs: string[] = [];
     for (const id of [...(resolvedProfile?.refs ?? []), ...(config.conventionRefs ?? [])]) {
