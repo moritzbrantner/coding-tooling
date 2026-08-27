@@ -4,7 +4,7 @@ import { basename, join, relative, resolve } from "node:path";
 
 import { discoverComponents, loadConfig } from "./core.ts";
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
-import { repositoryRoot, runCommand, walkFiles } from "./shared.ts";
+import { readJson, repositoryRoot, runCommand, walkFiles } from "./shared.ts";
 
 type ConventionResolutionOptions = {
   root?: string;
@@ -22,6 +22,11 @@ type ConventionFile = {
   path: string;
   absolutePath: string;
   reason: "principle" | "general" | "technology" | "explicit-ref";
+};
+
+type PackageManifest = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
 };
 
 const technologyConventionPaths: Record<string, string> = {
@@ -42,8 +47,27 @@ const technologyConventionPaths: Record<string, string> = {
   docker: "technologies/docker/README.md",
 };
 
+const dependencyTechnologies: Record<string, string> = {
+  "@moritzbrantner/ui": "moritzbrantner-ui",
+  "react-hook-form": "react-hook-form",
+  "@tanstack/react-query": "tanstack-query",
+  "@testing-library/react": "testing-library",
+  zustand: "zustand",
+  vitest: "vitest",
+  "@playwright/test": "playwright",
+  storybook: "storybook",
+  "@storybook/react": "storybook",
+  "@storybook/react-vite": "storybook",
+  lighthouse: "lighthouse",
+  "@lhci/cli": "lighthouse",
+};
+
 function defaultRegistryPath(): string {
-  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "moenarch", "environment.toml");
+  return join(
+    process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"),
+    "moenarch",
+    "environment.toml",
+  );
 }
 
 function validConventionsRoot(path: string): boolean {
@@ -79,7 +103,9 @@ function registryComponentPath(path: string, component: string): string | undefi
   return undefined;
 }
 
-export function resolveConventionSource(options: ConventionResolutionOptions = {}): ConventionSource | undefined {
+export function resolveConventionSource(
+  options: ConventionResolutionOptions = {},
+): ConventionSource | undefined {
   const root = resolve(options.root ?? repositoryRoot());
   const candidates: Array<ConventionSource | undefined> = [
     options.conventionsRoot
@@ -120,8 +146,9 @@ function conventionIds(root: string): Map<string, string> {
       const id = match[1];
       const relativePath = relative(root, path).replaceAll("\\", "/");
       const previous = index.get(id);
-      if (previous && previous !== relativePath)
+      if (previous && previous !== relativePath) {
         throw new Error(`Convention ID ${id} is defined in both ${previous} and ${relativePath}`);
+      }
       index.set(id, relativePath);
     }
   }
@@ -129,7 +156,19 @@ function conventionIds(root: string): Map<string, string> {
 }
 
 function repositoryTechnologies(root: string): string[] {
-  const technologies = new Set(discoverComponents(root).flatMap((component) => component.technologies));
+  const technologies = new Set(
+    discoverComponents(root).flatMap((component) => component.technologies),
+  );
+
+  for (const file of walkFiles(root, 4).filter((path) => basename(path) === "package.json")) {
+    const manifest = readJson<PackageManifest>(file);
+    if (!manifest) continue;
+    const dependencies = { ...manifest.dependencies, ...manifest.devDependencies };
+    for (const [dependency, technology] of Object.entries(dependencyTechnologies)) {
+      if (dependency in dependencies) technologies.add(technology);
+    }
+  }
+
   if (
     existsSync(join(root, "Dockerfile")) ||
     existsSync(join(root, "docker-compose.yml")) ||
@@ -182,17 +221,25 @@ export function resolveConventions(
     const technologies = repositoryTechnologies(root);
     const files = new Map<string, ConventionFile>();
 
-    for (const path of markdownFiles(source.root, "principles")) addFile(files, source.root, path, "principle");
-    for (const path of markdownFiles(source.root, "conventions")) addFile(files, source.root, path, "general");
+    for (const path of markdownFiles(source.root, "principles")) {
+      addFile(files, source.root, path, "principle");
+    }
+    for (const path of markdownFiles(source.root, "conventions")) {
+      addFile(files, source.root, path, "general");
+    }
 
     const technologyPaths = new Set<string>();
     for (const technology of technologies) {
       const path = technologyConventionPaths[technology];
       if (!path) continue;
       technologyPaths.add(path);
-      if (path.startsWith("technologies/tooling/")) technologyPaths.add("technologies/tooling/README.md");
+      if (path.startsWith("technologies/tooling/")) {
+        technologyPaths.add("technologies/tooling/README.md");
+      }
     }
-    for (const path of [...technologyPaths].sort()) addFile(files, source.root, path, "technology");
+    for (const path of [...technologyPaths].sort()) {
+      addFile(files, source.root, path, "technology");
+    }
 
     const ids = conventionIds(source.root);
     const resolvedRefs: Record<string, string> = {};
@@ -215,20 +262,29 @@ export function resolveConventions(
       message: `Configured convention reference ${id} was not found in ${source.root}`,
     }));
 
-    return envelope(missingRefs.length > 0 ? "failed" : "passed", started, {
-      root,
-      sourceRoot: source.root,
-      source: source.source,
-      sourceRevision: revision(source.root),
-      technologies,
-      files: [...files.values()],
-      explicitRefs: resolvedRefs,
-      localInstructions,
-      precedence: ["repository-local", "technology", "general", "principle"],
-    }, diagnostics);
+    return envelope(
+      missingRefs.length > 0 ? "failed" : "passed",
+      started,
+      {
+        root,
+        repositoryName: basename(root),
+        sourceRoot: source.root,
+        source: source.source,
+        sourceRevision: revision(source.root),
+        technologies,
+        files: [...files.values()],
+        explicitRefs: resolvedRefs,
+        localInstructions,
+        precedence: ["repository-local", "technology", "general", "principle"],
+      },
+      diagnostics,
+    );
   } catch (error) {
     return envelope("error", started, { root, files: [] }, [
-      { code: "conventions-resolution-error", message: error instanceof Error ? error.message : String(error) },
+      {
+        code: "conventions-resolution-error",
+        message: error instanceof Error ? error.message : String(error),
+      },
     ]);
   }
 }
