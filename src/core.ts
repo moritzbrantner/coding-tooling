@@ -65,6 +65,15 @@ export function loadConfig(root: string, configuredPath = ".coding-tooling.json"
         );
     }
   }
+  if (value.conventionProfile !== undefined && !value.conventionProfile.trim())
+    throw new Error("conventionProfile must not be empty");
+  for (const scope of value.conventionScopes ?? []) {
+    if (!scope.trim()) throw new Error("conventionScopes entries must not be empty");
+  }
+  for (const exception of value.conventionExceptions ?? []) {
+    if (!exception.id.trim() || !exception.reason.trim())
+      throw new Error("conventionExceptions entries require non-empty id and reason values");
+  }
   return value;
 }
 
