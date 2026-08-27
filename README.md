@@ -12,6 +12,7 @@ This repository contains mechanical operations that should not require an LLM to
 - Which validation capabilities are available?
 - Which files/components changed relative to a baseline?
 - How do I run a declared validation capability?
+- Which shared convention files apply to this repository right now?
 - Is the local environment able to run those capabilities?
 - Which exact source revisions should temporarily replace registry packages during cross-repository development?
 
@@ -19,6 +20,7 @@ It deliberately does **not** decide:
 
 - what task to implement,
 - how an agent should reason through a development task,
+- what the engineering policy should be,
 - when to create or destroy worktrees,
 - when to spawn/retry agents,
 - how runtime measurements are captured or normalized,
@@ -42,6 +44,7 @@ coding-tooling source-deps deactivate [--config <path>] [--json]
 coding-tooling agent-capabilities validate [--root <path>] [--json]
 coding-tooling agent-capabilities catalog [--root <path>] [--json]
 coding-tooling agent-capabilities profile <profile> [--root <path>] [--json]
+coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--json]
 ```
 
 Run directly during development with Bun:
@@ -49,6 +52,18 @@ Run directly during development with Bun:
 ```bash
 bun src/cli.ts inspect --json
 ```
+
+## Live convention resolution
+
+Shared engineering policy stays in `coding-agent-conventions`; consumer repositories do not need to vendor or pin copies of that policy. Resolve the exact current stack for a repository with:
+
+```bash
+coding-tooling conventions resolve --root /path/to/repository --json
+```
+
+The resolver finds the current conventions checkout from an explicit path, `CODING_AGENT_CONVENTIONS_ROOT`, the shared Moenarch environment registry, or a sibling checkout. Source lookup uses that order deterministically and the selected source kind is reported in the result. It loads current principles and general conventions, infers applicable technology branches from the target repository, resolves stable IDs declared through `.coding-tooling.json` `conventionRefs`, and reports repository-local `AGENTS.md`/`CLAUDE.md` separately as higher-precedence instructions.
+
+The result includes the observed conventions Git `sourceRevision`. A caller may store that revision in run/review evidence for reproducibility without forcing consumer repositories to update a policy dependency whenever the central conventions change.
 
 ## Source development mode
 
@@ -94,7 +109,7 @@ General coding-agent capabilities are sourced from `coding-agent-skills`. The `a
 2. Machine-readable output is a first-class interface.
 3. Checks must not silently mutate source code.
 4. A missing capability is different from a failed capability.
-5. Repository policy stays outside this repository. This tool reports capabilities/results; agent workflows decide when to use them.
+5. Repository policy stays outside this repository. This tool resolves policy sources but does not author or reinterpret their semantics.
 6. Outer agent lifecycle/orchestration stays outside this repository.
 7. Evidence-collector internals and evaluator semantics stay outside this repository.
 8. Prefer repository-declared commands over guessed ecosystem defaults when semantics could differ.
@@ -131,13 +146,13 @@ The arrows describe collaboration, not package dependencies:
 - `agent-contracts` owns cross-repository envelopes such as evidence, check results, and evaluation results;
 - `coding-agent-skills` owns reusable reasoning procedures, executable flows, and automatic-use profiles;
 - `coding-agent-conventions` owns stable engineering policy and vocabulary;
-- `coding-tooling` owns deterministic repository discovery, execution, source-dependency activation, and capability-source/profile resolution;
+- `coding-tooling` owns deterministic repository discovery, execution, convention/source-dependency resolution, and capability-source/profile resolution;
 - `runtime-profiler` owns runtime capture and immutable profiler bundles;
 - Moonlight owns baseline/candidate evaluation;
 - `agent-loop-orchestrator` decides when these components run for workloads that deliberately opt into durable coordination and stores their neutral outputs;
 - `agent-loop-setup` owns machine bootstrap and the shared per-user component registry, not skill semantics.
 
-`coding-tooling` must remain usable without any of the other repositories.
+`coding-tooling` must remain usable without any of the other repositories; convention resolution therefore reports `unavailable` when no shared convention checkout is configured rather than making policy repositories a hard dependency for unrelated commands.
 
 ## Private GitHub Action
 
