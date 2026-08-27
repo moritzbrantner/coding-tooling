@@ -328,8 +328,9 @@ export function catalogConventions(
         paths: outputs.map(({ path }) => path),
         matches,
         wrote: Boolean(options.write),
-        catalog,
-        idCatalog,
+        profileCount: Object.keys(catalog.profiles).length,
+        scopeCount: Object.keys(catalog.scopes).length,
+        conventionIdCount: Object.keys(idCatalog.conventionIds).length,
       },
       diagnostics,
     );
