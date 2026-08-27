@@ -23,8 +23,16 @@ function conventions(): string {
   write(root, "conventions/repository/README.md", "## REPO-001 — Keep local rules local\n");
   write(root, "technologies/typescript/README.md", "## TS-001 — TypeScript rule\n");
   write(root, "technologies/typescript/react/README.md", "## REACT-001 — React rule\n");
-  write(root, "technologies/tooling/README.md", "# Tooling\n");
+  write(root, "technologies/tooling/README.md", "## TOOL-001 — Tooling rule\n");
   write(root, "technologies/tooling/vite/README.md", "## VITE-001 — Vite rule\n");
+  write(root, "technologies/databases/README.md", "## DB-001 — Database rule\n");
+  write(root, "technologies/databases/postgres/README.md", "## POSTGRES-001 — Postgres rule\n");
+  write(root, "technologies/docker/README.md", "## DOCKER-001 — Docker rule\n");
+  write(
+    root,
+    "technologies/docker/dockerfile/README.md",
+    "## DOCKERFILE-001 — Dockerfile rule\n",
+  );
   return root;
 }
 
@@ -35,6 +43,7 @@ function repository(): string {
     "package.json",
     JSON.stringify({
       name: "fixture",
+      packageManager: "bun@1.3.14",
       dependencies: { react: "1", vite: "1" },
     }),
   );
@@ -56,7 +65,13 @@ describe("convention resolution", () => {
       const result = resolveConventions({ root: target, conventionsRoot: source });
       expect(result.status).toBe("passed");
       expect(result.operation).toBe("conventions");
-      expect(result.data.technologies).toEqual(["javascript", "react", "typescript", "vite"]);
+      expect(result.data.technologies).toEqual([
+        "javascript",
+        "react",
+        "tooling",
+        "typescript",
+        "vite",
+      ]);
       const paths = (result.data.files as Array<{ path: string }>).map((file) => file.path);
       expect(paths).toContain("principles/README.md");
       expect(paths).toContain("conventions/testing/README.md");
@@ -66,6 +81,40 @@ describe("convention resolution", () => {
       expect(paths).toContain("technologies/tooling/vite/README.md");
       expect(result.data.explicitRefs).toEqual({ "TEST-001": "conventions/testing/README.md" });
       expect(result.data.localInstructions).toEqual([join(target, "AGENTS.md")]);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("includes database and Docker parent scopes from repository signals", () => {
+    const source = conventions();
+    const target = repository();
+    try {
+      write(
+        target,
+        "package.json",
+        JSON.stringify({
+          name: "fixture",
+          dependencies: { pg: "1" },
+        }),
+      );
+      write(target, "Dockerfile", "FROM scratch\n");
+      const result = resolveConventions({ root: target, conventionsRoot: source });
+      expect(result.status).toBe("passed");
+      expect(result.data.technologies).toEqual([
+        "databases",
+        "docker",
+        "dockerfile",
+        "javascript",
+        "postgres",
+        "typescript",
+      ]);
+      const paths = (result.data.files as Array<{ path: string }>).map((file) => file.path);
+      expect(paths).toContain("technologies/databases/README.md");
+      expect(paths).toContain("technologies/databases/postgres/README.md");
+      expect(paths).toContain("technologies/docker/README.md");
+      expect(paths).toContain("technologies/docker/dockerfile/README.md");
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
