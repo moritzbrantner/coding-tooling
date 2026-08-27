@@ -73,7 +73,7 @@ coding-tooling conventions resolve --root /path/to/repository --compact --json
 
 Compact output omits absolute paths, inference details, and full stable-ID lists while preserving the policy revision, resolved profile and scopes, selected convention files, ID counts, explicit exceptions, local instruction paths, and precedence.
 
-`coding-agent-conventions` keeps the human-authored scope and profile graph in `catalog.source.json`. Regenerate or verify its compact agent-facing index with:
+`coding-agent-conventions` keeps the human-authored scope and profile graph in `catalog.source.json`. Generated `catalog.json` contains the compact profile/path graph; `convention-ids.json` is a separate stable-ID index so agents only load it when refs or exceptions require it. Regenerate or verify both with:
 
 ```bash
 coding-tooling conventions catalog --conventions-root /path/to/coding-agent-conventions --write
