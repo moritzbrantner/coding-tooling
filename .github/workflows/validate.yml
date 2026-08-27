@@ -19,4 +19,4 @@ jobs:
       - name: Bootstrap tooling dependencies
         run: bun install
       - name: Validate approved coding-agent-skills metadata
-        run: bun src/cli.ts agent-capabilities validate catalog-fixture
+        run: bun src/cli.ts agent-capabilities validate --root catalog-fixture
