@@ -18,6 +18,9 @@
     ]
   },
   "requiredCapabilities": ["lint", "typecheck", "test:unit", "build"],
+  "conventionProfile": "react-vite-library",
+  "conventionScopes": [],
   "conventionRefs": ["AGENT-001", "AGENT-007", "TEST-002", "CI-001", "CI-003"],
+  "conventionExceptions": [],
   "optionalCapabilities": ["test:integration", "test:e2e", "dependencies:audit", "benchmark:smoke"]
 }
