@@ -115,7 +115,11 @@ function validateDirection(
 ): DependencyFinding | undefined {
   if (dependency.relation === "adapter" || dependency.relation === "tooling") return undefined;
 
-  if (currentLayer === "foundation" && dependency.layer !== "foundation" && dependency.layer !== "tooling") {
+  if (
+    currentLayer === "foundation" &&
+    dependency.layer !== "foundation" &&
+    dependency.layer !== "tooling"
+  ) {
     return {
       severity: "error",
       code: "dependency-upward-from-foundation",
@@ -183,21 +187,61 @@ export function auditDependencies(
       status: "unavailable",
       durationMs: Math.round(performance.now() - started),
       data: { configPath: relativePosix(root, path) },
-      diagnostics: [{ code: "dependency-config-unavailable", message: `dependency architecture config not found or invalid: ${relativePosix(root, path)}` }],
+      diagnostics: [
+        {
+          code: "dependency-config-unavailable",
+          message: `dependency architecture config not found or invalid: ${relativePosix(root, path)}`,
+        },
+      ],
+    };
+  }
+
+  const validLayers: ArchitectureLayer[] = [
+    "foundation",
+    "domain",
+    "adapter",
+    "application",
+    "tooling",
+  ];
+  const validRepository =
+    config.repository &&
+    typeof config.repository.name === "string" &&
+    config.repository.name.length > 0 &&
+    validLayers.includes(config.repository.layer);
+  if (config.schemaVersion !== 1 || !validRepository) {
+    return {
+      schemaVersion: 1,
+      operation: "dependencies",
+      status: "failed",
+      durationMs: Math.round(performance.now() - started),
+      data: {
+        configPath: relativePosix(root, path),
+        findings: [
+          {
+            severity: "error",
+            code: "invalid-dependency-config",
+            message:
+              "dependency architecture config must use schemaVersion 1 and declare a valid repository name/layer",
+          },
+        ],
+        errors: 1,
+        warnings: 0,
+        strict,
+      },
+      diagnostics: [
+        {
+          code: "invalid-dependency-config",
+          message:
+            "dependency architecture config must use schemaVersion 1 and declare a valid repository name/layer",
+        },
+      ],
     };
   }
 
   const findings: DependencyFinding[] = [];
-  const validLayers: ArchitectureLayer[] = ["foundation", "domain", "adapter", "application", "tooling"];
-  if (config.schemaVersion !== 1 || !config.repository?.name || !validLayers.includes(config.repository.layer)) {
-    findings.push({
-      severity: "error",
-      code: "invalid-dependency-config",
-      message: "dependency architecture config must use schemaVersion 1 and declare a valid repository name/layer",
-    });
-  }
-
-  const dependencies = new Map((config.dependencies ?? []).map((dependency) => [dependency.repository, dependency]));
+  const dependencies = new Map(
+    (config.dependencies ?? []).map((dependency) => [dependency.repository, dependency]),
+  );
   const allowedSideways = new Set(config.allowedSideways ?? []);
   for (const dependency of dependencies.values()) {
     const finding = validateDirection(config.repository.layer, dependency, allowedSideways);
