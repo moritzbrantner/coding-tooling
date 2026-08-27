@@ -11,6 +11,7 @@ coding-tooling affected [--base <git-ref>] [--json]
 coding-tooling doctor [--json]
 coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
 coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
+coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]
 ```
 
 ## Stable capability names
@@ -191,6 +192,40 @@ A selector is a discovered component name or repository-relative component path;
 precedence. Commands are executed without a shell. This is the Rust/.NET escape hatch for
 repository-specific audit projects, BenchmarkDotNet entrypoints, Criterion benches, or other
 declared evidence that cannot be inferred safely from ecosystem defaults.
+
+## `conventions resolve`
+
+`conventions resolve` deterministically discovers the current `coding-agent-conventions` checkout and
+returns the exact files an agent should load for the target repository. It never copies convention
+text into the consumer repository.
+
+The source checkout is resolved in this order:
+
+1. `--conventions-root`;
+2. `CODING_AGENT_CONVENTIONS_ROOT`;
+3. the `coding-agent-conventions` entry in the shared Moenarch environment registry;
+4. a sibling `coding-agent-conventions` checkout.
+
+The normal registry is `${XDG_CONFIG_HOME:-~/.config}/moenarch/environment.toml`. `--registry` is a
+test/debug override.
+
+The resolved stack contains all current `principles/` and technology-independent `conventions/`
+Markdown files, then technology branches inferred from repository manifests and dependencies. Stable
+IDs in `.coding-tooling.json` `conventionRefs` are resolved against the same live checkout and fail
+resolution if an explicitly referenced ID disappears.
+
+Repository-local `AGENTS.md` and `CLAUDE.md` files are reported separately and have higher precedence
+than shared policy. The command records the observed conventions Git revision in its result so run
+receipts can remain reproducible without pinning every consumer repository to a convention commit.
+
+Example:
+
+```bash
+coding-tooling conventions resolve --root /path/to/repository --json
+```
+
+The output includes `sourceRoot`, `sourceRevision`, inferred `technologies`, resolved convention
+`files`, explicit stable-ID mappings, repository-local instruction files, and the precedence order.
 
 ## Boundary with orchestration
 
