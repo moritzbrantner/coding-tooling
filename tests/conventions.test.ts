@@ -25,6 +25,7 @@ function conventions(): string {
   write(root, "technologies/typescript/react/README.md", "## REACT-001 — React rule\n");
   write(root, "technologies/tooling/README.md", "## TOOL-001 — Tooling rule\n");
   write(root, "technologies/tooling/vite/README.md", "## VITE-001 — Vite rule\n");
+  write(root, "technologies/tooling/playwright/README.md", "## PLAYWRIGHT-001 — Playwright rule\n");
   write(root, "technologies/databases/README.md", "## DB-001 — Database rule\n");
   write(root, "technologies/databases/postgres/README.md", "## POSTGRES-001 — Postgres rule\n");
   write(root, "technologies/docker/README.md", "## DOCKER-001 — Docker rule\n");
@@ -45,6 +46,7 @@ function repository(): string {
   );
   write(root, "tsconfig.json", "{}\n");
   write(root, "AGENTS.md", "# Local instructions\n");
+  write(root, "packages/widget/AGENTS.md", "# Widget instructions\n");
   write(
     root,
     ".coding-tooling.json",
@@ -84,7 +86,41 @@ describe("convention resolution", () => {
         "VITE-001",
       ]);
       expect(result.data.explicitRefs).toEqual({ "TEST-001": "conventions/testing/README.md" });
-      expect(result.data.localInstructions).toEqual([join(target, "AGENTS.md")]);
+      expect(result.data.localInstructions).toEqual([
+        join(target, "AGENTS.md"),
+        join(target, "packages/widget/AGENTS.md"),
+      ]);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("infers conventions from peer and optional dependencies", () => {
+    const source = conventions();
+    const target = repository();
+    try {
+      write(
+        target,
+        "package.json",
+        JSON.stringify({
+          name: "fixture",
+          peerDependencies: { react: "1" },
+          optionalDependencies: { "@playwright/test": "1" },
+        }),
+      );
+      const result = resolveConventions({ root: target, conventionsRoot: source });
+      expect(result.status).toBe("passed");
+      expect(result.data.technologies).toEqual([
+        "javascript",
+        "playwright",
+        "react",
+        "tooling",
+        "typescript",
+      ]);
+      const paths = (result.data.files as Array<{ path: string }>).map((file) => file.path);
+      expect(paths).toContain("technologies/typescript/react/README.md");
+      expect(paths).toContain("technologies/tooling/playwright/README.md");
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
