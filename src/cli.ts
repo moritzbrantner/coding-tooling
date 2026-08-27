@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { agentCapabilitiesCommand } from "./agent-capabilities.ts";
+import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
 import { repositoryRoot } from "./shared.ts";
@@ -50,7 +51,8 @@ function usage(): never {
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
   coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
   coding-tooling source-deps <activate|status|deactivate> [--config <path>] [--json]
-  coding-tooling agent-capabilities <validate|catalog|profile> [profile-name] [--root <path>] [--json]`);
+  coding-tooling agent-capabilities <validate|catalog|profile> [profile-name] [--root <path>] [--json]
+  coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]`);
   process.exit(2);
 }
 
@@ -93,6 +95,14 @@ export function main(argv = process.argv.slice(2)): number {
       action,
       positional[1],
     );
+  } else if (command === "conventions") {
+    if (positional[0] !== "resolve") return usage();
+    result = resolveConventions({
+      root: resolve(stringOption(options, "root") ?? root),
+      configPath: stringOption(options, "config"),
+      conventionsRoot: stringOption(options, "conventions-root"),
+      registryPath: stringOption(options, "registry"),
+    });
   } else return usage();
   console.log(JSON.stringify(result, null, options.json ? 0 : 2));
   return exitCode(result.status);
