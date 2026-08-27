@@ -28,6 +28,8 @@ type PackageManifest = {
   packageManager?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
 };
 
 const technologyConventionPaths: Record<string, string> = {
@@ -53,6 +55,9 @@ const technologyConventionPaths: Record<string, string> = {
 };
 
 const dependencyTechnologies: Record<string, string> = {
+  react: "react",
+  next: "nextjs",
+  vite: "vite",
   "@moritzbrantner/ui": "moritzbrantner-ui",
   "react-hook-form": "react-hook-form",
   "@tanstack/react-query": "tanstack-query",
@@ -183,7 +188,12 @@ function repositoryTechnologies(root: string): string[] {
   for (const file of files.filter((path) => basename(path) === "package.json")) {
     const manifest = readJson<PackageManifest>(file);
     if (!manifest) continue;
-    const dependencies = { ...manifest.dependencies, ...manifest.devDependencies };
+    const dependencies = {
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
+      ...manifest.peerDependencies,
+      ...manifest.optionalDependencies,
+    };
     for (const [dependency, technology] of Object.entries(dependencyTechnologies)) {
       if (dependency in dependencies) technologies.add(technology);
     }
@@ -225,6 +235,15 @@ function repositoryTechnologies(root: string): string[] {
   }
 
   return [...technologies].sort();
+}
+
+function localInstructionFiles(root: string): string[] {
+  return walkFiles(root, 8)
+    .filter((path) => {
+      const name = basename(path);
+      return name === "AGENTS.md" || name === "CLAUDE.md";
+    })
+    .toSorted((left, right) => relative(root, left).localeCompare(relative(root, right)));
 }
 
 function addFile(
@@ -297,9 +316,7 @@ export function resolveConventions(
       .filter(([, path]) => selectedPaths.has(path))
       .map(([id]) => id)
       .sort();
-    const localInstructions = ["AGENTS.md", "CLAUDE.md"]
-      .filter((path) => existsSync(join(root, path)))
-      .map((path) => join(root, path));
+    const localInstructions = localInstructionFiles(root);
     const diagnostics: Diagnostic[] = missingRefs.map((id) => ({
       code: "convention-ref-unresolved",
       message: `Configured convention reference ${id} was not found in ${source.root}`,
