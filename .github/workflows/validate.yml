@@ -26,6 +26,10 @@ jobs:
           base64 -w0 bun.lock
           echo
           echo "LOCKFILE_END"
+      - name: Print formatter diff
+        run: |
+          bun run format:write
+          git diff -- docs/cli-contract.md tests/conventions.test.ts
       - name: Validate through the local Action
         uses: ./
         with:
