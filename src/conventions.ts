@@ -25,6 +25,7 @@ type ConventionFile = {
 };
 
 type PackageManifest = {
+  packageManager?: string;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
@@ -39,12 +40,16 @@ const technologyConventionPaths: Record<string, string> = {
   "tanstack-query": "technologies/typescript/react/tanstack-query/README.md",
   "testing-library": "technologies/typescript/react/testing-library/README.md",
   zustand: "technologies/typescript/react/zustand/README.md",
+  tooling: "technologies/tooling/README.md",
   vite: "technologies/tooling/vite/README.md",
   vitest: "technologies/tooling/vitest/README.md",
   playwright: "technologies/tooling/playwright/README.md",
   storybook: "technologies/tooling/storybook/README.md",
   lighthouse: "technologies/tooling/lighthouse/README.md",
+  databases: "technologies/databases/README.md",
+  postgres: "technologies/databases/postgres/README.md",
   docker: "technologies/docker/README.md",
+  dockerfile: "technologies/docker/dockerfile/README.md",
 };
 
 const dependencyTechnologies: Record<string, string> = {
@@ -60,7 +65,18 @@ const dependencyTechnologies: Record<string, string> = {
   "@storybook/react-vite": "storybook",
   lighthouse: "lighthouse",
   "@lhci/cli": "lighthouse",
+  pg: "postgres",
+  postgres: "postgres",
+  "@neondatabase/serverless": "postgres",
 };
+
+const toolingDependencies = new Set([
+  "tailwindcss",
+  "@tailwindcss/vite",
+  "@tailwindcss/postcss",
+  "oxfmt",
+  "oxlint",
+]);
 
 function defaultRegistryPath(): string {
   return join(
@@ -125,8 +141,11 @@ export function resolveConventionSource(
 }
 
 function revision(root: string): string {
-  const result = runCommand("git", ["rev-parse", "HEAD"], root);
-  return result.status === 0 && result.stdout.trim() ? result.stdout.trim() : "unversioned";
+  const head = runCommand("git", ["rev-parse", "HEAD"], root);
+  if (head.status !== 0 || !head.stdout.trim()) return "unversioned";
+  const status = runCommand("git", ["status", "--porcelain"], root);
+  const suffix = status.status === 0 && status.stdout.trim() ? "-dirty" : "";
+  return `${head.stdout.trim()}${suffix}`;
 }
 
 function markdownFiles(root: string, directory: string): string[] {
@@ -156,28 +175,57 @@ function conventionIds(root: string): Map<string, string> {
 }
 
 function repositoryTechnologies(root: string): string[] {
+  const files = walkFiles(root, 4);
   const technologies = new Set(
     discoverComponents(root).flatMap((component) => component.technologies),
   );
 
-  for (const file of walkFiles(root, 4).filter((path) => basename(path) === "package.json")) {
+  for (const file of files.filter((path) => basename(path) === "package.json")) {
     const manifest = readJson<PackageManifest>(file);
     if (!manifest) continue;
     const dependencies = { ...manifest.dependencies, ...manifest.devDependencies };
     for (const [dependency, technology] of Object.entries(dependencyTechnologies)) {
       if (dependency in dependencies) technologies.add(technology);
     }
+    if (
+      manifest.packageManager?.startsWith("bun@") ||
+      Object.keys(dependencies).some((dependency) => toolingDependencies.has(dependency))
+    ) {
+      technologies.add("tooling");
+    }
   }
 
   if (
-    existsSync(join(root, "Dockerfile")) ||
-    existsSync(join(root, "docker-compose.yml")) ||
-    existsSync(join(root, "docker-compose.yaml")) ||
-    existsSync(join(root, "compose.yml")) ||
-    existsSync(join(root, "compose.yaml"))
+    files.some((path) => basename(path) === "bun.lock" || basename(path) === "bun.lockb")
   ) {
-    technologies.add("docker");
+    technologies.add("tooling");
   }
+
+  const hasDockerfile = files.some((path) => {
+    const name = basename(path);
+    return name === "Dockerfile" || name.startsWith("Dockerfile.");
+  });
+  const hasCompose = files.some((path) => {
+    const name = basename(path);
+    return (
+      name === "docker-compose.yml" ||
+      name === "docker-compose.yaml" ||
+      name === "compose.yml" ||
+      name === "compose.yaml"
+    );
+  });
+  if (hasDockerfile || hasCompose) technologies.add("docker");
+  if (hasDockerfile) technologies.add("dockerfile");
+
+  if (technologies.has("postgres")) technologies.add("databases");
+  if (
+    [...technologies].some((technology) =>
+      technologyConventionPaths[technology]?.startsWith("technologies/tooling/"),
+    )
+  ) {
+    technologies.add("tooling");
+  }
+
   return [...technologies].sort();
 }
 
@@ -228,17 +276,9 @@ export function resolveConventions(
       addFile(files, source.root, path, "general");
     }
 
-    const technologyPaths = new Set<string>();
     for (const technology of technologies) {
       const path = technologyConventionPaths[technology];
-      if (!path) continue;
-      technologyPaths.add(path);
-      if (path.startsWith("technologies/tooling/")) {
-        technologyPaths.add("technologies/tooling/README.md");
-      }
-    }
-    for (const path of [...technologyPaths].sort()) {
-      addFile(files, source.root, path, "technology");
+      if (path) addFile(files, source.root, path, "technology");
     }
 
     const ids = conventionIds(source.root);
