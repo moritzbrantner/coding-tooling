@@ -61,7 +61,7 @@ Shared engineering policy stays in `coding-agent-conventions`; consumer reposito
 coding-tooling conventions resolve --root /path/to/repository --json
 ```
 
-The resolver finds the current conventions checkout from an explicit path, `CODING_AGENT_CONVENTIONS_ROOT`, the shared Moenarch environment registry, or a sibling checkout. It loads current principles and general conventions, infers applicable technology branches from the target repository, resolves stable IDs declared through `.coding-tooling.json` `conventionRefs`, and reports repository-local `AGENTS.md`/`CLAUDE.md` separately as higher-precedence instructions.
+The resolver finds the current conventions checkout from an explicit path, `CODING_AGENT_CONVENTIONS_ROOT`, the shared Moenarch environment registry, or a sibling checkout. Source lookup uses that order deterministically and the selected source kind is reported in the result. It loads current principles and general conventions, infers applicable technology branches from the target repository, resolves stable IDs declared through `.coding-tooling.json` `conventionRefs`, and reports repository-local `AGENTS.md`/`CLAUDE.md` separately as higher-precedence instructions.
 
 The result includes the observed conventions Git `sourceRevision`. A caller may store that revision in run/review evidence for reproducibility without forcing consumer repositories to update a policy dependency whenever the central conventions change.
 
