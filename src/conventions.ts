@@ -243,7 +243,7 @@ function localInstructionFiles(root: string): string[] {
       const name = basename(path);
       return name === "AGENTS.md" || name === "CLAUDE.md";
     })
-    .toSorted((left, right) => relative(root, left).localeCompare(relative(root, right)));
+    .sort((left, right) => relative(root, left).localeCompare(relative(root, right)));
 }
 
 function addFile(
