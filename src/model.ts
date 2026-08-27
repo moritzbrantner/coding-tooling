@@ -31,7 +31,8 @@ export type ResultEnvelope<T extends Record<string, unknown>> = {
     | "plan"
     | "run"
     | "source-deps"
-    | "agent-capabilities";
+    | "agent-capabilities"
+    | "conventions";
   status: ResultStatus;
   durationMs: number;
   data: T;
