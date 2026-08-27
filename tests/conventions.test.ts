@@ -78,6 +78,13 @@ function conventions(): string {
       profiles: {
         "react-vite-library": { scopes: ["react", "vite"] },
       },
+    }),
+  );
+  write(
+    root,
+    "convention-ids.json",
+    JSON.stringify({
+      schemaVersion: 1,
       conventionIds: {
         "DB-001": "technologies/databases/README.md",
         "DOCKER-001": "technologies/docker/README.md",
@@ -127,7 +134,7 @@ describe("convention resolution", () => {
       expect(written.data.wrote).toBe(true);
       expect(written.data.matches).toBe(true);
 
-      write(source, "catalog.json", "{}\n");
+      write(source, "convention-ids.json", "{}\n");
       const checked = catalogConventions({ conventionsRoot: source, check: true });
       expect(checked.status).toBe("failed");
       expect(checked.diagnostics[0]?.code).toBe("conventions-catalog-stale");
