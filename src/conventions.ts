@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join, relative, resolve } from "node:path";
 
@@ -11,6 +11,7 @@ type ConventionResolutionOptions = {
   configPath?: string;
   conventionsRoot?: string;
   registryPath?: string;
+  compact?: boolean;
 };
 
 type ConventionSource = {
@@ -22,6 +23,26 @@ type ConventionFile = {
   path: string;
   absolutePath: string;
   reason: "principle" | "general" | "technology" | "explicit-ref";
+};
+
+type ConventionCatalog = {
+  schemaVersion: 1;
+  principles: string[];
+  general: string[];
+  scopes: Record<string, { path: string; parents?: string[] }>;
+  profiles: Record<string, { scopes: string[]; refs?: string[]; extends?: string[] }>;
+  conventionIds: Record<string, string>;
+};
+
+type ResolvedProfile = { scopes: string[]; refs: string[] };
+
+type ConventionCatalogSource = Pick<ConventionCatalog, "schemaVersion" | "scopes" | "profiles">;
+
+type ConventionCatalogOptions = {
+  root?: string;
+  conventionsRoot?: string;
+  write?: boolean;
+  check?: boolean;
 };
 
 type PackageManifest = {
@@ -164,19 +185,155 @@ function markdownFiles(root: string, directory: string): string[] {
 
 function conventionIds(root: string): Map<string, string> {
   const index = new Map<string, string>();
-  for (const path of walkFiles(root, 10).filter((file) => file.endsWith(".md"))) {
-    const source = readFileSync(path, "utf8");
+  const paths = [
+    ...markdownFiles(root, "principles"),
+    ...markdownFiles(root, "conventions"),
+    ...markdownFiles(root, "technologies"),
+  ];
+  for (const path of paths) {
+    const source = readFileSync(join(root, path), "utf8");
     for (const match of source.matchAll(/^##\s+([A-Z][A-Z0-9-]*-\d+)\b/gm)) {
       const id = match[1];
-      const relativePath = relative(root, path).replaceAll("\\", "/");
       const previous = index.get(id);
-      if (previous && previous !== relativePath) {
-        throw new Error(`Convention ID ${id} is defined in both ${previous} and ${relativePath}`);
+      if (previous && previous !== path) {
+        throw new Error(`Convention ID ${id} is defined in both ${previous} and ${path}`);
       }
-      index.set(id, relativePath);
+      index.set(id, path);
     }
   }
   return index;
+}
+
+function conventionCatalog(root: string): ConventionCatalog | undefined {
+  const catalog = readJson<ConventionCatalog>(join(root, "catalog.json"));
+  if (!catalog) return undefined;
+  if (catalog.schemaVersion !== 1) throw new Error("catalog.json must use schemaVersion 1");
+  return catalog;
+}
+
+export function buildConventionCatalog(root: string): ConventionCatalog {
+  const source = readJson<ConventionCatalogSource>(join(root, "catalog.source.json"));
+  if (!source || source.schemaVersion !== 1)
+    throw new Error("catalog.source.json must use schemaVersion 1");
+  for (const [scope, entry] of Object.entries(source.scopes)) {
+    if (!existsSync(join(root, entry.path)))
+      throw new Error(`Convention scope ${scope} references missing file ${entry.path}`);
+  }
+  for (const profile of Object.keys(source.profiles)) {
+    try {
+      const catalog = { ...source, principles: [], general: [], conventionIds: {} };
+      const resolved = resolveProfile(catalog, profile);
+      expandScopes(catalog, resolved.scopes);
+    } catch (error) {
+      throw new Error(
+        `Convention profile ${profile} is invalid: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+  return {
+    schemaVersion: 1,
+    principles: markdownFiles(root, "principles"),
+    general: markdownFiles(root, "conventions"),
+    scopes: Object.fromEntries(
+      Object.entries(source.scopes).sort(([left], [right]) => left.localeCompare(right)),
+    ),
+    profiles: Object.fromEntries(
+      Object.entries(source.profiles).sort(([left], [right]) => left.localeCompare(right)),
+    ),
+    conventionIds: Object.fromEntries(
+      [...conventionIds(root)].sort(([left], [right]) => left.localeCompare(right)),
+    ),
+  };
+}
+
+function resolveProfile(catalog: ConventionCatalog, profile: string): ResolvedProfile {
+  const scopes = new Set<string>();
+  const refs = new Set<string>();
+  const active = new Set<string>();
+  const seen = new Set<string>();
+  const visit = (name: string): void => {
+    if (seen.has(name)) return;
+    if (active.has(name)) throw new Error(`Convention profile inheritance cycle at ${name}`);
+    const entry = catalog.profiles[name];
+    if (!entry) throw new Error(`Convention profile ${name} was not found in catalog.json`);
+    active.add(name);
+    for (const parent of entry.extends ?? []) visit(parent);
+    active.delete(name);
+    for (const scope of entry.scopes) scopes.add(scope);
+    for (const ref of entry.refs ?? []) refs.add(ref);
+    seen.add(name);
+  };
+  visit(profile);
+  return { scopes: [...scopes], refs: [...refs] };
+}
+
+export function catalogConventions(
+  options: ConventionCatalogOptions = {},
+): ResultEnvelope<Record<string, unknown>> {
+  const started = Date.now();
+  const root = resolve(options.conventionsRoot ?? options.root ?? repositoryRoot());
+  try {
+    if (!validConventionsRoot(root))
+      return envelope("unavailable", started, { root }, [
+        {
+          code: "conventions-source-unavailable",
+          message: `${root} is not a coding-agent-conventions checkout`,
+        },
+      ]);
+    if (options.write && options.check)
+      throw new Error("Use only one of --write or --check for conventions catalog");
+    const catalog = buildConventionCatalog(root);
+    const content = `${JSON.stringify(catalog)}\n`;
+    const path = join(root, "catalog.json");
+    if (options.write) writeFileSync(path, content);
+    const current = existsSync(path) ? readFileSync(path, "utf8") : undefined;
+    const matches = current === content;
+    const diagnostics: Diagnostic[] = [];
+    if (options.check && !matches)
+      diagnostics.push({
+        code: "conventions-catalog-stale",
+        message: "catalog.json does not match catalog.source.json and current convention files",
+        path,
+      });
+    return envelope(
+      diagnostics.length > 0 ? "failed" : "passed",
+      started,
+      {
+        root,
+        path,
+        matches,
+        wrote: Boolean(options.write),
+        catalog,
+      },
+      diagnostics,
+    );
+  } catch (error) {
+    return envelope("error", started, { root }, [
+      {
+        code: "conventions-catalog-error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ]);
+  }
+}
+
+function expandScopes(catalog: ConventionCatalog, scopes: string[]): string[] {
+  const resolved: string[] = [];
+  const active = new Set<string>();
+  const seen = new Set<string>();
+  const visit = (scope: string): void => {
+    if (seen.has(scope)) return;
+    if (active.has(scope)) throw new Error(`Convention scope inheritance cycle at ${scope}`);
+    const entry = catalog.scopes[scope];
+    if (!entry) throw new Error(`Convention scope ${scope} was not found in catalog.json`);
+    active.add(scope);
+    for (const parent of entry.parents ?? []) visit(parent);
+    active.delete(scope);
+    seen.add(scope);
+    resolved.push(scope);
+  };
+  for (const scope of scopes) visit(scope);
+  return resolved;
 }
 
 function repositoryTechnologies(root: string): string[] {
@@ -239,10 +396,7 @@ function repositoryTechnologies(root: string): string[] {
 
 function localInstructionFiles(root: string): string[] {
   return walkFiles(root, 8)
-    .filter((path) => {
-      const name = basename(path);
-      return name === "AGENTS.md" || name === "CLAUDE.md";
-    })
+    .filter((path) => basename(path) === "AGENTS.md")
     .sort((left, right) => relative(root, left).localeCompare(relative(root, right)));
 }
 
@@ -283,25 +437,37 @@ export function resolveConventions(
     }
 
     const config = loadConfig(root, options.configPath);
-    const technologies = repositoryTechnologies(root);
+    const inferredTechnologies = repositoryTechnologies(root);
+    const catalog = conventionCatalog(source.root);
+    const profile = config.conventionProfile;
+    const resolvedProfile = profile && catalog?.profiles[profile]
+      ? resolveProfile(catalog, profile)
+      : undefined;
+    const declaredScopes = [...(resolvedProfile?.scopes ?? []), ...(config.conventionScopes ?? [])];
+    const resolvedScopes =
+      catalog && declaredScopes.length > 0
+        ? expandScopes(catalog, declaredScopes)
+        : inferredTechnologies;
     const files = new Map<string, ConventionFile>();
 
-    for (const path of markdownFiles(source.root, "principles")) {
+    for (const path of catalog?.principles ?? markdownFiles(source.root, "principles")) {
       addFile(files, source.root, path, "principle");
     }
-    for (const path of markdownFiles(source.root, "conventions")) {
+    for (const path of catalog?.general ?? markdownFiles(source.root, "conventions")) {
       addFile(files, source.root, path, "general");
     }
 
-    for (const technology of technologies) {
-      const path = technologyConventionPaths[technology];
+    for (const technology of resolvedScopes) {
+      const path = catalog?.scopes[technology]?.path ?? technologyConventionPaths[technology];
       if (path) addFile(files, source.root, path, "technology");
     }
 
-    const ids = conventionIds(source.root);
+    const ids = catalog
+      ? new Map(Object.entries(catalog.conventionIds))
+      : conventionIds(source.root);
     const resolvedRefs: Record<string, string> = {};
     const missingRefs: string[] = [];
-    for (const id of config.conventionRefs ?? []) {
+    for (const id of [...(resolvedProfile?.refs ?? []), ...(config.conventionRefs ?? [])]) {
       const path = ids.get(id);
       if (!path) {
         missingRefs.push(id);
@@ -311,33 +477,82 @@ export function resolveConventions(
       addFile(files, source.root, path, "explicit-ref");
     }
 
+    const exceptions = config.conventionExceptions ?? [];
+    const missingExceptions = exceptions.filter(({ id }) => !ids.has(id));
+
     const selectedPaths = new Set(files.keys());
     const selectedConventionIds = [...ids.entries()]
       .filter(([, path]) => selectedPaths.has(path))
       .map(([id]) => id)
       .sort();
+    const exceptedIds = new Set(exceptions.map(({ id }) => id));
+    const effectiveConventionIds = selectedConventionIds.filter((id) => !exceptedIds.has(id));
     const localInstructions = localInstructionFiles(root);
+    const catalogScopes = new Set(Object.keys(catalog?.scopes ?? technologyConventionPaths));
+    const undeclaredTechnologies =
+      declaredScopes.length > 0
+        ? inferredTechnologies.filter(
+            (technology) => catalogScopes.has(technology) && !resolvedScopes.includes(technology),
+          )
+        : [];
     const diagnostics: Diagnostic[] = missingRefs.map((id) => ({
       code: "convention-ref-unresolved",
       message: `Configured convention reference ${id} was not found in ${source.root}`,
     }));
+    if (profile && !resolvedProfile) {
+      diagnostics.push({
+        code: "convention-profile-unresolved",
+        message: `Configured convention profile ${profile} was not found in catalog.json`,
+      });
+    }
+    diagnostics.push(
+      ...missingExceptions.map(({ id }) => ({
+        code: "convention-exception-unresolved",
+        message: `Configured convention exception ${id} was not found in ${source.root}`,
+      })),
+      ...undeclaredTechnologies.map((technology) => ({
+        code: "convention-scope-undeclared",
+        message: `Inferred convention scope ${technology} is not covered by the declared profile or scopes`,
+      })),
+    );
+
+    const resolvedFiles = [...files.values()];
+    const data = {
+      ...(options.compact
+        ? {}
+        : { root, sourceRoot: source.root, inferredTechnologies }),
+      repositoryName: basename(root),
+      source: source.source,
+      sourceRevision: revision(source.root),
+      profile,
+      declaredScopes,
+      resolvedScopes,
+      technologies: resolvedScopes,
+      undeclaredTechnologies,
+      files: options.compact
+        ? resolvedFiles.map(({ path, reason }) => ({ path, reason }))
+        : resolvedFiles,
+      ...(options.compact
+        ? {
+            conventionIdCount: selectedConventionIds.length,
+            effectiveConventionIdCount: effectiveConventionIds.length,
+          }
+        : {
+            conventionIds: selectedConventionIds,
+            effectiveConventionIds,
+          }),
+      explicitRefs: resolvedRefs,
+      exceptions,
+      localInstructions: options.compact
+        ? localInstructions.map((path) => relative(root, path).replaceAll("\\", "/"))
+        : localInstructions,
+      precedence: ["repository-local", "technology", "general", "principle"],
+    };
 
     return envelope(
-      missingRefs.length > 0 ? "failed" : "passed",
+      diagnostics.length > 0 ? "failed" : "passed",
       started,
-      {
-        root,
-        repositoryName: basename(root),
-        sourceRoot: source.root,
-        source: source.source,
-        sourceRevision: revision(source.root),
-        technologies,
-        files: [...files.values()],
-        conventionIds: selectedConventionIds,
-        explicitRefs: resolvedRefs,
-        localInstructions,
-        precedence: ["repository-local", "technology", "general", "principle"],
-      },
+      data,
       diagnostics,
     );
   } catch (error) {
