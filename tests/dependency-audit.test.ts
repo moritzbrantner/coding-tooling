@@ -27,6 +27,14 @@ function baseConfig(layer: "foundation" | "domain" | "adapter" | "application" |
 }
 
 describe("dependency architecture audit", () => {
+  test("fails malformed configuration without throwing", () => {
+    const root = repository({ schemaVersion: 1 });
+
+    const result = auditDependencies(root);
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics[0]?.code).toBe("invalid-dependency-config");
+  });
+
   test("rejects sideways domain implementation dependencies", () => {
     const config = baseConfig("domain");
     config.dependencies.push({
