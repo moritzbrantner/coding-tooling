@@ -25,7 +25,7 @@ It deliberately does **not** decide:
 - whether one candidate is semantically better than another,
 - whether a package should be published or version-bumped.
 
-Those concerns belong to conventions/skills, outer orchestration, evidence collectors, release workflows, and evaluation tooling respectively.
+Those concerns belong to the caller, `coding-agent-skills`, `coding-agent-conventions`, outer orchestration, evidence collectors, release workflows, and evaluation tooling respectively.
 
 ## Commands
 
@@ -39,6 +39,9 @@ coding-tooling run --tier fast --report .artifacts/coding-tooling/report.json --
 coding-tooling source-deps activate [--config <path>] [--json]
 coding-tooling source-deps status [--config <path>] [--json]
 coding-tooling source-deps deactivate [--config <path>] [--json]
+coding-tooling agent-capabilities validate [--root <path>] [--json]
+coding-tooling agent-capabilities catalog [--root <path>] [--json]
+coding-tooling agent-capabilities profile <profile> [--root <path>] [--json]
 ```
 
 Run directly during development with Bun:
@@ -83,6 +86,8 @@ External deterministic tools may also be wired through `capabilityCommands`. For
 
 The machine-readable [capability catalog](capabilities/catalog.json) and its family contracts describe broader validation tiers, artifact conventions, opt-in performance work, and baseline requirements. They remain declarative metadata; the executable capability vocabulary is the v0.2 list above.
 
+General coding-agent capabilities are sourced from `coding-agent-skills`. The `agent-capabilities` command family deterministically validates that source, derives its catalog, and resolves named profiles; it does not own or reinterpret the reasoning procedures themselves.
+
 ## Design rules
 
 1. Deterministic operations only; no LLM calls.
@@ -101,34 +106,36 @@ The machine-readable [capability catalog](capabilities/catalog.json) and its fam
 agent-contracts
   neutral interchange contracts
              │
-             ├──────────────────────────────┐
-             │                              │
-coding-agent-conventions          agent-loop-orchestrator
-  policy + development loop       scheduling + durable run state
-             │                              │
-             ▼                              ▼
-         coding agent ───────────────► coding-tooling
-                                      deterministic operations
-                                               │
-                          declared capability  │
-                                               ▼
-                                      runtime-profiler
-                                      runtime evidence
-                                               │
-                                               ▼
-                                           Moonlight
-                                      evaluation/comparison
+             ├───────────────────────────────────────┐
+             │                                       │
+coding-agent-conventions      coding-agent-skills   agent-loop-orchestrator
+  stable engineering policy     reasoning + flows     optional durable coordination
+             │                       │                         │
+             └──────────────┬────────┘                         │
+                            ▼                                  ▼
+                        coding agent ─────────────────► coding-tooling
+                                                    deterministic operations
+                                                             │
+                                        declared capability  │
+                                                             ▼
+                                                    runtime-profiler
+                                                    runtime evidence
+                                                             │
+                                                             ▼
+                                                         Moonlight
+                                                    evaluation/comparison
 ```
 
 The arrows describe collaboration, not package dependencies:
 
 - `agent-contracts` owns cross-repository envelopes such as evidence, check results, and evaluation results;
-- `coding-tooling` owns deterministic repository discovery, execution, and exact source-dependency activation;
+- `coding-agent-skills` owns reusable reasoning procedures, executable flows, and automatic-use profiles;
+- `coding-agent-conventions` owns stable engineering policy and vocabulary;
+- `coding-tooling` owns deterministic repository discovery, execution, source-dependency activation, and capability-source/profile resolution;
 - `runtime-profiler` owns runtime capture and immutable profiler bundles;
 - Moonlight owns baseline/candidate evaluation;
-- `agent-loop-orchestrator` decides when these components run and stores their neutral outputs;
-- `coding-agent-conventions` defines policy for how agents use the results;
-- `agent-loop-setup` may compose/install worker procedures but is not a source of tooling semantics.
+- `agent-loop-orchestrator` decides when these components run for workloads that deliberately opt into durable coordination and stores their neutral outputs;
+- `agent-loop-setup` owns machine bootstrap and the shared per-user component registry, not skill semantics.
 
 `coding-tooling` must remain usable without any of the other repositories.
 
