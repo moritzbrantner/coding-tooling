@@ -28,11 +28,7 @@ function conventions(): string {
   write(root, "technologies/databases/README.md", "## DB-001 — Database rule\n");
   write(root, "technologies/databases/postgres/README.md", "## POSTGRES-001 — Postgres rule\n");
   write(root, "technologies/docker/README.md", "## DOCKER-001 — Docker rule\n");
-  write(
-    root,
-    "technologies/docker/dockerfile/README.md",
-    "## DOCKERFILE-001 — Dockerfile rule\n",
-  );
+  write(root, "technologies/docker/dockerfile/README.md", "## DOCKERFILE-001 — Dockerfile rule\n");
   return root;
 }
 
