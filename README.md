@@ -61,7 +61,24 @@ Shared engineering policy stays in `coding-agent-conventions`; consumer reposito
 coding-tooling conventions resolve --root /path/to/repository --json
 ```
 
-The resolver finds the current conventions checkout from an explicit path, `CODING_AGENT_CONVENTIONS_ROOT`, the shared Moenarch environment registry, or a sibling checkout. Source lookup uses that order deterministically and the selected source kind is reported in the result. It loads current principles and general conventions, infers applicable technology branches from the target repository, resolves stable IDs declared through `.coding-tooling.json` `conventionRefs`, and reports repository-local `AGENTS.md`/`CLAUDE.md` separately as higher-precedence instructions.
+The resolver finds the current conventions checkout from an explicit path, `CODING_AGENT_CONVENTIONS_ROOT`, the shared Moenarch environment registry, or a sibling checkout. Source lookup uses that order deterministically and the selected source kind is reported in the result.
+
+Repositories may declare a `conventionProfile`, additional `conventionScopes`, stable `conventionRefs`, and reasoned `conventionExceptions` in `.coding-tooling.json`. The resolver expands parent scopes through the central `catalog.json`, reports manifest signals not covered by the declaration as drift, and falls back to inference when no declaration exists. Repository-local `AGENTS.md` files remain separate higher-precedence instructions.
+
+Use compact output when passing the resolution to an agent or evidence collector:
+
+```bash
+coding-tooling conventions resolve --root /path/to/repository --compact --json
+```
+
+Compact output omits absolute paths, inference details, and full stable-ID lists while preserving the policy revision, resolved profile and scopes, selected convention files, ID counts, explicit exceptions, local instruction paths, and precedence.
+
+`coding-agent-conventions` keeps the human-authored scope and profile graph in `catalog.source.json`. Regenerate or verify its compact agent-facing index with:
+
+```bash
+coding-tooling conventions catalog --conventions-root /path/to/coding-agent-conventions --write
+coding-tooling conventions catalog --conventions-root /path/to/coding-agent-conventions --check
+```
 
 The result includes the observed conventions Git `sourceRevision`. A caller may store that revision in run/review evidence for reproducibility without forcing consumer repositories to update a policy dependency whenever the central conventions change.
 
