@@ -440,9 +440,8 @@ export function resolveConventions(
     const inferredTechnologies = repositoryTechnologies(root);
     const catalog = conventionCatalog(source.root);
     const profile = config.conventionProfile;
-    const resolvedProfile = profile && catalog?.profiles[profile]
-      ? resolveProfile(catalog, profile)
-      : undefined;
+    const resolvedProfile =
+      profile && catalog?.profiles[profile] ? resolveProfile(catalog, profile) : undefined;
     const declaredScopes = [...(resolvedProfile?.scopes ?? []), ...(config.conventionScopes ?? [])];
     const resolvedScopes =
       catalog && declaredScopes.length > 0
@@ -518,9 +517,7 @@ export function resolveConventions(
 
     const resolvedFiles = [...files.values()];
     const data = {
-      ...(options.compact
-        ? {}
-        : { root, sourceRoot: source.root, inferredTechnologies }),
+      ...(options.compact ? {} : { root, sourceRoot: source.root, inferredTechnologies }),
       repositoryName: basename(root),
       source: source.source,
       sourceRevision: revision(source.root),
@@ -549,12 +546,7 @@ export function resolveConventions(
       precedence: ["repository-local", "technology", "general", "principle"],
     };
 
-    return envelope(
-      diagnostics.length > 0 ? "failed" : "passed",
-      started,
-      data,
-      diagnostics,
-    );
+    return envelope(diagnostics.length > 0 ? "failed" : "passed", started, data, diagnostics);
   } catch (error) {
     return envelope("error", started, { root, files: [] }, [
       {
