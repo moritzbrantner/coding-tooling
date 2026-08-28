@@ -22,6 +22,7 @@ test("conventions check detects unexpected symlinks in the managed snapshot", ()
     write(source, "README.md", "# Conventions\n");
     write(source, "principles/README.md", "## PRINCIPLE-001 — Be explicit\n");
     write(source, "conventions/testing/README.md", "## TEST-001 — Test narrowly\n");
+    write(source, "technologies/README.md", "# Technologies\n");
     write(
       source,
       "registry/registry.json",

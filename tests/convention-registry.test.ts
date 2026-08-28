@@ -144,9 +144,7 @@ describe("installed convention registry", () => {
       });
       expect(diff.status).toBe("passed");
       expect(diff.data.updateAvailable).toBe(true);
-      expect(diff.data.changed).toContain(
-        "modules/react/technologies/typescript/react/README.md",
-      );
+      expect(diff.data.changed).toContain("modules/react/technologies/typescript/react/README.md");
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });

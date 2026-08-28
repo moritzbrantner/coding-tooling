@@ -56,6 +56,26 @@ function repository(): string {
 }
 
 describe("convention resolution", () => {
+  test("ignores convention-shaped headings inside fenced examples", () => {
+    const source = conventions();
+    const target = repository();
+    try {
+      write(
+        source,
+        "README.md",
+        "# Conventions\n\n```md\n## REACT-001 — Example convention\n```\n",
+      );
+
+      const result = resolveConventions({ root: target, conventionsRoot: source });
+
+      expect(result.status).toBe("passed");
+      expect(result.data.conventionIds).toContain("REACT-001");
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
   test("loads current general and inferred technology conventions without copying them", () => {
     const source = conventions();
     const target = repository();
