@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -87,7 +94,11 @@ describe("installed convention registry", () => {
 
       const drifted = conventionRegistryCommand("check", [], { root: target });
       expect(drifted.status).toBe("failed");
-      expect(drifted.diagnostics.some((diagnostic) => diagnostic.code === "conventions-managed-file-drift")).toBe(true);
+      expect(
+        drifted.diagnostics.some(
+          (diagnostic) => diagnostic.code === "conventions-managed-file-drift",
+        ),
+      ).toBe(true);
 
       const update = conventionRegistryCommand("update", [], {
         root: target,
@@ -139,6 +150,69 @@ describe("installed convention registry", () => {
       expect(result.status).toBe("passed");
       const manifest = JSON.parse(readFileSync(join(target, "conventions.json"), "utf8"));
       expect(manifest.modules).toEqual(["react"]);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("rerunning init is an offline no-op after initialization", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      conventionRegistryCommand("init", ["react"], { root: target, conventionsRoot: source });
+      rmSync(source, { recursive: true, force: true });
+
+      const second = conventionRegistryCommand("init", [], { root: target });
+      expect(second.status).toBe("passed");
+      expect(second.data.unchanged).toBe(true);
+      expect(second.data.modules).toEqual(["react"]);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("does not persist an init manifest when snapshot construction fails", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      const manifestPath = join(source, "registry/registry.json");
+      const registryManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      registryManifest.modules.react.sources = ["missing.md"];
+      writeFileSync(manifestPath, `${JSON.stringify(registryManifest, null, 2)}\n`);
+
+      const result = conventionRegistryCommand("init", ["react"], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(result.status).toBe("error");
+      expect(existsSync(join(target, "conventions.json"))).toBe(false);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects registry module names that can escape the managed directory", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      const manifestPath = join(source, "registry/registry.json");
+      const registryManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      registryManifest.modules["../.."] = {
+        sources: ["README.md"],
+        dependencies: [],
+      };
+      writeFileSync(manifestPath, `${JSON.stringify(registryManifest, null, 2)}\n`);
+
+      const result = conventionRegistryCommand("init", ["../.."], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(result.status).toBe("error");
+      expect(existsSync(join(target, "README.md"))).toBe(false);
+      expect(existsSync(join(target, "conventions.json"))).toBe(false);
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
