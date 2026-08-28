@@ -11,7 +11,7 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { resolveConventionSource } from "./conventions.ts";
-import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
+import type { Diagnostic, ResultEnvelope, ResultOperation, ResultStatus } from "./model.ts";
 import { readJson, runCommand, walkFiles } from "./shared.ts";
 
 type RegistryModule = {
@@ -126,7 +126,10 @@ function loadRegistry(sourceRoot: string): RegistryManifest {
       throw new Error(`Invalid convention registry module: ${name}`);
     }
     const sources = rawModule.sources;
-    if (!sources.length || !sources.every((source) => typeof source === "string" && source.length > 0)) {
+    if (
+      !sources.length ||
+      !sources.every((source) => typeof source === "string" && source.length > 0)
+    ) {
       throw new Error(`Convention module ${name} has invalid sources`);
     }
     const dependencies = rawModule.dependencies ?? [];
@@ -134,8 +137,7 @@ function loadRegistry(sourceRoot: string): RegistryManifest {
       throw new Error(`Convention module ${name} has invalid dependencies`);
     }
     modules[name] = {
-      description:
-        typeof rawModule.description === "string" ? rawModule.description : undefined,
+      description: typeof rawModule.description === "string" ? rawModule.description : undefined,
       sources,
       dependencies,
     };
@@ -374,7 +376,7 @@ function snapshotHashes(snapshot: Snapshot): Record<string, string> {
 }
 
 function envelope(
-  operation: string,
+  operation: ResultOperation,
   status: ResultStatus,
   started: number,
   data: Record<string, unknown>,
@@ -417,7 +419,10 @@ export function conventionRegistryCommand(
       const lock = loadLock(root);
       if (!consumer) {
         return envelope("conventions-check", "failed", started, { root }, [
-          { code: "conventions-manifest-missing", message: `${manifestName} is missing or invalid` },
+          {
+            code: "conventions-manifest-missing",
+            message: `${manifestName} is missing or invalid`,
+          },
         ]);
       }
       if (!lock) {
@@ -426,7 +431,8 @@ export function conventionRegistryCommand(
         ]);
       }
       const drift = hashDiff(lock.files, currentFileHashes(root));
-      const selectionDrift = JSON.stringify(consumer.modules) !== JSON.stringify(lock.requestedModules);
+      const selectionDrift =
+        JSON.stringify(consumer.modules) !== JSON.stringify(lock.requestedModules);
       const diagnostics: Diagnostic[] = drift.map((path) => ({
         code: "conventions-managed-file-drift",
         message: `Managed convention file differs from the lock: ${path}`,

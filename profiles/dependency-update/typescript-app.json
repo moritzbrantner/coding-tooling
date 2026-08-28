@@ -16,5 +16,5 @@
   },
   "requiredCapabilities": ["lint", "typecheck", "test:unit", "build"],
   "optionalCapabilities": ["test:integration", "test:e2e", "dependencies:audit", "benchmark:smoke"],
-  "conventionRefs": ["AGENT-001", "AGENT-007", "TEST-002", "CI-001", "CI-003"]
+  "conventionRefs": ["AGENT-001", "AGENT-007", "TEST-002"]
 }

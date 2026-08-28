@@ -118,7 +118,8 @@ export function main(argv = process.argv.slice(2)): number {
       action === "diff" ||
       action === "update"
     ) {
-      if (action === "add" && positional.length < 2 && !stringOption(options, "profile")) return usage();
+      if (action === "add" && positional.length < 2 && !stringOption(options, "profile"))
+        return usage();
       result = conventionRegistryCommand(action, positional.slice(1), {
         root: targetRoot,
         conventionsRoot: stringOption(options, "conventions-root"),

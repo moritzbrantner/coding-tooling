@@ -162,12 +162,36 @@ function markdownFiles(root: string, directory: string): string[] {
     .sort();
 }
 
+function conventionIdsFromMarkdown(source: string): string[] {
+  const ids: string[] = [];
+  let fence: { marker: string; length: number } | undefined;
+
+  for (const line of source.split(/\r?\n/)) {
+    const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      const closingFence = line.match(/^ {0,3}(`{3,}|~{3,})\s*$/)?.[1];
+      if (closingFence?.[0] === fence.marker && closingFence.length >= fence.length) {
+        fence = undefined;
+      }
+      continue;
+    }
+    if (fenceMatch) {
+      fence = { marker: fenceMatch[1][0], length: fenceMatch[1].length };
+      continue;
+    }
+
+    const heading = line.match(/^##\s+([A-Z][A-Z0-9-]*-\d+)\b/);
+    if (heading) ids.push(heading[1]);
+  }
+
+  return ids;
+}
+
 function conventionIds(root: string): Map<string, string> {
   const index = new Map<string, string>();
   for (const path of walkFiles(root, 10).filter((file) => file.endsWith(".md"))) {
     const source = readFileSync(path, "utf8");
-    for (const match of source.matchAll(/^##\s+([A-Z][A-Z0-9-]*-\d+)\b/gm)) {
-      const id = match[1];
+    for (const id of conventionIdsFromMarkdown(source)) {
       const relativePath = relative(root, path).replaceAll("\\", "/");
       const previous = index.get(id);
       if (previous && previous !== relativePath) {

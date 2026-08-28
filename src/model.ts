@@ -14,6 +14,21 @@ export const capabilities = [
 
 export type Capability = (typeof capabilities)[number];
 export type ResultStatus = "passed" | "failed" | "unavailable" | "error";
+export type ResultOperation =
+  | "inspect"
+  | "check"
+  | "affected"
+  | "doctor"
+  | "plan"
+  | "run"
+  | "source-deps"
+  | "agent-capabilities"
+  | "conventions"
+  | "conventions-init"
+  | "conventions-add"
+  | "conventions-check"
+  | "conventions-diff"
+  | "conventions-update";
 
 export type Diagnostic = {
   code?: string;
@@ -23,16 +38,7 @@ export type Diagnostic = {
 
 export type ResultEnvelope<T extends Record<string, unknown>> = {
   schemaVersion: 1;
-  operation:
-    | "inspect"
-    | "check"
-    | "affected"
-    | "doctor"
-    | "plan"
-    | "run"
-    | "source-deps"
-    | "agent-capabilities"
-    | "conventions";
+  operation: ResultOperation;
   status: ResultStatus;
   durationMs: number;
   data: T;
