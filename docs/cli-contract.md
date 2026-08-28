@@ -123,6 +123,10 @@ Commands that need registry content resolve the source checkout in this order:
 
 `.conventions/` contains managed snapshots and must not be hand-edited.
 
+`.conventions/index.md` is the cheap entry point for humans and agents. It contains a deterministic rule briefing built from each installed `## ID — Title` heading and that rule's first authored bullet, followed by links to the full managed module files. Stable IDs are de-duplicated in the briefing, so detailed documents may expand a rule without repeating it in the hot-path summary.
+
+The briefing is navigation, not a second policy source: its wording is extracted directly from installed convention files, and the full managed source remains authoritative when a rule is relevant or ambiguous.
+
 Repository-specific semantics, commands, architecture boundaries, and deliberate exceptions belong in repository-local guidance such as `AGENTS.md`.
 
 `coding-agent-skills` owns reusable reasoning procedures. Skills may read installed conventions but should not copy policy text.
