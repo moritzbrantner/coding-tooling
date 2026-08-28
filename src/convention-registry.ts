@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -57,6 +58,7 @@ const manifestName = "conventions.json";
 const lockName = "conventions.lock.json";
 const installDirectory = ".conventions";
 const moduleNamePattern = /^[a-z0-9][a-z0-9-]*$/;
+const sha256Pattern = /^[a-f0-9]{64}$/;
 
 function hash(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -74,37 +76,124 @@ function revision(root: string): string {
   return `${head.stdout.trim()}${suffix}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isModuleName(value: unknown): value is string {
+  return typeof value === "string" && moduleNamePattern.test(value);
+}
+
+function isModuleList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(isModuleName) && new Set(value).size === value.length;
+}
+
+function isManagedPath(path: string): boolean {
+  if (!path || path.startsWith("/") || path.includes("\\")) return false;
+  const segments = path.split("/");
+  return segments.every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+
+function isFileHashRecord(value: unknown): value is Record<string, string> {
+  if (!isRecord(value)) return false;
+  const entries = Object.entries(value);
+  return (
+    entries.length > 0 &&
+    entries.every(
+      ([path, digest]) =>
+        isManagedPath(path) && typeof digest === "string" && sha256Pattern.test(digest),
+    )
+  );
+}
+
 function assertModuleName(name: string): void {
-  if (!moduleNamePattern.test(name)) {
+  if (!isModuleName(name)) {
     throw new Error(`Invalid convention module name: ${name}`);
   }
 }
 
 function loadRegistry(sourceRoot: string): RegistryManifest {
   const path = join(sourceRoot, "registry", "registry.json");
-  const manifest = readJson<RegistryManifest>(path);
-  if (!manifest || manifest.schemaVersion !== 1 || !manifest.modules) {
+  const value = readJson<unknown>(path);
+  if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.modules)) {
     throw new Error(`Invalid convention registry manifest: ${path}`);
   }
-  for (const [name, module] of Object.entries(manifest.modules)) {
+
+  const modules: Record<string, RegistryModule> = {};
+  for (const [name, rawModule] of Object.entries(value.modules)) {
     assertModuleName(name);
-    if (!Array.isArray(module.sources) || !module.sources.length) {
-      throw new Error(`Convention module ${name} has no sources`);
+    if (!isRecord(rawModule) || !Array.isArray(rawModule.sources)) {
+      throw new Error(`Invalid convention registry module: ${name}`);
     }
-    for (const dependency of module.dependencies ?? []) assertModuleName(dependency);
+    const sources = rawModule.sources;
+    if (!sources.length || !sources.every((source) => typeof source === "string" && source.length > 0)) {
+      throw new Error(`Convention module ${name} has invalid sources`);
+    }
+    const dependencies = rawModule.dependencies ?? [];
+    if (!isModuleList(dependencies)) {
+      throw new Error(`Convention module ${name} has invalid dependencies`);
+    }
+    modules[name] = {
+      description:
+        typeof rawModule.description === "string" ? rawModule.description : undefined,
+      sources,
+      dependencies,
+    };
   }
-  for (const modules of Object.values(manifest.profiles ?? {})) {
-    for (const name of modules) assertModuleName(name);
+
+  let profiles: Record<string, string[]> | undefined;
+  if (value.profiles !== undefined) {
+    if (!isRecord(value.profiles)) throw new Error(`Invalid convention registry profiles: ${path}`);
+    profiles = {};
+    for (const [name, modulesForProfile] of Object.entries(value.profiles)) {
+      if (!name || !isModuleList(modulesForProfile)) {
+        throw new Error(`Invalid convention registry profile: ${name}`);
+      }
+      profiles[name] = modulesForProfile;
+    }
   }
-  return manifest;
+
+  return { schemaVersion: 1, modules, profiles };
 }
 
 function loadConsumer(root: string): ConsumerManifest | undefined {
-  return readJson<ConsumerManifest>(join(root, manifestName));
+  const value = readJson<unknown>(join(root, manifestName));
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== 1 ||
+    value.registry !== "coding-agent-conventions" ||
+    !isModuleList(value.modules)
+  ) {
+    return undefined;
+  }
+  return {
+    schemaVersion: 1,
+    registry: "coding-agent-conventions",
+    modules: value.modules,
+  };
 }
 
 function loadLock(root: string): ConventionLock | undefined {
-  return readJson<ConventionLock>(join(root, lockName));
+  const value = readJson<unknown>(join(root, lockName));
+  if (
+    !isRecord(value) ||
+    value.schemaVersion !== 1 ||
+    typeof value.sourceRevision !== "string" ||
+    !value.sourceRevision ||
+    !isModuleList(value.requestedModules) ||
+    !isModuleList(value.resolvedModules) ||
+    !isFileHashRecord(value.files) ||
+    !Object.prototype.hasOwnProperty.call(value.files, "index.md")
+  ) {
+    return undefined;
+  }
+  return {
+    schemaVersion: 1,
+    sourceRevision: value.sourceRevision,
+    requestedModules: value.requestedModules,
+    resolvedModules: value.resolvedModules,
+    files: value.files,
+  };
 }
 
 function unique(values: string[]): string[] {
@@ -148,16 +237,33 @@ function resolveDependencies(registry: RegistryManifest, requested: string[]): s
   return resolved;
 }
 
+function withinRoot(root: string, path: string): boolean {
+  return path === root || path.startsWith(`${root}${sep}`);
+}
+
+function safeRealPath(sourceRoot: string, candidate: string, label: string): string {
+  const realRoot = realpathSync(sourceRoot);
+  const realCandidate = realpathSync(candidate);
+  if (!withinRoot(realRoot, realCandidate)) {
+    throw new Error(`Convention source escapes registry root: ${label}`);
+  }
+  return realCandidate;
+}
+
 function sourceFiles(sourceRoot: string, source: string): string[] {
   const root = resolve(sourceRoot);
   const absolute = resolve(root, source);
-  const boundary = `${root}${sep}`;
-  if (absolute !== root && !absolute.startsWith(boundary)) {
+  if (!withinRoot(root, absolute)) {
     throw new Error(`Convention source escapes registry root: ${source}`);
   }
   if (!existsSync(absolute)) throw new Error(`Convention source does not exist: ${source}`);
-  if (statSync(absolute).isFile()) return [absolute];
-  return walkFiles(absolute, 12).filter((file) => file.endsWith(".md")).sort();
+  const realSource = safeRealPath(root, absolute, source);
+  if (statSync(realSource).isFile()) return [realSource];
+
+  return walkFiles(realSource, 12)
+    .filter((file) => file.endsWith(".md"))
+    .map((file) => safeRealPath(root, file, source))
+    .sort();
 }
 
 function indexContent(resolvedModules: string[], moduleFiles: Map<string, string[]>): string {
@@ -191,7 +297,10 @@ function buildSnapshot(
     const installed: string[] = [];
     for (const source of module.sources) {
       for (const absolute of sourceFiles(sourceRoot, source)) {
-        const sourcePath = relative(sourceRoot, absolute).split(sep).join("/");
+        const sourcePath = relative(realpathSync(sourceRoot), absolute).split(sep).join("/");
+        if (!isManagedPath(sourcePath)) {
+          throw new Error(`Invalid convention source path: ${sourcePath}`);
+        }
         const targetPath = `modules/${moduleName}/${sourcePath}`;
         files.set(targetPath, readFileSync(absolute, "utf8"));
         installed.push(targetPath);
@@ -210,6 +319,7 @@ function buildSnapshot(
 }
 
 function managedDestination(installRoot: string, path: string): string {
+  if (!isManagedPath(path)) throw new Error(`Invalid managed convention path: ${path}`);
   const root = resolve(installRoot);
   const absolute = resolve(root, path);
   if (absolute === root || !absolute.startsWith(`${root}${sep}`)) {
@@ -248,6 +358,7 @@ function currentFileHashes(root: string): Record<string, string> {
   const result: Record<string, string> = {};
   for (const absolute of walkFiles(installRoot, 20).sort()) {
     const path = relative(installRoot, absolute).split(sep).join("/");
+    if (!isManagedPath(path)) continue;
     result[path] = hash(readFileSync(absolute, "utf8"));
   }
   return result;
@@ -304,12 +415,12 @@ export function conventionRegistryCommand(
     if (action === "check") {
       const consumer = loadConsumer(root);
       const lock = loadLock(root);
-      if (!consumer || consumer.schemaVersion !== 1) {
+      if (!consumer) {
         return envelope("conventions-check", "failed", started, { root }, [
           { code: "conventions-manifest-missing", message: `${manifestName} is missing or invalid` },
         ]);
       }
-      if (!lock || lock.schemaVersion !== 1) {
+      if (!lock) {
         return envelope("conventions-check", "failed", started, { root }, [
           { code: "conventions-lock-missing", message: `${lockName} is missing or invalid` },
         ]);
@@ -370,7 +481,7 @@ export function conventionRegistryCommand(
       });
     }
 
-    if (!existing || existing.schemaVersion !== 1) {
+    if (!existing) {
       return envelope(`conventions-${action}`, "failed", started, { root }, [
         {
           code: "conventions-manifest-missing",
