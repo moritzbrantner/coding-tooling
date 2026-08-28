@@ -54,11 +54,20 @@ type Snapshot = {
   files: Map<string, string>;
 };
 
+type RuleBriefing = {
+  id: string;
+  title: string;
+  directive?: string;
+  path: string;
+};
+
 const manifestName = "conventions.json";
 const lockName = "conventions.lock.json";
 const installDirectory = ".conventions";
 const moduleNamePattern = /^[a-z0-9][a-z0-9-]*$/;
 const sha256Pattern = /^[a-f0-9]{64}$/;
+const ruleHeadingPattern = /^##\s+([A-Z][A-Z0-9-]*-\d+)\s+—\s+(.+?)\s*$/;
+const bulletPattern = /^\s*[-*]\s+(.+?)\s*$/;
 
 function hash(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -268,16 +277,68 @@ function sourceFiles(sourceRoot: string, source: string): string[] {
     .sort();
 }
 
-function indexContent(resolvedModules: string[], moduleFiles: Map<string, string[]>): string {
+function extractRuleBriefings(content: string, path: string): RuleBriefing[] {
+  const lines = content.split(/\r?\n/);
+  const briefings: RuleBriefing[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const heading = ruleHeadingPattern.exec(lines[index] ?? "");
+    if (!heading) continue;
+
+    let directive: string | undefined;
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const line = lines[cursor] ?? "";
+      if (/^#{1,6}\s+/.test(line)) break;
+      const bullet = bulletPattern.exec(line);
+      if (bullet) {
+        directive = bullet[1];
+        break;
+      }
+    }
+
+    briefings.push({
+      id: heading[1],
+      title: heading[2],
+      directive,
+      path,
+    });
+  }
+
+  return briefings;
+}
+
+function indexContent(
+  resolvedModules: string[],
+  moduleFiles: Map<string, string[]>,
+  briefings: RuleBriefing[],
+): string {
   const lines = [
     "# Installed conventions",
     "",
     "This directory is managed by `coding-tooling conventions`. Do not edit these snapshots directly.",
     "Repository-specific rules and exceptions belong in `AGENTS.md`.",
     "",
+    "## Rule briefing",
+    "",
+    "Read this section first. Open the linked managed source when a rule is relevant, ambiguous, or needs its full context.",
+    "",
   ];
+
+  if (briefings.length === 0) {
+    lines.push("No convention rules are installed.", "");
+  } else {
+    for (const briefing of briefings) {
+      const directive = briefing.directive ? ` — ${briefing.directive}` : "";
+      lines.push(
+        `- **${briefing.id} — ${briefing.title}**${directive} ([details](${briefing.path}))`,
+      );
+    }
+    lines.push("");
+  }
+
+  lines.push("## Installed modules", "");
   for (const module of resolvedModules) {
-    lines.push(`## ${module}`, "");
+    lines.push(`### ${module}`, "");
     for (const path of moduleFiles.get(module) ?? []) lines.push(`- [${path}](${path})`);
     lines.push("");
   }
@@ -292,6 +353,8 @@ function buildSnapshot(
   const resolvedModules = resolveDependencies(registry, requestedModules);
   const files = new Map<string, string>();
   const moduleFiles = new Map<string, string[]>();
+  const briefings: RuleBriefing[] = [];
+  const seenRuleIds = new Set<string>();
 
   for (const moduleName of resolvedModules) {
     assertModuleName(moduleName);
@@ -304,14 +367,20 @@ function buildSnapshot(
           throw new Error(`Invalid convention source path: ${sourcePath}`);
         }
         const targetPath = `modules/${moduleName}/${sourcePath}`;
-        files.set(targetPath, readFileSync(absolute, "utf8"));
+        const content = readFileSync(absolute, "utf8");
+        files.set(targetPath, content);
         installed.push(targetPath);
+        for (const briefing of extractRuleBriefings(content, targetPath)) {
+          if (seenRuleIds.has(briefing.id)) continue;
+          seenRuleIds.add(briefing.id);
+          briefings.push(briefing);
+        }
       }
     }
     moduleFiles.set(moduleName, installed);
   }
 
-  files.set("index.md", indexContent(resolvedModules, moduleFiles));
+  files.set("index.md", indexContent(resolvedModules, moduleFiles, briefings));
   return {
     sourceRevision: revision(sourceRoot),
     requestedModules,
