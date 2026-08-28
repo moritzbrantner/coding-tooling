@@ -7,6 +7,7 @@ import { agentCapabilitiesCommand } from "./agent-capabilities.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
+import { auditDependencies } from "./dependency-audit.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
 import { repositoryRoot } from "./shared.ts";
 import { sourceDependencies } from "./source-deps.ts";
@@ -52,6 +53,7 @@ function usage(): never {
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
   coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
   coding-tooling source-deps <activate|status|deactivate> [--config <path>] [--json]
+  coding-tooling dependencies audit [--config <path>] [--strict] [--json]
   coding-tooling agent-capabilities <validate|catalog|profile> [profile-name] [--root <path>] [--json]
   coding-tooling conventions init [module...] [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions add <module...> [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
@@ -92,6 +94,9 @@ export function main(argv = process.argv.slice(2)): number {
     const action = positional[0];
     if (action !== "activate" && action !== "status" && action !== "deactivate") return usage();
     result = sourceDependencies(root, action, stringOption(options, "config"));
+  } else if (command === "dependencies") {
+    if (positional[0] !== "audit") return usage();
+    result = auditDependencies(root, stringOption(options, "config"), Boolean(options.strict));
   } else if (command === "agent-capabilities") {
     const action = positional[0];
     if (action !== "validate" && action !== "catalog" && action !== "profile") return usage();

@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "name": "moritzbrantner/example-app",
+    "layer": "application"
+  },
+  "dependencies": [
+    {
+      "repository": "moritzbrantner/moenarch-foundation",
+      "layer": "foundation",
+      "relation": "foundation"
+    },
+    {
+      "repository": "moritzbrantner/audio-analysis",
+      "layer": "domain",
+      "relation": "capability"
+    }
+  ],
+  "maxExactSourceRepositories": 2,
+  "maxPackagesPerSourceRepository": 5,
+  "legacyRepositories": {
+    "moritzbrantner/rust-packages": "moritzbrantner/audio-analysis"
+  },
+  "ownership": [
+    {
+      "package": "example-owned-package",
+      "sourceRepository": "moritzbrantner/example-app",
+      "releaseRepository": "moritzbrantner/example-app"
+    }
+  ],
+  "graph": {
+    "moritzbrantner/example-app": [
+      "moritzbrantner/moenarch-foundation",
+      "moritzbrantner/audio-analysis"
+    ],
+    "moritzbrantner/audio-analysis": ["moritzbrantner/moenarch-foundation"],
+    "moritzbrantner/moenarch-foundation": []
+  }
+}

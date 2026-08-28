@@ -22,6 +22,7 @@ export type ResultOperation =
   | "plan"
   | "run"
   | "source-deps"
+  | "dependencies"
   | "agent-capabilities"
   | "conventions"
   | "conventions-init"
