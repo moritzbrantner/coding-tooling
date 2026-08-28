@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { agentCapabilitiesCommand } from "./agent-capabilities.ts";
+import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
@@ -52,6 +53,11 @@ function usage(): never {
   coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
   coding-tooling source-deps <activate|status|deactivate> [--config <path>] [--json]
   coding-tooling agent-capabilities <validate|catalog|profile> [profile-name] [--root <path>] [--json]
+  coding-tooling conventions init [module...] [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
+  coding-tooling conventions add <module...> [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
+  coding-tooling conventions check [--root <path>] [--json]
+  coding-tooling conventions diff [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
+  coding-tooling conventions update [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]`);
   process.exit(2);
 }
@@ -96,13 +102,30 @@ export function main(argv = process.argv.slice(2)): number {
       positional[1],
     );
   } else if (command === "conventions") {
-    if (positional[0] !== "resolve") return usage();
-    result = resolveConventions({
-      root: resolve(stringOption(options, "root") ?? root),
-      configPath: stringOption(options, "config"),
-      conventionsRoot: stringOption(options, "conventions-root"),
-      registryPath: stringOption(options, "registry"),
-    });
+    const action = positional[0];
+    const targetRoot = resolve(stringOption(options, "root") ?? root);
+    if (action === "resolve") {
+      result = resolveConventions({
+        root: targetRoot,
+        configPath: stringOption(options, "config"),
+        conventionsRoot: stringOption(options, "conventions-root"),
+        registryPath: stringOption(options, "registry"),
+      });
+    } else if (
+      action === "init" ||
+      action === "add" ||
+      action === "check" ||
+      action === "diff" ||
+      action === "update"
+    ) {
+      if (action === "add" && positional.length < 2 && !stringOption(options, "profile")) return usage();
+      result = conventionRegistryCommand(action, positional.slice(1), {
+        root: targetRoot,
+        conventionsRoot: stringOption(options, "conventions-root"),
+        registryPath: stringOption(options, "registry"),
+        profile: stringOption(options, "profile"),
+      });
+    } else return usage();
   } else return usage();
   console.log(JSON.stringify(result, null, options.json ? 0 : 2));
   return exitCode(result.status);
