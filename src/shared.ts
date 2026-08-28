@@ -83,7 +83,9 @@ export function walkFiles(root: string, maxDepth = 3): string[] {
       const fullPath = join(current, entry.name);
       if (entry.isDirectory()) {
         if (!ignoredDirectories.has(entry.name)) walk(fullPath, depth + 1);
-      } else if (entry.isFile()) {
+      } else if (entry.isFile() || entry.isSymbolicLink()) {
+        // Never recurse through symlinks. Returning the entry lets callers either
+        // validate its resolved target or treat it as unexpected managed drift.
         files.push(fullPath);
       }
     }
