@@ -56,6 +56,7 @@ type Snapshot = {
 const manifestName = "conventions.json";
 const lockName = "conventions.lock.json";
 const installDirectory = ".conventions";
+const moduleNamePattern = /^[a-z0-9][a-z0-9-]*$/;
 
 function hash(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -66,8 +67,17 @@ function writeJson(path: string, value: unknown): void {
 }
 
 function revision(root: string): string {
-  const result = runCommand("git", ["rev-parse", "HEAD"], root);
-  return result.status === 0 && result.stdout.trim() ? result.stdout.trim() : "unversioned";
+  const head = runCommand("git", ["rev-parse", "HEAD"], root);
+  if (head.status !== 0 || !head.stdout.trim()) return "unversioned";
+  const status = runCommand("git", ["status", "--porcelain"], root);
+  const suffix = status.status === 0 && status.stdout.trim() ? "-dirty" : "";
+  return `${head.stdout.trim()}${suffix}`;
+}
+
+function assertModuleName(name: string): void {
+  if (!moduleNamePattern.test(name)) {
+    throw new Error(`Invalid convention module name: ${name}`);
+  }
 }
 
 function loadRegistry(sourceRoot: string): RegistryManifest {
@@ -75,6 +85,16 @@ function loadRegistry(sourceRoot: string): RegistryManifest {
   const manifest = readJson<RegistryManifest>(path);
   if (!manifest || manifest.schemaVersion !== 1 || !manifest.modules) {
     throw new Error(`Invalid convention registry manifest: ${path}`);
+  }
+  for (const [name, module] of Object.entries(manifest.modules)) {
+    assertModuleName(name);
+    if (!Array.isArray(module.sources) || !module.sources.length) {
+      throw new Error(`Convention module ${name} has no sources`);
+    }
+    for (const dependency of module.dependencies ?? []) assertModuleName(dependency);
+  }
+  for (const modules of Object.values(manifest.profiles ?? {})) {
+    for (const name of modules) assertModuleName(name);
   }
   return manifest;
 }
@@ -100,6 +120,7 @@ function resolveRequestedModules(
   if (profile && !profileModules) throw new Error(`Unknown convention profile: ${profile}`);
   const requested = unique([...(profileModules ?? []), ...modules]);
   for (const module of requested) {
+    assertModuleName(module);
     if (!registry.modules[module]) throw new Error(`Unknown convention module: ${module}`);
   }
   return requested;
@@ -111,6 +132,7 @@ function resolveDependencies(registry: RegistryManifest, requested: string[]): s
   const done = new Set<string>();
 
   function visit(name: string): void {
+    assertModuleName(name);
     if (done.has(name)) return;
     if (active.has(name)) throw new Error(`Convention module dependency cycle at ${name}`);
     const module = registry.modules[name];
@@ -127,9 +149,10 @@ function resolveDependencies(registry: RegistryManifest, requested: string[]): s
 }
 
 function sourceFiles(sourceRoot: string, source: string): string[] {
-  const absolute = resolve(sourceRoot, source);
-  const boundary = `${resolve(sourceRoot)}${sep}`;
-  if (absolute !== resolve(sourceRoot) && !absolute.startsWith(boundary)) {
+  const root = resolve(sourceRoot);
+  const absolute = resolve(root, source);
+  const boundary = `${root}${sep}`;
+  if (absolute !== root && !absolute.startsWith(boundary)) {
     throw new Error(`Convention source escapes registry root: ${source}`);
   }
   if (!existsSync(absolute)) throw new Error(`Convention source does not exist: ${source}`);
@@ -163,6 +186,7 @@ function buildSnapshot(
   const moduleFiles = new Map<string, string[]>();
 
   for (const moduleName of resolvedModules) {
+    assertModuleName(moduleName);
     const module = registry.modules[moduleName];
     const installed: string[] = [];
     for (const source of module.sources) {
@@ -185,6 +209,15 @@ function buildSnapshot(
   };
 }
 
+function managedDestination(installRoot: string, path: string): string {
+  const root = resolve(installRoot);
+  const absolute = resolve(root, path);
+  if (absolute === root || !absolute.startsWith(`${root}${sep}`)) {
+    throw new Error(`Managed convention path escapes install root: ${path}`);
+  }
+  return absolute;
+}
+
 function materialize(root: string, snapshot: Snapshot): ConventionLock {
   const installRoot = join(root, installDirectory);
   rmSync(installRoot, { recursive: true, force: true });
@@ -192,7 +225,7 @@ function materialize(root: string, snapshot: Snapshot): ConventionLock {
 
   const hashes: Record<string, string> = {};
   for (const [path, content] of snapshot.files) {
-    const absolute = join(installRoot, path);
+    const absolute = managedDestination(installRoot, path);
     mkdirSync(dirname(absolute), { recursive: true });
     writeFileSync(absolute, content);
     hashes[path] = hash(content);
@@ -308,26 +341,30 @@ export function conventionRegistryCommand(
       );
     }
 
-    const source = sourceFor({ ...options, root });
     const existing = loadConsumer(root);
+    if (action === "init" && existing) {
+      return envelope("conventions-init", "passed", started, {
+        root,
+        manifest: join(root, manifestName),
+        modules: existing.modules,
+        unchanged: true,
+      });
+    }
+
+    const source = sourceFor({ ...options, root });
 
     if (action === "init") {
-      if (existing) {
-        return envelope("conventions-init", "passed", started, {
-          root,
-          manifest: join(root, manifestName),
-          modules: existing.modules,
-          unchanged: true,
-        });
-      }
       const requested = resolveRequestedModules(source.registry, modules, options.profile);
+      const snapshot = requested.length
+        ? buildSnapshot(source.root, source.registry, requested)
+        : undefined;
       const consumer: ConsumerManifest = {
         schemaVersion: 1,
         registry: "coding-agent-conventions",
         modules: requested,
       };
+      if (snapshot) materialize(root, snapshot);
       writeJson(join(root, manifestName), consumer);
-      if (requested.length) materialize(root, buildSnapshot(source.root, source.registry, requested));
       return envelope("conventions-init", "passed", started, {
         root,
         modules: requested,
@@ -346,9 +383,10 @@ export function conventionRegistryCommand(
 
     if (action === "add") {
       const requested = resolveRequestedModules(source.registry, [...existing.modules, ...modules], options.profile);
+      const snapshot = buildSnapshot(source.root, source.registry, requested);
       const consumer: ConsumerManifest = { ...existing, modules: requested };
+      const lock = materialize(root, snapshot);
       writeJson(join(root, manifestName), consumer);
-      const lock = materialize(root, buildSnapshot(source.root, source.registry, requested));
       return envelope("conventions-add", "passed", started, {
         root,
         requestedModules: requested,
