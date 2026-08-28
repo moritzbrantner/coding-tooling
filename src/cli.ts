@@ -9,6 +9,7 @@ import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { auditDependencies } from "./dependency-audit.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
+import { integratePullRequest, type MergeMethod } from "./pr.ts";
 import { repositoryRoot } from "./shared.ts";
 import { sourceDependencies } from "./source-deps.ts";
 
@@ -52,6 +53,7 @@ function usage(): never {
   coding-tooling doctor [--json]
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
   coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
+  coding-tooling pr integrate <number> [--tier <name>] [--merge-method <squash|merge|rebase>] [--remote <name>] [--dry-run] [--json]
   coding-tooling source-deps <activate|status|deactivate> [--config <path>] [--json]
   coding-tooling dependencies audit [--config <path>] [--strict] [--json]
   coding-tooling agent-capabilities <validate|catalog|profile> [profile-name] [--root <path>] [--json]
@@ -90,6 +92,23 @@ export function main(argv = process.argv.slice(2)): number {
         : runPlan({ ...common, strict: Boolean(options.strict) });
     const report = stringOption(options, "report");
     if (report) writeReport(result, resolve(root, report));
+  } else if (command === "pr") {
+    const action = positional[0];
+    const prNumber = Number(positional[1]);
+    const mergeMethodOption = stringOption(options, "merge-method");
+    if (
+      action !== "integrate" ||
+      !Number.isInteger(prNumber) ||
+      prNumber <= 0 ||
+      (mergeMethodOption && !["squash", "merge", "rebase"].includes(mergeMethodOption))
+    )
+      return usage();
+    result = integratePullRequest(root, prNumber, {
+      tier: stringOption(options, "tier"),
+      mergeMethod: mergeMethodOption as MergeMethod | undefined,
+      remote: stringOption(options, "remote"),
+      dryRun: Boolean(options["dry-run"]),
+    });
   } else if (command === "source-deps") {
     const action = positional[0];
     if (action !== "activate" && action !== "status" && action !== "deactivate") return usage();

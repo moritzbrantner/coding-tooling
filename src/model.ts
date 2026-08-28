@@ -29,7 +29,8 @@ export type ResultOperation =
   | "conventions-add"
   | "conventions-check"
   | "conventions-diff"
-  | "conventions-update";
+  | "conventions-update"
+  | "pr";
 
 export type Diagnostic = {
   code?: string;
