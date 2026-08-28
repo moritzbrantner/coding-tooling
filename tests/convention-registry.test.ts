@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -75,6 +76,20 @@ describe("installed convention registry", () => {
 
       const check = conventionRegistryCommand("check", [], { root: target });
       expect(check.status).toBe("passed");
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("initializes an empty selection into a checkable managed snapshot", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      expect(
+        conventionRegistryCommand("init", [], { root: target, conventionsRoot: source }).status,
+      ).toBe("passed");
+      expect(conventionRegistryCommand("check", [], { root: target }).status).toBe("passed");
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
@@ -215,6 +230,60 @@ describe("installed convention registry", () => {
       expect(existsSync(join(target, "conventions.json"))).toBe(false);
     } finally {
       rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects direct registry symlinks that resolve outside the source checkout", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    const external = workspace("convention-secret-");
+    try {
+      const secret = join(external, "secret.md");
+      writeFileSync(secret, "do-not-copy\n");
+      symlinkSync(secret, join(source, "leak.md"));
+
+      const manifestPath = join(source, "registry/registry.json");
+      const registryManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+      registryManifest.modules.leak = { sources: ["leak.md"], dependencies: [] };
+      writeFileSync(manifestPath, `${JSON.stringify(registryManifest, null, 2)}\n`);
+
+      const result = conventionRegistryCommand("init", ["leak"], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(result.status).toBe("error");
+      expect(existsSync(join(target, "conventions.json"))).toBe(false);
+      expect(existsSync(join(target, ".conventions"))).toBe(false);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+      rmSync(external, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects malformed consumer manifests and locks", () => {
+    const target = workspace("convention-consumer-");
+    try {
+      writeFileSync(
+        join(target, "conventions.json"),
+        `${JSON.stringify({ schemaVersion: 1, registry: "coding-agent-conventions", modules: null })}\n`,
+      );
+      writeFileSync(
+        join(target, "conventions.lock.json"),
+        `${JSON.stringify({
+          schemaVersion: 1,
+          sourceRevision: "abc",
+          requestedModules: null,
+          resolvedModules: [],
+          files: {},
+        })}\n`,
+      );
+
+      const result = conventionRegistryCommand("check", [], { root: target });
+      expect(result.status).toBe("failed");
+      expect(result.diagnostics[0]?.code).toBe("conventions-manifest-missing");
+    } finally {
       rmSync(target, { recursive: true, force: true });
     }
   });
