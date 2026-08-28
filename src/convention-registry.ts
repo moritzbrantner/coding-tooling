@@ -355,15 +355,13 @@ export function conventionRegistryCommand(
 
     if (action === "init") {
       const requested = resolveRequestedModules(source.registry, modules, options.profile);
-      const snapshot = requested.length
-        ? buildSnapshot(source.root, source.registry, requested)
-        : undefined;
+      const snapshot = buildSnapshot(source.root, source.registry, requested);
       const consumer: ConsumerManifest = {
         schemaVersion: 1,
         registry: "coding-agent-conventions",
         modules: requested,
       };
-      if (snapshot) materialize(root, snapshot);
+      materialize(root, snapshot);
       writeJson(join(root, manifestName), consumer);
       return envelope("conventions-init", "passed", started, {
         root,
@@ -382,7 +380,11 @@ export function conventionRegistryCommand(
     }
 
     if (action === "add") {
-      const requested = resolveRequestedModules(source.registry, [...existing.modules, ...modules], options.profile);
+      const requested = resolveRequestedModules(
+        source.registry,
+        [...existing.modules, ...modules],
+        options.profile,
+      );
       const snapshot = buildSnapshot(source.root, source.registry, requested);
       const consumer: ConsumerManifest = { ...existing, modules: requested };
       const lock = materialize(root, snapshot);
