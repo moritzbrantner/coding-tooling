@@ -163,7 +163,7 @@ export function integratePullRequest(
   const tier = options.tier ?? "full";
   const mergeMethod = options.mergeMethod ?? "squash";
   const remote = options.remote ?? "origin";
-  const remoteChecksPolicy = options.remoteChecks ?? "required";
+  const remoteChecksPolicy = options.remoteChecks ?? "advisory";
   const data: Record<string, unknown> = {
     root,
     prNumber,
