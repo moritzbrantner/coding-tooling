@@ -121,26 +121,12 @@ test("merges only after the synthetic merge and local pipeline pass", () => {
   expect(fake.mergeCalls()).toBe(1);
 });
 
-test("requires remote checks by default", () => {
+test("remote checks are advisory by default", () => {
   const fake = fakeRunner({ remoteCheck: "failed" });
   const integration = integratePullRequest(
     "/repo",
     42,
     {},
-    { run: fake.run, runPipeline: pipeline("passed") },
-  );
-
-  expect(integration.status).toBe("unavailable");
-  expect(integration.diagnostics.some((diagnostic) => diagnostic.code === "remote-checks-failed")).toBe(true);
-  expect(fake.mergeCalls()).toBe(0);
-});
-
-test("advisory remote checks do not block a locally verified merge", () => {
-  const fake = fakeRunner({ remoteCheck: "failed" });
-  const integration = integratePullRequest(
-    "/repo",
-    42,
-    { remoteChecks: "advisory" },
     { run: fake.run, runPipeline: pipeline("passed") },
   );
 
@@ -156,12 +142,26 @@ test("advisory remote checks do not block a locally verified merge", () => {
   expect(fake.mergeCalls()).toBe(1);
 });
 
+test("remote checks can still be required explicitly", () => {
+  const fake = fakeRunner({ remoteCheck: "failed" });
+  const integration = integratePullRequest(
+    "/repo",
+    42,
+    { remoteChecks: "required" },
+    { run: fake.run, runPipeline: pipeline("passed") },
+  );
+
+  expect(integration.status).toBe("unavailable");
+  expect(integration.diagnostics.some((diagnostic) => diagnostic.code === "remote-checks-failed")).toBe(true);
+  expect(fake.mergeCalls()).toBe(0);
+});
+
 test("advisory remote checks also ignore pending hosted checks", () => {
   const fake = fakeRunner({ remoteCheck: "pending" });
   const integration = integratePullRequest(
     "/repo",
     42,
-    { remoteChecks: "advisory" },
+    {},
     { run: fake.run, runPipeline: pipeline("passed") },
   );
 
@@ -174,7 +174,7 @@ test("does not merge when the base moves after local verification", () => {
   const integration = integratePullRequest(
     "/repo",
     42,
-    { remoteChecks: "advisory" },
+    {},
     { run: fake.run, runPipeline: pipeline("passed") },
   );
 
