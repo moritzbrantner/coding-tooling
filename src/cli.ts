@@ -19,6 +19,11 @@ import { sourceDependencies } from "./source-deps.ts";
 
 type Options = Record<string, string | boolean>;
 
+type PlannedCheckView = {
+  capability?: unknown;
+  component?: unknown;
+};
+
 function parse(argv: string[]): { command?: string; positional: string[]; options: Options } {
   const [command, ...rest] = argv;
   const positional: string[] = [];
@@ -47,6 +52,54 @@ function stringOption(options: Options, name: string): string | undefined {
 
 function exitCode(status: ResultEnvelope<Record<string, unknown>>["status"]): number {
   return status === "passed" ? 0 : status === "failed" ? 1 : status === "unavailable" ? 2 : 3;
+}
+
+function reportPullRequestIntegrationStart(
+  root: string,
+  prNumber: number,
+  tier: string,
+  remoteChecks: RemoteChecksPolicy,
+  dryRun: boolean,
+): void {
+  console.error(`PR #${prNumber} integration${dryRun ? " dry run" : ""} started.`);
+  console.error("  Checking the worktree, fetching the exact PR head and target branch, then testing a synthetic merge.");
+  const plan = planEnvelope(root, tier);
+  const checks = Array.isArray(plan.data.checks)
+    ? (plan.data.checks as PlannedCheckView[])
+    : [];
+  if (checks.length > 0) {
+    console.error(`  Local ${tier} pipeline: ${checks.length} planned check${checks.length === 1 ? "" : "s"}:`);
+    for (const check of checks) {
+      const component = typeof check.component === "string" ? check.component : "repository";
+      const capability = typeof check.capability === "string" ? check.capability : "unknown";
+      console.error(`    - ${component}: ${capability}`);
+    }
+  } else {
+    console.error(`  Local ${tier} pipeline plan could not enumerate checks before execution.`);
+  }
+  console.error(
+    `  Hosted GitHub checks: ${remoteChecks === "advisory" ? "advisory" : "required"}.`,
+  );
+  console.error("  Local validation can take several minutes. Final JSON is printed when the operation finishes.");
+}
+
+function reportPullRequestIntegrationResult(
+  prNumber: number,
+  result: ResultEnvelope<Record<string, unknown>>,
+  dryRun: boolean,
+): void {
+  const seconds = (result.durationMs / 1000).toFixed(1);
+  console.error(`PR #${prNumber} integration finished: ${result.status} (${seconds}s).`);
+  const pipeline = result.data.pipeline;
+  if (pipeline && typeof pipeline === "object" && "status" in pipeline) {
+    const status = (pipeline as { status?: unknown }).status;
+    if (typeof status === "string") console.error(`  Local pipeline: ${status}.`);
+  }
+  if (result.status === "passed" && dryRun) console.error("  Dry run passed; no merge was attempted.");
+  for (const diagnostic of result.diagnostics) {
+    const label = diagnostic.code ? `${diagnostic.code}: ` : "";
+    console.error(`  ${label}${diagnostic.message}`);
+  }
 }
 
 function usage(): never {
@@ -109,13 +162,18 @@ export function main(argv = process.argv.slice(2)): number {
       (remoteChecksOption && !["required", "advisory"].includes(remoteChecksOption))
     )
       return usage();
+    const tier = stringOption(options, "tier") ?? "full";
+    const remoteChecks = (remoteChecksOption ?? "advisory") as RemoteChecksPolicy;
+    const dryRun = Boolean(options["dry-run"]);
+    reportPullRequestIntegrationStart(root, prNumber, tier, remoteChecks, dryRun);
     result = integratePullRequest(root, prNumber, {
-      tier: stringOption(options, "tier"),
+      tier,
       mergeMethod: mergeMethodOption as MergeMethod | undefined,
       remote: stringOption(options, "remote"),
-      remoteChecks: remoteChecksOption as RemoteChecksPolicy | undefined,
-      dryRun: Boolean(options["dry-run"]),
+      remoteChecks,
+      dryRun,
     });
+    reportPullRequestIntegrationResult(prNumber, result, dryRun);
   } else if (command === "source-deps") {
     const action = positional[0];
     if (action !== "activate" && action !== "status" && action !== "deactivate") return usage();
