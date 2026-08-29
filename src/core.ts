@@ -51,6 +51,11 @@ export function loadConfig(root: string, configuredPath = ".coding-tooling.json"
   for (const values of Object.values(value.tiers ?? {})) validateCapabilities(values);
   validateCapabilities(value.requiredCapabilities ?? []);
   validateCapabilities(value.optionalCapabilities ?? []);
+  const requiredCapabilities = new Set(value.requiredCapabilities ?? []);
+  for (const capability of value.optionalCapabilities ?? []) {
+    if (requiredCapabilities.has(capability))
+      throw new Error(`${capability} cannot be both required and optional`);
+  }
   for (const [selector, commands] of Object.entries(value.capabilityCommands ?? {})) {
     if (!selector.trim()) throw new Error("capabilityCommands selectors must not be empty");
     for (const [capability, command] of Object.entries(commands)) {
@@ -184,21 +189,27 @@ export function planChecks(options: {
   if (options.component && components.length === 0)
     throw new Error(`Unknown component: ${options.component}`);
   const checks: PlannedCheck[] = [];
-  const optionalCapabilities = new Set(config.optionalCapabilities ?? []);
-  const missing: { capability: Capability; component: string; optional: boolean }[] = [];
   for (const component of components) {
     for (const capability of selected) {
       const command = component.capabilities[capability];
       if (command)
         checks.push({ capability, component: component.name, path: component.path, command });
-      else
-        missing.push({
-          capability,
-          component: component.name,
-          optional: optionalCapabilities.has(capability),
-        });
     }
   }
+
+  const availableCapabilities = new Set(checks.map((check) => check.capability));
+  const requiredCapabilities = new Set(config.requiredCapabilities ?? []);
+  const optionalCapabilities = new Set(config.optionalCapabilities ?? []);
+  const scope = components.length === 1 ? components[0]!.name : "selected components";
+  const missing: { capability: Capability; component: string; optional: boolean }[] = [];
+  for (const capability of selected) {
+    if (availableCapabilities.has(capability)) continue;
+    if (requiredCapabilities.has(capability))
+      missing.push({ capability, component: scope, optional: false });
+    else if (optionalCapabilities.has(capability))
+      missing.push({ capability, component: scope, optional: true });
+  }
+
   return {
     profile: config.profile,
     tier: options.tier,
