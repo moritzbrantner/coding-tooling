@@ -7,11 +7,13 @@ type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean
 type PipelineRunner = typeof runPlan;
 
 export type MergeMethod = "merge" | "squash" | "rebase";
+export type RemoteChecksPolicy = "required" | "advisory";
 
 export type PullRequestIntegrationOptions = {
   tier?: string;
   mergeMethod?: MergeMethod;
   remote?: string;
+  remoteChecks?: RemoteChecksPolicy;
   dryRun?: boolean;
 };
 
@@ -161,12 +163,14 @@ export function integratePullRequest(
   const tier = options.tier ?? "full";
   const mergeMethod = options.mergeMethod ?? "squash";
   const remote = options.remote ?? "origin";
+  const remoteChecksPolicy = options.remoteChecks ?? "required";
   const data: Record<string, unknown> = {
     root,
     prNumber,
     tier,
     mergeMethod,
     remote,
+    remoteChecksPolicy,
     dryRun: Boolean(options.dryRun),
     merged: false,
   };
@@ -437,16 +441,18 @@ export function integratePullRequest(
       code: "base-moved",
       message: `${refreshed.baseRefName} moved from ${baseSha} to ${currentBaseSha} after local verification; rerun the pipeline`,
     });
-  if (checks.pending.length > 0)
-    blockingDiagnostics.push({
-      code: "remote-checks-pending",
-      message: `Remote checks are still pending: ${checks.pending.join(", ")}`,
-    });
-  if (checks.failed.length > 0)
-    blockingDiagnostics.push({
-      code: "remote-checks-failed",
-      message: `Remote checks are not green: ${checks.failed.join(", ")}`,
-    });
+  if (remoteChecksPolicy === "required") {
+    if (checks.pending.length > 0)
+      blockingDiagnostics.push({
+        code: "remote-checks-pending",
+        message: `Remote checks are still pending: ${checks.pending.join(", ")}`,
+      });
+    if (checks.failed.length > 0)
+      blockingDiagnostics.push({
+        code: "remote-checks-failed",
+        message: `Remote checks are not green: ${checks.failed.join(", ")}`,
+      });
+  }
   if (refreshed.mergeable !== "MERGEABLE")
     blockingDiagnostics.push({
       code: "pr-not-mergeable",
