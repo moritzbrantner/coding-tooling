@@ -6,7 +6,7 @@
 coding-tooling pr integrate 42
 ```
 
-The default behavior is intentionally conservative:
+The default behavior is local-authoritative:
 
 1. Require `git`, GitHub CLI (`gh`), and a clean working tree.
 2. Read the open, non-draft PR metadata from GitHub.
@@ -15,7 +15,7 @@ The default behavior is intentionally conservative:
 5. Run `coding-tooling`'s `full` validation tier against that synthetic merge.
 6. Verify the pipeline did not mutate tracked files.
 7. Refresh the PR and target branch.
-8. Refuse integration if the PR head or base moved, checks are pending/failing, reviews block the merge, or GitHub no longer reports the PR as mergeable.
+8. Refuse integration if the PR head or base moved, reviews block the merge, or GitHub no longer reports the PR as mergeable. Hosted check state is retained as evidence but is advisory by default.
 9. Restore the original local checkout and remove the temporary ref.
 10. Squash-merge through `gh pr merge --match-head-commit` so a changed PR head cannot be merged accidentally.
 
@@ -28,6 +28,7 @@ coding-tooling pr integrate 42 --tier fast
 coding-tooling pr integrate 42 --merge-method merge
 coding-tooling pr integrate 42 --merge-method rebase
 coding-tooling pr integrate 42 --remote upstream
+coding-tooling pr integrate 42 --remote-checks required
 coding-tooling pr integrate 42 --dry-run
 coding-tooling pr integrate 42 --json
 ```
@@ -37,8 +38,13 @@ Defaults:
 - validation tier: `full`
 - merge method: `squash`
 - Git remote: `origin`
+- remote-check policy: `advisory`
 
-`--dry-run` performs every fetch, synthetic merge, local check, and remote gate but does not merge.
+With the default `advisory` policy, GitHub check state remains in the result as evidence but pending or failed hosted checks do not block a locally verified integration. Use `--remote-checks required` for repositories where hosted checks are deliberately an additional merge gate.
+
+The advisory policy does **not** bypass review requirements, head/base race checks, merge conflicts, GitHub mergeability, or GitHub's own branch/ruleset enforcement at the final merge command.
+
+`--dry-run` performs every fetch, synthetic merge, local check, and enabled remote gate but does not merge.
 
 ## Failure behavior
 
@@ -51,7 +57,7 @@ The command does not merge when:
 - the local pipeline mutates tracked files;
 - the PR head changes after verification;
 - the base branch changes after verification;
-- GitHub checks are pending or failing;
+- GitHub checks are pending or failing while `--remote-checks required` is selected;
 - a review requirement blocks the PR;
 - GitHub reports the PR as not mergeable;
 - restoring the original checkout fails.
