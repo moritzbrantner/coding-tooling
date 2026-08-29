@@ -26,6 +26,16 @@ function repository(): string {
   return root;
 }
 
+function addRustComponent(root: string): void {
+  const rust = join(root, "crates", "backend");
+  mkdirSync(join(rust, "src"), { recursive: true });
+  writeFileSync(
+    join(rust, "Cargo.toml"),
+    '[package]\nname = "backend"\nversion = "0.1.0"\nedition = "2024"\n',
+  );
+  writeFileSync(join(rust, "src", "lib.rs"), "");
+}
+
 describe("coding-tooling plans", () => {
   test("discovers semantic package capabilities", () => {
     const root = repository();
@@ -44,7 +54,7 @@ describe("coding-tooling plans", () => {
     expect(discoverComponents(root).map((component) => component.name)).toEqual(["fixture"]);
   });
 
-  test("creates a deterministic fast plan and reports missing capabilities", () => {
+  test("creates a deterministic fast plan without treating absent capabilities as requirements", () => {
     const root = repository();
     const plan = planChecks({ root, tier: "fast" });
     expect(plan.checks.map((check) => check.capability)).toEqual([
@@ -53,8 +63,63 @@ describe("coding-tooling plans", () => {
       "test:unit",
       "build",
     ]);
+    expect(plan.missing).toEqual([]);
+  });
+
+  test("full tier runs each capability only where it is applicable", () => {
+    const root = repository();
+    addRustComponent(root);
+
+    const plan = planChecks({ root, tier: "full" });
+
+    expect(plan.checks.map((check) => `${check.component}:${check.capability}`)).toEqual([
+      "fixture:lint",
+      "fixture:typecheck",
+      "fixture:test:unit",
+      "fixture:build",
+      "backend:format:check",
+      "backend:lint",
+      "backend:test:unit",
+      "backend:test:integration",
+      "backend:build",
+    ]);
+    expect(plan.missing).toEqual([]);
+  });
+
+  test("required capabilities are satisfied across the selected component scope", () => {
+    const root = repository();
+    addRustComponent(root);
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        requiredCapabilities: ["typecheck"],
+      }),
+    );
+
+    const repositoryPlan = planChecks({ root, tier: "full" });
+    expect(repositoryPlan.missing).toEqual([]);
+
+    const rustPlan = planChecks({ root, tier: "full", component: "backend" });
+    expect(rustPlan.missing).toEqual([
+      { capability: "typecheck", component: "backend", optional: false },
+    ]);
+  });
+
+  test("reports a required capability when the selected scope cannot provide it", () => {
+    const root = repository();
+    addRustComponent(root);
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        requiredCapabilities: ["test:e2e"],
+      }),
+    );
+
+    const plan = planChecks({ root, tier: "full" });
     expect(plan.missing).toEqual([
-      { capability: "format:check", component: "fixture", optional: false },
+      { capability: "test:e2e", component: "selected components", optional: false },
     ]);
   });
 
@@ -72,6 +137,7 @@ describe("coding-tooling plans", () => {
             "benchmark:smoke",
           ],
         },
+        requiredCapabilities: ["lint", "dependencies:audit"],
         optionalCapabilities: ["test:integration", "benchmark:smoke"],
         capabilityCommands: {
           ".": {
@@ -91,5 +157,21 @@ describe("coding-tooling plans", () => {
     expect(plan.missing).toEqual([
       { capability: "test:integration", component: "fixture", optional: true },
     ]);
+  });
+
+  test("rejects contradictory required and optional capability policy", () => {
+    const root = repository();
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        requiredCapabilities: ["lint"],
+        optionalCapabilities: ["lint"],
+      }),
+    );
+
+    expect(() => planChecks({ root, tier: "fast" })).toThrow(
+      "lint cannot be both required and optional",
+    );
   });
 });
