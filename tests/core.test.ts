@@ -106,6 +106,23 @@ describe("coding-tooling plans", () => {
     ]);
   });
 
+  test("reports a required capability when the selected scope cannot provide it", () => {
+    const root = repository();
+    addRustComponent(root);
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        requiredCapabilities: ["test:e2e"],
+      }),
+    );
+
+    const plan = planChecks({ root, tier: "full" });
+    expect(plan.missing).toEqual([
+      { capability: "test:e2e", component: "selected components", optional: false },
+    ]);
+  });
+
   test("classifies unavailable dependency-update evidence as required or optional", () => {
     const root = repository();
     writeFileSync(
