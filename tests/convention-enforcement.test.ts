@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -55,22 +55,14 @@ describe("installed convention enforcement", () => {
       scripts: { "test:unit": "vitest run" },
       devDependencies: { vitest: "1" },
     });
-    writeFileSync(join(root, "src", "thing.test.ts"), "export {};\n");
+    const generic = join(root, "src", "thing.test.ts");
+    writeFileSync(generic, "export {};\n");
     enforce(root, "VITEST-001", { kind: "builtin", check: "vitest-kinds" });
 
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("failed");
 
-    writeFileSync(join(root, "src", "thing.test.ts"), "");
+    rmSync(generic);
     writeFileSync(join(root, "src", "thing.unit.test.ts"), "export {};\n");
-    const generic = join(root, "src", "thing.test.ts");
-    writeFileSync(generic, "");
-    // Empty generic test files are still named ambiguously, so remove the fixture by recreating the directory.
-    const clean = repository({
-      scripts: { "test:unit": "vitest run" },
-      devDependencies: { vitest: "1" },
-    });
-    writeFileSync(join(clean, "src", "thing.unit.test.ts"), "export {};\n");
-    enforce(clean, "VITEST-001", { kind: "builtin", check: "vitest-kinds" });
-    expect(runConventionChecks(clean, discoverComponents(clean)).status).toBe("passed");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
   });
 });
