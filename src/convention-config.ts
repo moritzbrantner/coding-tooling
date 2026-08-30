@@ -53,10 +53,6 @@ const unsupportedToolConfigNames: Record<SupportedTool, string[]> = {
     "oxfmt.config.cjs",
   ],
 };
-const capabilityScripts: Partial<Record<Capability, string[]>> = {
-  lint: ["lint"],
-  "format:check": ["format:check", "check:format"],
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -198,7 +194,27 @@ export function loadInstalledConventionConfigurations(root: string): InstalledCo
 }
 
 function equal(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => equal(value, right[index]))
+    );
+  }
+  if (isRecord(left) || isRecord(right)) {
+    if (!isRecord(left) || !isRecord(right)) return false;
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    return (
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every(
+        (key) => Object.prototype.hasOwnProperty.call(right, key) && equal(left[key], right[key]),
+      )
+    );
+  }
+  return false;
 }
 
 function severity(value: unknown): number | undefined {
@@ -372,16 +388,40 @@ function assertPortableOxfmtRepositoryConfig(config: RepositoryToolConfig): void
   }
 }
 
-function packageScript(root: string, component: Component, capability: Capability): string | undefined {
+function packageScriptName(command: string[]): string | undefined {
+  const manager = basename(command[0] ?? "");
+  if (manager !== "bun" && manager !== "npm" && manager !== "pnpm" && manager !== "yarn") {
+    return undefined;
+  }
+  const runIndex = command.indexOf("run");
+  if (runIndex < 0) return undefined;
+  const name = command[runIndex + 1];
+  return name && !name.startsWith("-") ? name : undefined;
+}
+
+function packageScriptForCommand(
+  root: string,
+  component: Component,
+  command: string[],
+): string | undefined {
   if (component.kind !== "package") return undefined;
+  const name = packageScriptName(command);
+  if (!name) return undefined;
   const manifest = readJson<PackageManifest>(join(componentDirectory(root, component), "package.json"));
-  const names = capabilityScripts[capability] ?? [];
-  const name = names.find((candidate) => candidate in (manifest?.scripts ?? {}));
-  return name ? manifest?.scripts?.[name] : undefined;
+  return manifest?.scripts?.[name];
 }
 
 function tokenIsTool(token: string, tool: SupportedTool): boolean {
   return basename(token) === tool || token === tool;
+}
+
+function tokenSelectsConfig(token: string): boolean {
+  return (
+    token === "--config" ||
+    token.startsWith("--config=") ||
+    token === "-c" ||
+    (token.startsWith("-c") && token.length > 2)
+  );
 }
 
 function safePackageScriptUsesTool(script: string, tool: SupportedTool): boolean {
@@ -390,11 +430,12 @@ function safePackageScriptUsesTool(script: string, tool: SupportedTool): boolean
   if (/&&|\|\||[;|<>\n\r]/.test(script)) {
     throw new Error(`Cannot safely inject convention config into compound package script: ${script}`);
   }
-  const first = script.trim().split(/\s+/, 1)[0] ?? "";
+  const tokens = script.trim().split(/\s+/);
+  const first = tokens[0] ?? "";
   if (!tokenIsTool(first, tool)) {
     throw new Error(`Cannot safely identify ${tool} as the package-script entrypoint: ${script}`);
   }
-  if (/(^|\s)(--config|-c)(=|\s)/.test(script)) {
+  if (tokens.slice(1).some(tokenSelectsConfig)) {
     throw new Error(`Cannot compose convention config with a package script that already selects a config: ${script}`);
   }
   return true;
@@ -403,12 +444,11 @@ function safePackageScriptUsesTool(script: string, tool: SupportedTool): boolean
 function commandUsesTool(
   root: string,
   component: Component,
-  capability: Capability,
   command: string[],
   tool: SupportedTool,
 ): boolean {
   if (command.some((token) => tokenIsTool(token, tool))) return true;
-  const script = packageScript(root, component, capability);
+  const script = packageScriptForCommand(root, component, command);
   return Boolean(script && safePackageScriptUsesTool(script, tool));
 }
 
@@ -456,7 +496,7 @@ function commandWithConfig(command: string[], tool: SupportedTool, configPath: s
   const flags = ["--config", configPath, "--disable-nested-config"];
   const toolIndex = command.findIndex((token) => tokenIsTool(token, tool));
   if (toolIndex >= 0) {
-    if (command.slice(toolIndex + 1).some((token) => token === "--config" || token === "-c")) {
+    if (command.slice(toolIndex + 1).some(tokenSelectsConfig)) {
       throw new Error(`Cannot compose convention config with a command that already selects a config`);
     }
     return [...command.slice(0, toolIndex + 1), ...flags, ...command.slice(toolIndex + 1)];
@@ -495,9 +535,7 @@ export function applyConventionConfigurations(root: string, components: Componen
       if (!applicable.length) continue;
 
       const tools = [...new Set(applicable.map((configuration) => configuration.tool))];
-      const matchingTools = tools.filter((tool) =>
-        commandUsesTool(root, component, capability, original, tool),
-      );
+      const matchingTools = tools.filter((tool) => commandUsesTool(root, component, original, tool));
       if (matchingTools.length !== 1) {
         throw new Error(
           `No unique convention configuration adapter matches ${component.name} ${capability}; configured tools: ${tools.join(", ")}`,
