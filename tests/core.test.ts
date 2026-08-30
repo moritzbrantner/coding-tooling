@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import { discoverComponents, planChecks } from "../src/core.ts";
+import { discoverComponents, planChecks, runPlan } from "../src/core.ts";
 
 function repository(): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-"));
@@ -34,6 +34,12 @@ function addRustComponent(root: string): void {
     '[package]\nname = "backend"\nversion = "0.1.0"\nedition = "2024"\n',
   );
   writeFileSync(join(rust, "src", "lib.rs"), "");
+}
+
+function addConventionEnforcement(root: string, name: string, value: unknown): void {
+  const directory = join(root, ".conventions", "modules", "test");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(directory, name), `${JSON.stringify(value, null, 2)}\n`);
 }
 
 describe("coding-tooling plans", () => {
@@ -84,6 +90,47 @@ describe("coding-tooling plans", () => {
       "backend:build",
     ]);
     expect(plan.missing).toEqual([]);
+  });
+
+  test("installed conventions can require an additional full-tier capability", () => {
+    const root = repository();
+    const manifest = JSON.parse(readFile(join(root, "package.json")));
+    manifest.scripts["storybook:check"] = "storybook build && storybook test";
+    writeFileSync(join(root, "package.json"), JSON.stringify(manifest));
+    addConventionEnforcement(root, "STORYBOOK-002.json", {
+      schemaVersion: 1,
+      ruleId: "STORYBOOK-002",
+      enforcement: {
+        kind: "capability",
+        capability: "storybook:check",
+        tiers: ["full"],
+      },
+    });
+
+    const plan = planChecks({ root, tier: "full" });
+    expect(plan.conventionRequiredCapabilities).toEqual(["storybook:check"]);
+    expect(plan.checks.map((check) => check.capability)).toContain("storybook:check");
+    expect(plan.missing).toEqual([]);
+  });
+
+  test("installed convention gates are reported missing when their canonical script is absent", () => {
+    const root = repository();
+    addConventionEnforcement(root, "LIGHTHOUSE-001.json", {
+      schemaVersion: 1,
+      ruleId: "LIGHTHOUSE-001",
+      enforcement: {
+        kind: "capability",
+        capability: "web:audit",
+        tiers: ["full"],
+      },
+    });
+
+    const plan = planChecks({ root, tier: "full" });
+    expect(plan.missing).toContainEqual({
+      capability: "web:audit",
+      component: "fixture",
+      optional: false,
+    });
   });
 
   test("required capabilities are satisfied across the selected component scope", () => {
@@ -159,6 +206,33 @@ describe("coding-tooling plans", () => {
     ]);
   });
 
+  test("stops a validation tier after the first failed check", () => {
+    const root = repository();
+    const marker = join(root, "should-not-run");
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { failFast: ["lint", "typecheck"] },
+        capabilityCommands: {
+          ".": {
+            lint: ["node", "-e", "process.exit(1)"],
+            typecheck: [
+              "node",
+              "-e",
+              `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`,
+            ],
+          },
+        },
+      }),
+    );
+
+    const result = runPlan({ root, tier: "failFast" });
+    expect(result.status).toBe("failed");
+    expect((result.data.results as unknown[]).length).toBe(1);
+    expect(existsSync(marker)).toBe(false);
+  });
+
   test("rejects contradictory required and optional capability policy", () => {
     const root = repository();
     writeFileSync(
@@ -175,3 +249,7 @@ describe("coding-tooling plans", () => {
     );
   });
 });
+
+function readFile(path: string): string {
+  return require("node:fs").readFileSync(path, "utf8");
+}
