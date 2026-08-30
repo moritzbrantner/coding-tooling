@@ -1,10 +1,16 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 
 import type { Capability, Component } from "./model.ts";
-import { findNearestFile, readJson } from "./shared.ts";
+import { readJson, walkFiles } from "./shared.ts";
 
 type SupportedTool = "oxlint" | "oxfmt";
 
@@ -16,19 +22,36 @@ type InstalledConventionConfiguration = {
   capability: Capability;
 };
 
-type InstalledConfigurationManifest = {
-  schemaVersion: 1;
-  configurations: InstalledConventionConfiguration[];
-};
-
 type PackageManifest = {
   scripts?: Record<string, string>;
 };
 
+type RepositoryToolConfig = {
+  path?: string;
+  value: Record<string, unknown>;
+};
+
+type ConventionFragment = {
+  rule: string;
+  path: string;
+  value: Record<string, unknown>;
+};
+
 const configurationManifestPath = ".conventions/configurations.json";
-const toolConfigNames: Record<SupportedTool, string[]> = {
+const supportedToolConfigNames: Record<SupportedTool, string[]> = {
   oxlint: [".oxlintrc.json", ".oxlintrc.jsonc"],
   oxfmt: [".oxfmtrc.json", ".oxfmtrc.jsonc"],
+};
+const unsupportedToolConfigNames: Record<SupportedTool, string[]> = {
+  oxlint: ["oxlint.config.ts", "oxlint.config.mts"],
+  oxfmt: [
+    "oxfmt.config.ts",
+    "oxfmt.config.mts",
+    "oxfmt.config.cts",
+    "oxfmt.config.js",
+    "oxfmt.config.mjs",
+    "oxfmt.config.cjs",
+  ],
 };
 const capabilityScripts: Partial<Record<Capability, string[]>> = {
   lint: ["lint"],
@@ -48,7 +71,7 @@ function withinRoot(root: string, path: string): boolean {
   return path === root || path.startsWith(`${root}${sep}`);
 }
 
-function parseJsonc(source: string, label: string): unknown {
+function stripComments(source: string): string {
   let result = "";
   let inString = false;
   let escaped = false;
@@ -95,8 +118,40 @@ function parseJsonc(source: string, label: string): unknown {
     }
     result += char;
   }
+  return result;
+}
+
+function stripTrailingCommas(source: string): string {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]!;
+    if (inString) {
+      result += char;
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      result += char;
+      continue;
+    }
+    if (char === ",") {
+      let cursor = index + 1;
+      while (cursor < source.length && /\s/.test(source[cursor]!)) cursor += 1;
+      if (source[cursor] === "}" || source[cursor] === "]") continue;
+    }
+    result += char;
+  }
+  return result;
+}
+
+function parseJsonc(source: string, label: string): unknown {
   try {
-    return JSON.parse(result) as unknown;
+    return JSON.parse(stripTrailingCommas(stripComments(source))) as unknown;
   } catch {
     throw new Error(`Convention config is not valid JSON/JSONC: ${label}`);
   }
@@ -133,6 +188,11 @@ export function loadInstalledConventionConfigurations(root: string): InstalledCo
     if (!withinRoot(installRoot, absolute) || !existsSync(absolute)) {
       throw new Error(`Convention configuration asset is missing or escapes the managed snapshot: ${path}`);
     }
+    const realInstallRoot = realpathSync(installRoot);
+    const realAsset = realpathSync(absolute);
+    if (!withinRoot(realInstallRoot, realAsset)) {
+      throw new Error(`Convention configuration asset escapes the managed snapshot: ${path}`);
+    }
     return { module, rule, path, tool, capability } as InstalledConventionConfiguration;
   });
 }
@@ -141,8 +201,41 @@ function equal(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function severity(value: unknown): number | undefined {
+  if (value === 0 || value === "off") return 0;
+  if (value === 1 || value === "warn" || value === "warning") return 1;
+  if (value === 2 || value === "error") return 2;
+  return undefined;
+}
+
+function ruleSetting(value: unknown): { severity: number; options: unknown[] } | undefined {
+  if (Array.isArray(value) && value.length > 0) {
+    const rank = severity(value[0]);
+    return rank === undefined ? undefined : { severity: rank, options: value.slice(1) };
+  }
+  const rank = severity(value);
+  return rank === undefined ? undefined : { severity: rank, options: [] };
+}
+
+function mergeRuleSetting(base: unknown, requirement: unknown, path: string): unknown | undefined {
+  if (!path.startsWith("rules.")) return undefined;
+  const baseSetting = ruleSetting(base);
+  const requiredSetting = ruleSetting(requirement);
+  if (!baseSetting || !requiredSetting) return undefined;
+  if (
+    baseSetting.severity > 0 &&
+    requiredSetting.severity > 0 &&
+    !equal(baseSetting.options, requiredSetting.options)
+  ) {
+    throw new Error(`convention-config-conflict at ${path}`);
+  }
+  return structuredClone(baseSetting.severity >= requiredSetting.severity ? base : requirement);
+}
+
 function mergeRequirement(base: unknown, requirement: unknown, path: string): unknown {
   if (base === undefined) return structuredClone(requirement);
+  const ruleValue = mergeRuleSetting(base, requirement, path);
+  if (ruleValue !== undefined) return ruleValue;
   if (isRecord(base) && isRecord(requirement)) {
     const result: Record<string, unknown> = structuredClone(base);
     for (const [key, value] of Object.entries(requirement)) {
@@ -185,19 +278,98 @@ function componentDirectory(root: string, component: Component): string {
   return component.path === "." ? root : join(root, component.path);
 }
 
-function repositoryToolConfig(root: string, component: Component, tool: SupportedTool): Record<string, unknown> {
-  const path = findNearestFile(componentDirectory(root, component), root, toolConfigNames[tool]);
-  if (!path) return {};
-  const parsed = parseJsonc(readFileSync(path, "utf8"), path);
-  if (!isRecord(parsed)) throw new Error(`${path} must contain a JSON object`);
-  return parsed;
+function allToolConfigNames(tool: SupportedTool): string[] {
+  return [...supportedToolConfigNames[tool], ...unsupportedToolConfigNames[tool]];
 }
 
-function fragmentValue(root: string, config: InstalledConventionConfiguration): Record<string, unknown> {
-  const path = join(root, ".conventions", config.path);
+function findRepositoryConfigPath(root: string, component: Component, tool: SupportedTool): string | undefined {
+  let current = resolve(componentDirectory(root, component));
+  const boundary = resolve(root);
+  while (true) {
+    const supported = supportedToolConfigNames[tool]
+      .map((name) => join(current, name))
+      .filter(existsSync);
+    const unsupported = unsupportedToolConfigNames[tool]
+      .map((name) => join(current, name))
+      .filter(existsSync);
+    if (unsupported.length > 0) {
+      throw new Error(
+        `${tool} convention composition currently requires JSON/JSONC config; unsupported config: ${unsupported[0]}`,
+      );
+    }
+    if (supported.length > 1) {
+      throw new Error(`Multiple ${tool} configuration files are present in ${current}`);
+    }
+    if (supported.length === 1) return supported[0];
+    if (current === boundary) return undefined;
+    const parent = dirname(current);
+    if (parent === current || !withinRoot(boundary, parent)) return undefined;
+    current = parent;
+  }
+}
+
+function assertNoNestedConfigs(
+  root: string,
+  component: Component,
+  tool: SupportedTool,
+  selectedPath?: string,
+): void {
+  const directory = resolve(componentDirectory(root, component));
+  const selected = selectedPath ? resolve(selectedPath) : undefined;
+  const names = new Set(allToolConfigNames(tool));
+  const nested = walkFiles(directory, 10)
+    .filter((path) => names.has(basename(path)))
+    .map(resolve)
+    .filter((path) => path !== selected);
+  if (nested.length > 0) {
+    throw new Error(
+      `${tool} convention composition does not yet support nested config trees; found ${nested[0]}`,
+    );
+  }
+}
+
+function repositoryToolConfig(
+  root: string,
+  component: Component,
+  tool: SupportedTool,
+): RepositoryToolConfig {
+  const path = findRepositoryConfigPath(root, component, tool);
+  assertNoNestedConfigs(root, component, tool, path);
+  if (!path) return { value: {} };
+  const parsed = parseJsonc(readFileSync(path, "utf8"), path);
+  if (!isRecord(parsed)) throw new Error(`${path} must contain a JSON object`);
+  return { path, value: parsed };
+}
+
+function fragment(root: string, config: InstalledConventionConfiguration): ConventionFragment {
+  const path = resolve(root, ".conventions", config.path);
   const parsed = parseJsonc(readFileSync(path, "utf8"), path);
   if (!isRecord(parsed)) throw new Error(`Convention configuration ${config.rule} must contain a JSON object`);
-  return parsed;
+  return { rule: config.rule, path, value: parsed };
+}
+
+function assertPortableFragment(tool: SupportedTool, item: ConventionFragment): void {
+  const forbidden =
+    tool === "oxlint"
+      ? ["extends", "ignorePatterns", "overrides", "jsPlugins"]
+      : ["ignorePatterns", "overrides", "sortTailwindcss"];
+  const key = forbidden.find((candidate) => Object.prototype.hasOwnProperty.call(item.value, candidate));
+  if (key) {
+    throw new Error(
+      `Convention configuration ${item.rule} uses path-sensitive ${tool} field ${key}, which is not supported by the current composition adapter`,
+    );
+  }
+}
+
+function assertPortableOxfmtRepositoryConfig(config: RepositoryToolConfig): void {
+  if (!config.path) return;
+  const forbidden = ["ignorePatterns", "overrides", "sortTailwindcss"];
+  const key = forbidden.find((candidate) => Object.prototype.hasOwnProperty.call(config.value, candidate));
+  if (key) {
+    throw new Error(
+      `Oxfmt repository config ${config.path} uses path-sensitive field ${key}; convention composition refuses to change its path semantics`,
+    );
+  }
 }
 
 function packageScript(root: string, component: Component, capability: Capability): string | undefined {
@@ -212,6 +384,22 @@ function tokenIsTool(token: string, tool: SupportedTool): boolean {
   return basename(token) === tool || token === tool;
 }
 
+function safePackageScriptUsesTool(script: string, tool: SupportedTool): boolean {
+  const mentionsTool = new RegExp(`(^|[^a-zA-Z0-9_-])${tool}([^a-zA-Z0-9_-]|$)`).test(script);
+  if (!mentionsTool) return false;
+  if (/&&|\|\||[;|<>\n\r]/.test(script)) {
+    throw new Error(`Cannot safely inject convention config into compound package script: ${script}`);
+  }
+  const first = script.trim().split(/\s+/, 1)[0] ?? "";
+  if (!tokenIsTool(first, tool)) {
+    throw new Error(`Cannot safely identify ${tool} as the package-script entrypoint: ${script}`);
+  }
+  if (/(^|\s)(--config|-c)(=|\s)/.test(script)) {
+    throw new Error(`Cannot compose convention config with a package script that already selects a config: ${script}`);
+  }
+  return true;
+}
+
 function commandUsesTool(
   root: string,
   component: Component,
@@ -221,7 +409,36 @@ function commandUsesTool(
 ): boolean {
   if (command.some((token) => tokenIsTool(token, tool))) return true;
   const script = packageScript(root, component, capability);
-  return Boolean(script && new RegExp(`(^|[^a-zA-Z0-9_-])${tool}([^a-zA-Z0-9_-]|$)`).test(script));
+  return Boolean(script && safePackageScriptUsesTool(script, tool));
+}
+
+function invocationConfig(
+  tool: SupportedTool,
+  repositoryConfig: RepositoryToolConfig,
+  fragments: ConventionFragment[],
+): Record<string, unknown> {
+  for (const item of fragments) assertPortableFragment(tool, item);
+  const conventionOnly = composeToolConfiguration(
+    {},
+    fragments.map((item) => ({ rule: item.rule, value: item.value })),
+  );
+  composeToolConfiguration(
+    repositoryConfig.value,
+    fragments.map((item) => ({ rule: item.rule, value: item.value })),
+  );
+
+  if (tool === "oxlint") {
+    return {
+      ...(repositoryConfig.path ? { extends: [resolve(repositoryConfig.path)], plugins: [] } : {}),
+      ...conventionOnly,
+    };
+  }
+
+  assertPortableOxfmtRepositoryConfig(repositoryConfig);
+  return composeToolConfiguration(
+    repositoryConfig.value,
+    fragments.map((item) => ({ rule: item.rule, value: item.value })),
+  );
 }
 
 function effectiveConfigPath(tool: SupportedTool, config: Record<string, unknown>): string {
@@ -229,27 +446,25 @@ function effectiveConfigPath(tool: SupportedTool, config: Record<string, unknown
   const digest = createHash("sha256").update(content).digest("hex");
   const directory = join(tmpdir(), "coding-tooling-convention-config", digest);
   mkdirSync(directory, { recursive: true });
-  const path = join(directory, `${tool}.json`);
+  const filename = tool === "oxlint" ? ".oxlintrc.json" : ".oxfmtrc.json";
+  const path = join(directory, filename);
   if (!existsSync(path) || readFileSync(path, "utf8") !== content) writeFileSync(path, content);
   return path;
 }
 
 function commandWithConfig(command: string[], tool: SupportedTool, configPath: string): string[] {
+  const flags = ["--config", configPath, "--disable-nested-config"];
   const toolIndex = command.findIndex((token) => tokenIsTool(token, tool));
   if (toolIndex >= 0) {
-    return [
-      ...command.slice(0, toolIndex + 1),
-      "--config",
-      configPath,
-      "--disable-nested-config",
-      ...command.slice(toolIndex + 1),
-    ];
+    if (command.slice(toolIndex + 1).some((token) => token === "--config" || token === "-c")) {
+      throw new Error(`Cannot compose convention config with a command that already selects a config`);
+    }
+    return [...command.slice(0, toolIndex + 1), ...flags, ...command.slice(toolIndex + 1)];
   }
-  if (
-    (command[0] === "bun" || command[0] === "npm" || command[0] === "pnpm" || command[0] === "yarn") &&
-    command.includes("run")
-  ) {
-    return [...command, "--", "--config", configPath, "--disable-nested-config"];
+  if (command[0] === "bun" && command.includes("run")) return [...command, ...flags];
+  if (command[0] === "npm" && command.includes("run")) return [...command, "--", ...flags];
+  if ((command[0] === "pnpm" || command[0] === "yarn") && command.includes("run")) {
+    return [...command, ...flags];
   }
   throw new Error(`Cannot inject convention config into command: ${command.join(" ")}`);
 }
@@ -291,12 +506,14 @@ export function applyConventionConfigurations(root: string, components: Componen
       const tool = matchingTools[0]!;
       const fragments = applicable
         .filter((configuration) => configuration.tool === tool)
-        .map((configuration) => ({
-          rule: configuration.rule,
-          value: fragmentValue(root, configuration),
-        }));
-      const effective = composeToolConfiguration(repositoryToolConfig(root, component, tool), fragments);
-      capabilities[capability] = commandWithConfig(original, tool, effectiveConfigPath(tool, effective));
+        .map((configuration) => fragment(root, configuration));
+      const repositoryConfig = repositoryToolConfig(root, component, tool);
+      const effective = invocationConfig(tool, repositoryConfig, fragments);
+      capabilities[capability] = commandWithConfig(
+        original,
+        tool,
+        effectiveConfigPath(tool, effective),
+      );
     }
     return { ...component, capabilities };
   });
