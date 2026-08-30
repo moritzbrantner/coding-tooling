@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "sourceRevision": "3ae3fa76d96d7fd872e6a52f2dca351505d2ba80",
+  "requestedModules": ["rust"],
+  "resolvedModules": ["base", "rust"],
+  "files": {
+    "modules/base/principles/README.md": "a36300040600d1bf47bcbf28a12d2253b556585301d496a3c4b223cee2c0f8dd",
+    "modules/base/conventions/agents/AGENT-009-delegate-one-bounded-capability-per-run.md": "8842b7efd27bea0646129b302f689e51025ee8a41b9d5674bd253f91cd29bce5",
+    "modules/base/conventions/agents/AGENT-010-do-not-require-higher-level-execution-machinery.md": "65ee9272d0d7baff3783da15c144f3e69cc736fe75ca5ea2d3a3c75caa6f9c4c",
+    "modules/base/conventions/agents/README.md": "49c9d1b706b7278e492f9abccc0edd344e82326d0b65dc99dd3f221dc2400cca",
+    "modules/base/conventions/authentication/README.md": "9c1f012f515444f7a902086665634f5306fb6269caad471fe072b82300427b9f",
+    "modules/base/conventions/authorization/README.md": "be9f99bca080e9bcc09c9a30dcc9da793ab268979bdedd799f332128e13eaf60",
+    "modules/base/conventions/benchmarking/README.md": "955311068f20e5510783a70097a23797325153fe01ff824eb4977ff6f8a5f96f",
+    "modules/base/conventions/codebase-design/README.md": "ae902ce07158a13e2340319215033d8b86e8f58060274e2f669cf28a537377ce",
+    "modules/base/conventions/dependencies/README.md": "df79ce740f74874964407f4f72bdd6d560226630e050bf7c7d8c836572822c88",
+    "modules/base/conventions/environment/README.md": "456f1dff0e5b4722d783eec9064fe23556266ad7e0fa0a7290fb16fabcc4bc48",
+    "modules/base/conventions/git/README.md": "658d7c56df4652f372b25e520d4c2176f739b486ef199d05743425c401c500e5",
+    "modules/base/conventions/interface-design/README.md": "d4cbf9422edbaf53e3060812970a62f30587a84a1546f03b82a0d3af1b8a24cf",
+    "modules/base/conventions/repository/README.md": "351416dc7def4336f2ddafb140b7435989f19fa762e04ceb33f5e1c2311ea885",
+    "modules/base/conventions/scripts/README.md": "9152670cf8cda35d3296ee228e8f34e4920044ead374fdcae8823500ef0d89f8",
+    "modules/base/conventions/template-repositories/README.md": "c3578186eebd55c3510bbc0c0725b004a8abd6598285108c6609f7cd1445937b",
+    "modules/base/conventions/testing/README.md": "e97f5d8cbf0c313d9faba7f46c62a2d18fb22c180d3bd0c83a43737e4bbae7ed",
+    "modules/rust/technologies/rust/README.md": "cf6eaeb058e999e8df328f9d2c9d17dc7330c6323074720efbf297d72deea583",
+    "index.md": "a16252ef18acdcfd87266c732fb2a71a3979baeb8041eca05ccc8374d47897aa"
+  }
+}

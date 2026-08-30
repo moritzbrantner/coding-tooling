@@ -57,7 +57,9 @@ function pipeline(status: ResultEnvelope<Record<string, unknown>>["status"] = "p
   });
 }
 
-function fakeRunner(options: { moveBase?: boolean; remoteCheck?: "success" | "failed" | "pending" } = {}) {
+function fakeRunner(
+  options: { moveBase?: boolean; remoteCheck?: "success" | "failed" | "pending" } = {},
+) {
   let baseReads = 0;
   let mergeCalls = 0;
 
@@ -152,7 +154,9 @@ test("remote checks can still be required explicitly", () => {
   );
 
   expect(integration.status).toBe("unavailable");
-  expect(integration.diagnostics.some((diagnostic) => diagnostic.code === "remote-checks-failed")).toBe(true);
+  expect(
+    integration.diagnostics.some((diagnostic) => diagnostic.code === "remote-checks-failed"),
+  ).toBe(true);
   expect(fake.mergeCalls()).toBe(0);
 });
 

@@ -17,6 +17,7 @@ function write(root: string, path: string, content: string): void {
 
 function registry(): string {
   const root = workspace("convention-index-");
+  write(root, "README.md", "# Convention test registry\n");
   write(
     root,
     "principles/README.md",
@@ -84,9 +85,7 @@ describe("installed convention index", () => {
         "**REACT-001 — Keep state local** — Own state in the smallest subtree that needs it.",
       );
       expect(index.match(/\*\*TEST-001 —/g)).toHaveLength(1);
-      expect(index).toContain(
-        "[details](modules/react/technologies/typescript/react/README.md)",
-      );
+      expect(index).toContain("[details](modules/react/technologies/typescript/react/README.md)");
       expect(index.indexOf("## Rule briefing")).toBeLessThan(index.indexOf("## Installed modules"));
       expect(index).toContain("### base");
       expect(index).toContain("### react");
