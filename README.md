@@ -76,6 +76,10 @@ conventions.lock.json
 
 Do not hand-edit `.conventions/`. Repository-specific policy and exceptions belong in `AGENTS.md`.
 
+Some installed rules include small JSON enforcement sidecars authored next to the convention. `coding-tooling run` consumes those descriptors before repository validation commands. It can run focused Oxlint or Clippy checks, perform a small set of structural checks, or require a semantic capability for a validation tier. The rule semantics remain owned by `coding-agent-conventions`; `coding-tooling` only executes the declared deterministic mechanism.
+
+Validation is fail-fast: convention checks and tier capabilities run in deterministic order and stop after the first failure or unavailable required enforcement. This makes the cheap-before-expensive validation policy executable rather than advisory.
+
 ### Updating policy
 
 Convention policy does not silently change underneath a repository. Inspect and deliberately accept updates:
@@ -93,7 +97,7 @@ coding-tooling conventions update
 coding-tooling conventions check
 ```
 
-The check is intentionally narrow. It verifies the manifest/lock relationship and detects drift in managed convention files. It does **not** replace formatters, linters, analyzers, tests, architecture checks, or the repository's normal CI commands.
+The check is intentionally narrow. It verifies the manifest/lock relationship and detects drift in managed convention files. It does **not** execute convention enforcement or replace the repository's normal validation commands; `coding-tooling run` performs executable enforcement as part of validation.
 
 Commands that need registry content (`init`, `add`, `diff`, `update`) discover `coding-agent-conventions` from an explicit `--conventions-root`, `CODING_AGENT_CONVENTIONS_ROOT`, the shared Moenarch environment registry, or a sibling checkout. `check` needs only the committed consumer files and therefore works offline.
 
@@ -123,9 +127,14 @@ test:e2e
 dependencies:audit
 benchmark
 benchmark:smoke
+storybook:check
+web:audit
+template:smoke
 ```
 
 For JavaScript/TypeScript components, declared package scripts are preferred over invented commands. Rust and .NET use conservative built-in commands where semantics are mechanically clear.
+
+The convention-backed gate capabilities deliberately use canonical repository scripts: `storybook:check`, `web:audit`, and `template:smoke`. A module that installs the corresponding convention can make that capability required for its full validation tier without embedding Storybook, Lighthouse, or template-specific orchestration inside coding-tooling.
 
 External deterministic tools may be wired through `capabilityCommands`. `coding-tooling` invokes the declared command but does not own the external tool's semantics.
 
@@ -141,7 +150,7 @@ General coding-agent capabilities are sourced from `coding-agent-skills`. The `a
 2. Machine-readable output is a first-class interface.
 3. Checks must not silently mutate source code.
 4. A missing capability is different from a failed capability.
-5. Engineering policy stays in `coding-agent-conventions`; this repository only installs and verifies it.
+5. Engineering policy stays in `coding-agent-conventions`; this repository installs it and executes only explicitly declared deterministic enforcement.
 6. Repository-specific policy stays in consumer repositories.
 7. Outer agent lifecycle/orchestration stays outside this repository.
 8. Prefer repository-declared commands over guessed ecosystem defaults when semantics could differ.
