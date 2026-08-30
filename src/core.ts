@@ -2,6 +2,10 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 import {
+  conventionRequiredCapabilities,
+  runConventionChecks,
+} from "./convention-enforcement.ts";
+import {
   capabilities,
   defaultTiers,
   type Capability,
@@ -40,6 +44,9 @@ const scriptCandidates: Record<Capability, string[]> = {
   "dependencies:audit": ["dependencies:audit", "audit:dependencies"],
   benchmark: ["benchmark", "bench"],
   "benchmark:smoke": ["benchmark:smoke", "bench:smoke"],
+  "storybook:check": ["storybook:check"],
+  "web:audit": ["web:audit"],
+  "template:smoke": ["template:smoke"],
 };
 
 export function loadConfig(root: string, configuredPath = ".coding-tooling.json"): ToolingConfig {
@@ -95,6 +102,10 @@ export function discoverComponents(root = repositoryRoot()): Component[] {
     if ("react" in deps) technologies.push("react");
     if ("next" in deps) technologies.push("nextjs");
     if ("vite" in deps) technologies.push("vite");
+    if ("vitest" in deps) technologies.push("vitest");
+    if ("storybook" in deps || Object.keys(deps).some((dependency) => dependency.startsWith("@storybook/")))
+      technologies.push("storybook");
+    if ("lighthouse" in deps || "@lhci/cli" in deps) technologies.push("lighthouse");
     components.push({
       name: manifest.name ?? (path === "." ? basename(root) : basename(directory)),
       path,
@@ -177,9 +188,11 @@ export function planChecks(options: {
 }) {
   const root = options.root ?? repositoryRoot();
   const config = loadConfig(root, options.configPath);
-  const selected = config.tiers?.[options.tier] ?? defaultTiers[options.tier];
-  if (!selected) throw new Error(`Unknown tier: ${options.tier}`);
-  validateCapabilities(selected);
+  const configured = config.tiers?.[options.tier] ?? defaultTiers[options.tier];
+  if (!configured) throw new Error(`Unknown tier: ${options.tier}`);
+  validateCapabilities(configured);
+  const conventionRequired = conventionRequiredCapabilities(root, options.tier);
+  const selected = [...new Set([...configured, ...conventionRequired])];
   const components = applyCapabilityCommands(discoverComponents(root), config).filter(
     (component) =>
       !options.component ||
@@ -198,7 +211,10 @@ export function planChecks(options: {
   }
 
   const availableCapabilities = new Set(checks.map((check) => check.capability));
-  const requiredCapabilities = new Set(config.requiredCapabilities ?? []);
+  const requiredCapabilities = new Set([
+    ...(config.requiredCapabilities ?? []),
+    ...conventionRequired,
+  ]);
   const optionalCapabilities = new Set(config.optionalCapabilities ?? []);
   const scope = components.length === 1 ? components[0]!.name : "selected components";
   const missing: { capability: Capability; component: string; optional: boolean }[] = [];
@@ -215,6 +231,7 @@ export function planChecks(options: {
     tier: options.tier,
     checks,
     missing,
+    conventionRequiredCapabilities: conventionRequired,
     conventionRefs: config.conventionRefs ?? [],
   };
 }
@@ -230,6 +247,15 @@ function applyCapabilityCommands(components: Component[], config: ToolingConfig)
   }));
 }
 
+function missingDiagnostics(
+  missing: { capability: Capability; component: string; optional: boolean }[],
+): Diagnostic[] {
+  return missing.map((item) => ({
+    code: item.optional ? "optional-capability-unavailable" : "capability-unavailable",
+    message: `${item.capability} is unavailable for ${item.component}`,
+  }));
+}
+
 export function runPlan(options: {
   root?: string;
   tier: string;
@@ -241,11 +267,36 @@ export function runPlan(options: {
   const root = options.root ?? repositoryRoot();
   try {
     const plan = planChecks({ ...options, root });
-    const results = plan.checks.map((planned) => {
+    const selectedComponents = discoverComponents(root).filter(
+      (component) =>
+        !options.component ||
+        component.name === options.component ||
+        component.path === options.component,
+    );
+    const convention = runConventionChecks(root, selectedComponents);
+    const diagnostics = [...convention.diagnostics, ...missingDiagnostics(plan.missing)];
+    if (convention.status !== "passed") {
+      return envelope(
+        "run",
+        convention.status,
+        started,
+        {
+          ...plan,
+          root,
+          strict: Boolean(options.strict),
+          conventionResults: convention.results,
+          results: [],
+        },
+        diagnostics,
+      );
+    }
+
+    const results: Array<Record<string, unknown>> = [];
+    for (const planned of plan.checks) {
       const checkStarted = Date.now();
       const cwd = planned.path === "." ? root : join(root, planned.path);
       const result = runCommand(planned.command[0], planned.command.slice(1), cwd);
-      return {
+      const completed = {
         ...planned,
         status: result.error ? "error" : result.status === 0 ? "passed" : "failed",
         exitCode: result.status,
@@ -254,7 +305,9 @@ export function runPlan(options: {
         stderr: result.stderr,
         error: result.error,
       };
-    });
+      results.push(completed);
+      if (completed.status !== "passed") break;
+    }
     const status: ResultStatus = results.some((result) => result.status === "error")
       ? "error"
       : results.some((result) => result.status === "failed")
@@ -266,11 +319,14 @@ export function runPlan(options: {
       "run",
       status,
       started,
-      { ...plan, root, strict: Boolean(options.strict), results },
-      plan.missing.map((item) => ({
-        code: item.optional ? "optional-capability-unavailable" : "capability-unavailable",
-        message: `${item.capability} is unavailable for ${item.component}`,
-      })),
+      {
+        ...plan,
+        root,
+        strict: Boolean(options.strict),
+        conventionResults: convention.results,
+        results,
+      },
+      diagnostics,
     );
   } catch (error) {
     return envelope("run", "error", started, { root, tier: options.tier }, [
