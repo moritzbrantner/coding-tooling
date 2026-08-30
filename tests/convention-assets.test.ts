@@ -27,6 +27,7 @@ function registry(asset = "technologies/typescript/.toolrc.json"): string {
   const root = workspace("convention-assets-source-");
   write(root, "README.md", "# Conventions\n");
   write(root, "principles/README.md", "## PRINCIPLE-001 — Be explicit\n");
+  write(root, "conventions/README.md", "# General conventions\n");
   write(root, "technologies/typescript/README.md", "## TS-001 — TypeScript rule\n");
   write(root, asset, `${JSON.stringify({ enabled: true }, null, 2)}\n`);
   write(
