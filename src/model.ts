@@ -10,6 +10,9 @@ export const capabilities = [
   "dependencies:audit",
   "benchmark",
   "benchmark:smoke",
+  "storybook:check",
+  "web:audit",
+  "template:smoke",
 ] as const;
 
 export type Capability = (typeof capabilities)[number];
