@@ -263,7 +263,7 @@ export function composeToolConfiguration(
   fragments: Array<{ rule: string; value: Record<string, unknown> }>,
 ): Record<string, unknown> {
   let result: Record<string, unknown> = structuredClone(repositoryConfig);
-  for (const fragment of fragments.toSorted((left, right) => left.rule.localeCompare(right.rule))) {
+  for (const fragment of [...fragments].sort((left, right) => left.rule.localeCompare(right.rule))) {
     try {
       result = mergeRequirement(result, fragment.value, "") as Record<string, unknown>;
     } catch (error) {
@@ -319,7 +319,7 @@ function assertNoNestedConfigs(
   const names = new Set(allToolConfigNames(tool));
   const nested = walkFiles(directory, 10)
     .filter((path) => names.has(basename(path)))
-    .map(resolve)
+    .map((path) => resolve(path))
     .filter((path) => path !== selected);
   if (nested.length > 0) {
     throw new Error(
