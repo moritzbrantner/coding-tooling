@@ -31,7 +31,6 @@ function conventionSource(): string {
     "technologies/typescript/TS-003.oxlint.json",
     `${JSON.stringify(
       {
-        plugins: ["typescript"],
         rules: { "typescript/consistent-type-definitions": ["error", "type"] },
       },
       null,
@@ -135,7 +134,7 @@ describe("convention tooling configuration", () => {
       const configPath = command[command.indexOf("--config") + 1]!;
       const effective = JSON.parse(readFileSync(configPath, "utf8"));
       expect(effective.categories.correctness).toBe("error");
-      expect(effective.plugins).toContain("typescript");
+      expect(effective.plugins).toBeUndefined();
       expect(effective.rules["typescript/consistent-type-definitions"]).toEqual([
         "error",
         "type",
@@ -228,11 +227,11 @@ describe("convention tooling configuration", () => {
     }
   });
 
-  test("merges plugin sets but treats incompatible rule values as conflicts", () => {
+  test("merges explicit plugin requirements but treats incompatible rule values as conflicts", () => {
     expect(
       composeToolConfiguration(
         { plugins: ["unicorn"] },
-        [{ rule: "TS-003", value: { plugins: ["typescript"] } }],
+        [{ rule: "RULE-001", value: { plugins: ["typescript"] } }],
       ),
     ).toEqual({ plugins: ["typescript", "unicorn"] });
     expect(() =>
