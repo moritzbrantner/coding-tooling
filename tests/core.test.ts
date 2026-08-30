@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -94,7 +94,7 @@ describe("coding-tooling plans", () => {
 
   test("installed conventions can require an additional full-tier capability", () => {
     const root = repository();
-    const manifest = JSON.parse(readFile(join(root, "package.json")));
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     manifest.scripts["storybook:check"] = "storybook build && storybook test";
     writeFileSync(join(root, "package.json"), JSON.stringify(manifest));
     addConventionEnforcement(root, "STORYBOOK-002.json", {
@@ -249,7 +249,3 @@ describe("coding-tooling plans", () => {
     );
   });
 });
-
-function readFile(path: string): string {
-  return require("node:fs").readFileSync(path, "utf8");
-}
