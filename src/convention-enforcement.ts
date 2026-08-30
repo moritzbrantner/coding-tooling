@@ -7,10 +7,22 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, extname, join, relative } from "node:path";
 
-import { capabilities, type Capability, type Component, type Diagnostic, type ResultStatus } from "./model.ts";
-import { commandAvailable, findNearestFile, readJson, runCommand, walkFiles } from "./shared.ts";
+import {
+  capabilities,
+  type Capability,
+  type Component,
+  type Diagnostic,
+  type ResultStatus,
+} from "./model.ts";
+import {
+  commandAvailable,
+  findNearestFile,
+  readJson,
+  runCommand,
+  walkFiles,
+} from "./shared.ts";
 
 type OxlintEnforcement = {
   kind: "oxlint";
@@ -66,9 +78,17 @@ const sourceExtensions = new Set([
   ".yaml",
   ".yml",
 ]);
+const builtinChecks = new Set(["bun-default", "env-example", "vitest-kinds"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validTechnologies(value: unknown): boolean {
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.every((technology) => typeof technology === "string"))
+  );
 }
 
 function loadEnforcements(root: string): ConventionEnforcement[] {
@@ -92,18 +112,22 @@ function loadEnforcements(root: string): ConventionEnforcement[] {
         continue;
       }
     } else if (enforcement.kind === "oxlint") {
-      if (!isRecord(enforcement.config)) continue;
+      if (!isRecord(enforcement.config) || !validTechnologies(enforcement.technologies)) continue;
     } else if (enforcement.kind === "clippy") {
-      if (!Array.isArray(enforcement.args) || !enforcement.args.every((arg) => typeof arg === "string"))
+      if (
+        !Array.isArray(enforcement.args) ||
+        !enforcement.args.every((arg) => typeof arg === "string") ||
+        !validTechnologies(enforcement.technologies)
+      ) {
         continue;
+      }
     } else if (enforcement.kind === "builtin") {
-      if (!new Set(["bun-default", "env-example", "vitest-kinds"]).has(String(enforcement.check)))
-        continue;
+      if (!builtinChecks.has(String(enforcement.check))) continue;
     } else {
       continue;
     }
 
-    byRule.set(value.ruleId, value as ConventionEnforcement);
+    byRule.set(value.ruleId, value as unknown as ConventionEnforcement);
   }
   return [...byRule.values()].sort((left, right) => left.ruleId.localeCompare(right.ruleId));
 }
@@ -122,7 +146,10 @@ export function conventionRequiredCapabilities(root: string, tier: string): Capa
 }
 
 function appliesTo(component: Component, technologies?: string[]): boolean {
-  return !technologies?.length || technologies.every((technology) => component.technologies.includes(technology));
+  return (
+    !technologies?.length ||
+    technologies.every((technology) => component.technologies.includes(technology))
+  );
 }
 
 function executable(root: string, componentRoot: string, name: string): string | undefined {
@@ -218,7 +245,8 @@ function bunDefault(root: string, components: Component[], ruleId: string): Conv
     }
 
     const hasBunLock = [componentRoot, root].some(
-      (directory) => existsSync(join(directory, "bun.lock")) || existsSync(join(directory, "bun.lockb")),
+      (directory) =>
+        existsSync(join(directory, "bun.lock")) || existsSync(join(directory, "bun.lockb")),
     );
     if (!hasBunLock) failures.push(`${component.name}: no bun.lock or bun.lockb is present`);
 
@@ -270,13 +298,14 @@ function envExample(root: string, ruleId: string): ConventionCheckResult {
     const trackedEnv = tracked.stdout
       .split(/\r?\n/)
       .filter((path) => basename(path) === ".env" || basename(path).startsWith(".env.local"));
-    if (trackedEnv.length > 0) failures.push(`tracked local environment file(s): ${trackedEnv.join(", ")}`);
+    if (trackedEnv.length > 0) {
+      failures.push(`tracked local environment file(s): ${trackedEnv.join(", ")}`);
+    }
   }
 
   for (const file of walkFiles(root, 8)) {
     const relativePath = relative(root, file).replaceAll("\\", "/");
-    if (relativePath.startsWith(".conventions/") || !sourceExtensions.has(file.slice(file.lastIndexOf("."))))
-      continue;
+    if (relativePath.startsWith(".conventions/") || !sourceExtensions.has(extname(file))) continue;
     try {
       if (statSync(file).size > 1_000_000) continue;
       const keys = envKeysFromSource(readFileSync(file, "utf8"));
@@ -289,7 +318,9 @@ function envExample(root: string, ruleId: string): ConventionCheckResult {
       const documented = envFileKeys(example);
       const missing = keys.filter((key) => !documented.has(key));
       if (missing.length > 0) {
-        failures.push(`${relativePath}: ${relative(root, example)} is missing ${missing.join(", ")}`);
+        failures.push(
+          `${relativePath}: ${relative(root, example)} is missing ${missing.join(", ")}`,
+        );
       }
     } catch {
       // Ignore unreadable/non-text source candidates; normal repository checks can diagnose them.
@@ -326,16 +357,24 @@ function vitestKinds(root: string, components: Component[], ruleId: string): Con
       if (/\.unit\.(?:test|spec)\.[cm]?[jt]sx?$/.test(name)) hasUnit = true;
       else if (/\.integration\.(?:test|spec)\.[cm]?[jt]sx?$/.test(name)) hasIntegration = true;
       else if (/\.bench\.[cm]?[jt]sx?$/.test(name)) hasBenchmark = true;
-      else if (/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(name)) generic.push(relative(componentRoot, file));
+      else if (/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(name)) {
+        generic.push(relative(componentRoot, file));
+      }
     }
 
-    if (generic.length > 0) failures.push(`${component.name}: test kind missing in ${generic.join(", ")}`);
+    if (generic.length > 0) {
+      failures.push(`${component.name}: test kind missing in ${generic.join(", ")}`);
+    }
     const scripts = manifest?.scripts ?? {};
-    if (hasUnit && !("test:unit" in scripts)) failures.push(`${component.name}: missing test:unit script`);
-    if (hasIntegration && !("test:integration" in scripts))
+    if (hasUnit && !("test:unit" in scripts)) {
+      failures.push(`${component.name}: missing test:unit script`);
+    }
+    if (hasIntegration && !("test:integration" in scripts)) {
       failures.push(`${component.name}: missing test:integration script`);
-    if (hasBenchmark && !("benchmark" in scripts) && !("bench" in scripts))
+    }
+    if (hasBenchmark && !("benchmark" in scripts) && !("bench" in scripts)) {
       failures.push(`${component.name}: missing benchmark or bench script`);
+    }
   }
 
   return {
@@ -350,8 +389,13 @@ function vitestKinds(root: string, components: Component[], ruleId: string): Con
 function diagnostic(result: ConventionCheckResult): Diagnostic | undefined {
   if (result.status === "passed") return undefined;
   return {
-    code: result.status === "unavailable" ? "convention-enforcement-unavailable" : "convention-enforcement-failed",
-    message: `${result.ruleId} ${result.status} for ${result.component}${result.error ? `: ${result.error}` : result.stderr ? `: ${result.stderr}` : ""}`,
+    code:
+      result.status === "unavailable"
+        ? "convention-enforcement-unavailable"
+        : "convention-enforcement-failed",
+    message: `${result.ruleId} ${result.status} for ${result.component}${
+      result.error ? `: ${result.error}` : result.stderr ? `: ${result.stderr}` : ""
+    }`,
   };
 }
 
@@ -380,15 +424,21 @@ export function runConventionChecks(
       continue;
     }
 
-    for (const component of components.filter((candidate) => appliesTo(candidate, enforcement.technologies))) {
+    let failed = false;
+    for (const component of components.filter((candidate) =>
+      appliesTo(candidate, enforcement.technologies),
+    )) {
       const result =
         enforcement.kind === "oxlint"
           ? runOxlint(root, component, item.ruleId, enforcement)
           : runClippy(root, component, item.ruleId, enforcement);
       results.push(result);
-      if (result.status !== "passed") break;
+      if (result.status !== "passed") {
+        failed = true;
+        break;
+      }
     }
-    if (results.at(-1)?.status !== "passed") break;
+    if (failed) break;
   }
 
   const diagnostics = results.map(diagnostic).filter((item): item is Diagnostic => Boolean(item));
