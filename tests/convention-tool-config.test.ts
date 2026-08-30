@@ -21,6 +21,7 @@ function conventionSource(): string {
   const root = workspace("convention-config-source-");
   write(root, "README.md", "# Conventions\n");
   write(root, "principles/README.md", "## PRINCIPLE-001 — Be explicit\n");
+  write(root, "conventions/README.md", "# General conventions\n");
   write(
     root,
     "technologies/typescript/README.md",
@@ -208,6 +209,86 @@ describe("convention tooling configuration", () => {
     }
   });
 
+  test("inspects the package script selected by capabilityCommands overrides", () => {
+    const source = conventionSource();
+    const target = typescriptConsumer();
+    try {
+      write(
+        target,
+        "package.json",
+        `${JSON.stringify(
+          {
+            name: "consumer",
+            scripts: {
+              lint: "oxlint .",
+              "custom-lint": "eslint .",
+              "format:check": "oxfmt --check .",
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      write(
+        target,
+        ".coding-tooling.json",
+        `${JSON.stringify(
+          {
+            schemaVersion: 1,
+            tiers: { lintOnly: ["lint"] },
+            capabilityCommands: { consumer: { lint: ["bun", "run", "custom-lint"] } },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      expect(
+        conventionRegistryCommand("init", ["typescript"], {
+          root: target,
+          conventionsRoot: source,
+        }).status,
+      ).toBe("passed");
+      expect(() => planChecks({ root: target, tier: "lintOnly" })).toThrow(
+        "No unique convention configuration adapter matches",
+      );
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects direct commands that already select a config with equals syntax", () => {
+    const source = conventionSource();
+    const target = typescriptConsumer();
+    try {
+      write(
+        target,
+        ".coding-tooling.json",
+        `${JSON.stringify(
+          {
+            schemaVersion: 1,
+            tiers: { lintOnly: ["lint"] },
+            capabilityCommands: { consumer: { lint: ["oxlint", "--config=.oxlintrc.json", "."] } },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      expect(
+        conventionRegistryCommand("init", ["typescript"], {
+          root: target,
+          conventionsRoot: source,
+        }).status,
+      ).toBe("passed");
+      expect(() => planChecks({ root: target, tier: "lintOnly" })).toThrow(
+        "already selects a config",
+      );
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
   test("uses the same composition seam for Oxfmt format checks", () => {
     const target = typescriptConsumer();
     try {
@@ -266,5 +347,31 @@ describe("convention tooling configuration", () => {
         [{ rule: "RULE-001", value: { rules: { example: ["error", "right"] } } }],
       ),
     ).toThrow("convention-config-conflict");
+  });
+
+  test("compares rule option objects structurally instead of by key insertion order", () => {
+    expect(
+      composeToolConfiguration(
+        {
+          rules: {
+            example: ["error", { allow: ["a"], deny: ["b"] }],
+          },
+        },
+        [
+          {
+            rule: "RULE-001",
+            value: {
+              rules: {
+                example: ["error", { deny: ["b"], allow: ["a"] }],
+              },
+            },
+          },
+        ],
+      ),
+    ).toEqual({
+      rules: {
+        example: ["error", { allow: ["a"], deny: ["b"] }],
+      },
+    });
   });
 });
