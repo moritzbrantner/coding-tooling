@@ -128,13 +128,13 @@ describe("convention tooling configuration", () => {
       const plan = planChecks({ root: target, tier: "lintOnly" });
       expect(plan.checks).toHaveLength(1);
       const command = plan.checks[0]!.command;
-      expect(command.slice(0, 3)).toEqual(["bun", "run", "lint"]);
-      expect(command).toContain("--config");
+      expect(command.slice(0, 4)).toEqual(["bun", "run", "lint", "--config"]);
       expect(command).toContain("--disable-nested-config");
+      expect(command).not.toContain("--");
       const configPath = command[command.indexOf("--config") + 1]!;
       const effective = JSON.parse(readFileSync(configPath, "utf8"));
-      expect(effective.categories.correctness).toBe("error");
-      expect(effective.plugins).toBeUndefined();
+      expect(effective.extends).toEqual([join(target, ".oxlintrc.json")]);
+      expect(effective.plugins).toEqual([]);
       expect(effective.rules["typescript/consistent-type-definitions"]).toEqual([
         "error",
         "type",
@@ -160,7 +160,7 @@ describe("convention tooling configuration", () => {
     }
   });
 
-  test("rejects repository configuration that weakens an installed convention rule", () => {
+  test("rejects repository configuration with an incompatible convention rule option", () => {
     const source = conventionSource();
     const target = typescriptConsumer();
     try {
@@ -181,6 +181,26 @@ describe("convention tooling configuration", () => {
       ).toBe("passed");
       expect(() => planChecks({ root: target, tier: "lintOnly" })).toThrow(
         "convention-config-conflict",
+      );
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects nested Oxlint configs rather than silently disabling their behavior", () => {
+    const source = conventionSource();
+    const target = typescriptConsumer();
+    try {
+      write(target, "src/.oxlintrc.json", `${JSON.stringify({ rules: {} }, null, 2)}\n`);
+      expect(
+        conventionRegistryCommand("init", ["typescript"], {
+          root: target,
+          conventionsRoot: source,
+        }).status,
+      ).toBe("passed");
+      expect(() => planChecks({ root: target, tier: "lintOnly" })).toThrow(
+        "does not yet support nested config trees",
       );
     } finally {
       rmSync(source, { recursive: true, force: true });
@@ -218,7 +238,7 @@ describe("convention tooling configuration", () => {
       );
       const [component] = applyConventionConfigurations(target, discoverComponents(target));
       const command = component!.capabilities["format:check"]!;
-      expect(command.slice(0, 3)).toEqual(["bun", "run", "format:check"]);
+      expect(command.slice(0, 4)).toEqual(["bun", "run", "format:check", "--config"]);
       const configPath = command[command.indexOf("--config") + 1]!;
       const effective = JSON.parse(readFileSync(configPath, "utf8"));
       expect(effective).toEqual({ semi: true, singleQuote: true });
@@ -227,17 +247,23 @@ describe("convention tooling configuration", () => {
     }
   });
 
-  test("merges explicit plugin requirements but treats incompatible rule values as conflicts", () => {
+  test("merges plugin requirements and stronger severities but rejects incompatible rule options", () => {
     expect(
       composeToolConfiguration(
         { plugins: ["unicorn"] },
         [{ rule: "RULE-001", value: { plugins: ["typescript"] } }],
       ),
     ).toEqual({ plugins: ["typescript", "unicorn"] });
+    expect(
+      composeToolConfiguration(
+        { rules: { example: "warn" } },
+        [{ rule: "RULE-001", value: { rules: { example: "error" } } }],
+      ),
+    ).toEqual({ rules: { example: "error" } });
     expect(() =>
       composeToolConfiguration(
-        { rules: { example: "off" } },
-        [{ rule: "RULE-001", value: { rules: { example: "error" } } }],
+        { rules: { example: ["error", "left"] } },
+        [{ rule: "RULE-001", value: { rules: { example: ["error", "right"] } } }],
       ),
     ).toThrow("convention-config-conflict");
   });
