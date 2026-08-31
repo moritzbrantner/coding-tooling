@@ -249,13 +249,7 @@ export function main(argv = process.argv.slice(2)): number {
     if ((action === "describe" || action === "plan") && !positional[1]) return usage();
     const inputs = generatorInputs(options);
     if (!inputs) return usage();
-    result = generatorCommand(
-      root,
-      action,
-      positional[1],
-      inputs,
-      stringOption(options, "target"),
-    );
+    result = generatorCommand(root, action, positional[1], inputs, stringOption(options, "target"));
   } else return usage();
   console.log(JSON.stringify(result, null, options.json ? 0 : 2));
   return exitCode(result.status);

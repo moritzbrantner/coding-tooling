@@ -13,9 +13,7 @@ type GeneratorInput = {
   values?: string[];
 };
 
-type GeneratorTarget =
-  | { kind: "root" }
-  | { kind: "concept"; concept: string };
+type GeneratorTarget = { kind: "root" } | { kind: "concept"; concept: string };
 
 type CreateFileOperation = {
   kind: "create-file";
@@ -149,7 +147,10 @@ function validateInterpolation(value: string, inputNames: ReadonlySet<string>): 
 
 function parseInput(value: unknown, generatorId: string, name: string): GeneratorInput {
   if (!isRecord(value) || typeof value.type !== "string") {
-    throw new GeneratorError("invalid-generator", `Generator ${generatorId} has invalid input ${name}`);
+    throw new GeneratorError(
+      "invalid-generator",
+      `Generator ${generatorId} has invalid input ${name}`,
+    );
   }
   const type = value.type;
   if (!["string", "boolean", "enum", "identifier", "path"].includes(type)) {
@@ -161,9 +162,14 @@ function parseInput(value: unknown, generatorId: string, name: string): Generato
   const values = value.values;
   if (
     type === "enum" &&
-    (!Array.isArray(values) || values.length === 0 || !values.every((item) => typeof item === "string"))
+    (!Array.isArray(values) ||
+      values.length === 0 ||
+      !values.every((item) => typeof item === "string"))
   ) {
-    throw new GeneratorError("invalid-generator", `Generator ${generatorId} enum ${name} needs values`);
+    throw new GeneratorError(
+      "invalid-generator",
+      `Generator ${generatorId} enum ${name} needs values`,
+    );
   }
   return {
     type: type as GeneratorInputType,
@@ -199,17 +205,25 @@ function parseDescriptor(path: string): GeneratorDescriptor {
 
   const rules = value.rules;
   if (!rules.every((rule) => typeof rule === "string" && ruleIdPattern.test(rule))) {
-    throw new GeneratorError("invalid-generator", `Generator ${value.id} has invalid rule references`);
+    throw new GeneratorError(
+      "invalid-generator",
+      `Generator ${value.id} has invalid rule references`,
+    );
   }
   const technologies = value.technologies;
-  if (!technologies.every((technology) => typeof technology === "string" && technology.length > 0)) {
+  if (
+    !technologies.every((technology) => typeof technology === "string" && technology.length > 0)
+  ) {
     throw new GeneratorError("invalid-generator", `Generator ${value.id} has invalid technologies`);
   }
 
   const inputs: Record<string, GeneratorInput> = {};
   for (const [name, input] of Object.entries(value.inputs)) {
     if (!inputNamePattern.test(name)) {
-      throw new GeneratorError("invalid-generator", `Generator ${value.id} has invalid input name ${name}`);
+      throw new GeneratorError(
+        "invalid-generator",
+        `Generator ${value.id} has invalid input name ${name}`,
+      );
     }
     inputs[name] = parseInput(input, value.id, name);
   }
@@ -224,7 +238,10 @@ function parseDescriptor(path: string): GeneratorDescriptor {
   ) {
     target = { kind: "concept", concept: value.target.concept };
   } else {
-    throw new GeneratorError("invalid-generator", `Generator ${value.id} has invalid target metadata`);
+    throw new GeneratorError(
+      "invalid-generator",
+      `Generator ${value.id} has invalid target metadata`,
+    );
   }
 
   const operations: CreateFileOperation[] = value.operations.map((operation) => {
@@ -246,17 +263,30 @@ function parseDescriptor(path: string): GeneratorDescriptor {
   });
 
   const compose: GeneratorComposition[] = value.compose.map((item) => {
-    if (!isRecord(item) || typeof item.generator !== "string" || !generatorIdPattern.test(item.generator)) {
-      throw new GeneratorError("invalid-generator", `Generator ${value.id} has invalid composition`);
+    if (
+      !isRecord(item) ||
+      typeof item.generator !== "string" ||
+      !generatorIdPattern.test(item.generator)
+    ) {
+      throw new GeneratorError(
+        "invalid-generator",
+        `Generator ${value.id} has invalid composition`,
+      );
     }
     const mapping: Record<string, string> = {};
     if (item.inputs !== undefined) {
       if (!isRecord(item.inputs)) {
-        throw new GeneratorError("invalid-generator", `Generator ${value.id} has invalid input mapping`);
+        throw new GeneratorError(
+          "invalid-generator",
+          `Generator ${value.id} has invalid input mapping`,
+        );
       }
       for (const [name, expression] of Object.entries(item.inputs)) {
         if (!inputNamePattern.test(name) || typeof expression !== "string") {
-          throw new GeneratorError("invalid-generator", `Generator ${value.id} has invalid input mapping`);
+          throw new GeneratorError(
+            "invalid-generator",
+            `Generator ${value.id} has invalid input mapping`,
+          );
         }
         validateInterpolation(expression, inputNames);
         mapping[name] = expression;
@@ -267,14 +297,20 @@ function parseDescriptor(path: string): GeneratorDescriptor {
 
   const prerequisites = value.prerequisites.map((item) => {
     if (!isRecord(item) || typeof item.kind !== "string" || !item.kind) {
-      throw new GeneratorError("invalid-generator", `Generator ${value.id} has invalid prerequisite`);
+      throw new GeneratorError(
+        "invalid-generator",
+        `Generator ${value.id} has invalid prerequisite`,
+      );
     }
     return item as GeneratorPrerequisite;
   });
 
   const postconditions = value.postconditions.map((item) => {
     if (typeof item !== "string" || !capabilities.includes(item as Capability)) {
-      throw new GeneratorError("invalid-generator", `Generator ${value.id} has invalid postcondition`);
+      throw new GeneratorError(
+        "invalid-generator",
+        `Generator ${value.id} has invalid postcondition`,
+      );
     }
     return item as Capability;
   });
@@ -299,7 +335,8 @@ function conventionGenerators(root: string): LoadedGenerator[] {
   if (!existsSync(modulesRoot)) return [];
   const result: LoadedGenerator[] = [];
   for (const path of walkFiles(modulesRoot, 16).sort()) {
-    if (!path.endsWith(`${sep}generator.json`) || !path.includes(`${sep}generators${sep}`)) continue;
+    if (!path.endsWith(`${sep}generator.json`) || !path.includes(`${sep}generators${sep}`))
+      continue;
     const relativePath = relative(modulesRoot, path);
     const module = relativePath.split(sep)[0];
     if (!module) continue;
@@ -318,7 +355,9 @@ function localGenerators(root: string): LoadedGenerator[] {
   const generatorsRoot = join(root, ".coding-tooling", "generators");
   if (!existsSync(generatorsRoot)) return [];
   const result: LoadedGenerator[] = [];
-  for (const entry of readdirSync(generatorsRoot, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const entry of readdirSync(generatorsRoot, { withFileTypes: true }).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  )) {
     if (!entry.isDirectory() || !generatorIdPattern.test(entry.name)) continue;
     const directory = join(generatorsRoot, entry.name);
     const descriptorPath = join(directory, "generator.json");
@@ -326,7 +365,10 @@ function localGenerators(root: string): LoadedGenerator[] {
     const realDirectory = realpathSync(directory);
     const realRoot = realpathSync(generatorsRoot);
     if (!withinRoot(realRoot, realDirectory)) {
-      throw new GeneratorError("invalid-generator-path", `Local generator escapes generator root: ${entry.name}`);
+      throw new GeneratorError(
+        "invalid-generator-path",
+        `Local generator escapes generator root: ${entry.name}`,
+      );
     }
     result.push({
       descriptor: parseDescriptor(descriptorPath),
@@ -343,7 +385,10 @@ function discover(root: string): Map<string, LoadedGenerator> {
   for (const generator of [...conventionGenerators(root), ...localGenerators(root)]) {
     const id = generator.descriptor.id;
     if (catalog.has(id)) {
-      throw new GeneratorError("generator-id-conflict", `Generator ID is defined more than once: ${id}`);
+      throw new GeneratorError(
+        "generator-id-conflict",
+        `Generator ID is defined more than once: ${id}`,
+      );
     }
     catalog.set(id, generator);
   }
@@ -356,7 +401,10 @@ function validateComposition(catalog: Map<string, LoadedGenerator>): void {
   const visited = new Set<string>();
   const visit = (id: string): void => {
     if (visiting.has(id)) {
-      throw new GeneratorError("generator-composition-cycle", `Generator composition cycle at ${id}`);
+      throw new GeneratorError(
+        "generator-composition-cycle",
+        `Generator composition cycle at ${id}`,
+      );
     }
     if (visited.has(id)) return;
     const generator = catalog.get(id);
@@ -405,24 +453,39 @@ function normalizeInput(
   if (raw === undefined) {
     if (descriptor.default !== undefined) return descriptor.default;
     if (descriptor.required) {
-      throw new GeneratorError("missing-generator-input", `Generator ${generatorId} requires input ${name}`);
+      throw new GeneratorError(
+        "missing-generator-input",
+        `Generator ${generatorId} requires input ${name}`,
+      );
     }
     return undefined;
   }
   if (descriptor.type === "boolean") {
     if (raw !== "true" && raw !== "false") {
-      throw new GeneratorError("invalid-generator-input", `Generator ${generatorId} input ${name} must be boolean`);
+      throw new GeneratorError(
+        "invalid-generator-input",
+        `Generator ${generatorId} input ${name} must be boolean`,
+      );
     }
     return raw === "true";
   }
   if (descriptor.type === "enum" && !descriptor.values?.includes(raw)) {
-    throw new GeneratorError("invalid-generator-input", `Generator ${generatorId} input ${name} is not an allowed value`);
+    throw new GeneratorError(
+      "invalid-generator-input",
+      `Generator ${generatorId} input ${name} is not an allowed value`,
+    );
   }
   if (descriptor.type === "identifier" && !identifierPattern.test(raw)) {
-    throw new GeneratorError("invalid-generator-input", `Generator ${generatorId} input ${name} is not an identifier`);
+    throw new GeneratorError(
+      "invalid-generator-input",
+      `Generator ${generatorId} input ${name} is not an identifier`,
+    );
   }
   if (descriptor.type === "path" && !managedPath(raw)) {
-    throw new GeneratorError("invalid-generator-input", `Generator ${generatorId} input ${name} is not a managed path`);
+    throw new GeneratorError(
+      "invalid-generator-input",
+      `Generator ${generatorId} input ${name} is not a managed path`,
+    );
   }
   return raw;
 }
@@ -433,7 +496,10 @@ function resolveInputs(
 ): Record<string, string | boolean> {
   for (const name of Object.keys(rawInputs)) {
     if (!descriptor.inputs[name]) {
-      throw new GeneratorError("unknown-generator-input", `Generator ${descriptor.id} does not declare input ${name}`);
+      throw new GeneratorError(
+        "unknown-generator-input",
+        `Generator ${descriptor.id} does not declare input ${name}`,
+      );
     }
   }
   const result: Record<string, string | boolean> = {};
@@ -457,8 +523,14 @@ function transform(value: string, kind: string | undefined): string {
   const parts = words(value);
   if (kind === "kebab") return parts.join("-");
   if (kind === "snake") return parts.join("_");
-  if (kind === "camel") return parts.map((part, index) => index === 0 ? part : `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("");
-  if (kind === "pascal") return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("");
+  if (kind === "camel")
+    return parts
+      .map((part, index) =>
+        index === 0 ? part : `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`,
+      )
+      .join("");
+  if (kind === "pascal")
+    return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("");
   throw new GeneratorError("unsupported-template-expression", `Unsupported transform: ${kind}`);
 }
 
@@ -467,7 +539,10 @@ function render(value: string, inputs: Record<string, string | boolean>): string
     const [rawName, rawTransform] = rawExpression.split("|").map((piece) => piece.trim());
     const input = inputs[rawName ?? ""];
     if (input === undefined) {
-      throw new GeneratorError("missing-generator-input", `No value for generator input ${rawName}`);
+      throw new GeneratorError(
+        "missing-generator-input",
+        `No value for generator input ${rawName}`,
+      );
     }
     return transform(String(input), rawTransform);
   });
@@ -476,7 +551,8 @@ function render(value: string, inputs: Record<string, string | boolean>): string
 function targetCandidates(root: string, concept: string): string[] {
   const config = readJson<GeneratorConfig>(join(root, ".coding-tooling.json"));
   const configured = config?.generatorTargets?.[concept];
-  const values = typeof configured === "string" ? [configured] : Array.isArray(configured) ? configured : [];
+  const values =
+    typeof configured === "string" ? [configured] : Array.isArray(configured) ? configured : [];
   return values.map((candidate) => safePath(root, candidate, "invalid-generator-target"));
 }
 
@@ -496,8 +572,15 @@ function resolveTarget(root: string, target: GeneratorTarget, explicitTarget?: s
 function templatePath(generator: LoadedGenerator, path: string): string {
   const candidate = resolve(generator.directory, path);
   const directory = resolve(generator.directory);
-  if (!withinRoot(directory, candidate) || !existsSync(candidate) || !statSync(candidate).isFile()) {
-    throw new GeneratorError("invalid-generator-template", `Generator template is unavailable: ${path}`);
+  if (
+    !withinRoot(directory, candidate) ||
+    !existsSync(candidate) ||
+    !statSync(candidate).isFile()
+  ) {
+    throw new GeneratorError(
+      "invalid-generator-template",
+      `Generator template is unavailable: ${path}`,
+    );
   }
   return candidate;
 }
@@ -544,16 +627,16 @@ export function planGenerator(
   const prerequisites: GeneratorPrerequisite[] = [];
   const postconditions: Capability[] = [];
 
-  const append = (
-    current: LoadedGenerator,
-    inputs: Record<string, string | boolean>,
-  ): void => {
+  const append = (current: LoadedGenerator, inputs: Record<string, string | boolean>): void => {
     prerequisites.push(...current.descriptor.prerequisites);
     postconditions.push(...current.descriptor.postconditions);
     for (const operation of current.descriptor.operations) {
       const relativePath = render(operation.path, inputs);
       if (!managedPath(relativePath)) {
-        throw new GeneratorError("invalid-generator-output", `Generator ${current.descriptor.id} produced unsafe path ${relativePath}`);
+        throw new GeneratorError(
+          "invalid-generator-output",
+          `Generator ${current.descriptor.id} produced unsafe path ${relativePath}`,
+        );
       }
       const output = safePath(target, relativePath, "invalid-generator-output");
       operations.push({
@@ -574,7 +657,10 @@ export function planGenerator(
   const seenPaths = new Set<string>();
   for (const operation of operations) {
     if (seenPaths.has(operation.path)) {
-      throw new GeneratorError("generation-plan-conflict", `Multiple generator operations target ${operation.path}`);
+      throw new GeneratorError(
+        "generation-plan-conflict",
+        `Multiple generator operations target ${operation.path}`,
+      );
     }
     seenPaths.add(operation.path);
   }
@@ -614,26 +700,25 @@ export function generatorCommand(
 ): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   try {
-    if (action === "list") return envelope(started, "passed", { generators: generatorCatalog(root) });
-    if (!id) throw new GeneratorError("generator-required", `Generator ID is required for ${action}`);
+    if (action === "list")
+      return envelope(started, "passed", { generators: generatorCatalog(root) });
+    if (!id)
+      throw new GeneratorError("generator-required", `Generator ID is required for ${action}`);
     if (action === "describe") {
       const entry = generatorCatalog(root).find((item) => item.id === id);
       if (!entry) throw new GeneratorError("unknown-generator", `Unknown generator: ${id}`);
       return envelope(started, "passed", { generator: entry });
     }
-    return envelope(started, "passed", { plan: planGenerator(root, id, rawInputs, explicitTarget) });
+    return envelope(started, "passed", {
+      plan: planGenerator(root, id, rawInputs, explicitTarget),
+    });
   } catch (error) {
     const generatorError = error instanceof GeneratorError ? error : undefined;
-    return envelope(
-      started,
-      "failed",
-      {},
-      [
-        {
-          code: generatorError?.code ?? "generator-error",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      ],
-    );
+    return envelope(started, "failed", {}, [
+      {
+        code: generatorError?.code ?? "generator-error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ]);
   }
 }

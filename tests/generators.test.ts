@@ -22,10 +22,7 @@ function writeJson(path: string, value: unknown): void {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
-function descriptor(
-  id: string,
-  overrides: Record<string, unknown> = {},
-): Record<string, unknown> {
+function descriptor(id: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     schemaVersion: 1,
     id,
@@ -80,7 +77,9 @@ describe("generator catalog", () => {
     conventionGenerator(root, "react-component");
     localGenerator(root, "feature");
 
-    expect(generatorCatalog(root).map(({ id, source, module }) => ({ id, source, module }))).toEqual([
+    expect(
+      generatorCatalog(root).map(({ id, source, module }) => ({ id, source, module })),
+    ).toEqual([
       { id: "feature", source: "local", module: undefined },
       { id: "react-component", source: "convention", module: "react" },
     ]);
@@ -98,8 +97,16 @@ describe("generator catalog", () => {
 
   test("rejects composition cycles", () => {
     const root = fixture();
-    localGenerator(root, "one", descriptor("one", { compose: [{ generator: "two", inputs: { name: "{{name}}" } }] }));
-    localGenerator(root, "two", descriptor("two", { compose: [{ generator: "one", inputs: { name: "{{name}}" } }] }));
+    localGenerator(
+      root,
+      "one",
+      descriptor("one", { compose: [{ generator: "two", inputs: { name: "{{name}}" } }] }),
+    );
+    localGenerator(
+      root,
+      "two",
+      descriptor("two", { compose: [{ generator: "one", inputs: { name: "{{name}}" } }] }),
+    );
 
     const result = generatorCommand(root, "list");
     expect(result.status).toBe("failed");
@@ -164,10 +171,12 @@ describe("generator planning", () => {
     const root = fixture();
     localGenerator(root, "feature");
 
-    expect(generatorCommand(root, "plan", "feature", { name: "../escape" }).diagnostics[0]?.code)
-      .toBe("invalid-generator-input");
-    expect(generatorCommand(root, "plan", "feature", { name: "Card", extra: "x" }).diagnostics[0]?.code)
-      .toBe("unknown-generator-input");
+    expect(
+      generatorCommand(root, "plan", "feature", { name: "../escape" }).diagnostics[0]?.code,
+    ).toBe("invalid-generator-input");
+    expect(
+      generatorCommand(root, "plan", "feature", { name: "Card", extra: "x" }).diagnostics[0]?.code,
+    ).toBe("unknown-generator-input");
   });
 
   test("flattens explicitly mapped acyclic composition deterministically", () => {
