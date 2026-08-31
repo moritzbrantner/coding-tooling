@@ -8,6 +8,7 @@ import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { auditDependencies } from "./dependency-audit.ts";
+import { applyGeneratorCommand } from "./generator-apply.ts";
 import { generatorCommand } from "./generators.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
 import { integratePullRequest, type MergeMethod, type RemoteChecksPolicy } from "./pr.ts";
@@ -146,7 +147,8 @@ function usage(): never {
   coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling generate list [--json]
   coding-tooling generate describe <id> [--json]
-  coding-tooling generate plan <id> [--input name=value]... [--target <path>] [--json]`);
+  coding-tooling generate plan <id> [--input name=value]... [--target <path>] [--json]
+  coding-tooling generate <id> [--input name=value]... [--target <path>] [--dry-run] [--json]`);
   process.exit(2);
 }
 
@@ -245,11 +247,18 @@ export function main(argv = process.argv.slice(2)): number {
     } else return usage();
   } else if (command === "generate") {
     const action = positional[0];
-    if (action !== "list" && action !== "describe" && action !== "plan") return usage();
-    if ((action === "describe" || action === "plan") && !positional[1]) return usage();
+    if (!action) return usage();
     const inputs = generatorInputs(options);
     if (!inputs) return usage();
-    result = generatorCommand(root, action, positional[1], inputs, stringOption(options, "target"));
+    const target = stringOption(options, "target");
+    if (action === "list" || action === "describe" || action === "plan") {
+      if ((action === "describe" || action === "plan") && !positional[1]) return usage();
+      result = generatorCommand(root, action, positional[1], inputs, target);
+    } else {
+      result = options["dry-run"]
+        ? generatorCommand(root, "plan", action, inputs, target)
+        : applyGeneratorCommand(root, action, inputs, target);
+    }
   } else return usage();
   console.log(JSON.stringify(result, null, options.json ? 0 : 2));
   return exitCode(result.status);
