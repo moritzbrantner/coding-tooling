@@ -71,7 +71,7 @@ describe("installed convention enforcement", () => {
     const source = join(root, "src", "thing.ts");
     enforce(root, "REPO-010", { kind: "builtin", check: "todo-format" });
 
-    writeFileSync(source, "export const url = \"https://example.test/TODO\";\n");
+    writeFileSync(source, `export const url = "https://example.test/TODO";\n`);
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
 
     writeFileSync(source, "// TODO make retry limit configurable\n");
