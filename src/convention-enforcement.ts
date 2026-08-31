@@ -246,7 +246,9 @@ function bunDefault(root: string, components: Component[], ruleId: string): Conv
     const rootManifest = readJson<{ packageManager?: string }>(join(root, "package.json"));
     const rootManager = rootManifest?.packageManager;
     if (!rootManager) {
-      failures.push("repository: package.json must declare an exact packageManager such as bun@1.4.0");
+      failures.push(
+        "repository: package.json must declare an exact packageManager such as bun@1.4.0",
+      );
     } else if (!exactBunPackageManager.test(rootManager)) {
       failures.push(`repository: packageManager must be an exact Bun version, got ${rootManager}`);
     }
@@ -256,7 +258,9 @@ function bunDefault(root: string, components: Component[], ruleId: string): Conv
     const componentRoot = component.path === "." ? root : join(root, component.path);
     const manifest = readJson<{ packageManager?: string }>(join(componentRoot, "package.json"));
     if (manifest?.packageManager && !exactBunPackageManager.test(manifest.packageManager)) {
-      failures.push(`${component.name}: packageManager must be an exact Bun version, got ${manifest.packageManager}`);
+      failures.push(
+        `${component.name}: packageManager must be an exact Bun version, got ${manifest.packageManager}`,
+      );
     }
 
     const hasBunLock = [componentRoot, root].some(
@@ -373,11 +377,15 @@ function todoFormat(root: string, ruleId: string): ConventionCheckResult {
         const comment = commentText(line);
         if (!comment || (!/\bTODO\b/.test(comment) && !/\bFIXME\b/.test(comment))) continue;
         if (/\bFIXME\b/.test(comment)) {
-          failures.push(`${relativePath}:${index + 1}: use TODO: ... or TODO(#123): ... instead of FIXME`);
+          failures.push(
+            `${relativePath}:${index + 1}: use TODO: ... or TODO(#123): ... instead of FIXME`,
+          );
           continue;
         }
         if (!/\bTODO(?:\(#\d+\))?:\s+\S/.test(comment)) {
-          failures.push(`${relativePath}:${index + 1}: TODO must use TODO: <description> or TODO(#123): <description>`);
+          failures.push(
+            `${relativePath}:${index + 1}: TODO must use TODO: <description> or TODO(#123): <description>`,
+          );
         }
       }
     } catch {
