@@ -43,10 +43,7 @@ describe("convention enforcement sidecars", () => {
         schemaVersion: 1,
         modules: {
           typescript: {
-            sources: [
-              "technologies/typescript/README.md",
-              "technologies/typescript/TS-003.json",
-            ],
+            sources: ["technologies/typescript/README.md", "technologies/typescript/TS-003.json"],
             dependencies: [],
           },
         },

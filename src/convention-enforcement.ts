@@ -1,11 +1,4 @@
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, join, relative } from "node:path";
 
@@ -16,13 +9,7 @@ import {
   type Diagnostic,
   type ResultStatus,
 } from "./model.ts";
-import {
-  commandAvailable,
-  findNearestFile,
-  readJson,
-  runCommand,
-  walkFiles,
-} from "./shared.ts";
+import { commandAvailable, findNearestFile, readJson, runCommand, walkFiles } from "./shared.ts";
 
 type OxlintEnforcement = {
   kind: "oxlint";
