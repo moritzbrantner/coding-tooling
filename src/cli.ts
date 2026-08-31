@@ -8,7 +8,7 @@ import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { auditDependencies } from "./dependency-audit.ts";
-import { applyGeneratorCommand } from "./generator-apply.ts";
+import { executeGeneratorCommand } from "./generator-execution.ts";
 import { generatorCommand } from "./generators.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
 import { integratePullRequest, type MergeMethod, type RemoteChecksPolicy } from "./pr.ts";
@@ -257,7 +257,7 @@ export function main(argv = process.argv.slice(2)): number {
     } else {
       result = options["dry-run"]
         ? generatorCommand(root, "plan", action, inputs, target)
-        : applyGeneratorCommand(root, action, inputs, target);
+        : executeGeneratorCommand(root, action, inputs, target);
     }
   } else return usage();
   console.log(JSON.stringify(result, null, options.json ? 0 : 2));
