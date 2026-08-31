@@ -1,0 +1,46 @@
+name: Prepare generator verification
+
+on:
+  push:
+    branches: [feat/generator-verification]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/generator-verification
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Route CLI generation through verified execution
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/cli.ts')
+          text = path.read_text()
+          old_import = 'import { applyGeneratorCommand } from "./generator-apply.ts";'
+          new_import = 'import { executeGeneratorCommand } from "./generator-execution.ts";'
+          if old_import in text:
+              text = text.replace(old_import, new_import, 1)
+          old_call = ': applyGeneratorCommand(root, action, inputs, target);'
+          new_call = ': executeGeneratorCommand(root, action, inputs, target);'
+          if old_call in text:
+              text = text.replace(old_call, new_call, 1)
+          path.write_text(text)
+          PY
+          bun run format:write
+      - name: Commit prepared implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/cli.ts src/generator-execution.ts src/generator-verification.ts tests/generator-execution.test.ts docs/generators.md
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Wire verified generator execution"
+          git push origin HEAD:feat/generator-verification
