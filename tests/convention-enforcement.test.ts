@@ -43,16 +43,16 @@ describe("installed convention enforcement", () => {
     const missing = repository();
     writeFileSync(join(missing, "bun.lock"), "");
     enforce(missing, "BUN-001", { kind: "builtin", check: "bun-default" });
-    expect(runConventionChecks(missing, discoverComponents(missing)).diagnostics[0]?.message).toContain(
-      "must declare an exact packageManager",
-    );
+    expect(
+      runConventionChecks(missing, discoverComponents(missing)).diagnostics[0]?.message,
+    ).toContain("must declare an exact packageManager");
 
     const floating = repository({ packageManager: "bun@^1.4.0" });
     writeFileSync(join(floating, "bun.lock"), "");
     enforce(floating, "BUN-001", { kind: "builtin", check: "bun-default" });
-    expect(runConventionChecks(floating, discoverComponents(floating)).diagnostics[0]?.message).toContain(
-      "must be an exact Bun version",
-    );
+    expect(
+      runConventionChecks(floating, discoverComponents(floating)).diagnostics[0]?.message,
+    ).toContain("must be an exact Bun version");
   });
 
   test("requires used environment variables in the nearest .env.example", () => {
