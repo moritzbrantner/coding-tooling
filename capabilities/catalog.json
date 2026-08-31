@@ -101,6 +101,42 @@
       "baselineRequired": false
     },
     {
+      "name": "test:e2e:smoke",
+      "kind": "test",
+      "tier": "system",
+      "scriptCandidates": ["test:e2e:smoke"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "test:accessibility",
+      "kind": "test",
+      "tier": "system",
+      "scriptCandidates": ["test:accessibility"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "test:visual",
+      "kind": "test",
+      "tier": "system",
+      "scriptCandidates": ["test:visual"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
+      "name": "package:check",
+      "kind": "package",
+      "tier": "release",
+      "scriptCandidates": ["package:check"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
       "name": "audit:lighthouse",
       "kind": "audit",
       "tier": "performance",

@@ -6,6 +6,9 @@ Stable names:
 - \`test:unit\` — focused, network-free behavior tests.
 - \`test:integration\` — tests crossing process, database, filesystem, or service boundaries.
 - \`test:component\` — rendered component behavior below the full browser workflow.
+- \`test:e2e:smoke\` — a deliberately small end-to-end suite proving critical paths quickly, distinct from the full \`test:e2e\` suite.
+- \`test:accessibility\` — deterministic automated accessibility checks; it does not replace manual accessibility review.
+- \`test:visual\` — deterministic visual-regression or visual-contract checks.
 
 Discovery is declaration-first: inspect package scripts or ecosystem manifests and report \`unavailable\` when no matching capability exists. Do not invent a test command from installed dependencies.
 

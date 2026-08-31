@@ -22,10 +22,10 @@
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "kind": {
-            "enum": ["static", "build", "test", "audit", "benchmark"]
+            "enum": ["static", "build", "test", "audit", "benchmark", "package"]
           },
           "tier": {
-            "enum": ["fast", "focused", "integration", "system", "performance"]
+            "enum": ["fast", "focused", "integration", "system", "performance", "release"]
           },
           "scriptCandidates": {
             "type": "array",
