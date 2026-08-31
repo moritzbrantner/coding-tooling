@@ -356,11 +356,11 @@ function envExample(root: string, ruleId: string): ConventionCheckResult {
 }
 
 function commentText(line: string): string | undefined {
-  const lineComment = line.match(/\/\/(.*)$/)?.[1];
+  const lineComment = line.match(/(?:^|[\s;)}\]])\/\/(.*)$/)?.[1];
   if (lineComment !== undefined) return lineComment;
-  const hashComment = line.match(/#(.*)$/)?.[1];
+  const hashComment = line.match(/(?:^|\s)#(.*)$/)?.[1];
   if (hashComment !== undefined) return hashComment;
-  const blockStart = line.match(/\/\*(.*)$/)?.[1];
+  const blockStart = line.match(/(?:^|[\s;)}\]])\/\*(.*)$/)?.[1];
   if (blockStart !== undefined) return blockStart;
   return line.match(/^\s*\*(.*)$/)?.[1];
 }
