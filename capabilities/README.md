@@ -7,6 +7,7 @@ This directory defines deterministic semantic capabilities that repositories may
 ## Families
 
 - [Automated tests](automated-tests/)
+- [Package validation](package/)
 - [Storybook](storybook/)
 - [Playwright](playwright/)
 - [Lighthouse](lighthouse/)

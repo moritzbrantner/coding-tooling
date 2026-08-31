@@ -144,6 +144,10 @@ test
 test:unit
 test:integration
 test:e2e
+test:e2e:smoke
+test:accessibility
+test:visual
+package:check
 dependencies:audit
 benchmark
 benchmark:smoke
@@ -151,6 +155,11 @@ storybook:check
 web:audit
 template:smoke
 ```
+
+- `test:e2e:smoke` checks a deliberately small end-to-end suite for critical paths; it is separate from a full `test:e2e` suite.
+- `test:accessibility` runs deterministic automated accessibility checks. It does not replace manual accessibility review.
+- `test:visual` runs deterministic visual-regression or visual-contract checks.
+- `package:check` validates the package or release shape without publishing, such as metadata, a pack dry-run, or an API/package surface check.
 
 For JavaScript/TypeScript components, declared package scripts are preferred over invented commands. When an installed convention has an applicable supported tool fragment, `coding-tooling` preserves that normal semantic capability but injects the deterministic effective config into the selected formatter/linter invocation. Rust and .NET use conservative built-in commands where semantics are mechanically clear.
 

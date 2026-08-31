@@ -3,7 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import { discoverComponents, planChecks, runPlan } from "../src/core.ts";
+import {
+  check as checkCapability,
+  discoverComponents,
+  planChecks,
+  runPlan,
+  writeReport,
+} from "../src/core.ts";
+import type { Capability } from "../src/model.ts";
 
 function repository(): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-"));
@@ -58,6 +65,26 @@ describe("coding-tooling plans", () => {
     writeFileSync(join(fixture, "package.json"), JSON.stringify({ name: "fixture-sample" }));
 
     expect(discoverComponents(root).map((component) => component.name)).toEqual(["fixture"]);
+  });
+
+  test("discovers declared progressive validation capabilities", () => {
+    const root = repository();
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    manifest.scripts["test:e2e:smoke"] = "bun test smoke";
+    manifest.scripts["test:accessibility"] = "bun test accessibility";
+    manifest.scripts["test:visual"] = "bun test visual";
+    manifest.scripts["package:check"] = "bun run package-check";
+    writeFileSync(join(root, "package.json"), JSON.stringify(manifest));
+
+    const [component] = discoverComponents(root);
+    expect(component.capabilities["test:e2e:smoke"]).toEqual(["npm", "run", "test:e2e:smoke"]);
+    expect(component.capabilities["test:accessibility"]).toEqual([
+      "npm",
+      "run",
+      "test:accessibility",
+    ]);
+    expect(component.capabilities["test:visual"]).toEqual(["npm", "run", "test:visual"]);
+    expect(component.capabilities["package:check"]).toEqual(["npm", "run", "package:check"]);
   });
 
   test("creates a deterministic fast plan without treating absent capabilities as requirements", () => {
@@ -204,6 +231,63 @@ describe("coding-tooling plans", () => {
     expect(plan.missing).toEqual([
       { capability: "test:integration", component: "fixture", optional: true },
     ]);
+  });
+
+  test("plans, executes, and reports repository-owned progressive tiers", () => {
+    const root = repository();
+    const report = join(root, "reports", "progressive.json");
+    const progressiveCapabilities = [
+      "test:e2e:smoke",
+      "test:accessibility",
+      "test:visual",
+      "package:check",
+    ] as const satisfies Capability[];
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { progressive: progressiveCapabilities },
+        capabilityCommands: {
+          ".": Object.fromEntries(
+            progressiveCapabilities.map((capability) => [
+              capability,
+              ["node", "-e", "process.exit(0)"],
+            ]),
+          ),
+        },
+      }),
+    );
+
+    const plan = planChecks({ root, tier: "progressive" });
+    expect(plan.checks.map((item) => item.capability)).toEqual(progressiveCapabilities);
+
+    const result = runPlan({ root, tier: "progressive", strict: true });
+    expect(result.status).toBe("passed");
+    writeReport(result, report);
+
+    const reported = JSON.parse(readFileSync(report, "utf8"));
+    expect(reported.status).toBe("passed");
+    expect(reported.data.results.map((item: { capability: string }) => item.capability)).toEqual(
+      progressiveCapabilities,
+    );
+  });
+
+  test("reports undeclared progressive capabilities as unavailable", () => {
+    const root = repository();
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { accessibility: ["test:accessibility"] },
+        optionalCapabilities: ["test:accessibility"],
+      }),
+    );
+
+    const plan = planChecks({ root, tier: "accessibility" });
+    expect(plan.missing).toEqual([
+      { capability: "test:accessibility", component: "fixture", optional: true },
+    ]);
+    expect(checkCapability(root, "test:accessibility").status).toBe("unavailable");
   });
 
   test("stops a validation tier after the first failed check", () => {

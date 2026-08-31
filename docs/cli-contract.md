@@ -32,12 +32,24 @@ test
 test:unit
 test:integration
 test:e2e
+test:e2e:smoke
+test:accessibility
+test:visual
+package:check
 dependencies:audit
 benchmark
 benchmark:smoke
+storybook:check
+web:audit
+template:smoke
 ```
 
 A capability name describes semantics, not an ecosystem command. The implementation maps it to a repository-declared or mechanically safe command.
+
+- `test:e2e:smoke` is a deliberately small end-to-end critical-path suite, distinct from `test:e2e`.
+- `test:accessibility` is deterministic automated accessibility validation; manual review remains separate.
+- `test:visual` is deterministic visual-regression or visual-contract validation.
+- `package:check` validates package or release shape without publishing.
 
 ## JSON envelope
 

@@ -30,7 +30,7 @@ describe("capability catalog", () => {
   });
 
   test("declares deterministic script candidates and valid tiers", () => {
-    const tiers = new Set(["fast", "focused", "integration", "system", "performance"]);
+    const tiers = new Set(["fast", "focused", "integration", "system", "performance", "release"]);
 
     for (const capability of catalog.capabilities) {
       expect(capability.scriptCandidates.length).toBeGreaterThan(0);
@@ -45,5 +45,14 @@ describe("capability catalog", () => {
     expect(byName.get("audit:lighthouse")?.baselineRequired).toBe(true);
     expect(byName.get("benchmark")?.baselineRequired).toBe(false);
     expect(byName.has("benchmark:compare")).toBe(false);
+  });
+
+  test("includes framework-neutral progressive validation capabilities", () => {
+    const byName = new Map(catalog.capabilities.map((capability) => [capability.name, capability]));
+
+    expect(byName.get("test:e2e:smoke")?.scriptCandidates).toEqual(["test:e2e:smoke"]);
+    expect(byName.get("test:accessibility")?.scriptCandidates).toEqual(["test:accessibility"]);
+    expect(byName.get("test:visual")?.scriptCandidates).toEqual(["test:visual"]);
+    expect(byName.get("package:check")?.scriptCandidates).toEqual(["package:check"]);
   });
 });
