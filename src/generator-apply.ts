@@ -219,7 +219,7 @@ export function applyGeneratorPlan(
     }
   } catch (error) {
     const rolledBack: string[] = [];
-    for (const mutation of touched.toReversed()) {
+    for (const mutation of [...touched].reverse()) {
       try {
         if (mutation.previousContent === undefined) rmSync(mutation.absolutePath, { force: true });
         else writeFileSync(mutation.absolutePath, mutation.previousContent);
