@@ -11,7 +11,13 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { resolveConventionSource } from "./conventions.ts";
-import type { Capability, Diagnostic, ResultEnvelope, ResultOperation, ResultStatus } from "./model.ts";
+import type {
+  Capability,
+  Diagnostic,
+  ResultEnvelope,
+  ResultOperation,
+  ResultStatus,
+} from "./model.ts";
 import { readJson, runCommand, walkFiles } from "./shared.ts";
 
 type RegistryConfiguration = {
@@ -141,8 +147,13 @@ function assertModuleName(name: string): void {
   if (!isModuleName(name)) throw new Error(`Invalid convention module name: ${name}`);
 }
 
-function parseConfiguration(value: unknown, moduleName: string, assets: string[]): RegistryConfiguration {
-  if (!isRecord(value)) throw new Error(`Convention module ${moduleName} has invalid configuration metadata`);
+function parseConfiguration(
+  value: unknown,
+  moduleName: string,
+  assets: string[],
+): RegistryConfiguration {
+  if (!isRecord(value))
+    throw new Error(`Convention module ${moduleName} has invalid configuration metadata`);
   const rule = value.rule;
   const path = value.path;
   const tool = value.tool;
@@ -151,10 +162,14 @@ function parseConfiguration(value: unknown, moduleName: string, assets: string[]
     throw new Error(`Convention module ${moduleName} has invalid configuration rule`);
   }
   if (typeof path !== "string" || !isManagedPath(path) || !assets.includes(path)) {
-    throw new Error(`Convention module ${moduleName} configuration ${rule} must reference a declared asset`);
+    throw new Error(
+      `Convention module ${moduleName} configuration ${rule} must reference a declared asset`,
+    );
   }
   if (tool !== "oxlint" && tool !== "oxfmt") {
-    throw new Error(`Convention module ${moduleName} configuration ${rule} uses unsupported tool: ${String(tool)}`);
+    throw new Error(
+      `Convention module ${moduleName} configuration ${rule} uses unsupported tool: ${String(tool)}`,
+    );
   }
   if (
     typeof capability !== "string" ||
@@ -181,7 +196,10 @@ function loadRegistry(sourceRoot: string): RegistryManifest {
       throw new Error(`Invalid convention registry module: ${name}`);
     }
     const sources = rawModule.sources;
-    if (!sources.length || !sources.every((source) => typeof source === "string" && source.length > 0)) {
+    if (
+      !sources.length ||
+      !sources.every((source) => typeof source === "string" && source.length > 0)
+    ) {
       throw new Error(`Convention module ${name} has invalid sources`);
     }
     const assets = rawModule.assets ?? [];
@@ -192,7 +210,8 @@ function loadRegistry(sourceRoot: string): RegistryManifest {
     }
     const configurations = rawConfigurations.map((item) => parseConfiguration(item, name, assets));
     const dependencies = rawModule.dependencies ?? [];
-    if (!isModuleList(dependencies)) throw new Error(`Convention module ${name} has invalid dependencies`);
+    if (!isModuleList(dependencies))
+      throw new Error(`Convention module ${name} has invalid dependencies`);
     modules[name] = {
       description: typeof rawModule.description === "string" ? rawModule.description : undefined,
       sources: sources as string[],
@@ -207,7 +226,8 @@ function loadRegistry(sourceRoot: string): RegistryManifest {
     if (!isRecord(value.profiles)) throw new Error(`Invalid convention registry profiles: ${path}`);
     profiles = {};
     for (const [name, modulesForProfile] of Object.entries(value.profiles)) {
-      if (!name || !isModuleList(modulesForProfile)) throw new Error(`Invalid convention registry profile: ${name}`);
+      if (!name || !isModuleList(modulesForProfile))
+        throw new Error(`Invalid convention registry profile: ${name}`);
       profiles[name] = modulesForProfile;
     }
   }
@@ -222,7 +242,8 @@ function loadConsumer(root: string): ConsumerManifest | undefined {
     value.schemaVersion !== 1 ||
     value.registry !== "coding-agent-conventions" ||
     !isModuleList(value.modules)
-  ) return undefined;
+  )
+    return undefined;
   return { schemaVersion: 1, registry: "coding-agent-conventions", modules: value.modules };
 }
 
@@ -237,7 +258,8 @@ function loadLock(root: string): ConventionLock | undefined {
     !isModuleList(value.resolvedModules) ||
     !isFileHashRecord(value.files) ||
     !Object.prototype.hasOwnProperty.call(value.files, "index.md")
-  ) return undefined;
+  )
+    return undefined;
   return {
     schemaVersion: 1,
     sourceRevision: value.sourceRevision,
@@ -251,7 +273,11 @@ function unique(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-function resolveRequestedModules(registry: RegistryManifest, modules: string[], profile?: string): string[] {
+function resolveRequestedModules(
+  registry: RegistryManifest,
+  modules: string[],
+  profile?: string,
+): string[] {
   const profileModules = profile ? registry.profiles?.[profile] : undefined;
   if (profile && !profileModules) throw new Error(`Unknown convention profile: ${profile}`);
   const requested = unique([...(profileModules ?? []), ...modules]);
@@ -289,14 +315,16 @@ function withinRoot(root: string, path: string): boolean {
 function safeRealPath(sourceRoot: string, candidate: string, label: string): string {
   const realRoot = realpathSync(sourceRoot);
   const realCandidate = realpathSync(candidate);
-  if (!withinRoot(realRoot, realCandidate)) throw new Error(`Convention source escapes registry root: ${label}`);
+  if (!withinRoot(realRoot, realCandidate))
+    throw new Error(`Convention source escapes registry root: ${label}`);
   return realCandidate;
 }
 
 function sourceFiles(sourceRoot: string, source: string): string[] {
   const root = resolve(sourceRoot);
   const absolute = resolve(root, source);
-  if (!withinRoot(root, absolute)) throw new Error(`Convention source escapes registry root: ${source}`);
+  if (!withinRoot(root, absolute))
+    throw new Error(`Convention source escapes registry root: ${source}`);
   if (!existsSync(absolute)) throw new Error(`Convention source does not exist: ${source}`);
   const realSource = safeRealPath(root, absolute, source);
   if (statSync(realSource).isFile()) return [realSource];
@@ -309,7 +337,8 @@ function sourceFiles(sourceRoot: string, source: string): string[] {
 function assetFile(sourceRoot: string, asset: string): string {
   const root = resolve(sourceRoot);
   const absolute = resolve(root, asset);
-  if (!withinRoot(root, absolute)) throw new Error(`Convention asset escapes registry root: ${asset}`);
+  if (!withinRoot(root, absolute))
+    throw new Error(`Convention asset escapes registry root: ${asset}`);
   if (!existsSync(absolute)) throw new Error(`Convention asset does not exist: ${asset}`);
   const realAsset = safeRealPath(root, absolute, asset);
   if (!statSync(realAsset).isFile()) throw new Error(`Convention asset must be a file: ${asset}`);
@@ -358,7 +387,9 @@ function indexContent(
   else {
     for (const briefing of briefings) {
       const directive = briefing.directive ? ` — ${briefing.directive}` : "";
-      lines.push(`- **${briefing.id} — ${briefing.title}**${directive} ([details](${briefing.path}))`);
+      lines.push(
+        `- **${briefing.id} — ${briefing.title}**${directive} ([details](${briefing.path}))`,
+      );
     }
     lines.push("");
   }
@@ -383,7 +414,11 @@ function indexContent(
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-function buildSnapshot(sourceRoot: string, registry: RegistryManifest, requestedModules: string[]): Snapshot {
+function buildSnapshot(
+  sourceRoot: string,
+  registry: RegistryManifest,
+  requestedModules: string[],
+): Snapshot {
   const resolvedModules = resolveDependencies(registry, requestedModules);
   const files = new Map<string, string>();
   const moduleSources = new Map<string, string[]>();
@@ -399,7 +434,8 @@ function buildSnapshot(sourceRoot: string, registry: RegistryManifest, requested
     for (const source of module.sources) {
       for (const absolute of sourceFiles(sourceRoot, source)) {
         const sourcePath = relative(realpathSync(sourceRoot), absolute).split(sep).join("/");
-        if (!isManagedPath(sourcePath)) throw new Error(`Invalid convention source path: ${sourcePath}`);
+        if (!isManagedPath(sourcePath))
+          throw new Error(`Invalid convention source path: ${sourcePath}`);
         const targetPath = `modules/${moduleName}/${sourcePath}`;
         const content = readFileSync(absolute, "utf8");
         files.set(targetPath, content);
@@ -414,7 +450,8 @@ function buildSnapshot(sourceRoot: string, registry: RegistryManifest, requested
     for (const asset of module.assets ?? []) {
       const absolute = assetFile(sourceRoot, asset);
       const sourcePath = relative(realpathSync(sourceRoot), absolute).split(sep).join("/");
-      if (!isManagedPath(sourcePath)) throw new Error(`Invalid convention asset path: ${sourcePath}`);
+      if (!isManagedPath(sourcePath))
+        throw new Error(`Invalid convention asset path: ${sourcePath}`);
       const targetPath = `modules/${moduleName}/${sourcePath}`;
       files.set(targetPath, readFileSync(absolute, "utf8"));
       installedAssets.push(targetPath);
@@ -432,7 +469,9 @@ function buildSnapshot(sourceRoot: string, registry: RegistryManifest, requested
 
   for (const configuration of installedConfigurations) {
     if (!seenRuleIds.has(configuration.rule)) {
-      throw new Error(`Convention configuration references unknown installed rule: ${configuration.rule}`);
+      throw new Error(
+        `Convention configuration references unknown installed rule: ${configuration.rule}`,
+      );
     }
     if (!files.has(configuration.path)) {
       throw new Error(`Convention configuration asset was not installed: ${configuration.path}`);
@@ -507,7 +546,14 @@ function envelope(
   data: Record<string, unknown>,
   diagnostics: Diagnostic[] = [],
 ): ResultEnvelope<Record<string, unknown>> {
-  return { schemaVersion: 1, operation, status, durationMs: Date.now() - started, data, diagnostics };
+  return {
+    schemaVersion: 1,
+    operation,
+    status,
+    durationMs: Date.now() - started,
+    data,
+    diagnostics,
+  };
 }
 
 function sourceFor(options: RegistryOptions): { root: string; registry: RegistryManifest } {
@@ -537,7 +583,10 @@ export function conventionRegistryCommand(
       const lock = loadLock(root);
       if (!consumer) {
         return envelope("conventions-check", "failed", started, { root }, [
-          { code: "conventions-manifest-missing", message: `${manifestName} is missing or invalid` },
+          {
+            code: "conventions-manifest-missing",
+            message: `${manifestName} is missing or invalid`,
+          },
         ]);
       }
       if (!lock) {
@@ -546,7 +595,8 @@ export function conventionRegistryCommand(
         ]);
       }
       const drift = hashDiff(lock.files, currentFileHashes(root));
-      const selectionDrift = JSON.stringify(consumer.modules) !== JSON.stringify(lock.requestedModules);
+      const selectionDrift =
+        JSON.stringify(consumer.modules) !== JSON.stringify(lock.requestedModules);
       const diagnostics: Diagnostic[] = drift.map((path) => ({
         code: "conventions-managed-file-drift",
         message: `Managed convention file differs from the lock: ${path}`,
@@ -593,17 +643,28 @@ export function conventionRegistryCommand(
       };
       materialize(root, snapshot);
       writeJson(join(root, manifestName), consumer);
-      return envelope("conventions-init", "passed", started, { root, modules: requested, profile: options.profile });
+      return envelope("conventions-init", "passed", started, {
+        root,
+        modules: requested,
+        profile: options.profile,
+      });
     }
 
     if (!existing) {
       return envelope(`conventions-${action}`, "failed", started, { root }, [
-        { code: "conventions-manifest-missing", message: `Run coding-tooling conventions init before ${action}` },
+        {
+          code: "conventions-manifest-missing",
+          message: `Run coding-tooling conventions init before ${action}`,
+        },
       ]);
     }
 
     if (action === "add") {
-      const requested = resolveRequestedModules(source.registry, [...existing.modules, ...modules], options.profile);
+      const requested = resolveRequestedModules(
+        source.registry,
+        [...existing.modules, ...modules],
+        options.profile,
+      );
       const snapshot = buildSnapshot(source.root, source.registry, requested);
       const consumer: ConsumerManifest = { ...existing, modules: requested };
       const lock = materialize(root, snapshot);
@@ -625,7 +686,8 @@ export function conventionRegistryCommand(
         installedRevision: lock?.sourceRevision,
         availableRevision: snapshot.sourceRevision,
         changed,
-        updateAvailable: Boolean(lock && lock.sourceRevision !== snapshot.sourceRevision) || changed.length > 0,
+        updateAvailable:
+          Boolean(lock && lock.sourceRevision !== snapshot.sourceRevision) || changed.length > 0,
       });
     }
 

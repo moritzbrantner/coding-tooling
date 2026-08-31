@@ -3,7 +3,10 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { applyConventionConfigurations, composeToolConfiguration } from "../src/convention-config.ts";
+import {
+  applyConventionConfigurations,
+  composeToolConfiguration,
+} from "../src/convention-config.ts";
 import { conventionRegistryCommand } from "../src/convention-registry.ts";
 import { discoverComponents, planChecks } from "../src/core.ts";
 
@@ -136,10 +139,7 @@ describe("convention tooling configuration", () => {
       const effective = JSON.parse(readFileSync(configPath, "utf8"));
       expect(effective.extends).toEqual([join(target, ".oxlintrc.json")]);
       expect(effective.plugins).toEqual([]);
-      expect(effective.rules["typescript/consistent-type-definitions"]).toEqual([
-        "error",
-        "type",
-      ]);
+      expect(effective.rules["typescript/consistent-type-definitions"]).toEqual(["error", "type"]);
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
@@ -330,22 +330,19 @@ describe("convention tooling configuration", () => {
 
   test("merges plugin requirements and stronger severities but rejects incompatible rule options", () => {
     expect(
-      composeToolConfiguration(
-        { plugins: ["unicorn"] },
-        [{ rule: "RULE-001", value: { plugins: ["typescript"] } }],
-      ),
+      composeToolConfiguration({ plugins: ["unicorn"] }, [
+        { rule: "RULE-001", value: { plugins: ["typescript"] } },
+      ]),
     ).toEqual({ plugins: ["typescript", "unicorn"] });
     expect(
-      composeToolConfiguration(
-        { rules: { example: "warn" } },
-        [{ rule: "RULE-001", value: { rules: { example: "error" } } }],
-      ),
+      composeToolConfiguration({ rules: { example: "warn" } }, [
+        { rule: "RULE-001", value: { rules: { example: "error" } } },
+      ]),
     ).toEqual({ rules: { example: "error" } });
     expect(() =>
-      composeToolConfiguration(
-        { rules: { example: ["error", "left"] } },
-        [{ rule: "RULE-001", value: { rules: { example: ["error", "right"] } } }],
-      ),
+      composeToolConfiguration({ rules: { example: ["error", "left"] } }, [
+        { rule: "RULE-001", value: { rules: { example: ["error", "right"] } } },
+      ]),
     ).toThrow("convention-config-conflict");
   });
 

@@ -9,11 +9,7 @@ import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { auditDependencies } from "./dependency-audit.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
-import {
-  integratePullRequest,
-  type MergeMethod,
-  type RemoteChecksPolicy,
-} from "./pr.ts";
+import { integratePullRequest, type MergeMethod, type RemoteChecksPolicy } from "./pr.ts";
 import { repositoryRoot } from "./shared.ts";
 import { sourceDependencies } from "./source-deps.ts";
 
@@ -62,13 +58,15 @@ function reportPullRequestIntegrationStart(
   dryRun: boolean,
 ): void {
   console.error(`PR #${prNumber} integration${dryRun ? " dry run" : ""} started.`);
-  console.error("  Checking the worktree, fetching the exact PR head and target branch, then testing a synthetic merge.");
+  console.error(
+    "  Checking the worktree, fetching the exact PR head and target branch, then testing a synthetic merge.",
+  );
   const plan = planEnvelope(root, tier);
-  const checks = Array.isArray(plan.data.checks)
-    ? (plan.data.checks as PlannedCheckView[])
-    : [];
+  const checks = Array.isArray(plan.data.checks) ? (plan.data.checks as PlannedCheckView[]) : [];
   if (checks.length > 0) {
-    console.error(`  Local ${tier} pipeline: ${checks.length} planned check${checks.length === 1 ? "" : "s"}:`);
+    console.error(
+      `  Local ${tier} pipeline: ${checks.length} planned check${checks.length === 1 ? "" : "s"}:`,
+    );
     for (const check of checks) {
       const component = typeof check.component === "string" ? check.component : "repository";
       const capability = typeof check.capability === "string" ? check.capability : "unknown";
@@ -80,7 +78,9 @@ function reportPullRequestIntegrationStart(
   console.error(
     `  Hosted GitHub checks: ${remoteChecks === "advisory" ? "advisory" : "required"}.`,
   );
-  console.error("  Local validation can take several minutes. Final JSON is printed when the operation finishes.");
+  console.error(
+    "  Local validation can take several minutes. Final JSON is printed when the operation finishes.",
+  );
 }
 
 function reportPullRequestIntegrationResult(
@@ -95,7 +95,8 @@ function reportPullRequestIntegrationResult(
     const status = (pipeline as { status?: unknown }).status;
     if (typeof status === "string") console.error(`  Local pipeline: ${status}.`);
   }
-  if (result.status === "passed" && dryRun) console.error("  Dry run passed; no merge was attempted.");
+  if (result.status === "passed" && dryRun)
+    console.error("  Dry run passed; no merge was attempted.");
   for (const diagnostic of result.diagnostics) {
     const label = diagnostic.code ? `${diagnostic.code}: ` : "";
     console.error(`  ${label}${diagnostic.message}`);

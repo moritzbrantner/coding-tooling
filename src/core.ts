@@ -171,7 +171,10 @@ function packageCapabilities(
 }
 
 function configuredComponents(root: string, config: ToolingConfig): Component[] {
-  return applyConventionConfigurations(root, applyCapabilityCommands(discoverComponents(root), config));
+  return applyConventionConfigurations(
+    root,
+    applyCapabilityCommands(discoverComponents(root), config),
+  );
 }
 
 export function planChecks(options: {

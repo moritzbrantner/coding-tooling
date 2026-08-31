@@ -68,9 +68,9 @@ describe("convention companion assets", () => {
       );
       expect(readFileSync(installed, "utf8")).toContain('"enabled": true');
       const lock = JSON.parse(readFileSync(join(target, "conventions.lock.json"), "utf8"));
-      expect(
-        lock.files["modules/typescript/technologies/typescript/.toolrc.json"],
-      ).toMatch(/^[a-f0-9]{64}$/);
+      expect(lock.files["modules/typescript/technologies/typescript/.toolrc.json"]).toMatch(
+        /^[a-f0-9]{64}$/,
+      );
       expect(conventionRegistryCommand("check", [], { root: target }).status).toBe("passed");
     } finally {
       rmSync(source, { recursive: true, force: true });
@@ -95,9 +95,7 @@ describe("convention companion assets", () => {
       writeFileSync(installed, "locally changed\n");
       const check = conventionRegistryCommand("check", [], { root: target });
       expect(check.status).toBe("failed");
-      expect(check.data.drift).toContain(
-        "modules/typescript/technologies/typescript/.toolrc.json",
-      );
+      expect(check.data.drift).toContain("modules/typescript/technologies/typescript/.toolrc.json");
 
       write(source, "technologies/typescript/.toolrc.json", '{"enabled":false}\n');
       const diff = conventionRegistryCommand("diff", [], {

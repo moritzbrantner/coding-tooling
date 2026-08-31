@@ -1,11 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 
@@ -153,7 +147,9 @@ function parseJsonc(source: string, label: string): unknown {
   }
 }
 
-export function loadInstalledConventionConfigurations(root: string): InstalledConventionConfiguration[] {
+export function loadInstalledConventionConfigurations(
+  root: string,
+): InstalledConventionConfiguration[] {
   const installRoot = resolve(root, ".conventions");
   const manifestPath = resolve(root, configurationManifestPath);
   if (!existsSync(manifestPath)) return [];
@@ -182,7 +178,9 @@ export function loadInstalledConventionConfigurations(root: string): InstalledCo
     }
     const absolute = resolve(installRoot, path);
     if (!withinRoot(installRoot, absolute) || !existsSync(absolute)) {
-      throw new Error(`Convention configuration asset is missing or escapes the managed snapshot: ${path}`);
+      throw new Error(
+        `Convention configuration asset is missing or escapes the managed snapshot: ${path}`,
+      );
     }
     const realInstallRoot = realpathSync(installRoot);
     const realAsset = realpathSync(absolute);
@@ -279,7 +277,9 @@ export function composeToolConfiguration(
   fragments: Array<{ rule: string; value: Record<string, unknown> }>,
 ): Record<string, unknown> {
   let result: Record<string, unknown> = structuredClone(repositoryConfig);
-  for (const fragment of [...fragments].sort((left, right) => left.rule.localeCompare(right.rule))) {
+  for (const fragment of [...fragments].sort((left, right) =>
+    left.rule.localeCompare(right.rule),
+  )) {
     try {
       result = mergeRequirement(result, fragment.value, "") as Record<string, unknown>;
     } catch (error) {
@@ -298,7 +298,11 @@ function allToolConfigNames(tool: SupportedTool): string[] {
   return [...supportedToolConfigNames[tool], ...unsupportedToolConfigNames[tool]];
 }
 
-function findRepositoryConfigPath(root: string, component: Component, tool: SupportedTool): string | undefined {
+function findRepositoryConfigPath(
+  root: string,
+  component: Component,
+  tool: SupportedTool,
+): string | undefined {
   let current = resolve(componentDirectory(root, component));
   const boundary = resolve(root);
   while (true) {
@@ -360,7 +364,8 @@ function repositoryToolConfig(
 function fragment(root: string, config: InstalledConventionConfiguration): ConventionFragment {
   const path = resolve(root, ".conventions", config.path);
   const parsed = parseJsonc(readFileSync(path, "utf8"), path);
-  if (!isRecord(parsed)) throw new Error(`Convention configuration ${config.rule} must contain a JSON object`);
+  if (!isRecord(parsed))
+    throw new Error(`Convention configuration ${config.rule} must contain a JSON object`);
   return { rule: config.rule, path, value: parsed };
 }
 
@@ -369,7 +374,9 @@ function assertPortableFragment(tool: SupportedTool, item: ConventionFragment): 
     tool === "oxlint"
       ? ["extends", "ignorePatterns", "overrides", "jsPlugins"]
       : ["ignorePatterns", "overrides", "sortTailwindcss"];
-  const key = forbidden.find((candidate) => Object.prototype.hasOwnProperty.call(item.value, candidate));
+  const key = forbidden.find((candidate) =>
+    Object.prototype.hasOwnProperty.call(item.value, candidate),
+  );
   if (key) {
     throw new Error(
       `Convention configuration ${item.rule} uses path-sensitive ${tool} field ${key}, which is not supported by the current composition adapter`,
@@ -380,7 +387,9 @@ function assertPortableFragment(tool: SupportedTool, item: ConventionFragment): 
 function assertPortableOxfmtRepositoryConfig(config: RepositoryToolConfig): void {
   if (!config.path) return;
   const forbidden = ["ignorePatterns", "overrides", "sortTailwindcss"];
-  const key = forbidden.find((candidate) => Object.prototype.hasOwnProperty.call(config.value, candidate));
+  const key = forbidden.find((candidate) =>
+    Object.prototype.hasOwnProperty.call(config.value, candidate),
+  );
   if (key) {
     throw new Error(
       `Oxfmt repository config ${config.path} uses path-sensitive field ${key}; convention composition refuses to change its path semantics`,
@@ -407,7 +416,9 @@ function packageScriptForCommand(
   if (component.kind !== "package") return undefined;
   const name = packageScriptName(command);
   if (!name) return undefined;
-  const manifest = readJson<PackageManifest>(join(componentDirectory(root, component), "package.json"));
+  const manifest = readJson<PackageManifest>(
+    join(componentDirectory(root, component), "package.json"),
+  );
   return manifest?.scripts?.[name];
 }
 
@@ -428,7 +439,9 @@ function safePackageScriptUsesTool(script: string, tool: SupportedTool): boolean
   const mentionsTool = new RegExp(`(^|[^a-zA-Z0-9_-])${tool}([^a-zA-Z0-9_-]|$)`).test(script);
   if (!mentionsTool) return false;
   if (/&&|\|\||[;|<>\n\r]/.test(script)) {
-    throw new Error(`Cannot safely inject convention config into compound package script: ${script}`);
+    throw new Error(
+      `Cannot safely inject convention config into compound package script: ${script}`,
+    );
   }
   const tokens = script.trim().split(/\s+/);
   const first = tokens[0] ?? "";
@@ -436,7 +449,9 @@ function safePackageScriptUsesTool(script: string, tool: SupportedTool): boolean
     throw new Error(`Cannot safely identify ${tool} as the package-script entrypoint: ${script}`);
   }
   if (tokens.slice(1).some(tokenSelectsConfig)) {
-    throw new Error(`Cannot compose convention config with a package script that already selects a config: ${script}`);
+    throw new Error(
+      `Cannot compose convention config with a package script that already selects a config: ${script}`,
+    );
   }
   return true;
 }
@@ -497,7 +512,9 @@ function commandWithConfig(command: string[], tool: SupportedTool, configPath: s
   const toolIndex = command.findIndex((token) => tokenIsTool(token, tool));
   if (toolIndex >= 0) {
     if (command.slice(toolIndex + 1).some(tokenSelectsConfig)) {
-      throw new Error(`Cannot compose convention config with a command that already selects a config`);
+      throw new Error(
+        `Cannot compose convention config with a command that already selects a config`,
+      );
     }
     return [...command.slice(0, toolIndex + 1), ...flags, ...command.slice(toolIndex + 1)];
   }
@@ -535,7 +552,9 @@ export function applyConventionConfigurations(root: string, components: Componen
       if (!applicable.length) continue;
 
       const tools = [...new Set(applicable.map((configuration) => configuration.tool))];
-      const matchingTools = tools.filter((tool) => commandUsesTool(root, component, original, tool));
+      const matchingTools = tools.filter((tool) =>
+        commandUsesTool(root, component, original, tool),
+      );
       if (matchingTools.length !== 1) {
         throw new Error(
           `No unique convention configuration adapter matches ${component.name} ${capability}; configured tools: ${tools.join(", ")}`,
