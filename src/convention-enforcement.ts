@@ -25,7 +25,7 @@ type ClippyEnforcement = {
 
 type BuiltinEnforcement = {
   kind: "builtin";
-  check: "bun-default" | "env-example" | "vitest-kinds";
+  check: "bun-default" | "env-example" | "todo-format" | "vitest-kinds";
 };
 
 type CapabilityEnforcement = {
@@ -65,7 +65,24 @@ const sourceExtensions = new Set([
   ".yaml",
   ".yml",
 ]);
-const builtinChecks = new Set(["bun-default", "env-example", "vitest-kinds"]);
+const todoExtensions = new Set([
+  ".cjs",
+  ".cs",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".mts",
+  ".py",
+  ".rs",
+  ".sh",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".yaml",
+  ".yml",
+]);
+const builtinChecks = new Set(["bun-default", "env-example", "todo-format", "vitest-kinds"]);
+const exactBunPackageManager = /^bun@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -224,11 +241,26 @@ function runClippy(
 
 function bunDefault(root: string, components: Component[], ruleId: string): ConventionCheckResult {
   const failures: string[] = [];
-  for (const component of components.filter((item) => item.kind === "package")) {
+  const packages = components.filter((item) => item.kind === "package");
+  if (packages.length > 0) {
+    const rootManifest = readJson<{ packageManager?: string }>(join(root, "package.json"));
+    const rootManager = rootManifest?.packageManager;
+    if (!rootManager) {
+      failures.push(
+        "repository: package.json must declare an exact packageManager such as bun@1.4.0",
+      );
+    } else if (!exactBunPackageManager.test(rootManager)) {
+      failures.push(`repository: packageManager must be an exact Bun version, got ${rootManager}`);
+    }
+  }
+
+  for (const component of packages) {
     const componentRoot = component.path === "." ? root : join(root, component.path);
     const manifest = readJson<{ packageManager?: string }>(join(componentRoot, "package.json"));
-    if (manifest?.packageManager && !manifest.packageManager.startsWith("bun@")) {
-      failures.push(`${component.name}: packageManager is ${manifest.packageManager}`);
+    if (manifest?.packageManager && !exactBunPackageManager.test(manifest.packageManager)) {
+      failures.push(
+        `${component.name}: packageManager must be an exact Bun version, got ${manifest.packageManager}`,
+      );
     }
 
     const hasBunLock = [componentRoot, root].some(
@@ -323,6 +355,53 @@ function envExample(root: string, ruleId: string): ConventionCheckResult {
   };
 }
 
+function commentText(line: string): string | undefined {
+  const lineComment = line.match(/(?:^|[\s;)}\]])\/\/(.*)$/)?.[1];
+  if (lineComment !== undefined) return lineComment;
+  const hashComment = line.match(/(?:^|\s)#(.*)$/)?.[1];
+  if (hashComment !== undefined) return hashComment;
+  const blockStart = line.match(/(?:^|[\s;)}\]])\/\*(.*)$/)?.[1];
+  if (blockStart !== undefined) return blockStart;
+  return line.match(/^\s*\*(.*)$/)?.[1];
+}
+
+function todoFormat(root: string, ruleId: string): ConventionCheckResult {
+  const failures: string[] = [];
+  for (const file of walkFiles(root, 10)) {
+    const relativePath = relative(root, file).replaceAll("\\", "/");
+    if (relativePath.startsWith(".conventions/") || !todoExtensions.has(extname(file))) continue;
+    try {
+      if (statSync(file).size > 1_000_000) continue;
+      const lines = readFileSync(file, "utf8").split(/\r?\n/);
+      for (const [index, line] of lines.entries()) {
+        const comment = commentText(line);
+        if (!comment || (!/\bTODO\b/.test(comment) && !/\bFIXME\b/.test(comment))) continue;
+        if (/\bFIXME\b/.test(comment)) {
+          failures.push(
+            `${relativePath}:${index + 1}: use TODO: ... or TODO(#123): ... instead of FIXME`,
+          );
+          continue;
+        }
+        if (!/\bTODO(?:\(#\d+\))?:\s+\S/.test(comment)) {
+          failures.push(
+            `${relativePath}:${index + 1}: TODO must use TODO: <description> or TODO(#123): <description>`,
+          );
+        }
+      }
+    } catch {
+      // Ignore unreadable/non-text source candidates; normal repository checks can diagnose them.
+    }
+  }
+
+  return {
+    ruleId,
+    kind: "builtin:todo-format",
+    component: "repository",
+    status: failures.length ? "failed" : "passed",
+    stderr: failures.join("\n"),
+  };
+}
+
 function vitestKinds(root: string, components: Component[], ruleId: string): ConventionCheckResult {
   const failures: string[] = [];
   for (const component of components.filter((item) => item.kind === "package")) {
@@ -405,7 +484,9 @@ export function runConventionChecks(
           ? bunDefault(root, components, item.ruleId)
           : enforcement.check === "env-example"
             ? envExample(root, item.ruleId)
-            : vitestKinds(root, components, item.ruleId);
+            : enforcement.check === "todo-format"
+              ? todoFormat(root, item.ruleId)
+              : vitestKinds(root, components, item.ruleId);
       results.push(result);
       if (result.status !== "passed") break;
       continue;
