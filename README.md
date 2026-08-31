@@ -13,6 +13,7 @@ This repository contains mechanical operations that should not require an LLM to
 - Which files/components changed relative to a baseline?
 - How do I run a declared validation capability?
 - Which convention modules are installed and are their managed snapshots intact?
+- Which installed convention rules have deterministic tool configuration, and how is that configuration projected into the normal capability that enforces them?
 - Is the local environment able to run declared capabilities?
 - Which exact source revisions should temporarily replace registry packages during cross-repository development?
 
@@ -69,12 +70,31 @@ conventions.json
 conventions.lock.json
 .conventions/
   index.md
+  configurations.json
   modules/
 ```
 
-`conventions.json` is the human-owned selection. `conventions.lock.json` records the resolved dependency set, source revision, and content hashes. `.conventions/` contains managed snapshots that agents can read without network access or a shared conventions checkout.
+`conventions.json` is the human-owned selection. `conventions.lock.json` records the resolved dependency set, source revision, and content hashes. `.conventions/` contains managed snapshots that agents and deterministic tooling can consume without network access or a shared conventions checkout.
 
 Do not hand-edit `.conventions/`. Repository-specific policy and exceptions belong in `AGENTS.md`.
+
+### Companion tooling configuration
+
+A convention module may include explicit tool-native companion assets, such as an Oxlint or Oxfmt JSON fragment. The registry associates each executable fragment with a stable rule ID, a supported tool, and an existing semantic capability.
+
+For example, the TypeScript convention `TS-003 — Prefer type over interface` can ship an Oxlint fragment that requires `typescript/consistent-type-definitions` with the `type` option. Installing the TypeScript module vendors and hashes that fragment. There is no separate convention-only verification command: normal `lint` resolution composes the repository's Oxlint config with the installed convention requirement and invokes the existing lint command with the resulting explicit config.
+
+The same seam applies to `format:check` for Oxfmt fragments. Hooks, CI, agents, or local workflows that delegate to `coding-tooling` semantic capabilities therefore inherit deterministic convention enforcement automatically.
+
+Composition is structural and conservative:
+
+- repository configuration may add unrelated settings;
+- installed convention requirements cannot be silently disabled or weakened;
+- incompatible values produce a deterministic `convention-config-conflict` instead of relying on config precedence;
+- fragments from modules that are not installed do not apply;
+- repositories without executable convention fragments retain their previous capability commands unchanged.
+
+Effective merged configs are generated as deterministic temporary artifacts and passed through the supported tool's explicit config-path option. They are not another human-authored policy source and do not change the locked `.conventions/` snapshot.
 
 ### Updating policy
 
@@ -93,7 +113,7 @@ coding-tooling conventions update
 coding-tooling conventions check
 ```
 
-The check is intentionally narrow. It verifies the manifest/lock relationship and detects drift in managed convention files. It does **not** replace formatters, linters, analyzers, tests, architecture checks, or the repository's normal CI commands.
+The check is intentionally narrow. It verifies the manifest/lock relationship and detects drift in managed convention files, including companion assets and their installed configuration metadata. It does **not** run formatters, linters, analyzers, tests, architecture checks, or the repository's normal CI commands. Those checks remain the normal semantic capabilities; when they are executed, applicable convention configuration is composed automatically.
 
 Commands that need registry content (`init`, `add`, `diff`, `update`) discover `coding-agent-conventions` from an explicit `--conventions-root`, `CODING_AGENT_CONVENTIONS_ROOT`, the shared Moenarch environment registry, or a sibling checkout. `check` needs only the committed consumer files and therefore works offline.
 
@@ -125,9 +145,9 @@ benchmark
 benchmark:smoke
 ```
 
-For JavaScript/TypeScript components, declared package scripts are preferred over invented commands. Rust and .NET use conservative built-in commands where semantics are mechanically clear.
+For JavaScript/TypeScript components, declared package scripts are preferred over invented commands. When an installed convention has an applicable supported tool fragment, `coding-tooling` preserves that normal semantic capability but injects the deterministic effective config into the selected formatter/linter invocation. Rust and .NET use conservative built-in commands where semantics are mechanically clear.
 
-External deterministic tools may be wired through `capabilityCommands`. `coding-tooling` invokes the declared command but does not own the external tool's semantics.
+External deterministic tools may be wired through `capabilityCommands`. `coding-tooling` invokes the declared command but does not own the external tool's policy semantics; applicable convention fragments still have to match a supported deterministic adapter before they can be enforced.
 
 ## Capability catalog
 
@@ -141,17 +161,19 @@ General coding-agent capabilities are sourced from `coding-agent-skills`. The `a
 2. Machine-readable output is a first-class interface.
 3. Checks must not silently mutate source code.
 4. A missing capability is different from a failed capability.
-5. Engineering policy stays in `coding-agent-conventions`; this repository only installs and verifies it.
+5. Engineering policy stays in `coding-agent-conventions`; this repository may install it and deterministically project explicitly declared tool-native fragments into existing capabilities, but must not invent policy.
 6. Repository-specific policy stays in consumer repositories.
 7. Outer agent lifecycle/orchestration stays outside this repository.
 8. Prefer repository-declared commands over guessed ecosystem defaults when semantics could differ.
 9. Source dependency activation may generate only explicitly managed local configuration and must never publish packages or change package versions.
+10. Convention tooling adapters are a small closed set with structural merges and explicit conflicts; do not introduce arbitrary executable hooks or a universal policy DSL.
 
 ## Landscape boundaries
 
 ```text
 coding-agent-skills          coding-agent-conventions
   reusable procedures          shared engineering policy
+          │                      + tool-native fragments
           │                              │
           │                              ▼
           │                       installed snapshots
@@ -162,14 +184,14 @@ coding-agent-skills          coding-agent-conventions
                          │
                          ▼
                     coding-tooling
-                 deterministic mechanics
+        deterministic mechanics + config composition
 ```
 
 - `agent-contracts` owns neutral cross-repository envelopes.
 - `coding-agent-skills` owns reusable reasoning procedures and flows.
-- `coding-agent-conventions` owns shared engineering policy and its installable registry.
+- `coding-agent-conventions` owns shared engineering policy, tool-native policy fragments, and its installable registry.
 - consumer `AGENTS.md` files own repository-specific guidance and exceptions.
-- `coding-tooling` owns deterministic discovery, validation, convention installation/checking, and source-dependency mechanics.
+- `coding-tooling` owns deterministic discovery, validation, convention installation/integrity checking, supported config composition, and source-dependency mechanics.
 - `runtime-profiler` owns runtime capture.
 - Moonlight owns candidate evaluation.
 - `agent-loop-orchestrator` owns optional durable coordination.

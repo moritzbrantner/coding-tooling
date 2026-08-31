@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
+import { applyConventionConfigurations } from "./convention-config.ts";
 import {
   capabilities,
   defaultTiers,
@@ -169,6 +170,13 @@ function packageCapabilities(
   return result;
 }
 
+function configuredComponents(root: string, config: ToolingConfig): Component[] {
+  return applyConventionConfigurations(
+    root,
+    applyCapabilityCommands(discoverComponents(root), config),
+  );
+}
+
 export function planChecks(options: {
   root?: string;
   tier: string;
@@ -180,7 +188,7 @@ export function planChecks(options: {
   const selected = config.tiers?.[options.tier] ?? defaultTiers[options.tier];
   if (!selected) throw new Error(`Unknown tier: ${options.tier}`);
   validateCapabilities(selected);
-  const components = applyCapabilityCommands(discoverComponents(root), config).filter(
+  const components = configuredComponents(root, config).filter(
     (component) =>
       !options.component ||
       component.name === options.component ||
@@ -300,46 +308,56 @@ export function check(
   component?: string,
 ): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
-  const selected = discoverComponents(root).filter(
-    (item) => !component || item.name === component || item.path === component,
-  );
-  const checks = selected.flatMap((item) =>
-    item.capabilities[capability]
-      ? [
-          {
-            capability,
-            component: item.name,
-            path: item.path,
-            command: item.capabilities[capability]!,
-          },
-        ]
-      : [],
-  );
-  if (checks.length === 0)
-    return envelope("check", "unavailable", started, { capability, results: [] }, [
-      { code: "capability-unavailable", message: `${capability} is unavailable` },
-    ]);
-  const results = checks.map((item) => {
-    const result = runCommand(
-      item.command[0],
-      item.command.slice(1),
-      item.path === "." ? root : join(root, item.path),
+  try {
+    const config = loadConfig(root);
+    const selected = configuredComponents(root, config).filter(
+      (item) => !component || item.name === component || item.path === component,
     );
-    return {
-      ...item,
-      status: result.error ? "error" : result.status === 0 ? "passed" : "failed",
-      exitCode: result.status,
-      stdout: result.stdout,
-      stderr: result.stderr,
-      error: result.error,
-    };
-  });
-  const status = results.some((item) => item.status === "error")
-    ? "error"
-    : results.some((item) => item.status === "failed")
-      ? "failed"
-      : "passed";
-  return envelope("check", status, started, { capability, results });
+    const checks = selected.flatMap((item) =>
+      item.capabilities[capability]
+        ? [
+            {
+              capability,
+              component: item.name,
+              path: item.path,
+              command: item.capabilities[capability]!,
+            },
+          ]
+        : [],
+    );
+    if (checks.length === 0)
+      return envelope("check", "unavailable", started, { capability, results: [] }, [
+        { code: "capability-unavailable", message: `${capability} is unavailable` },
+      ]);
+    const results = checks.map((item) => {
+      const result = runCommand(
+        item.command[0],
+        item.command.slice(1),
+        item.path === "." ? root : join(root, item.path),
+      );
+      return {
+        ...item,
+        status: result.error ? "error" : result.status === 0 ? "passed" : "failed",
+        exitCode: result.status,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        error: result.error,
+      };
+    });
+    const status = results.some((item) => item.status === "error")
+      ? "error"
+      : results.some((item) => item.status === "failed")
+        ? "failed"
+        : "passed";
+    return envelope("check", status, started, { capability, results });
+  } catch (error) {
+    return envelope("check", "error", started, { capability, results: [] }, [
+      {
+        code: "invalid-check",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ]);
+  }
 }
 
 export function affected(root: string, base = "HEAD"): ResultEnvelope<Record<string, unknown>> {

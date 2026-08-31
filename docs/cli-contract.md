@@ -62,13 +62,13 @@ Exit codes are `0` for passed, `1` for failed, `2` for unavailable or invalid CL
 
 `inspect` performs mechanical discovery only.
 
-`check` executes one declared deterministic validation capability and must not silently mutate source code.
+`check` executes one declared deterministic validation capability and must not silently mutate source code. Before executing a supported formatter/linter capability, it also resolves any applicable installed convention configuration fragments and injects their deterministic effective config into the same normal capability command.
 
 `affected` reports facts derived from a Git baseline and repository structure. It does not decide agent policy.
 
 `doctor` diagnoses whether the deterministic toolchain can operate. Repair operations must remain explicit.
 
-`plan` resolves a named validation tier without executing it. `run` executes that plan and may write the full result envelope to `--report`.
+`plan` resolves a named validation tier without executing it. `run` executes that plan and may write the full result envelope to `--report`. Both use the same convention-aware capability resolution as `check`.
 
 The optional `.coding-tooling.json` defines repository validation tiers and explicit capability commands. It should not be used as the primary convention-distribution mechanism for new repositories.
 
@@ -76,7 +76,7 @@ The optional `.coding-tooling.json` defines repository validation tiers and expl
 
 ### `conventions init`
 
-Creates `conventions.json` with the selected modules or profile. When the selection is non-empty it also materializes `.conventions/` and `conventions.lock.json`.
+Creates `conventions.json` with the selected modules or profile and materializes `.conventions/` plus `conventions.lock.json`, including an empty managed snapshot when the selection is empty.
 
 The command is idempotent: if the repository is already initialized, it returns the existing selection without overwriting it.
 
@@ -86,6 +86,10 @@ Adds modules, resolves their dependencies from `coding-agent-conventions/registr
 
 A module selection is explicit. Technology inference is not used to silently change the installed policy set.
 
+Modules may declare explicit companion `assets` and executable `configurations`. Assets are ordinary source-controlled tool-native text files such as JSON, JSONC, TOML, or dotfiles. Executable configuration metadata associates a declared asset with an installed stable rule ID, a supported deterministic tool, and an existing semantic capability.
+
+The installed snapshot contains `.conventions/configurations.json`, which records only the resolved executable metadata for installed modules. It is managed and hashed like every other `.conventions/` file.
+
 ### `conventions check`
 
 Works without access to the source registry. It verifies:
@@ -93,18 +97,18 @@ Works without access to the source registry. It verifies:
 - `conventions.json` exists and is valid;
 - `conventions.lock.json` exists and is valid;
 - the manifest selection matches the lock selection;
-- every managed `.conventions/` file matches its recorded SHA-256 hash;
+- every managed `.conventions/` source, companion asset, and metadata file matches its recorded SHA-256 hash;
 - no unexpected managed files have appeared.
 
-The command does not run formatters, linters, analyzers, tests, or architecture checks. Those remain normal repository capabilities.
+The command does not run formatters, linters, analyzers, tests, or architecture checks. Those remain normal repository capabilities. Installed executable convention fragments are consumed when those normal capabilities are planned or executed; there is no separate convention-verification capability that callers must remember to add.
 
 ### `conventions diff`
 
-Requires access to the current conventions source. It resolves the installed module selection against the current registry and reports changed managed files plus the installed and available registry revisions. It does not mutate the consumer repository.
+Requires access to the current conventions source. It resolves the installed module selection against the current registry and reports changed managed files, including companion assets and executable metadata, plus the installed and available registry revisions. It does not mutate the consumer repository.
 
 ### `conventions update`
 
-Requires access to the current conventions source. It rematerializes the currently selected modules from the current registry and refreshes `conventions.lock.json`.
+Requires access to the current conventions source. It rematerializes the currently selected modules, companion assets, and executable metadata from the current registry and refreshes `conventions.lock.json`.
 
 Policy updates are therefore deliberate repository changes that can be reviewed like dependency updates.
 
@@ -119,15 +123,35 @@ Commands that need registry content resolve the source checkout in this order:
 
 `conventions check` does not need any of these sources.
 
+## Convention configuration projection
+
+Installed executable fragments are inputs to existing capabilities, not a second execution system.
+
+For each applicable package component and semantic capability, `coding-tooling`:
+
+1. detects the supported tool already selected by the repository-declared capability command or package script;
+2. reads the nearest supported repository tool configuration;
+3. loads all applicable installed convention fragments for that tool/capability;
+4. structurally composes the effective configuration;
+5. rejects incompatible settings with `convention-config-conflict` rather than silently weakening policy;
+6. writes a deterministic temporary effective config keyed by content hash;
+7. invokes the normal capability command with the tool's explicit config-path and nested-config-disable arguments.
+
+The initial adapters are Oxlint for `lint` and Oxfmt for `format:check`. The adapter set is deliberately closed and deterministic; arbitrary shell hooks or a universal convention DSL are out of scope.
+
+A repository with no applicable executable convention fragments receives exactly its previous capability command. A fragment from an uninstalled module cannot apply. If applicable fragments exist but the normal capability does not resolve to exactly one supported tool adapter, capability resolution fails clearly instead of silently ignoring the policy.
+
+Effective configs are transient execution artifacts. They do not modify repository source or the locked `.conventions/` snapshot.
+
 ## Managed and local policy
 
 `.conventions/` contains managed snapshots and must not be hand-edited.
 
-`.conventions/index.md` is the cheap entry point for humans and agents. It contains a deterministic rule briefing built from each installed `## ID — Title` heading and that rule's first authored bullet, followed by links to the full managed module files. Stable IDs are de-duplicated in the briefing, so detailed documents may expand a rule without repeating it in the hot-path summary.
+`.conventions/index.md` is the cheap entry point for humans and agents. It contains a deterministic rule briefing built from each installed `## ID — Title` heading and that rule's first authored bullet, followed by links to the full managed module files and a separate companion-asset section. Stable IDs are de-duplicated in the briefing, so detailed documents may expand a rule without repeating it in the hot-path summary.
 
 The briefing is navigation, not a second policy source: its wording is extracted directly from installed convention files, and the full managed source remains authoritative when a rule is relevant or ambiguous.
 
-Repository-specific semantics, commands, architecture boundaries, and deliberate exceptions belong in repository-local guidance such as `AGENTS.md`.
+Repository-specific semantics, commands, architecture boundaries, and deliberate exceptions belong in repository-local guidance such as `AGENTS.md`. Repository tool configuration may add non-conflicting settings, but it may not accidentally override an installed convention requirement through config precedence.
 
 `coding-agent-skills` owns reusable reasoning procedures. Skills may read installed conventions but should not copy policy text.
 
