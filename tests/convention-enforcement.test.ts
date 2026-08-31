@@ -26,7 +26,7 @@ function enforce(root: string, name: string, enforcement: Record<string, unknown
 }
 
 describe("installed convention enforcement", () => {
-  test("accepts Bun repositories and rejects conflicting package-manager locks", () => {
+  test("accepts exact Bun repositories and rejects conflicting package-manager locks", () => {
     const root = repository({ packageManager: "bun@1.4.0" });
     writeFileSync(join(root, "bun.lock"), "");
     enforce(root, "BUN-001", { kind: "builtin", check: "bun-default" });
@@ -39,6 +39,22 @@ describe("installed convention enforcement", () => {
     expect(failed.diagnostics[0]?.message).toContain("conflicting lockfile");
   });
 
+  test("requires an exact root Bun packageManager declaration", () => {
+    const missing = repository();
+    writeFileSync(join(missing, "bun.lock"), "");
+    enforce(missing, "BUN-001", { kind: "builtin", check: "bun-default" });
+    expect(runConventionChecks(missing, discoverComponents(missing)).diagnostics[0]?.message).toContain(
+      "must declare an exact packageManager",
+    );
+
+    const floating = repository({ packageManager: "bun@^1.4.0" });
+    writeFileSync(join(floating, "bun.lock"), "");
+    enforce(floating, "BUN-001", { kind: "builtin", check: "bun-default" });
+    expect(runConventionChecks(floating, discoverComponents(floating)).diagnostics[0]?.message).toContain(
+      "must be an exact Bun version",
+    );
+  });
+
   test("requires used environment variables in the nearest .env.example", () => {
     const root = repository();
     writeFileSync(join(root, "src", "config.ts"), "export const value = process.env.API_URL;\n");
@@ -48,6 +64,26 @@ describe("installed convention enforcement", () => {
 
     writeFileSync(join(root, ".env.example"), "API_URL=\n");
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+  });
+
+  test("requires actionable TODO syntax and rejects FIXME", () => {
+    const root = repository();
+    const source = join(root, "src", "thing.ts");
+    enforce(root, "REPO-010", { kind: "builtin", check: "todo-format" });
+
+    writeFileSync(source, "// TODO make retry limit configurable\n");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("failed");
+
+    writeFileSync(source, "// TODO: make retry limit configurable\n");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+
+    writeFileSync(source, "// TODO(#123): make retry limit configurable\n");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+
+    writeFileSync(source, "// FIXME: retry limit\n");
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("instead of FIXME");
   });
 
   test("requires Vitest execution kind in filenames and scripts", () => {
