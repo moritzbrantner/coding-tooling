@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
@@ -21,6 +21,15 @@ type CreateFileOperation = {
   path: string;
 };
 
+type JsonSetOperation = {
+  kind: "json-set";
+  path: string;
+  key: string;
+  value: string;
+};
+
+type GeneratorOperation = CreateFileOperation | JsonSetOperation;
+
 type GeneratorComposition = {
   generator: string;
   inputs?: Record<string, string>;
@@ -39,7 +48,7 @@ export type GeneratorDescriptor = {
   technologies: string[];
   inputs: Record<string, GeneratorInput>;
   target: GeneratorTarget;
-  operations: CreateFileOperation[];
+  operations: GeneratorOperation[];
   compose: GeneratorComposition[];
   prerequisites: GeneratorPrerequisite[];
   postconditions: Capability[];
@@ -60,12 +69,21 @@ export type GeneratorCatalogEntry = {
   composedGenerators: string[];
 };
 
-export type PlannedGeneratorOperation = {
-  generator: string;
-  kind: "create-file";
-  path: string;
-  template: string;
-};
+export type PlannedGeneratorOperation =
+  | {
+      generator: string;
+      kind: "create-file";
+      path: string;
+      template: string;
+      content: string;
+    }
+  | {
+      generator: string;
+      kind: "json-set";
+      path: string;
+      key: string;
+      value: string;
+    };
 
 export type GeneratorPlan = {
   generator: string;
@@ -244,22 +262,55 @@ function parseDescriptor(path: string): GeneratorDescriptor {
     );
   }
 
-  const operations: CreateFileOperation[] = value.operations.map((operation) => {
-    if (
-      !isRecord(operation) ||
-      operation.kind !== "create-file" ||
-      typeof operation.template !== "string" ||
-      !managedPath(operation.template) ||
-      typeof operation.path !== "string" ||
-      !operation.path
-    ) {
+  const operations: GeneratorOperation[] = value.operations.map((operation) => {
+    if (!isRecord(operation) || typeof operation.kind !== "string") {
       throw new GeneratorError(
         "invalid-generator",
         `Generator ${value.id} contains an unsupported operation`,
       );
     }
-    validateInterpolation(operation.path, inputNames);
-    return { kind: "create-file", template: operation.template, path: operation.path };
+    if (operation.kind === "create-file") {
+      if (
+        typeof operation.template !== "string" ||
+        !managedPath(operation.template) ||
+        typeof operation.path !== "string" ||
+        !operation.path
+      ) {
+        throw new GeneratorError(
+          "invalid-generator",
+          `Generator ${value.id} contains an invalid create-file operation`,
+        );
+      }
+      validateInterpolation(operation.path, inputNames);
+      return { kind: "create-file", template: operation.template, path: operation.path };
+    }
+    if (operation.kind === "json-set") {
+      if (
+        typeof operation.path !== "string" ||
+        !operation.path ||
+        typeof operation.key !== "string" ||
+        !operation.key ||
+        typeof operation.value !== "string"
+      ) {
+        throw new GeneratorError(
+          "invalid-generator",
+          `Generator ${value.id} contains an invalid json-set operation`,
+        );
+      }
+      validateInterpolation(operation.path, inputNames);
+      validateInterpolation(operation.key, inputNames);
+      validateInterpolation(operation.value, inputNames);
+      return {
+        kind: "json-set",
+        path: operation.path,
+        key: operation.key,
+        value: operation.value,
+      };
+    }
+    throw new GeneratorError(
+      "invalid-generator",
+      `Generator ${value.id} contains an unsupported operation`,
+    );
   });
 
   const compose: GeneratorComposition[] = value.compose.map((item) => {
@@ -639,11 +690,33 @@ export function planGenerator(
         );
       }
       const output = safePath(target, relativePath, "invalid-generator-output");
+      const renderedPath = relative(root, output).split(sep).join("/");
+      if (operation.kind === "create-file") {
+        const template = templatePath(current, operation.template);
+        const templateContent = readFileSync(template, "utf8");
+        validateInterpolation(templateContent, new Set(Object.keys(current.descriptor.inputs)));
+        operations.push({
+          generator: current.descriptor.id,
+          kind: "create-file",
+          path: renderedPath,
+          template: relative(root, template).split(sep).join("/"),
+          content: render(templateContent, inputs),
+        });
+        continue;
+      }
+      const key = render(operation.key, inputs);
+      if (!/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/.test(key)) {
+        throw new GeneratorError(
+          "invalid-generator-output",
+          `Generator ${current.descriptor.id} produced invalid JSON key ${key}`,
+        );
+      }
       operations.push({
         generator: current.descriptor.id,
-        kind: "create-file",
-        path: relative(root, output).split(sep).join("/"),
-        template: relative(root, templatePath(current, operation.template)).split(sep).join("/"),
+        kind: "json-set",
+        path: renderedPath,
+        key,
+        value: render(operation.value, inputs),
       });
     }
     for (const composition of current.descriptor.compose) {

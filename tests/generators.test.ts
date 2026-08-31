@@ -130,6 +130,7 @@ describe("generator planning", () => {
           kind: "create-file",
           path: "UserProfile/user-profile.ts",
           template: ".coding-tooling/generators/feature/templates/file.tmpl",
+          content: "export const value = 'UserProfile';\n",
         },
       ],
       prerequisites: [],

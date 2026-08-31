@@ -119,9 +119,12 @@ describe("generator apply", () => {
   test("applies composed generator templates with their mapped inputs", () => {
     const root = fixture();
     createFileGenerator(root, "leaf");
-    localGenerator(root, "feature", [], [
-      { generator: "leaf", inputs: { name: "{{name | pascal}}Part" } },
-    ]);
+    localGenerator(
+      root,
+      "feature",
+      [],
+      [{ generator: "leaf", inputs: { name: "{{name | pascal}}Part" } }],
+    );
 
     const result = applyGeneratorCommand(root, "feature", { name: "user" });
     expect(result.status).toBe("passed");

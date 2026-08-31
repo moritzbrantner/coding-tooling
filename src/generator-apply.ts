@@ -1,25 +1,10 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";
 
-import {
-  planGenerator,
-  type GeneratorPlan,
-  type PlannedGeneratorOperation,
-} from "./generators.ts";
+import { planGenerator, type GeneratorPlan, type PlannedGeneratorOperation } from "./generators.ts";
 import type { ResultEnvelope } from "./model.ts";
 
-type GenerationResultKind =
-  | "generated"
-  | "no-op"
-  | "generation-conflict"
-  | "generation-failed";
+type GenerationResultKind = "generated" | "no-op" | "generation-conflict" | "generation-failed";
 
 export type GenerationApplyResult = {
   result: GenerationResultKind;
@@ -69,10 +54,7 @@ function assertWritableParent(root: string, path: string): void {
   let current = dirname(path);
   while (withinRoot(absoluteRoot, current) && current !== absoluteRoot) {
     if (existsSync(current) && !statSync(current).isDirectory()) {
-      throw new GenerationConflict(
-        path,
-        `Generated path has a non-directory parent: ${current}`,
-      );
+      throw new GenerationConflict(path, `Generated path has a non-directory parent: ${current}`);
     }
     current = dirname(current);
   }
@@ -226,7 +208,8 @@ export function applyGeneratorPlan(
     };
   }
 
-  const writeFile = options.writeFile ?? ((path: string, content: string) => writeFileSync(path, content));
+  const writeFile =
+    options.writeFile ?? ((path: string, content: string) => writeFileSync(path, content));
   const touched: PreparedMutation[] = [];
   try {
     for (const mutation of writes) {
