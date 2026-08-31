@@ -1,8 +1,5 @@
 import { applyGeneratorPlan, type GeneratorApplyOptions } from "./generator-apply.ts";
-import {
-  generatorCommand,
-  type GeneratorPlan,
-} from "./generators.ts";
+import { generatorCommand, type GeneratorPlan } from "./generators.ts";
 import {
   evaluateGeneratorPrerequisites,
   verifyGeneratorPostconditions,

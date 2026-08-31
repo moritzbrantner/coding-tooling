@@ -172,7 +172,7 @@ function localFeatureGenerator(root: string): void {
   });
   writeFileSync(
     join(directory, "templates", "feature.ts.tmpl"),
-    "export const {{name | camel}}Feature = \"{{name | kebab}}\";\n",
+    'export const {{name | camel}}Feature = "{{name | kebab}}";\n',
   );
   writeFileSync(
     join(directory, "templates", "index.ts.tmpl"),
@@ -275,7 +275,7 @@ describe("repository-local generator dogfood", () => {
     expect((repeat.data.generation as { result: string }).result).toBe("no-op");
 
     const file = join(root, "src/features/billing/Billing.ts");
-    writeFileSync(file, "export const billingFeature = \"custom\";\n");
+    writeFileSync(file, 'export const billingFeature = "custom";\n');
     const conflict = executeGeneratorCommand(root, "feature", { name: "Billing" });
     expect(conflict.status).toBe("failed");
     expect(conflict.data.result).toBe("generation-conflict");
@@ -286,7 +286,8 @@ describe("repository-local generator dogfood", () => {
     const root = fixture();
     toolingFixture(root);
     localFeatureGenerator(root);
-    const checker: CapabilityChecker = (_root, capability) => capabilityResult(capability, "failed");
+    const checker: CapabilityChecker = (_root, capability) =>
+      capabilityResult(capability, "failed");
 
     const result = executeGeneratorCommand(root, "feature", { name: "Orders" }, undefined, {
       checkCapability: checker,

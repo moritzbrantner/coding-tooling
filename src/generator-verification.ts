@@ -140,7 +140,11 @@ function packageVersionMatches(
   }
 }
 
-function packageCheck(root: string, target: string, prerequisite: PackagePrerequisite): PrerequisiteCheck {
+function packageCheck(
+  root: string,
+  target: string,
+  prerequisite: PackagePrerequisite,
+): PrerequisiteCheck {
   if (!prerequisite.name) {
     return {
       kind: prerequisite.kind,
@@ -278,7 +282,10 @@ function prerequisiteCheck(root: string, plan: GeneratorPlan, raw: unknown): Pre
   };
 }
 
-export function evaluateGeneratorPrerequisites(root: string, plan: GeneratorPlan): PrerequisiteEvaluation {
+export function evaluateGeneratorPrerequisites(
+  root: string,
+  plan: GeneratorPlan,
+): PrerequisiteEvaluation {
   const checks: PrerequisiteCheck[] = [];
   for (const prerequisite of plan.prerequisites) {
     const result = prerequisiteCheck(root, plan, prerequisite);
