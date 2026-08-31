@@ -33,6 +33,7 @@ export type ResultOperation =
   | "conventions-check"
   | "conventions-diff"
   | "conventions-update"
+  | "generate"
   | "pr";
 
 export type Diagnostic = {

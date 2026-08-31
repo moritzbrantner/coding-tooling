@@ -8,12 +8,14 @@ import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { auditDependencies } from "./dependency-audit.ts";
+import { generatorCommand } from "./generators.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
 import { integratePullRequest, type MergeMethod, type RemoteChecksPolicy } from "./pr.ts";
 import { repositoryRoot } from "./shared.ts";
 import { sourceDependencies } from "./source-deps.ts";
 
-type Options = Record<string, string | boolean>;
+type OptionValue = string | boolean | string[];
+type Options = Record<string, OptionValue>;
 
 type PlannedCheckView = {
   capability?: unknown;
@@ -34,7 +36,10 @@ function parse(argv: string[]): { command?: string; positional: string[]; option
     const next = rest[index + 1];
     if (!next || next.startsWith("--")) options[key] = true;
     else {
-      options[key] = next;
+      const previous = options[key];
+      if (typeof previous === "string") options[key] = [previous, next];
+      else if (Array.isArray(previous)) options[key] = [...previous, next];
+      else options[key] = next;
       index += 1;
     }
   }
@@ -44,6 +49,24 @@ function parse(argv: string[]): { command?: string; positional: string[]; option
 function stringOption(options: Options, name: string): string | undefined {
   const value = options[name];
   return typeof value === "string" ? value : undefined;
+}
+
+function stringOptions(options: Options, name: string): string[] {
+  const value = options[name];
+  if (typeof value === "string") return [value];
+  return Array.isArray(value) ? value : [];
+}
+
+function generatorInputs(options: Options): Record<string, string> | undefined {
+  const result: Record<string, string> = {};
+  for (const value of stringOptions(options, "input")) {
+    const separator = value.indexOf("=");
+    if (separator <= 0) return undefined;
+    const name = value.slice(0, separator);
+    if (Object.prototype.hasOwnProperty.call(result, name)) return undefined;
+    result[name] = value.slice(separator + 1);
+  }
+  return result;
 }
 
 function exitCode(status: ResultEnvelope<Record<string, unknown>>["status"]): number {
@@ -120,7 +143,10 @@ function usage(): never {
   coding-tooling conventions check [--root <path>] [--json]
   coding-tooling conventions diff [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions update [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
-  coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]`);
+  coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]
+  coding-tooling generate list [--json]
+  coding-tooling generate describe <id> [--json]
+  coding-tooling generate plan <id> [--input name=value]... [--target <path>] [--json]`);
   process.exit(2);
 }
 
@@ -217,6 +243,13 @@ export function main(argv = process.argv.slice(2)): number {
         profile: stringOption(options, "profile"),
       });
     } else return usage();
+  } else if (command === "generate") {
+    const action = positional[0];
+    if (action !== "list" && action !== "describe" && action !== "plan") return usage();
+    if ((action === "describe" || action === "plan") && !positional[1]) return usage();
+    const inputs = generatorInputs(options);
+    if (!inputs) return usage();
+    result = generatorCommand(root, action, positional[1], inputs, stringOption(options, "target"));
   } else return usage();
   console.log(JSON.stringify(result, null, options.json ? 0 : 2));
   return exitCode(result.status);
