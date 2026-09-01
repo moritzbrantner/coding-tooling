@@ -158,4 +158,84 @@ describe("generator apply", () => {
     expect(existsSync(join(root, "First", "first.ts"))).toBe(false);
     expect(existsSync(join(root, "Second", "second.ts"))).toBe(false);
   });
+
+  test("adds a TypeScript barrel export in deterministic order and becomes a no-op", () => {
+    const root = fixture();
+    localGenerator(root, "feature", [
+      {
+        kind: "typescript-barrel-export",
+        path: "src/data.ts",
+        module: "./components/data/{{name | kebab}}",
+      },
+    ]);
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(
+      join(root, "src", "data.ts"),
+      '"use client";\n\nexport * from "./components/data/alpha";\nexport * from "./components/data/gamma";\n',
+    );
+
+    const first = applyGeneratorCommand(root, "feature", { name: "Beta" });
+    expect(first.status).toBe("passed");
+    expect((first.data.generation as { result: string }).result).toBe("generated");
+    expect(readFileSync(join(root, "src", "data.ts"), "utf8")).toBe(
+      '"use client";\n\nexport * from "./components/data/alpha";\nexport * from "./components/data/beta";\nexport * from "./components/data/gamma";\n',
+    );
+
+    const repeat = applyGeneratorCommand(root, "feature", { name: "Beta" });
+    expect(repeat.status).toBe("passed");
+    expect((repeat.data.generation as { result: string }).result).toBe("no-op");
+  });
+
+  test("refuses TypeScript barrels that require interpretation", () => {
+    const root = fixture();
+    localGenerator(root, "feature", [
+      {
+        kind: "typescript-barrel-export",
+        path: "src/data.ts",
+        module: "./components/data/{{name | kebab}}",
+      },
+    ]);
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(join(root, "src", "data.ts"), 'import "./setup";\n');
+
+    const result = applyGeneratorCommand(root, "feature", { name: "Beta" });
+    expect(result.status).toBe("failed");
+    expect((result.data.generation as { result: string }).result).toBe("generation-conflict");
+    expect(readFileSync(join(root, "src", "data.ts"), "utf8")).toBe('import "./setup";\n');
+  });
+
+  test("rolls back an earlier write when a later barrel write fails", () => {
+    const root = fixture();
+    localGenerator(root, "feature", [
+      {
+        kind: "create-file",
+        template: "templates/file.tmpl",
+        path: "created.ts",
+      },
+      {
+        kind: "typescript-barrel-export",
+        path: "src/data.ts",
+        module: "./created",
+      },
+    ]);
+    const directory = join(root, ".coding-tooling", "generators", "feature");
+    writeFileSync(join(directory, "templates", "file.tmpl"), "export const created = true;\n");
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(join(root, "src", "data.ts"), 'export * from "./alpha";\n');
+    const plan = planGenerator(root, "feature", { name: "Unused" });
+    let writes = 0;
+
+    const result = applyGeneratorPlan(root, plan, {
+      writeFile(path, content) {
+        writes += 1;
+        if (writes === 2) throw new Error("injected barrel write failure");
+        writeFileSync(path, content);
+      },
+    });
+
+    expect(result.result).toBe("generation-failed");
+    expect(result.rolledBack).toEqual(["created.ts"]);
+    expect(existsSync(join(root, "created.ts"))).toBe(false);
+    expect(readFileSync(join(root, "src", "data.ts"), "utf8")).toBe('export * from "./alpha";\n');
+  });
 });

@@ -153,9 +153,79 @@ function jsonSetMutation(root: string, operation: PlannedGeneratorOperation): Pr
   };
 }
 
+function typescriptBarrelExportMutation(
+  root: string,
+  operation: PlannedGeneratorOperation,
+): PreparedMutation {
+  if (operation.kind !== "typescript-barrel-export") {
+    throw new Error(`Expected typescript-barrel-export operation, received ${operation.kind}`);
+  }
+  const absolutePath = outputPath(root, operation.path);
+  if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+    throw new GenerationConflict(
+      operation.path,
+      `TypeScript barrel update target must be an existing file: ${operation.path}`,
+    );
+  }
+
+  const previousContent = readFileSync(absolutePath, "utf8");
+  const lines = previousContent.split("\n");
+  while (lines.at(-1) === "") lines.pop();
+
+  let index = 0;
+  let useClient = false;
+  if (lines[0] === '"use client";') {
+    useClient = true;
+    index = 1;
+  }
+
+  const modules: string[] = [];
+  for (; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    if (line === "") continue;
+    const match = /^export \* from "([^"\n]+)";$/.exec(line);
+    if (!match) {
+      throw new GenerationConflict(
+        operation.path,
+        `TypeScript barrel contains unsupported content: ${operation.path}`,
+      );
+    }
+    modules.push(match[1]!);
+  }
+
+  if (new Set(modules).size !== modules.length) {
+    throw new GenerationConflict(
+      operation.path,
+      `TypeScript barrel contains duplicate exports: ${operation.path}`,
+    );
+  }
+  if (modules.includes(operation.module)) {
+    return {
+      operation,
+      absolutePath,
+      desiredContent: previousContent,
+      previousContent,
+      outcome: "no-op",
+    };
+  }
+
+  const nextModules = [...modules, operation.module].sort((a, b) => a.localeCompare(b));
+  const exports = nextModules.map((module) => `export * from "${module}";`).join("\n");
+  const desiredContent = useClient ? `"use client";\n\n${exports}\n` : `${exports}\n`;
+  return {
+    operation,
+    absolutePath,
+    desiredContent,
+    previousContent,
+    outcome: "change",
+  };
+}
+
 function prepareMutation(root: string, operation: PlannedGeneratorOperation): PreparedMutation {
   if (operation.kind === "create-file") return createFileMutation(root, operation);
   if (operation.kind === "json-set") return jsonSetMutation(root, operation);
+  if (operation.kind === "typescript-barrel-export")
+    return typescriptBarrelExportMutation(root, operation);
   const exhaustive: never = operation;
   throw new Error(`Unsupported planned generator operation: ${String(exhaustive)}`);
 }
