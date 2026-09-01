@@ -52,7 +52,10 @@ function bunToolchain(root: string): EnvironmentToolchain | null {
   const path = join(root, "package.json");
   if (!existsSync(path)) return null;
   const packageJson = JSON.parse(text(path)) as { packageManager?: unknown };
-  if (typeof packageJson.packageManager !== "string" || !packageJson.packageManager.startsWith("bun@")) {
+  if (
+    typeof packageJson.packageManager !== "string" ||
+    !packageJson.packageManager.startsWith("bun@")
+  ) {
     return null;
   }
   const declaredVersion = packageJson.packageManager.slice("bun@".length);
@@ -87,17 +90,27 @@ function rustToolchain(root: string): EnvironmentToolchain | null {
     };
   }
 
-  const installedToolchains = commandVersion("rustup", ["toolchain", "list"], root, (value) => value);
+  const installedToolchains = commandVersion(
+    "rustup",
+    ["toolchain", "list"],
+    root,
+    (value) => value,
+  );
   let observedVersion: string | null = null;
   if (installedToolchains !== null) {
     const installed = installedToolchains
       .split("\n")
       .some((line) => line.trim().startsWith(declaredVersion));
     if (installed) {
-      observedVersion = commandVersion("rustc", [`+${declaredVersion}`, "--version"], root, (value) => {
-        const version = value.match(/^rustc\s+(\d+\.\d+\.\d+)/)?.[1];
-        return version ?? null;
-      });
+      observedVersion = commandVersion(
+        "rustc",
+        [`+${declaredVersion}`, "--version"],
+        root,
+        (value) => {
+          const version = value.match(/^rustc\s+(\d+\.\d+\.\d+)/)?.[1];
+          return version ?? null;
+        },
+      );
     }
   } else {
     observedVersion = commandVersion("rustc", ["--version"], root, (value) => {
@@ -132,7 +145,10 @@ function holdField(lines: string[], name: string): string | null {
   return null;
 }
 
-function compatibilityHolds(source: string): { holds: CompatibilityHold[]; invalidTools: string[] } {
+function compatibilityHolds(source: string): {
+  holds: CompatibilityHold[];
+  invalidTools: string[];
+} {
   const lines = source.split(/\r?\n/);
   const holds: CompatibilityHold[] = [];
   const invalidTools: string[] = [];
@@ -263,7 +279,8 @@ export function repositoryEnvironmentConformance(root: string): {
         code: "environment-script-invalid",
         status: "failed",
         severity: "error",
-        message: "scripts/codex-environment.sh does not expose the environment-v1 setup/maintenance contract",
+        message:
+          "scripts/codex-environment.sh does not expose the environment-v1 setup/maintenance contract",
         path: "scripts/codex-environment.sh",
       });
     }
