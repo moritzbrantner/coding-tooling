@@ -52,7 +52,9 @@ function orderedCapabilities(values: Iterable<Capability>): Capability[] {
 
 function packageTechnologies(root: string): Set<string> {
   const technologies = new Set<string>();
-  for (const path of walkFiles(root, 4).filter((candidate) => basename(candidate) === "package.json")) {
+  for (const path of walkFiles(root, 4).filter(
+    (candidate) => basename(candidate) === "package.json",
+  )) {
     const manifest = readJson<PackageManifest>(path);
     if (!manifest) continue;
     const deps = { ...manifest.dependencies, ...manifest.devDependencies };
@@ -75,7 +77,11 @@ function repositoryTechnologies(root: string, components: Component[]): string[]
   return [...technologies].sort();
 }
 
-function recommendedModules(root: string, components: Component[], technologies: string[]): string[] {
+function recommendedModules(
+  root: string,
+  components: Component[],
+  technologies: string[],
+): string[] {
   const modules = new Set<string>(["environment", "git"]);
   if (components.length > 1) modules.add("dependencies");
   if (basename(root).toLowerCase().includes("template")) modules.add("template-authoring");
@@ -94,7 +100,11 @@ function availableCapabilities(components: Component[]): Set<Capability> {
   );
 }
 
-function recommendedConfig(components: Component[], technologies: string[], root: string): ToolingConfig {
+function recommendedConfig(
+  components: Component[],
+  technologies: string[],
+  root: string,
+): ToolingConfig {
   const required = new Set<Capability>();
   const optional = new Set<Capability>();
   const available = availableCapabilities(components);
@@ -220,7 +230,8 @@ export function bootstrapRepository(
       return envelope("unavailable", started, recommendation, [
         {
           code: "repository-components-unavailable",
-          message: "No supported code components were discovered; repository bootstrap was not applied",
+          message:
+            "No supported code components were discovered; repository bootstrap was not applied",
         },
       ]);
     }
