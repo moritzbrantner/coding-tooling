@@ -19,11 +19,21 @@ type NativeObservation = {
   status: ObservationStatus;
 };
 
+type RustComponentObservation = {
+  component: string;
+  status: ObservationStatus;
+};
+
 type SourceObservation = {
   profile: EnvironmentFingerprintProfile;
   active: boolean;
   status: ObservationStatus;
   detail?: string;
+};
+
+type ExpectedRustToolchain = {
+  version: string;
+  components: string[];
 };
 
 function resultStatus(statuses: ObservationStatus[]): ResultStatus {
@@ -32,17 +42,98 @@ function resultStatus(statuses: ObservationStatus[]): ResultStatus {
   return "passed";
 }
 
-function expectedAptPackages(expected: ResultEnvelope<Record<string, unknown>>): string[] {
+function layerInputs(
+  expected: ResultEnvelope<Record<string, unknown>>,
+  layerName: string,
+): Record<string, unknown> | null {
   const layers = expected.data.layers;
-  if (!layers || typeof layers !== "object") return [];
-  const native = (layers as Record<string, unknown>).native;
-  if (!native || typeof native !== "object") return [];
-  const inputs = (native as Record<string, unknown>).inputs;
-  if (!inputs || typeof inputs !== "object") return [];
-  const apt = (inputs as Record<string, unknown>).apt;
-  return Array.isArray(apt)
-    ? apt.filter((value): value is string => typeof value === "string")
-    : [];
+  if (!layers || typeof layers !== "object") return null;
+  const layer = (layers as Record<string, unknown>)[layerName];
+  if (!layer || typeof layer !== "object") return null;
+  const inputs = (layer as Record<string, unknown>).inputs;
+  return inputs && typeof inputs === "object" ? (inputs as Record<string, unknown>) : null;
+}
+
+function expectedAptPackages(expected: ResultEnvelope<Record<string, unknown>>): string[] {
+  const inputs = layerInputs(expected, "native");
+  const apt = inputs?.apt;
+  return Array.isArray(apt) ? apt.filter((value): value is string => typeof value === "string") : [];
+}
+
+function expectedRustToolchain(
+  expected: ResultEnvelope<Record<string, unknown>>,
+): ExpectedRustToolchain | null {
+  const inputs = layerInputs(expected, "toolchain");
+  const rust = inputs?.rust;
+  if (!rust || typeof rust !== "object") return null;
+  const record = rust as Record<string, unknown>;
+  if (typeof record.version !== "string" || !Array.isArray(record.components)) return null;
+  const components = record.components.filter(
+    (component): component is string => typeof component === "string",
+  );
+  return { version: record.version, components };
+}
+
+export function missingRustComponents(declared: string[], listing: string): string[] {
+  const installed = listing
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/\s+\(installed\)$/, ""))
+    .filter(Boolean);
+  return declared.filter(
+    (component) =>
+      !installed.some((installedComponent) =>
+        installedComponent === component || installedComponent.startsWith(`${component}-`),
+      ),
+  );
+}
+
+function rustComponentObservations(
+  root: string,
+  toolchain: ExpectedRustToolchain | null,
+): {
+  observations: RustComponentObservation[];
+  diagnostics: Diagnostic[];
+} {
+  if (!toolchain || toolchain.components.length === 0) {
+    return { observations: [], diagnostics: [] };
+  }
+
+  const result = spawnSync(
+    "rustup",
+    ["component", "list", "--toolchain", toolchain.version, "--installed"],
+    {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    },
+  );
+  if (result.status !== 0 || typeof result.stdout !== "string") {
+    return {
+      observations: toolchain.components.map((component) => ({
+        component,
+        status: "unavailable",
+      })),
+      diagnostics: [
+        {
+          code: "environment-rust-component-verifier-unavailable",
+          message: `Declared Rust components cannot be verified for toolchain ${toolchain.version}`,
+          path: "rust-toolchain.toml",
+        },
+      ],
+    };
+  }
+
+  const missing = new Set(missingRustComponents(toolchain.components, result.stdout));
+  const observations = toolchain.components.map((component) => ({
+    component,
+    status: missing.has(component) ? ("failed" as const) : ("passed" as const),
+  }));
+  const diagnostics: Diagnostic[] = [...missing].map((component) => ({
+    code: "environment-rust-component-missing",
+    message: `Rust component ${component} is declared but not installed for toolchain ${toolchain.version}`,
+    path: "rust-toolchain.toml",
+  }));
+  return { observations, diagnostics };
 }
 
 function nativeObservations(
@@ -195,6 +286,7 @@ export function verifyEnvironmentFingerprint(
   const blockingEnvironmentFindings = environment.findings.filter(
     (finding) => finding.severity === "error",
   );
+  const rustComponents = rustComponentObservations(root, expectedRustToolchain(expected));
   const native = nativeObservations(root, expectedAptPackages(expected));
   const source = sourceObservation(root, profile);
   const diagnostics: Diagnostic[] = [
@@ -203,6 +295,7 @@ export function verifyEnvironmentFingerprint(
       message: finding.message,
       path: finding.path,
     })),
+    ...rustComponents.diagnostics,
     ...native.diagnostics,
     ...source.diagnostics,
   ];
@@ -210,6 +303,7 @@ export function verifyEnvironmentFingerprint(
   const environmentStatuses = blockingEnvironmentFindings.map((finding) => finding.status);
   const status = resultStatus([
     ...environmentStatuses,
+    ...rustComponents.observations.map((observation) => observation.status),
     ...native.observations.map((observation) => observation.status),
     source.observation.status,
   ]);
@@ -228,6 +322,7 @@ export function verifyEnvironmentFingerprint(
       layers: expected.data.layers,
       observations: {
         environment: environment.data,
+        rustComponents: rustComponents.observations,
         native: native.observations,
         sources: source.observation,
       },
