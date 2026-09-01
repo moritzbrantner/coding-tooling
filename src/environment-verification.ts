@@ -57,7 +57,9 @@ function layerInputs(
 function expectedAptPackages(expected: ResultEnvelope<Record<string, unknown>>): string[] {
   const inputs = layerInputs(expected, "native");
   const apt = inputs?.apt;
-  return Array.isArray(apt) ? apt.filter((value): value is string => typeof value === "string") : [];
+  return Array.isArray(apt)
+    ? apt.filter((value): value is string => typeof value === "string")
+    : [];
 }
 
 function expectedRustToolchain(
@@ -81,8 +83,9 @@ export function missingRustComponents(declared: string[], listing: string): stri
     .filter(Boolean);
   return declared.filter(
     (component) =>
-      !installed.some((installedComponent) =>
-        installedComponent === component || installedComponent.startsWith(`${component}-`),
+      !installed.some(
+        (installedComponent) =>
+          installedComponent === component || installedComponent.startsWith(`${component}-`),
       ),
   );
 }
