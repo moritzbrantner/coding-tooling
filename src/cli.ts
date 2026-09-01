@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { agentCapabilitiesCommand } from "./agent-capabilities.ts";
+import { bootstrapRepository } from "./bootstrap.ts";
 import { conformanceReport } from "./conformance.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
@@ -140,6 +141,7 @@ function usage(): never {
   coding-tooling affected [--base <git-ref>] [--json]
   coding-tooling doctor [--json]
   coding-tooling conformance [--config <path>] [--json]
+  coding-tooling bootstrap <plan|apply> [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling environment <fingerprint|verify> [--profile <default|source-development>] [--json]
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
   coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
@@ -168,7 +170,15 @@ export function main(argv = process.argv.slice(2)): number {
   else if (command === "doctor") result = doctor(root);
   else if (command === "conformance")
     result = conformanceReport({ root, configPath: stringOption(options, "config") });
-  else if (command === "environment") {
+  else if (command === "bootstrap") {
+    const action = positional[0];
+    if (action !== "plan" && action !== "apply") return usage();
+    result = bootstrapRepository(action, {
+      root: resolve(stringOption(options, "root") ?? root),
+      conventionsRoot: stringOption(options, "conventions-root"),
+      registryPath: stringOption(options, "registry"),
+    });
+  } else if (command === "environment") {
     const action = positional[0];
     const profile = stringOption(options, "profile") ?? "default";
     if (

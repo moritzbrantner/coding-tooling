@@ -28,6 +28,7 @@ export type ResultOperation =
   | "doctor"
   | "conformance"
   | "environment"
+  | "bootstrap"
   | "plan"
   | "run"
   | "source-deps"
