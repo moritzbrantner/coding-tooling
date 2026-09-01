@@ -122,7 +122,7 @@ const generatorIdPattern = /^[a-z0-9][a-z0-9-]*$/;
 const inputNamePattern = /^[A-Za-z][A-Za-z0-9_-]*$/;
 const identifierPattern = /^[A-Za-z][A-Za-z0-9_-]*$/;
 const ruleIdPattern = /^[A-Z][A-Z0-9-]*-\d+$/;
-const allowedTransforms = new Set(["pascal", "camel", "kebab", "snake"]);
+const allowedTransforms = new Set(["pascal", "camel", "kebab", "snake", "title"]);
 
 class GeneratorError extends Error {
   constructor(
@@ -293,6 +293,7 @@ function parseDescriptor(path: string): GeneratorDescriptor {
           `Generator ${value.id} contains an invalid create-file operation`,
         );
       }
+      validateInterpolation(operation.template, inputNames);
       validateInterpolation(operation.path, inputNames);
       return { kind: "create-file", template: operation.template, path: operation.path };
     }
@@ -384,6 +385,15 @@ function parseDescriptor(path: string): GeneratorDescriptor {
         "invalid-generator",
         `Generator ${value.id} has invalid prerequisite`,
       );
+    }
+    if (item.kind === "file") {
+      if (typeof item.path !== "string" || !managedPath(item.path)) {
+        throw new GeneratorError(
+          "invalid-generator",
+          `Generator ${value.id} has invalid file prerequisite`,
+        );
+      }
+      validateInterpolation(item.path, inputNames);
     }
     return item as GeneratorPrerequisite;
   });
@@ -614,6 +624,8 @@ function transform(value: string, kind: string | undefined): string {
       .join("");
   if (kind === "pascal")
     return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("");
+  if (kind === "title")
+    return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join(" ");
   throw new GeneratorError("unsupported-template-expression", `Unsupported transform: ${kind}`);
 }
 
@@ -711,7 +723,20 @@ export function planGenerator(
   const postconditions: Capability[] = [];
 
   const append = (current: LoadedGenerator, inputs: Record<string, string | boolean>): void => {
-    prerequisites.push(...current.descriptor.prerequisites);
+    for (const prerequisite of current.descriptor.prerequisites) {
+      if (prerequisite.kind === "file" && typeof prerequisite.path === "string") {
+        const path = render(prerequisite.path, inputs);
+        if (!managedPath(path)) {
+          throw new GeneratorError(
+            "invalid-generator-output",
+            `Generator ${current.descriptor.id} produced unsafe prerequisite path ${path}`,
+          );
+        }
+        prerequisites.push({ ...prerequisite, path });
+      } else {
+        prerequisites.push(prerequisite);
+      }
+    }
     postconditions.push(...current.descriptor.postconditions);
     for (const operation of current.descriptor.operations) {
       const relativePath = render(operation.path, inputs);
@@ -724,7 +749,14 @@ export function planGenerator(
       const output = safePath(target, relativePath, "invalid-generator-output");
       const renderedPath = relative(root, output).split(sep).join("/");
       if (operation.kind === "create-file") {
-        const template = templatePath(current, operation.template);
+        const renderedTemplate = render(operation.template, inputs);
+        if (!managedPath(renderedTemplate)) {
+          throw new GeneratorError(
+            "invalid-generator-output",
+            `Generator ${current.descriptor.id} produced unsafe template path ${renderedTemplate}`,
+          );
+        }
+        const template = templatePath(current, renderedTemplate);
         const templateContent = readFileSync(template, "utf8");
         validateInterpolation(templateContent, new Set(Object.keys(current.descriptor.inputs)));
         operations.push({

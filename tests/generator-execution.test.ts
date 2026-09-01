@@ -332,4 +332,44 @@ describe("generator prerequisites", () => {
       { status: "failed", code: "network-required" },
     ]);
   });
+
+  test("checks a rendered repository file prerequisite before mutation", () => {
+    const root = fixture();
+    toolingFixture(root);
+    const directory = join(root, ".coding-tooling", "generators", "component-test");
+    mkdirSync(join(directory, "templates"), { recursive: true });
+    writeJson(join(directory, "generator.json"), {
+      schemaVersion: 1,
+      id: "component-test",
+      description: "Create a test only for an existing component.",
+      rules: [],
+      technologies: ["typescript"],
+      inputs: { name: { type: "identifier", required: true } },
+      target: { kind: "root" },
+      operations: [
+        {
+          kind: "create-file",
+          template: "templates/test.tmpl",
+          path: "src/components/{{name | kebab}}.test.ts",
+        },
+      ],
+      compose: [],
+      prerequisites: [{ kind: "file", path: "src/components/{{name | kebab}}.ts" }],
+      postconditions: [],
+    });
+    writeFileSync(join(directory, "templates", "test.tmpl"), "export {};\n");
+
+    const missing = executeGeneratorCommand(root, "component-test", { name: "StatusBadge" });
+    expect(missing.status).toBe("failed");
+    expect(missing.data.result).toBe("prerequisite-failed");
+    expect(missing.diagnostics[0]?.code).toBe("missing-generator-file");
+    expect(existsSync(join(root, "src/components/status-badge.test.ts"))).toBe(false);
+
+    mkdirSync(join(root, "src", "components"), { recursive: true });
+    writeFileSync(join(root, "src/components/status-badge.ts"), "export {};\n");
+    const present = executeGeneratorCommand(root, "component-test", { name: "StatusBadge" });
+    expect(present.status).toBe("passed");
+    expect(present.data.result).toBe("generated-and-verified");
+    expect(existsSync(join(root, "src/components/status-badge.test.ts"))).toBe(true);
+  });
 });
