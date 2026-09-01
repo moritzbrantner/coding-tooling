@@ -111,7 +111,7 @@ describe("repository conformance report", () => {
     );
   });
 
-  test("reports a configured clean repository as passed", () => {
+  test("reports a configured clean repository as passed with environment adoption visible", () => {
     const root = repository();
     configureTooling(root);
     installConventions(root);
@@ -121,7 +121,16 @@ describe("repository conformance report", () => {
     expect(result.status).toBe("passed");
     expect(result.data.reportVersion).toBe(1);
     expect(result.data.tools).toEqual([{ name: "node", status: "passed" }]);
-    expect(findings(result)).toEqual([]);
+    expect(findings(result)).toEqual([
+      expect.objectContaining({
+        code: "environment-v1-not-adopted",
+        status: "unavailable",
+        severity: "advisory",
+      }),
+    ]);
+    expect(result.data.environment).toEqual(
+      expect.objectContaining({ adopted: false, configPresent: false, scriptPresent: false }),
+    );
     expect(result.data.conventions).toEqual(
       expect.objectContaining({
         manifestPresent: true,
