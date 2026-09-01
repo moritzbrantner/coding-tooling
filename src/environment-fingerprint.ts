@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import type { Diagnostic, ResultEnvelope } from "./model.ts";
+import { relativePosix, walkFiles } from "./shared.ts";
 
 export type EnvironmentFingerprintProfile = "default" | "source-development";
 
@@ -164,9 +165,13 @@ function environmentConfig(
 }
 
 function dependencyInputs(root: string): unknown {
-  return lockfiles
-    .filter((path) => existsSync(join(root, path)))
-    .map((path) => ({ path, digest: fileDigest(join(root, path)) }))
+  const lockfileNames = new Set<string>(lockfiles);
+  return walkFiles(root, 8)
+    .filter((path) => lockfileNames.has(basename(path)))
+    .map((absolutePath) => ({
+      path: relativePosix(root, absolutePath),
+      digest: fileDigest(absolutePath),
+    }))
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
