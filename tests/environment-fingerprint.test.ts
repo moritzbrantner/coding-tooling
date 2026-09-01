@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -86,6 +86,24 @@ describe("expected environment fingerprint", () => {
     expect(after.layers.native.digest).toBe(before.layers.native.digest);
     expect(after.layers.sources.digest).toBe(before.layers.sources.digest);
     expect(after.layers.config.digest).toBe(before.layers.config.digest);
+  });
+
+  test("includes nested committed lockfiles in dependency identity", () => {
+    const root = repository();
+    mkdirSync(join(root, "backend"), { recursive: true });
+    writeFileSync(join(root, "backend", "Cargo.lock"), "backend-lock-v1\n");
+    const before = passedData(root);
+
+    writeFileSync(join(root, "backend", "Cargo.lock"), "backend-lock-v2\n");
+    const after = passedData(root);
+
+    expect(after.fingerprint).not.toBe(before.fingerprint);
+    expect(after.layers.dependencies.digest).not.toBe(before.layers.dependencies.digest);
+    expect(after.layers.toolchain.digest).toBe(before.layers.toolchain.digest);
+    expect(after.layers.native.digest).toBe(before.layers.native.digest);
+    expect(
+      (after.layers.dependencies.inputs as Array<{ path: string }>).map((input) => input.path),
+    ).toContain("backend/Cargo.lock");
   });
 
   test("does not fingerprint compatibility-hold explanations", () => {
