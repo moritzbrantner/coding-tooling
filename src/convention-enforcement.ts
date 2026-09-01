@@ -152,6 +152,27 @@ const builtinChecks = new Set([
 ]);
 const exactBunPackageManager = /^bun@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const exactActionRevision = /^[0-9a-f]{40}$/i;
+const ambientEnvironmentKeys = new Set([
+  "CI",
+  "HOME",
+  "PATH",
+  "PWD",
+  "TEMP",
+  "TMP",
+  "TMPDIR",
+  "USER",
+  "USERNAME",
+  "XDG_CACHE_HOME",
+]);
+
+function isAmbientEnvironmentKey(key: string): boolean {
+  return (
+    ambientEnvironmentKeys.has(key) ||
+    key.startsWith("ACTIONS_") ||
+    key.startsWith("GITHUB_") ||
+    key.startsWith("RUNNER_")
+  );
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -379,7 +400,7 @@ function envKeysFromSource(content: string): string[] {
   for (const expression of expressions) {
     for (const match of content.matchAll(expression)) keys.add(match[1]);
   }
-  return [...keys];
+  return [...keys].filter((key) => !isAmbientEnvironmentKey(key));
 }
 
 function envFileKeys(path: string): Set<string> {
