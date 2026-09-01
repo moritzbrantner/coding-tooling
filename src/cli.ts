@@ -170,13 +170,11 @@ export function main(argv = process.argv.slice(2)): number {
   else if (command === "environment") {
     const action = positional[0];
     const profile = stringOption(options, "profile") ?? "default";
-    if (
-      action !== "fingerprint" ||
-      (profile !== "default" && profile !== "source-development")
-    )
+    if (action !== "fingerprint" || (profile !== "default" && profile !== "source-development"))
       return usage();
     result = expectedEnvironmentFingerprint(root, profile as EnvironmentFingerprintProfile);
-  } else if (command === "affected") result = affected(root, stringOption(options, "base") ?? "HEAD");
+  } else if (command === "affected")
+    result = affected(root, stringOption(options, "base") ?? "HEAD");
   else if (command === "check") {
     const capability = positional[0] as Capability | undefined;
     if (!capability || !capabilities.includes(capability)) return usage();
