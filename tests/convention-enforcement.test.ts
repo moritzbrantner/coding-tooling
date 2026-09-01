@@ -66,6 +66,27 @@ describe("installed convention enforcement", () => {
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
   });
 
+  test("does not treat ambient host and CI variables as repository environment contract", () => {
+    const root = repository();
+    writeFileSync(
+      join(root, "src", "ambient.ts"),
+      "export const ci = process.env.CI;\nexport const home = process.env.HOME;\n",
+    );
+    writeFileSync(
+      join(root, "src", "ambient.rs"),
+      'fn cache() { let _ = std::env::var_os("XDG_CACHE_HOME"); }\n',
+    );
+    enforce(root, "ENV-003", { kind: "builtin", check: "env-example" });
+
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+
+    writeFileSync(
+      join(root, "src", "ambient.ts"),
+      "export const ci = process.env.CI;\nexport const api = process.env.API_URL;\n",
+    );
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("failed");
+  });
+
   test("requires actionable TODO syntax and rejects FIXME", () => {
     const root = repository();
     const source = join(root, "src", "thing.ts");
