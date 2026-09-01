@@ -4,6 +4,7 @@ import { basename, join, resolve } from "node:path";
 import { runConventionChecks } from "./convention-enforcement.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { discoverComponents, loadConfig, planChecks } from "./core.ts";
+import { repositoryEnvironmentConformance } from "./environment-conformance.ts";
 import {
   defaultTiers,
   type Diagnostic,
@@ -98,6 +99,9 @@ export function conformanceReport(
       message: "No supported repository components were discovered",
     });
   }
+
+  const environment = repositoryEnvironmentConformance(root);
+  findings.push(...environment.findings);
 
   const toolingConfigPresent = existsSync(join(root, configPath));
   let toolingConfig: ToolingConfig = { schemaVersion: 1 };
@@ -225,6 +229,7 @@ export function conformanceReport(
       repositoryName: basename(root),
       technologies,
       components,
+      environment: environment.data,
       tooling: {
         configPath,
         configPresent: toolingConfigPresent,
