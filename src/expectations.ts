@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 
 import { discoverComponents, loadConfig } from "./core.ts";
@@ -238,7 +238,11 @@ export function loadExpectationConfig(
   };
 }
 
-function semanticFindingId(expectationId: string, subjectKey: string, requirementKey: string): string {
+function semanticFindingId(
+  expectationId: string,
+  subjectKey: string,
+  requirementKey: string,
+): string {
   const digest = createHash("sha256")
     .update(`${expectationId}\0${subjectKey}\0${requirementKey}`)
     .digest("hex")
@@ -311,11 +315,46 @@ function sourceIdentity(source: string, packageInfo: PackageInfo): string {
   return withoutRoot.slice(0, -extension.length);
 }
 
+function moduleSpecifiers(content: string): string[] {
+  const result: string[] = [];
+  const patterns = [
+    /\bfrom\s*["']([^"']+)["']/g,
+    /\bimport\s*["']([^"']+)["']/g,
+    /\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/g,
+  ];
+  for (const pattern of patterns) {
+    for (const match of content.matchAll(pattern)) {
+      if (match[1]) result.push(match[1]);
+    }
+  }
+  return result;
+}
+
+function testDirectlyReferencesSource(source: string, testFile: string): boolean {
+  let content: string;
+  try {
+    content = readFileSync(testFile, "utf8");
+  } catch {
+    return false;
+  }
+  const relativeImport = normalizePath(relative(dirname(testFile), source));
+  const specifier = relativeImport.startsWith(".") ? relativeImport : `./${relativeImport}`;
+  const extension = extname(specifier);
+  const extensionless = extension ? specifier.slice(0, -extension.length) : specifier;
+  return moduleSpecifiers(content).some(
+    (candidate) => candidate === specifier || candidate === extensionless,
+  );
+}
+
 function matchingTest(source: string, packageInfo: PackageInfo): string | undefined {
   const identity = sourceIdentity(source, packageInfo);
   return packageInfo.testFiles.find((testFile) => {
     const test = testIdentity(testFile, packageInfo);
-    return test === identity || test?.startsWith(`${identity}-`) === true;
+    return (
+      test === identity ||
+      test?.startsWith(`${identity}-`) === true ||
+      testDirectlyReferencesSource(source, testFile)
+    );
   });
 }
 
@@ -464,11 +503,7 @@ function missingTypeScriptConfigFindings(root: string, packages: PackageInfo[]):
       ],
       verification:
         typeof packageInfo.manifest.scripts?.typecheck === "string"
-          ? [
-              packageInfo.usesBun
-                ? ["bun", "run", "typecheck"]
-                : ["npm", "run", "typecheck"],
-            ]
+          ? [packageInfo.usesBun ? ["bun", "run", "typecheck"] : ["npm", "run", "typecheck"]]
           : [],
     });
   }
@@ -506,9 +541,7 @@ function missingCliWiringFindings(root: string, packages: PackageInfo[]): RawFin
             expectedArtifact: relativePosix(root, join(packageInfo.directory, target)),
           },
           message: `${manifestPath} wires bin target ${target}, but that file does not exist`,
-          evidence: [
-            { kind: "manifest", path: manifestPath, detail: `bin references ${target}` },
-          ],
+          evidence: [{ kind: "manifest", path: manifestPath, detail: `bin references ${target}` }],
           relatedFiles: [manifestPath],
           verification: [],
         });
@@ -811,7 +844,12 @@ export function scaffoldFinding(root: string, id: string): ExpectationEnvelope {
         result: remaining ? "still-active" : "scaffolded",
       },
       diagnostics: remaining
-        ? [{ code: "scaffold-incomplete", message: `Finding ${id} remains active after scaffolding` }]
+        ? [
+            {
+              code: "scaffold-incomplete",
+              message: `Finding ${id} remains active after scaffolding`,
+            },
+          ]
         : [],
     };
   } catch (error) {
