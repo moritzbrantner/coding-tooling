@@ -25,213 +25,139 @@ jobs:
         run: |
           from pathlib import Path
 
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"{label} marker not found")
+              return text.replace(old, new, 1)
+
           generators = Path("src/generators.ts")
           text = generators.read_text()
-
-          text = text.replace(
+          text = replace_once(
+              text,
               'const allowedTransforms = new Set(["pascal", "camel", "kebab", "snake"]);',
               'const allowedTransforms = new Set(["pascal", "camel", "kebab", "snake", "title"]);',
+              "transform catalog",
           )
-
-          old = '''      validateInterpolation(operation.path, inputNames);
-                return { kind: "create-file", template: operation.template, path: operation.path };'''
-          new = '''      validateInterpolation(operation.template, inputNames);
-                validateInterpolation(operation.path, inputNames);
-                return { kind: "create-file", template: operation.template, path: operation.path };'''
-          if old not in text:
-              raise SystemExit("create-file validation marker not found")
-          text = text.replace(old, new, 1)
-
-          old = '''  const prerequisites = value.prerequisites.map((item) => {
-              if (!isRecord(item) || typeof item.kind !== "string" || !item.kind) {
-                throw new GeneratorError(
-                  "invalid-generator",
-                  `Generator ${value.id} has invalid prerequisite`,
-                );
-              }
-              return item as GeneratorPrerequisite;
-            });'''
-          new = '''  const prerequisites = value.prerequisites.map((item) => {
-              if (!isRecord(item) || typeof item.kind !== "string" || !item.kind) {
-                throw new GeneratorError(
-                  "invalid-generator",
-                  `Generator ${value.id} has invalid prerequisite`,
-                );
-              }
-              if (item.kind === "file") {
-                if (typeof item.path !== "string" || !managedPath(item.path)) {
-                  throw new GeneratorError(
-                    "invalid-generator",
-                    `Generator ${value.id} has invalid file prerequisite`,
-                  );
-                }
-                validateInterpolation(item.path, inputNames);
-              }
-              return item as GeneratorPrerequisite;
-            });'''
-          if old not in text:
-              raise SystemExit("prerequisite parser marker not found")
-          text = text.replace(old, new, 1)
-
-          old = '''  if (kind === "pascal")
-              return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("");
-            throw new GeneratorError("unsupported-template-expression", `Unsupported transform: ${kind}`);'''
-          new = '''  if (kind === "pascal")
-              return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("");
-            if (kind === "title")
-              return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join(" ");
-            throw new GeneratorError("unsupported-template-expression", `Unsupported transform: ${kind}`);'''
-          if old not in text:
-              raise SystemExit("transform marker not found")
-          text = text.replace(old, new, 1)
-
-          old = '''  const append = (current: LoadedGenerator, inputs: Record<string, string | boolean>): void => {
-              prerequisites.push(...current.descriptor.prerequisites);
-              postconditions.push(...current.descriptor.postconditions);'''
-          new = '''  const append = (current: LoadedGenerator, inputs: Record<string, string | boolean>): void => {
-              for (const prerequisite of current.descriptor.prerequisites) {
-                if (prerequisite.kind === "file" && typeof prerequisite.path === "string") {
-                  const path = render(prerequisite.path, inputs);
-                  if (!managedPath(path)) {
-                    throw new GeneratorError(
-                      "invalid-generator-output",
-                      `Generator ${current.descriptor.id} produced unsafe prerequisite path ${path}`,
-                    );
-                  }
-                  prerequisites.push({ ...prerequisite, path });
-                } else {
-                  prerequisites.push(prerequisite);
-                }
-              }
-              postconditions.push(...current.descriptor.postconditions);'''
-          if old not in text:
-              raise SystemExit("append prerequisite marker not found")
-          text = text.replace(old, new, 1)
-
-          old = '        const template = templatePath(current, operation.template);'
-          new = '''        const renderedTemplate = render(operation.template, inputs);
-                  if (!managedPath(renderedTemplate)) {
-                    throw new GeneratorError(
-                      "invalid-generator-output",
-                      `Generator ${current.descriptor.id} produced unsafe template path ${renderedTemplate}`,
-                    );
-                  }
-                  const template = templatePath(current, renderedTemplate);'''
-          if old not in text:
-              raise SystemExit("template planning marker not found")
-          text = text.replace(old, new, 1)
+          text = replace_once(
+              text,
+              '      validateInterpolation(operation.path, inputNames);\n      return { kind: "create-file", template: operation.template, path: operation.path };',
+              '      validateInterpolation(operation.template, inputNames);\n      validateInterpolation(operation.path, inputNames);\n      return { kind: "create-file", template: operation.template, path: operation.path };',
+              "create-file validation",
+          )
+          text = replace_once(
+              text,
+              '    return item as GeneratorPrerequisite;\n  });\n\n  const postconditions = value.postconditions.map((item) => {',
+              '    if (item.kind === "file") {\n      if (typeof item.path !== "string" || !managedPath(item.path)) {\n        throw new GeneratorError(\n          "invalid-generator",\n          `Generator ${value.id} has invalid file prerequisite`,\n        );\n      }\n      validateInterpolation(item.path, inputNames);\n    }\n    return item as GeneratorPrerequisite;\n  });\n\n  const postconditions = value.postconditions.map((item) => {',
+              "file prerequisite parsing",
+          )
+          text = replace_once(
+              text,
+              '  if (kind === "pascal")\n    return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("");\n  throw new GeneratorError("unsupported-template-expression", `Unsupported transform: ${kind}`);',
+              '  if (kind === "pascal")\n    return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join("");\n  if (kind === "title")\n    return parts.map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`).join(" ");\n  throw new GeneratorError("unsupported-template-expression", `Unsupported transform: ${kind}`);',
+              "title transform",
+          )
+          text = replace_once(
+              text,
+              '  const append = (current: LoadedGenerator, inputs: Record<string, string | boolean>): void => {\n    prerequisites.push(...current.descriptor.prerequisites);\n    postconditions.push(...current.descriptor.postconditions);',
+              '  const append = (current: LoadedGenerator, inputs: Record<string, string | boolean>): void => {\n    for (const prerequisite of current.descriptor.prerequisites) {\n      if (prerequisite.kind === "file" && typeof prerequisite.path === "string") {\n        const path = render(prerequisite.path, inputs);\n        if (!managedPath(path)) {\n          throw new GeneratorError(\n            "invalid-generator-output",\n            `Generator ${current.descriptor.id} produced unsafe prerequisite path ${path}`,\n          );\n        }\n        prerequisites.push({ ...prerequisite, path });\n      } else {\n        prerequisites.push(prerequisite);\n      }\n    }\n    postconditions.push(...current.descriptor.postconditions);',
+              "rendered prerequisites",
+          )
+          text = replace_once(
+              text,
+              '        const template = templatePath(current, operation.template);',
+              '        const renderedTemplate = render(operation.template, inputs);\n        if (!managedPath(renderedTemplate)) {\n          throw new GeneratorError(\n            "invalid-generator-output",\n            `Generator ${current.descriptor.id} produced unsafe template path ${renderedTemplate}`,\n          );\n        }\n        const template = templatePath(current, renderedTemplate);',
+              "rendered template",
+          )
           generators.write_text(text)
 
           verification = Path("src/generator-verification.ts")
           text = verification.read_text()
-          text = text.replace(
+          text = replace_once(
+              text,
               'import { existsSync } from "node:fs";',
               'import { existsSync, realpathSync, statSync } from "node:fs";',
+              "fs imports",
           )
-          old = '''type ToolPrerequisite = {
-              kind: "tool";
-              name: string;
-            };
-
-            type NetworkPrerequisite = {'''
-          new = '''type ToolPrerequisite = {
-              kind: "tool";
-              name: string;
-            };
-
-            type FilePrerequisite = {
-              kind: "file";
-              path: string;
-            };
-
-            type NetworkPrerequisite = {'''
-          if old not in text:
-              raise SystemExit("prerequisite type marker not found")
-          text = text.replace(old, new, 1)
-          old = '''  | TechnologyPrerequisite
-              | ToolPrerequisite
-              | NetworkPrerequisite;'''
-          new = '''  | TechnologyPrerequisite
-              | ToolPrerequisite
-              | FilePrerequisite
-              | NetworkPrerequisite;'''
-          if old not in text:
-              raise SystemExit("prerequisite union marker not found")
-          text = text.replace(old, new, 1)
-
-          marker = '''function prerequisiteCheck(root: string, plan: GeneratorPlan, raw: unknown): PrerequisiteCheck {
-          '''
+          text = replace_once(
+              text,
+              'type NetworkPrerequisite = {',
+              'type FilePrerequisite = {\n  kind: "file";\n  path: string;\n};\n\ntype NetworkPrerequisite = {',
+              "file prerequisite type",
+          )
+          text = replace_once(
+              text,
+              '  | ToolPrerequisite\n  | NetworkPrerequisite;',
+              '  | ToolPrerequisite\n  | FilePrerequisite\n  | NetworkPrerequisite;',
+              "file prerequisite union",
+          )
           helper = '''function fileCheck(root: string, prerequisite: FilePrerequisite): PrerequisiteCheck {
-              if (!prerequisite.path) {
-                return {
-                  kind: prerequisite.kind,
-                  status: "failed",
-                  code: "invalid-generator-prerequisite",
-                  message: "File prerequisite is missing a path.",
-                };
-              }
-              const absoluteRoot = resolve(root);
-              const candidate = resolve(absoluteRoot, prerequisite.path);
-              if (!withinRoot(absoluteRoot, candidate)) {
-                return {
-                  kind: prerequisite.kind,
-                  status: "failed",
-                  code: "invalid-generator-prerequisite",
-                  message: `File prerequisite escapes repository root: ${prerequisite.path}`,
-                };
-              }
-              if (!existsSync(candidate)) {
-                return {
-                  kind: prerequisite.kind,
-                  status: "failed",
-                  code: "missing-generator-file",
-                  message: `Required generator file is missing: ${prerequisite.path}`,
-                };
-              }
-              try {
-                const realRoot = realpathSync(absoluteRoot);
-                const realCandidate = realpathSync(candidate);
-                if (!withinRoot(realRoot, realCandidate) || !statSync(realCandidate).isFile()) {
-                  return {
-                    kind: prerequisite.kind,
-                    status: "failed",
-                    code: "invalid-generator-prerequisite",
-                    message: `Required generator path is not a repository file: ${prerequisite.path}`,
-                  };
-                }
-              } catch {
-                return {
-                  kind: prerequisite.kind,
-                  status: "failed",
-                  code: "invalid-generator-prerequisite",
-                  message: `Required generator path is not a readable file: ${prerequisite.path}`,
-                };
-              }
+            if (!prerequisite.path) {
               return {
                 kind: prerequisite.kind,
-                name: prerequisite.path,
-                status: "passed",
-                message: `File prerequisite ${prerequisite.path} is satisfied.`,
-                evidence: { path: prerequisite.path },
+                status: "failed",
+                code: "invalid-generator-prerequisite",
+                message: "File prerequisite is missing a path.",
               };
             }
+            const absoluteRoot = resolve(root);
+            const candidate = resolve(absoluteRoot, prerequisite.path);
+            if (!withinRoot(absoluteRoot, candidate)) {
+              return {
+                kind: prerequisite.kind,
+                status: "failed",
+                code: "invalid-generator-prerequisite",
+                message: `File prerequisite escapes repository root: ${prerequisite.path}`,
+              };
+            }
+            if (!existsSync(candidate)) {
+              return {
+                kind: prerequisite.kind,
+                status: "failed",
+                code: "missing-generator-file",
+                message: `Required generator file is missing: ${prerequisite.path}`,
+              };
+            }
+            try {
+              const realRoot = realpathSync(absoluteRoot);
+              const realCandidate = realpathSync(candidate);
+              if (!withinRoot(realRoot, realCandidate) || !statSync(realCandidate).isFile()) {
+                return {
+                  kind: prerequisite.kind,
+                  status: "failed",
+                  code: "invalid-generator-prerequisite",
+                  message: `Required generator path is not a repository file: ${prerequisite.path}`,
+                };
+              }
+            } catch {
+              return {
+                kind: prerequisite.kind,
+                status: "failed",
+                code: "invalid-generator-prerequisite",
+                message: `Required generator path is not a readable file: ${prerequisite.path}`,
+              };
+            }
+            return {
+              kind: prerequisite.kind,
+              name: prerequisite.path,
+              status: "passed",
+              message: `File prerequisite ${prerequisite.path} is satisfied.`,
+              evidence: { path: prerequisite.path },
+            };
+          }
 
-            '''
-          if marker not in text:
-              raise SystemExit("prerequisiteCheck marker not found")
-          text = text.replace(marker, helper + marker, 1)
-          old = '''  if (prerequisite.kind === "technology") return technologyCheck(root, prerequisite);
-              if (prerequisite.kind === "tool") return toolCheck(prerequisite);
-              if (
           '''
-          new = '''  if (prerequisite.kind === "technology") return technologyCheck(root, prerequisite);
-              if (prerequisite.kind === "tool") return toolCheck(prerequisite);
-              if (prerequisite.kind === "file") return fileCheck(root, prerequisite);
-              if (
-          '''
-          if old not in text:
-              raise SystemExit("prerequisite dispatch marker not found")
-          text = text.replace(old, new, 1)
+          text = replace_once(
+              text,
+              'function prerequisiteCheck(root: string, plan: GeneratorPlan, raw: unknown): PrerequisiteCheck {',
+              helper + 'function prerequisiteCheck(root: string, plan: GeneratorPlan, raw: unknown): PrerequisiteCheck {',
+              "file prerequisite checker",
+          )
+          text = replace_once(
+              text,
+              '  if (prerequisite.kind === "tool") return toolCheck(prerequisite);',
+              '  if (prerequisite.kind === "tool") return toolCheck(prerequisite);\n  if (prerequisite.kind === "file") return fileCheck(root, prerequisite);',
+              "file prerequisite dispatch",
+          )
           verification.write_text(text)
 
           tests = Path("tests/generators.test.ts")
