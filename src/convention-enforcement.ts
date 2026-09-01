@@ -522,7 +522,9 @@ function ciActionPins(root: string, ruleId: string): ConventionCheckResult {
       const separator = value.lastIndexOf("@");
       const revision = separator >= 0 ? value.slice(separator + 1) : "";
       if (!exactActionRevision.test(revision)) {
-        failures.push(`${file.relativePath}:${index + 1}: external action must use a full commit SHA`);
+        failures.push(
+          `${file.relativePath}:${index + 1}: external action must use a full commit SHA`,
+        );
       }
     }
   }
@@ -559,7 +561,9 @@ function casePortability(root: string, ruleId: string): ConventionCheckResult {
     const key = file.relativePath.normalize("NFC").toLowerCase();
     const previous = seen.get(key);
     if (previous && previous !== file.relativePath) {
-      failures.push(`${previous} and ${file.relativePath}: paths collide on case-insensitive filesystems`);
+      failures.push(
+        `${previous} and ${file.relativePath}: paths collide on case-insensitive filesystems`,
+      );
     } else {
       seen.set(key, file.relativePath);
     }
