@@ -9,6 +9,10 @@ import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { auditDependencies } from "./dependency-audit.ts";
+import {
+  expectedEnvironmentFingerprint,
+  type EnvironmentFingerprintProfile,
+} from "./environment-fingerprint.ts";
 import { executeGeneratorCommand } from "./generator-execution.ts";
 import { generatorCommand } from "./generators.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
@@ -135,6 +139,7 @@ function usage(): never {
   coding-tooling affected [--base <git-ref>] [--json]
   coding-tooling doctor [--json]
   coding-tooling conformance [--config <path>] [--json]
+  coding-tooling environment fingerprint [--profile <default|source-development>] [--json]
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
   coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
   coding-tooling pr integrate <number> [--tier <name>] [--merge-method <squash|merge|rebase>] [--remote <name>] [--remote-checks <required|advisory>] [--dry-run] [--json]
@@ -162,7 +167,14 @@ export function main(argv = process.argv.slice(2)): number {
   else if (command === "doctor") result = doctor(root);
   else if (command === "conformance")
     result = conformanceReport({ root, configPath: stringOption(options, "config") });
-  else if (command === "affected") result = affected(root, stringOption(options, "base") ?? "HEAD");
+  else if (command === "environment") {
+    const action = positional[0];
+    const profile = stringOption(options, "profile") ?? "default";
+    if (action !== "fingerprint" || (profile !== "default" && profile !== "source-development"))
+      return usage();
+    result = expectedEnvironmentFingerprint(root, profile as EnvironmentFingerprintProfile);
+  } else if (command === "affected")
+    result = affected(root, stringOption(options, "base") ?? "HEAD");
   else if (command === "check") {
     const capability = positional[0] as Capability | undefined;
     if (!capability || !capabilities.includes(capability)) return usage();

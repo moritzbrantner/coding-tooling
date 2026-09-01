@@ -27,6 +27,7 @@ export type ResultOperation =
   | "affected"
   | "doctor"
   | "conformance"
+  | "environment"
   | "plan"
   | "run"
   | "source-deps"
