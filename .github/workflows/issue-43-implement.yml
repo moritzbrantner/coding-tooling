@@ -108,19 +108,15 @@ jobs:
               raise SystemExit("append prerequisite marker not found")
           text = text.replace(old, new, 1)
 
-          old = '''      if (operation.kind === "create-file") {
-                const template = templatePath(current, operation.template);
-                const templateContent = readFileSync(template, "utf8");'''
-          new = '''      if (operation.kind === "create-file") {
-                const renderedTemplate = render(operation.template, inputs);
-                if (!managedPath(renderedTemplate)) {
-                  throw new GeneratorError(
-                    "invalid-generator-output",
-                    `Generator ${current.descriptor.id} produced unsafe template path ${renderedTemplate}`,
-                  );
-                }
-                const template = templatePath(current, renderedTemplate);
-                const templateContent = readFileSync(template, "utf8");'''
+          old = '        const template = templatePath(current, operation.template);'
+          new = '''        const renderedTemplate = render(operation.template, inputs);
+                  if (!managedPath(renderedTemplate)) {
+                    throw new GeneratorError(
+                      "invalid-generator-output",
+                      `Generator ${current.descriptor.id} produced unsafe template path ${renderedTemplate}`,
+                    );
+                  }
+                  const template = templatePath(current, renderedTemplate);'''
           if old not in text:
               raise SystemExit("template planning marker not found")
           text = text.replace(old, new, 1)
