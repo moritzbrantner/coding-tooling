@@ -1,0 +1,47 @@
+name: Patch environment contract enforcement
+
+on:
+  push:
+    branches:
+      - fix/environment-contract-ambient-vars
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+      - name: Apply focused source and test patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source_path = Path('src/convention-enforcement.ts')
+          source = source_path.read_text()
+          anchor = 'const exactActionRevision = /^[0-9a-f]{40}$/i;\n'
+          addition = '''const ambientEnvironmentKeys = new Set([\n  "CI",\n  "HOME",\n  "PATH",\n  "PWD",\n  "TEMP",\n  "TMP",\n  "TMPDIR",\n  "USER",\n  "USERNAME",\n  "XDG_CACHE_HOME",\n]);\n\nfunction isAmbientEnvironmentKey(key: string): boolean {\n  return (\n    ambientEnvironmentKeys.has(key) ||\n    key.startsWith("ACTIONS_") ||\n    key.startsWith("GITHUB_") ||\n    key.startsWith("RUNNER_")\n  );\n}\n'''
+          if addition not in source:
+              source = source.replace(anchor, anchor + addition)
+          source = source.replace('  return [...keys];\n}\n\nfunction envFileKeys', '  return [...keys].filter((key) => !isAmbientEnvironmentKey(key));\n}\n\nfunction envFileKeys')
+          source_path.write_text(source)
+
+          test_path = Path('tests/convention-enforcement.test.ts')
+          tests = test_path.read_text()
+          anchor = '''  test("requires actionable TODO syntax and rejects FIXME", () => {\n'''
+          test = '''  test("does not treat ambient host and CI variables as repository environment contract", () => {\n    const root = repository();\n    writeFileSync(\n      join(root, "src", "ambient.ts"),\n      "export const ci = process.env.CI;\\nexport const home = process.env.HOME;\\n",\n    );\n    writeFileSync(\n      join(root, "src", "ambient.rs"),\n      'fn cache() { let _ = std::env::var_os("XDG_CACHE_HOME"); }\\n',\n    );\n    enforce(root, "ENV-003", { kind: "builtin", check: "env-example" });\n\n    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");\n\n    writeFileSync(\n      join(root, "src", "ambient.ts"),\n      "export const ci = process.env.CI;\\nexport const api = process.env.API_URL;\\n",\n    );\n    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("failed");\n  });\n\n'''
+          if test not in tests:
+              tests = tests.replace(anchor, test + anchor)
+          test_path.write_text(tests)
+          PY
+
+          git rm .github/workflows/patch-env-contract.yml
+          git add src/convention-enforcement.ts tests/convention-enforcement.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: ignore ambient variables in env contract"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
