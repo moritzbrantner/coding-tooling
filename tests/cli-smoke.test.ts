@@ -1,0 +1,31 @@
+import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
+
+const repositoryRoot = resolve(import.meta.dir, "..");
+
+describe("CLI boundary", () => {
+  test("generate list exits successfully with machine-readable output", async () => {
+    const child = Bun.spawn([process.execPath, "src/cli.ts", "generate", "list", "--json"], {
+      cwd: repositoryRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+
+    const result = JSON.parse(stdout) as {
+      status?: unknown;
+      data?: unknown;
+    };
+
+    expect(result.status).toBe("passed");
+    expect(result.data).toBeDefined();
+  });
+});
