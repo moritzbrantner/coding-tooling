@@ -86,7 +86,9 @@ export function conformanceReport(
   const configPath = options.configPath ?? ".coding-tooling.json";
   const findings: ConformanceFinding[] = [];
   const components = discoverComponents(root);
-  const technologies = [...new Set(components.flatMap((component) => component.technologies))].sort();
+  const technologies = [
+    ...new Set(components.flatMap((component) => component.technologies)),
+  ].sort();
 
   if (components.length === 0) {
     findings.push({
