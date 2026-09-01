@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { agentCapabilitiesCommand } from "./agent-capabilities.ts";
+import { conformanceReport } from "./conformance.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
@@ -133,6 +134,7 @@ function usage(): never {
   coding-tooling check <capability> [--component <name>] [--json]
   coding-tooling affected [--base <git-ref>] [--json]
   coding-tooling doctor [--json]
+  coding-tooling conformance [--config <path>] [--json]
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
   coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
   coding-tooling pr integrate <number> [--tier <name>] [--merge-method <squash|merge|rebase>] [--remote <name>] [--remote-checks <required|advisory>] [--dry-run] [--json]
@@ -158,6 +160,8 @@ export function main(argv = process.argv.slice(2)): number {
   let result: ResultEnvelope<Record<string, unknown>>;
   if (command === "inspect") result = inspect(root);
   else if (command === "doctor") result = doctor(root);
+  else if (command === "conformance")
+    result = conformanceReport({ root, configPath: stringOption(options, "config") });
   else if (command === "affected") result = affected(root, stringOption(options, "base") ?? "HEAD");
   else if (command === "check") {
     const capability = positional[0] as Capability | undefined;
