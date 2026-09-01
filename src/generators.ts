@@ -28,7 +28,13 @@ type JsonSetOperation = {
   value: string;
 };
 
-type GeneratorOperation = CreateFileOperation | JsonSetOperation;
+type TypeScriptBarrelExportOperation = {
+  kind: "typescript-barrel-export";
+  path: string;
+  module: string;
+};
+
+type GeneratorOperation = CreateFileOperation | JsonSetOperation | TypeScriptBarrelExportOperation;
 
 type GeneratorComposition = {
   generator: string;
@@ -83,6 +89,12 @@ export type PlannedGeneratorOperation =
       path: string;
       key: string;
       value: string;
+    }
+  | {
+      generator: string;
+      kind: "typescript-barrel-export";
+      path: string;
+      module: string;
     };
 
 export type GeneratorPlan = {
@@ -283,6 +295,26 @@ function parseDescriptor(path: string): GeneratorDescriptor {
       }
       validateInterpolation(operation.path, inputNames);
       return { kind: "create-file", template: operation.template, path: operation.path };
+    }
+    if (operation.kind === "typescript-barrel-export") {
+      if (
+        typeof operation.path !== "string" ||
+        !operation.path ||
+        typeof operation.module !== "string" ||
+        !operation.module
+      ) {
+        throw new GeneratorError(
+          "invalid-generator",
+          `Generator ${value.id} contains an invalid typescript-barrel-export operation`,
+        );
+      }
+      validateInterpolation(operation.path, inputNames);
+      validateInterpolation(operation.module, inputNames);
+      return {
+        kind: "typescript-barrel-export",
+        path: operation.path,
+        module: operation.module,
+      };
     }
     if (operation.kind === "json-set") {
       if (
@@ -701,6 +733,22 @@ export function planGenerator(
           path: renderedPath,
           template: relative(root, template).split(sep).join("/"),
           content: render(templateContent, inputs),
+        });
+        continue;
+      }
+      if (operation.kind === "typescript-barrel-export") {
+        const module = render(operation.module, inputs);
+        if (!/^(?:\.{1,2}\/)[A-Za-z0-9@._/-]+$/.test(module) || module.includes("/../")) {
+          throw new GeneratorError(
+            "invalid-generator-output",
+            `Generator ${current.descriptor.id} produced invalid TypeScript barrel module ${module}`,
+          );
+        }
+        operations.push({
+          generator: current.descriptor.id,
+          kind: "typescript-barrel-export",
+          path: renderedPath,
+          module,
         });
         continue;
       }

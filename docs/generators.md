@@ -78,3 +78,17 @@ It deliberately does not provide arbitrary shell hooks, embedded JavaScript, loo
 Generation is offline by default. V1 never discovers `latest` versions, installs missing packages, or executes ecosystem generators implicitly.
 
 The descriptor/reporting boundary leaves room for a future **small allowlisted set** of native and package-manager adapters (for example carefully constrained `dotnet new`, `cargo new`, or exact package additions). Such adapters should require explicit network permission such as `--allow-network` when fetching is necessary, consume exact declared prerequisites, and remain a closed deterministic set. This must not become an arbitrary command/plugin execution mechanism.
+
+## Narrow structured source mutations
+
+Generator apply supports a deliberately closed set of existing-file mutations. `typescript-barrel-export` ensures one exact TypeScript re-export in an existing export-only barrel:
+
+```json
+{
+  "kind": "typescript-barrel-export",
+  "path": "src/data.ts",
+  "module": "./components/data/{{name | kebab}}"
+}
+```
+
+The target may contain an optional leading `"use client";`, blank lines, and `export * from "...";` declarations only. An existing export is a no-op; a missing export is inserted in lexical module order. Imports, executable statements, comments/sections, malformed exports, duplicates, or any other structure that would require interpretation fail as a generation conflict. This operation is intentionally not a generic text editor or AST/codemod surface.
