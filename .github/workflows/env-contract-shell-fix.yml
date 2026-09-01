@@ -47,7 +47,7 @@ jobs:
               raise SystemExit('test insertion marker not unique')
           tests.write_text(test_text.replace(marker, addition + marker, 1))
           PY
-          bun run format
+          bunx oxfmt --write src/convention-enforcement.ts tests/convention-enforcement.test.ts
           bun run lint
           bun run typecheck
           bun test
