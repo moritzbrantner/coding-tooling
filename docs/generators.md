@@ -91,7 +91,7 @@ Generator apply supports a deliberately closed set of existing-file mutations. `
 }
 ```
 
-The target may contain an optional leading `"use client";`, blank lines, and `export * from "...";` declarations only. An existing export is a no-op; a missing export is inserted in lexical module order. Imports, executable statements, comments/sections, malformed exports, duplicates, or any other structure that would require interpretation fail as a generation conflict. This operation is intentionally not a generic text editor or AST/codemod surface.
+The target may contain an optional leading `"use client";`, blank lines, and `export * from "...";` declarations only. An existing export is a no-op; a missing export is inserted at a deterministic lexical insertion point while preserving the relative order of every existing export. The operation never normalizes or reorders pre-existing lines. Imports, executable statements, comments/sections, malformed exports, duplicates, or any other structure that would require interpretation fail as a generation conflict. This operation is intentionally not a generic text editor or AST/codemod surface.
 
 ## Bounded adoption primitives
 

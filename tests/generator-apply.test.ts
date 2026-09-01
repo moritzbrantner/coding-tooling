@@ -186,6 +186,28 @@ describe("generator apply", () => {
     expect((repeat.data.generation as { result: string }).result).toBe("no-op");
   });
 
+  test("preserves existing barrel order while inserting one export", () => {
+    const root = fixture();
+    localGenerator(root, "feature", [
+      {
+        kind: "typescript-barrel-export",
+        path: "src/data.ts",
+        module: "./components/data/{{name | kebab}}",
+      },
+    ]);
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(
+      join(root, "src", "data.ts"),
+      '"use client";\n\nexport * from "./components/data/comparison-matrix";\nexport * from "./components/data/collapsible";\nexport * from "./components/data/typography";\n',
+    );
+
+    const result = applyGeneratorCommand(root, "feature", { name: "VisuallyHidden" });
+    expect(result.status).toBe("passed");
+    expect(readFileSync(join(root, "src", "data.ts"), "utf8")).toBe(
+      '"use client";\n\nexport * from "./components/data/comparison-matrix";\nexport * from "./components/data/collapsible";\nexport * from "./components/data/typography";\nexport * from "./components/data/visually-hidden";\n',
+    );
+  });
+
   test("refuses TypeScript barrels that require interpretation", () => {
     const root = fixture();
     localGenerator(root, "feature", [

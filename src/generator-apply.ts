@@ -209,7 +209,13 @@ function typescriptBarrelExportMutation(
     };
   }
 
-  const nextModules = [...modules, operation.module].sort((a, b) => a.localeCompare(b));
+  const insertionIndex = modules.findIndex((module) => module.localeCompare(operation.module) > 0);
+  const nextModules = [...modules];
+  nextModules.splice(
+    insertionIndex === -1 ? nextModules.length : insertionIndex,
+    0,
+    operation.module,
+  );
   const exports = nextModules.map((module) => `export * from "${module}";`).join("\n");
   const desiredContent = useClient ? `"use client";\n\n${exports}\n` : `${exports}\n`;
   return {
