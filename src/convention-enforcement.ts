@@ -1,6 +1,15 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, extname, join, relative } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 
 import {
   capabilities,
@@ -25,7 +34,15 @@ type ClippyEnforcement = {
 
 type BuiltinEnforcement = {
   kind: "builtin";
-  check: "bun-default" | "env-example" | "todo-format" | "vitest-kinds";
+  check:
+    | "bun-default"
+    | "case-portability"
+    | "ci-action-pins"
+    | "env-example"
+    | "symlink-boundaries"
+    | "text-hygiene"
+    | "todo-format"
+    | "vitest-kinds";
 };
 
 type CapabilityEnforcement = {
@@ -81,8 +98,60 @@ const todoExtensions = new Set([
   ".yaml",
   ".yml",
 ]);
-const builtinChecks = new Set(["bun-default", "env-example", "todo-format", "vitest-kinds"]);
+const knownTextExtensions = new Set([
+  ".c",
+  ".cjs",
+  ".cpp",
+  ".cs",
+  ".csproj",
+  ".css",
+  ".editorconfig",
+  ".graphql",
+  ".h",
+  ".hpp",
+  ".html",
+  ".js",
+  ".json",
+  ".jsx",
+  ".md",
+  ".mjs",
+  ".mts",
+  ".props",
+  ".py",
+  ".rs",
+  ".scss",
+  ".sh",
+  ".sln",
+  ".sql",
+  ".targets",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".txt",
+  ".xml",
+  ".yaml",
+  ".yml",
+]);
+const knownTextNames = new Set([
+  ".dockerignore",
+  ".gitattributes",
+  ".gitignore",
+  "Dockerfile",
+  "LICENSE",
+  "Makefile",
+]);
+const builtinChecks = new Set([
+  "bun-default",
+  "case-portability",
+  "ci-action-pins",
+  "env-example",
+  "symlink-boundaries",
+  "text-hygiene",
+  "todo-format",
+  "vitest-kinds",
+]);
 const exactBunPackageManager = /^bun@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const exactActionRevision = /^[0-9a-f]{40}$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -239,6 +308,25 @@ function runClippy(
   };
 }
 
+function repositoryFiles(root: string): Array<{ absolutePath: string; relativePath: string }> {
+  return walkFiles(root, 20)
+    .map((absolutePath) => ({
+      absolutePath,
+      relativePath: relative(root, absolutePath).replaceAll("\\", "/"),
+    }))
+    .filter((file) => !file.relativePath.startsWith(".conventions/"));
+}
+
+function builtinResult(ruleId: string, check: string, failures: string[]): ConventionCheckResult {
+  return {
+    ruleId,
+    kind: `builtin:${check}`,
+    component: "repository",
+    status: failures.length ? "failed" : "passed",
+    stderr: failures.join("\n"),
+  };
+}
+
 function bunDefault(root: string, components: Component[], ruleId: string): ConventionCheckResult {
   const failures: string[] = [];
   const packages = components.filter((item) => item.kind === "package");
@@ -276,13 +364,7 @@ function bunDefault(root: string, components: Component[], ruleId: string): Conv
       failures.push(`${component.name}: conflicting lockfile(s): ${conflictingLocks.join(", ")}`);
     }
   }
-  return {
-    ruleId,
-    kind: "builtin:bun-default",
-    component: "repository",
-    status: failures.length ? "failed" : "passed",
-    stderr: failures.join("\n"),
-  };
+  return builtinResult(ruleId, "bun-default", failures);
 }
 
 function envKeysFromSource(content: string): string[] {
@@ -346,13 +428,7 @@ function envExample(root: string, ruleId: string): ConventionCheckResult {
     }
   }
 
-  return {
-    ruleId,
-    kind: "builtin:env-example",
-    component: "repository",
-    status: failures.length ? "failed" : "passed",
-    stderr: failures.join("\n"),
-  };
+  return builtinResult(ruleId, "env-example", failures);
 }
 
 function commentText(line: string): string | undefined {
@@ -393,13 +469,106 @@ function todoFormat(root: string, ruleId: string): ConventionCheckResult {
     }
   }
 
-  return {
-    ruleId,
-    kind: "builtin:todo-format",
-    component: "repository",
-    status: failures.length ? "failed" : "passed",
-    stderr: failures.join("\n"),
-  };
+  return builtinResult(ruleId, "todo-format", failures);
+}
+
+function textHygiene(root: string, ruleId: string): ConventionCheckResult {
+  const failures: string[] = [];
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+
+  for (const file of repositoryFiles(root)) {
+    let stats;
+    try {
+      stats = lstatSync(file.absolutePath);
+    } catch {
+      continue;
+    }
+    if (stats.isSymbolicLink() || stats.size > 5_000_000) continue;
+
+    const buffer = readFileSync(file.absolutePath);
+    const knownText =
+      knownTextExtensions.has(extname(file.absolutePath).toLowerCase()) ||
+      knownTextNames.has(basename(file.absolutePath));
+    if (buffer.includes(0) && !knownText) continue;
+
+    try {
+      decoder.decode(buffer);
+    } catch {
+      if (knownText) failures.push(`${file.relativePath}: text file is not valid UTF-8`);
+      continue;
+    }
+
+    if (buffer.length >= 3 && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+      failures.push(`${file.relativePath}: UTF-8 BOM is not allowed`);
+    }
+    if (buffer.includes(0x0d)) failures.push(`${file.relativePath}: use LF line endings`);
+  }
+
+  return builtinResult(ruleId, "text-hygiene", failures);
+}
+
+function ciActionPins(root: string, ruleId: string): ConventionCheckResult {
+  const failures: string[] = [];
+  for (const file of repositoryFiles(root)) {
+    const workflowLike =
+      (file.relativePath.startsWith(".github/") && /\.ya?ml$/i.test(file.relativePath)) ||
+      file.relativePath === "action.yml" ||
+      file.relativePath === "action.yaml";
+    if (!workflowLike) continue;
+
+    for (const [index, line] of readFileSync(file.absolutePath, "utf8").split(/\r?\n/).entries()) {
+      const value = line.match(/^\s*(?:-\s*)?uses:\s*([^\s#]+)/)?.[1];
+      if (!value || value.startsWith("./") || value.startsWith("docker://")) continue;
+      const separator = value.lastIndexOf("@");
+      const revision = separator >= 0 ? value.slice(separator + 1) : "";
+      if (!exactActionRevision.test(revision)) {
+        failures.push(
+          `${file.relativePath}:${index + 1}: external action must use a full commit SHA`,
+        );
+      }
+    }
+  }
+  return builtinResult(ruleId, "ci-action-pins", failures);
+}
+
+function withinRoot(root: string, candidate: string): boolean {
+  return candidate === root || candidate.startsWith(`${root}${sep}`);
+}
+
+function symlinkBoundaries(root: string, ruleId: string): ConventionCheckResult {
+  const failures: string[] = [];
+  const absoluteRoot = resolve(root);
+  for (const file of repositoryFiles(root)) {
+    let stats;
+    try {
+      stats = lstatSync(file.absolutePath);
+    } catch {
+      continue;
+    }
+    if (!stats.isSymbolicLink()) continue;
+    const target = resolve(dirname(file.absolutePath), readlinkSync(file.absolutePath));
+    if (!withinRoot(absoluteRoot, target)) {
+      failures.push(`${file.relativePath}: symlink target escapes repository boundary`);
+    }
+  }
+  return builtinResult(ruleId, "symlink-boundaries", failures);
+}
+
+function casePortability(root: string, ruleId: string): ConventionCheckResult {
+  const failures: string[] = [];
+  const seen = new Map<string, string>();
+  for (const file of repositoryFiles(root)) {
+    const key = file.relativePath.normalize("NFC").toLowerCase();
+    const previous = seen.get(key);
+    if (previous && previous !== file.relativePath) {
+      failures.push(
+        `${previous} and ${file.relativePath}: paths collide on case-insensitive filesystems`,
+      );
+    } else {
+      seen.set(key, file.relativePath);
+    }
+  }
+  return builtinResult(ruleId, "case-portability", failures);
 }
 
 function vitestKinds(root: string, components: Component[], ruleId: string): ConventionCheckResult {
@@ -443,13 +612,33 @@ function vitestKinds(root: string, components: Component[], ruleId: string): Con
     }
   }
 
-  return {
-    ruleId,
-    kind: "builtin:vitest-kinds",
-    component: "repository",
-    status: failures.length ? "failed" : "passed",
-    stderr: failures.join("\n"),
-  };
+  return builtinResult(ruleId, "vitest-kinds", failures);
+}
+
+function runBuiltin(
+  root: string,
+  components: Component[],
+  ruleId: string,
+  check: BuiltinEnforcement["check"],
+): ConventionCheckResult {
+  switch (check) {
+    case "bun-default":
+      return bunDefault(root, components, ruleId);
+    case "case-portability":
+      return casePortability(root, ruleId);
+    case "ci-action-pins":
+      return ciActionPins(root, ruleId);
+    case "env-example":
+      return envExample(root, ruleId);
+    case "symlink-boundaries":
+      return symlinkBoundaries(root, ruleId);
+    case "text-hygiene":
+      return textHygiene(root, ruleId);
+    case "todo-format":
+      return todoFormat(root, ruleId);
+    case "vitest-kinds":
+      return vitestKinds(root, components, ruleId);
+  }
 }
 
 function diagnostic(result: ConventionCheckResult): Diagnostic | undefined {
@@ -479,14 +668,7 @@ export function runConventionChecks(
     if (enforcement.kind === "capability") continue;
 
     if (enforcement.kind === "builtin") {
-      const result =
-        enforcement.check === "bun-default"
-          ? bunDefault(root, components, item.ruleId)
-          : enforcement.check === "env-example"
-            ? envExample(root, item.ruleId)
-            : enforcement.check === "todo-format"
-              ? todoFormat(root, item.ruleId)
-              : vitestKinds(root, components, item.ruleId);
+      const result = runBuiltin(root, components, item.ruleId, enforcement.check);
       results.push(result);
       if (result.status !== "passed") break;
       continue;

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -87,6 +87,62 @@ describe("installed convention enforcement", () => {
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");
     expect(failed.diagnostics[0]?.message).toContain("instead of FIXME");
+  });
+
+  test("requires portable UTF-8 LF text", () => {
+    const root = repository();
+    const source = join(root, "src", "thing.ts");
+    enforce(root, "REP-011", { kind: "builtin", check: "text-hygiene" });
+
+    writeFileSync(source, "export const value = 1;\n");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+
+    writeFileSync(source, "export const value = 1;\r\n");
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("use LF line endings");
+  });
+
+  test("requires immutable external CI action revisions", () => {
+    const root = repository();
+    const workflows = join(root, ".github", "workflows");
+    mkdirSync(workflows, { recursive: true });
+    const workflow = join(workflows, "validate.yml");
+    enforce(root, "GIT-004", { kind: "builtin", check: "ci-action-pins" });
+
+    writeFileSync(workflow, "steps:\n  - uses: actions/checkout@v6\n");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("failed");
+
+    writeFileSync(
+      workflow,
+      "steps:\n  - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1\n",
+    );
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+  });
+
+  test("rejects symlinks that escape the repository", () => {
+    const root = repository();
+    const link = join(root, "src", "outside");
+    enforce(root, "REPO-012", { kind: "builtin", check: "symlink-boundaries" });
+
+    symlinkSync(join(tmpdir(), "outside-target"), link);
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("failed");
+
+    rmSync(link);
+    writeFileSync(join(root, "src", "inside.ts"), "export {};\n");
+    symlinkSync("inside.ts", link);
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+  });
+
+  test("rejects case-colliding repository paths", () => {
+    const root = repository();
+    enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
+    writeFileSync(join(root, "src", "User.ts"), "export {};\n");
+    writeFileSync(join(root, "src", "user.ts"), "export {};\n");
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("case-insensitive filesystems");
   });
 
   test("requires Vitest execution kind in filenames and scripts", () => {
