@@ -68,9 +68,7 @@ describe("environment verification receipt", () => {
     ].join("\n");
 
     expect(missingRustComponents(["clippy", "rustfmt"], listing)).toEqual([]);
-    expect(missingRustComponents(["clippy", "rust-src", "rustfmt"], listing)).toEqual([
-      "rust-src",
-    ]);
+    expect(missingRustComponents(["clippy", "rust-src", "rustfmt"], listing)).toEqual(["rust-src"]);
   });
 
   test("keeps managed source mode out of the default environment identity", () => {
