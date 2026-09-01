@@ -22,7 +22,7 @@ Findings have stable semantic IDs derived from the expectation, subject, and req
 
 The first batch intentionally covers several kinds of absence instead of specializing the model around tests:
 
-- `typescript-source-test`: a TypeScript source file in a package with a test command has no matching structural test artifact.
+- `typescript-source-test`: a TypeScript source file in a package with a test command has neither a conventionally matching test artifact nor a test that directly imports the source module.
 - `package-aggregate-check`: a package exposes multiple verification scripts but no aggregate `check` or `verify` script.
 - `typescript-project-config`: a package contains TypeScript source but no `tsconfig.json`.
 - `package-cli-wiring`: a CLI entrypoint is not wired through `package.json`, or configured bin wiring points to a missing file.
@@ -30,7 +30,7 @@ The first batch intentionally covers several kinds of absence instead of special
 
 These expectations are warnings by default. Repositories can explicitly promote selected expectation IDs to errors.
 
-The TypeScript test expectation is structural, not a claim about behavioral coverage. A matching test artifact satisfies the MVP rule; deeper endpoint/test-case cardinality can be added later using deterministic AST or build metadata where justified.
+The TypeScript test expectation is structural, not a claim about behavioral coverage. A conventionally matching test or a direct deterministic test import satisfies the MVP rule; deeper endpoint/test-case cardinality can be added later using deterministic AST or build metadata where justified.
 
 ## Persistent metadata
 
