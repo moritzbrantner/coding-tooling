@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import { renderSourceDependencies } from "../src/source-deps.ts";
-import { verifyEnvironmentFingerprint } from "../src/environment-verification.ts";
+import {
+  missingRustComponents,
+  verifyEnvironmentFingerprint,
+} from "../src/environment-verification.ts";
 
 function repository(packageManager = `bun@${Bun.version}`): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-environment-verify-"));
@@ -55,6 +58,17 @@ describe("environment verification receipt", () => {
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({ code: "environment-toolchain-mismatch", path: "package.json" }),
     );
+  });
+
+  test("matches declared Rust component names against target-qualified rustup output", () => {
+    const listing = [
+      "cargo-x86_64-unknown-linux-gnu (installed)",
+      "clippy-x86_64-unknown-linux-gnu (installed)",
+      "rustfmt-x86_64-unknown-linux-gnu (installed)",
+    ].join("\n");
+
+    expect(missingRustComponents(["clippy", "rustfmt"], listing)).toEqual([]);
+    expect(missingRustComponents(["clippy", "rust-src", "rustfmt"], listing)).toEqual(["rust-src"]);
   });
 
   test("keeps managed source mode out of the default environment identity", () => {
