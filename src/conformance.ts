@@ -5,6 +5,7 @@ import { runConventionChecks } from "./convention-enforcement.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { discoverComponents, loadConfig, planChecks } from "./core.ts";
 import { repositoryEnvironmentConformance } from "./environment-conformance.ts";
+import { verifyEnvironmentFingerprint } from "./environment-verification.ts";
 import {
   defaultTiers,
   type Diagnostic,
@@ -102,6 +103,19 @@ export function conformanceReport(
 
   const environment = repositoryEnvironmentConformance(root);
   findings.push(...environment.findings);
+  const environmentFingerprint = verifyEnvironmentFingerprint(root);
+  if (environmentFingerprint.status !== "passed") {
+    const fingerprintStatus: FindingStatus =
+      environmentFingerprint.status === "unavailable" ? "unavailable" : "failed";
+    for (const diagnostic of environmentFingerprint.diagnostics) {
+      if (
+        diagnostic.code?.startsWith("environment-native-") ||
+        diagnostic.code?.startsWith("environment-source-")
+      ) {
+        findings.push(findingFromDiagnostic(diagnostic, fingerprintStatus));
+      }
+    }
+  }
 
   const toolingConfigPresent = existsSync(join(root, configPath));
   let toolingConfig: ToolingConfig = { schemaVersion: 1 };
@@ -230,6 +244,7 @@ export function conformanceReport(
       technologies,
       components,
       environment: environment.data,
+      environmentFingerprint: environmentFingerprint.data,
       tooling: {
         configPath,
         configPresent: toolingConfigPresent,
