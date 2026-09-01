@@ -97,7 +97,10 @@ function toolchainInputs(root: string, diagnostics: Diagnostic[]): unknown {
   const packagePath = join(root, "package.json");
   if (existsSync(packagePath)) {
     const packageJson = JSON.parse(text(packagePath)) as { packageManager?: unknown };
-    if (typeof packageJson.packageManager === "string" && packageJson.packageManager.startsWith("bun@")) {
+    if (
+      typeof packageJson.packageManager === "string" &&
+      packageJson.packageManager.startsWith("bun@")
+    ) {
       const version = packageJson.packageManager.slice("bun@".length);
       toolchains.bun = { version };
       if (!exactVersion(version)) {
@@ -129,7 +132,10 @@ function toolchainInputs(root: string, diagnostics: Diagnostic[]): unknown {
   return toolchains;
 }
 
-function environmentConfig(root: string, diagnostics: Diagnostic[]): {
+function environmentConfig(
+  root: string,
+  diagnostics: Diagnostic[],
+): {
   config: unknown;
   native: unknown;
 } {
