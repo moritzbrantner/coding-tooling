@@ -92,3 +92,17 @@ Generator apply supports a deliberately closed set of existing-file mutations. `
 ```
 
 The target may contain an optional leading `"use client";`, blank lines, and `export * from "...";` declarations only. An existing export is a no-op; a missing export is inserted in lexical module order. Imports, executable statements, comments/sections, malformed exports, duplicates, or any other structure that would require interpretation fail as a generation conflict. This operation is intentionally not a generic text editor or AST/codemod surface.
+
+## Bounded adoption primitives
+
+Repository-local generators may interpolate a `create-file.template` path with the same restricted input syntax used for output paths. This selects among committed templates only; rendered template paths remain contained by the generator directory and do not introduce conditional expressions or arbitrary execution. A boolean input can therefore select `templates/component-true.tmpl` or `templates/component-false.tmpl` through `templates/component-{{client}}.tmpl`.
+
+The closed interpolation transform set also includes `title`, which converts identifier-like input such as `StatusBadge` or `status-badge` to `Status Badge` for display text.
+
+A local prerequisite may require one exact repository file before generation mutates anything:
+
+```json
+{ "kind": "file", "path": "src/components/{{name | kebab}}.tsx" }
+```
+
+File prerequisite paths use restricted interpolation, must remain repository-relative, must resolve inside the repository even through symlinks, and must identify an existing regular file. There is no globbing, fuzzy lookup, arbitrary predicate, or filesystem scripting surface.

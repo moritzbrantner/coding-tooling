@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
 import { check, inspect } from "./core.ts";
@@ -39,6 +39,11 @@ type ToolPrerequisite = {
   name: string;
 };
 
+type FilePrerequisite = {
+  kind: "file";
+  path: string;
+};
+
 type NetworkPrerequisite = {
   kind: "native" | "dependency" | "network";
   network?: boolean;
@@ -50,6 +55,7 @@ type SupportedPrerequisite =
   | ConventionModulePrerequisite
   | TechnologyPrerequisite
   | ToolPrerequisite
+  | FilePrerequisite
   | NetworkPrerequisite;
 
 export type PrerequisiteCheck = {
@@ -247,6 +253,61 @@ function toolCheck(prerequisite: ToolPrerequisite): PrerequisiteCheck {
   };
 }
 
+function fileCheck(root: string, prerequisite: FilePrerequisite): PrerequisiteCheck {
+  if (!prerequisite.path) {
+    return {
+      kind: prerequisite.kind,
+      status: "failed",
+      code: "invalid-generator-prerequisite",
+      message: "File prerequisite is missing a path.",
+    };
+  }
+  const absoluteRoot = resolve(root);
+  const candidate = resolve(absoluteRoot, prerequisite.path);
+  if (!withinRoot(absoluteRoot, candidate)) {
+    return {
+      kind: prerequisite.kind,
+      status: "failed",
+      code: "invalid-generator-prerequisite",
+      message: `File prerequisite escapes repository root: ${prerequisite.path}`,
+    };
+  }
+  if (!existsSync(candidate)) {
+    return {
+      kind: prerequisite.kind,
+      status: "failed",
+      code: "missing-generator-file",
+      message: `Required generator file is missing: ${prerequisite.path}`,
+    };
+  }
+  try {
+    const realRoot = realpathSync(absoluteRoot);
+    const realCandidate = realpathSync(candidate);
+    if (!withinRoot(realRoot, realCandidate) || !statSync(realCandidate).isFile()) {
+      return {
+        kind: prerequisite.kind,
+        status: "failed",
+        code: "invalid-generator-prerequisite",
+        message: `Required generator path is not a repository file: ${prerequisite.path}`,
+      };
+    }
+  } catch {
+    return {
+      kind: prerequisite.kind,
+      status: "failed",
+      code: "invalid-generator-prerequisite",
+      message: `Required generator path is not a readable file: ${prerequisite.path}`,
+    };
+  }
+  return {
+    kind: prerequisite.kind,
+    name: prerequisite.path,
+    status: "passed",
+    message: `File prerequisite ${prerequisite.path} is satisfied.`,
+    evidence: { path: prerequisite.path },
+  };
+}
+
 function prerequisiteCheck(root: string, plan: GeneratorPlan, raw: unknown): PrerequisiteCheck {
   if (!isRecord(raw) || typeof raw.kind !== "string") {
     return {
@@ -261,6 +322,7 @@ function prerequisiteCheck(root: string, plan: GeneratorPlan, raw: unknown): Pre
   if (prerequisite.kind === "convention-module") return moduleCheck(root, prerequisite);
   if (prerequisite.kind === "technology") return technologyCheck(root, prerequisite);
   if (prerequisite.kind === "tool") return toolCheck(prerequisite);
+  if (prerequisite.kind === "file") return fileCheck(root, prerequisite);
   if (
     prerequisite.kind === "network" ||
     prerequisite.kind === "native" ||

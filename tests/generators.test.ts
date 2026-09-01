@@ -195,4 +195,55 @@ describe("generator planning", () => {
     const plan = planGenerator(root, "feature", { name: "user" });
     expect(plan.operations.map((operation) => operation.path)).toEqual(["UserPart/user-part.ts"]);
   });
+
+  test("selects a declared template through boolean interpolation and humanizes titles", () => {
+    const root = fixture();
+    const value = descriptor("feature", {
+      inputs: {
+        name: { type: "identifier", required: true },
+        client: { type: "boolean", required: true },
+      },
+      operations: [
+        {
+          kind: "create-file",
+          template: "templates/component-{{client}}.tmpl",
+          path: "{{name | kebab}}.tsx",
+        },
+      ],
+    });
+    localGenerator(root, "feature", value);
+    const directory = join(root, ".coding-tooling", "generators", "feature", "templates");
+    writeFileSync(
+      join(directory, "component-true.tmpl"),
+      '"use client";\nexport const title = "{{name | title}}";\n',
+    );
+    writeFileSync(
+      join(directory, "component-false.tmpl"),
+      'export const title = "{{name | title}}";\n',
+    );
+
+    const client = planGenerator(root, "feature", { name: "StatusBadge", client: "true" });
+    expect(client.operations[0]).toMatchObject({
+      template: ".coding-tooling/generators/feature/templates/component-true.tmpl",
+      content: '"use client";\nexport const title = "Status Badge";\n',
+    });
+
+    const server = planGenerator(root, "feature", { name: "status-badge", client: "false" });
+    expect(server.operations[0]).toMatchObject({
+      template: ".coding-tooling/generators/feature/templates/component-false.tmpl",
+      content: 'export const title = "Status Badge";\n',
+    });
+  });
+
+  test("rejects unmanaged file prerequisite paths", () => {
+    const root = fixture();
+    localGenerator(
+      root,
+      "feature",
+      descriptor("feature", { prerequisites: [{ kind: "file", path: "../outside.ts" }] }),
+    );
+    const result = generatorCommand(root, "list");
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics[0]?.code).toBe("invalid-generator");
+  });
 });
