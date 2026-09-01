@@ -1,0 +1,52 @@
+name: Patch nested lockfile fingerprint
+
+on:
+  push:
+    branches:
+      - fix/fingerprint-nested-lockfiles
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - name: Apply focused source and test patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source_path = Path('src/environment-fingerprint.ts')
+          source = source_path.read_text()
+          source = source.replace('import { join } from "node:path";\n', 'import { basename, join } from "node:path";\n')
+          source = source.replace('import type { Diagnostic, ResultEnvelope } from "./model.ts";\n', 'import type { Diagnostic, ResultEnvelope } from "./model.ts";\nimport { relativePosix, walkFiles } from "./shared.ts";\n')
+          old = '''function dependencyInputs(root: string): unknown {\n  return lockfiles\n    .filter((path) => existsSync(join(root, path)))\n    .map((path) => ({ path, digest: fileDigest(join(root, path)) }))\n    .sort((left, right) => left.path.localeCompare(right.path));\n}\n'''
+          new = '''function dependencyInputs(root: string): unknown {\n  const lockfileNames = new Set<string>(lockfiles);\n  return walkFiles(root, 8)\n    .filter((path) => lockfileNames.has(basename(path)))\n    .map((absolutePath) => ({\n      path: relativePosix(root, absolutePath),\n      digest: fileDigest(absolutePath),\n    }))\n    .sort((left, right) => left.path.localeCompare(right.path));\n}\n'''
+          if old not in source:
+              raise SystemExit('dependencyInputs anchor not found')
+          source_path.write_text(source.replace(old, new))
+
+          test_path = Path('tests/environment-fingerprint.test.ts')
+          tests = test_path.read_text()
+          anchor = '''  test("does not fingerprint compatibility-hold explanations", () => {\n'''
+          test = '''  test("includes nested committed lockfiles in dependency identity", () => {\n    const root = repository();\n    mkdirSync(join(root, "backend"), { recursive: true });\n    writeFileSync(join(root, "backend", "Cargo.lock"), "backend-lock-v1\\n");\n    const before = passedData(root);\n\n    writeFileSync(join(root, "backend", "Cargo.lock"), "backend-lock-v2\\n");\n    const after = passedData(root);\n\n    expect(after.fingerprint).not.toBe(before.fingerprint);\n    expect(after.layers.dependencies.digest).not.toBe(before.layers.dependencies.digest);\n    expect(after.layers.toolchain.digest).toBe(before.layers.toolchain.digest);\n    expect(after.layers.native.digest).toBe(before.layers.native.digest);\n    expect(\n      (after.layers.dependencies.inputs as Array<{ path: string }>).map((input) => input.path),\n    ).toContain("backend/Cargo.lock");\n  });\n\n'''
+          if test not in tests:
+              tests = tests.replace(anchor, test + anchor)
+          if 'mkdirSync' not in tests.split('\n', 1)[0]:
+              tests = tests.replace(
+                  'import { mkdtempSync, writeFileSync } from "node:fs";',
+                  'import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";',
+              )
+          test_path.write_text(tests)
+          PY
+          git rm .github/workflows/patch-nested-lock-fingerprint.yml
+          git add src/environment-fingerprint.ts tests/environment-fingerprint.test.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix: fingerprint nested lockfiles"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
