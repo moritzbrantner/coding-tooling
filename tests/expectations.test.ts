@@ -73,6 +73,23 @@ describe("repository expectations", () => {
     expect(findings.every((finding) => finding.severity === "warning")).toBeTrue();
   });
 
+  test("accepts a differently named test that directly imports the source", () => {
+    const root = fixture();
+    mkdirSync(join(root, "tests"), { recursive: true });
+    writeFileSync(
+      join(root, "tests", "service-contract.test.ts"),
+      'import { service } from "../src/service.ts";\nvoid service;\n',
+    );
+
+    expect(
+      analyzeExpectations(root).findings.some(
+        (finding) =>
+          finding.expectationId === "typescript-source-test" &&
+          finding.subject.key === "src/service.ts",
+      ),
+    ).toBeFalse();
+  });
+
   test("keeps semantic finding IDs stable across unrelated repository changes", () => {
     const root = fixture();
     const before = analyzeExpectations(root).findings.map((finding) => finding.id);
