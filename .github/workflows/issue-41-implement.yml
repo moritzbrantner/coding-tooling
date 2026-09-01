@@ -1,0 +1,332 @@
+name: Implement issue 41
+
+on:
+  push:
+    branches: [issue-41-typescript-barrel-export]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: issue-41-typescript-barrel-export
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Apply focused implementation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          generators = Path("src/generators.ts")
+          text = generators.read_text()
+          text = text.replace(
+          '''type JsonSetOperation = {
+            kind: "json-set";
+            path: string;
+            key: string;
+            value: string;
+          };
+
+          type GeneratorOperation = CreateFileOperation | JsonSetOperation;''',
+          '''type JsonSetOperation = {
+            kind: "json-set";
+            path: string;
+            key: string;
+            value: string;
+          };
+
+          type TypeScriptBarrelExportOperation = {
+            kind: "typescript-barrel-export";
+            path: string;
+            module: string;
+          };
+
+          type GeneratorOperation =
+            | CreateFileOperation
+            | JsonSetOperation
+            | TypeScriptBarrelExportOperation;''')
+          text = text.replace(
+          '''  | {
+                generator: string;
+                kind: "json-set";
+                path: string;
+                key: string;
+                value: string;
+              };''',
+          '''  | {
+                generator: string;
+                kind: "json-set";
+                path: string;
+                key: string;
+                value: string;
+              }
+            | {
+                generator: string;
+                kind: "typescript-barrel-export";
+                path: string;
+                module: string;
+              };''')
+          marker = '''    if (operation.kind === "json-set") {
+          '''
+          insertion = '''    if (operation.kind === "typescript-barrel-export") {
+                if (
+                  typeof operation.path !== "string" ||
+                  !operation.path ||
+                  typeof operation.module !== "string" ||
+                  !operation.module
+                ) {
+                  throw new GeneratorError(
+                    "invalid-generator",
+                    `Generator ${value.id} contains an invalid typescript-barrel-export operation`,
+                  );
+                }
+                validateInterpolation(operation.path, inputNames);
+                validateInterpolation(operation.module, inputNames);
+                return {
+                  kind: "typescript-barrel-export",
+                  path: operation.path,
+                  module: operation.module,
+                };
+              }
+          '''
+          if marker not in text:
+              raise SystemExit("json-set parse marker not found")
+          text = text.replace(marker, insertion + marker, 1)
+          marker = '''      const key = render(operation.key, inputs);
+          '''
+          insertion = '''      if (operation.kind === "typescript-barrel-export") {
+                const module = render(operation.module, inputs);
+                if (!/^(?:\\.{1,2}\\/)[A-Za-z0-9@._/-]+$/.test(module) || module.includes("/../")) {
+                  throw new GeneratorError(
+                    "invalid-generator-output",
+                    `Generator ${current.descriptor.id} produced invalid TypeScript barrel module ${module}`,
+                  );
+                }
+                operations.push({
+                  generator: current.descriptor.id,
+                  kind: "typescript-barrel-export",
+                  path: renderedPath,
+                  module,
+                });
+                continue;
+              }
+          '''
+          if marker not in text:
+              raise SystemExit("plan marker not found")
+          text = text.replace(marker, insertion + marker, 1)
+          generators.write_text(text)
+
+          apply = Path("src/generator-apply.ts")
+          text = apply.read_text()
+          marker = '''function prepareMutation(root: string, operation: PlannedGeneratorOperation): PreparedMutation {
+          '''
+          helper = r'''function typescriptBarrelExportMutation(
+            root: string,
+            operation: PlannedGeneratorOperation,
+          ): PreparedMutation {
+            if (operation.kind !== "typescript-barrel-export") {
+              throw new Error(`Expected typescript-barrel-export operation, received ${operation.kind}`);
+            }
+            const absolutePath = outputPath(root, operation.path);
+            if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+              throw new GenerationConflict(
+                operation.path,
+                `TypeScript barrel update target must be an existing file: ${operation.path}`,
+              );
+            }
+
+            const previousContent = readFileSync(absolutePath, "utf8");
+            const lines = previousContent.split("\n");
+            while (lines.at(-1) === "") lines.pop();
+
+            let index = 0;
+            let useClient = false;
+            if (lines[0] === '"use client";') {
+              useClient = true;
+              index = 1;
+            }
+
+            const modules: string[] = [];
+            for (; index < lines.length; index += 1) {
+              const line = lines[index]!;
+              if (line === "") continue;
+              const match = /^export \* from "([^"\n]+)";$/.exec(line);
+              if (!match) {
+                throw new GenerationConflict(
+                  operation.path,
+                  `TypeScript barrel contains unsupported content: ${operation.path}`,
+                );
+              }
+              modules.push(match[1]!);
+            }
+
+            if (new Set(modules).size !== modules.length) {
+              throw new GenerationConflict(
+                operation.path,
+                `TypeScript barrel contains duplicate exports: ${operation.path}`,
+              );
+            }
+            if (modules.includes(operation.module)) {
+              return {
+                operation,
+                absolutePath,
+                desiredContent: previousContent,
+                previousContent,
+                outcome: "no-op",
+              };
+            }
+
+            const nextModules = [...modules, operation.module].sort((a, b) => a.localeCompare(b));
+            const exports = nextModules.map((module) => `export * from "${module}";`).join("\n");
+            const desiredContent = useClient ? `"use client";\n\n${exports}\n` : `${exports}\n`;
+            return {
+              operation,
+              absolutePath,
+              desiredContent,
+              previousContent,
+              outcome: "change",
+            };
+          }
+
+          '''
+          if marker not in text:
+              raise SystemExit("prepare marker not found")
+          text = text.replace(marker, helper + marker, 1)
+          text = text.replace(
+          '''  if (operation.kind === "json-set") return jsonSetMutation(root, operation);
+            const exhaustive: never = operation;''',
+          '''  if (operation.kind === "json-set") return jsonSetMutation(root, operation);
+            if (operation.kind === "typescript-barrel-export")
+              return typescriptBarrelExportMutation(root, operation);
+            const exhaustive: never = operation;''')
+          apply.write_text(text)
+
+          tests = Path("tests/generator-apply.test.ts")
+          text = tests.read_text()
+          addition = r'''
+
+            test("adds a TypeScript barrel export in deterministic order and becomes a no-op", () => {
+              const root = fixture();
+              localGenerator(root, "feature", [
+                {
+                  kind: "typescript-barrel-export",
+                  path: "src/data.ts",
+                  module: "./components/data/{{name | kebab}}",
+                },
+              ]);
+              mkdirSync(join(root, "src"), { recursive: true });
+              writeFileSync(
+                join(root, "src", "data.ts"),
+                '"use client";\n\nexport * from "./components/data/alpha";\nexport * from "./components/data/gamma";\n',
+              );
+
+              const first = applyGeneratorCommand(root, "feature", { name: "Beta" });
+              expect(first.status).toBe("passed");
+              expect((first.data.generation as { result: string }).result).toBe("generated");
+              expect(readFileSync(join(root, "src", "data.ts"), "utf8")).toBe(
+                '"use client";\n\nexport * from "./components/data/alpha";\nexport * from "./components/data/beta";\nexport * from "./components/data/gamma";\n',
+              );
+
+              const repeat = applyGeneratorCommand(root, "feature", { name: "Beta" });
+              expect(repeat.status).toBe("passed");
+              expect((repeat.data.generation as { result: string }).result).toBe("no-op");
+            });
+
+            test("refuses TypeScript barrels that require interpretation", () => {
+              const root = fixture();
+              localGenerator(root, "feature", [
+                {
+                  kind: "typescript-barrel-export",
+                  path: "src/data.ts",
+                  module: "./components/data/{{name | kebab}}",
+                },
+              ]);
+              mkdirSync(join(root, "src"), { recursive: true });
+              writeFileSync(join(root, "src", "data.ts"), 'import "./setup";\n');
+
+              const result = applyGeneratorCommand(root, "feature", { name: "Beta" });
+              expect(result.status).toBe("failed");
+              expect((result.data.generation as { result: string }).result).toBe("generation-conflict");
+              expect(readFileSync(join(root, "src", "data.ts"), "utf8")).toBe('import "./setup";\n');
+            });
+
+            test("rolls back an earlier write when a later barrel write fails", () => {
+              const root = fixture();
+              localGenerator(root, "feature", [
+                {
+                  kind: "create-file",
+                  template: "templates/file.tmpl",
+                  path: "created.ts",
+                },
+                {
+                  kind: "typescript-barrel-export",
+                  path: "src/data.ts",
+                  module: "./created",
+                },
+              ]);
+              const directory = join(root, ".coding-tooling", "generators", "feature");
+              writeFileSync(join(directory, "templates", "file.tmpl"), "export const created = true;\n");
+              mkdirSync(join(root, "src"), { recursive: true });
+              writeFileSync(join(root, "src", "data.ts"), 'export * from "./alpha";\n');
+              const plan = planGenerator(root, "feature", { name: "Unused" });
+              let writes = 0;
+
+              const result = applyGeneratorPlan(root, plan, {
+                writeFile(path, content) {
+                  writes += 1;
+                  if (writes === 2) throw new Error("injected barrel write failure");
+                  writeFileSync(path, content);
+                },
+              });
+
+              expect(result.result).toBe("generation-failed");
+              expect(result.rolledBack).toEqual(["created.ts"]);
+              expect(existsSync(join(root, "created.ts"))).toBe(false);
+              expect(readFileSync(join(root, "src", "data.ts"), "utf8")).toBe(
+                'export * from "./alpha";\n',
+              );
+            });
+          '''
+          pos = text.rfind("\n});")
+          if pos < 0:
+              raise SystemExit("test suite end not found")
+          text = text[:pos] + addition + text[pos:]
+          tests.write_text(text)
+
+          docs = Path("docs/generators.md")
+          text = docs.read_text()
+          text += r'''
+
+          ## Narrow structured source mutations
+
+          Generator apply supports a deliberately closed set of existing-file mutations. `typescript-barrel-export` ensures one exact TypeScript re-export in an existing export-only barrel:
+
+          ```json
+          {
+            "kind": "typescript-barrel-export",
+            "path": "src/data.ts",
+            "module": "./components/data/{{name | kebab}}"
+          }
+          ```
+
+          The target may contain an optional leading `"use client";`, blank lines, and `export * from "...";` declarations only. An existing export is a no-op; a missing export is inserted in lexical module order. Imports, executable statements, comments/sections, malformed exports, duplicates, or any other structure that would require interpretation fail as a generation conflict. This operation is intentionally not a generic text editor or AST/codemod surface.
+          '''
+          docs.write_text(text)
+      - run: bun run format:write
+      - run: bun run check
+      - name: Commit implementation and remove helper workflow
+        run: |
+          rm .github/workflows/issue-41-implement.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add TypeScript barrel export mutation"
+          git push origin HEAD:issue-41-typescript-barrel-export
