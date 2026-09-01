@@ -1,9 +1,9 @@
-name: Run private coding tooling
-description: Run a version-pinned coding-tooling validation tier or validate an agent capability catalog.
+name: Run coding tooling
+description: Run version-pinned repository validation, environment verification, conformance, or agent capability validation.
 
 inputs:
   operation:
-    description: Operation to run. Use run for repository checks or agent-capabilities-validate for a capability source repository.
+    description: "Operation to run: run, environment-verify, conformance, or agent-capabilities-validate."
     required: false
     default: run
   tier:
@@ -18,16 +18,20 @@ inputs:
     description: Repository-relative configuration path.
     required: false
     default: .coding-tooling.json
+  environment-profile:
+    description: Environment fingerprint profile used by environment-verify.
+    required: false
+    default: default
   report-path:
-    description: Repository-relative JSON report path.
+    description: Repository-relative JSON report path for run, environment-verify, and conformance.
     required: false
     default: .artifacts/coding-tooling/report.json
   strict:
-    description: Fail when a selected capability is unavailable.
+    description: Fail when a selected coding-tooling capability is unavailable.
     required: false
     default: "true"
   bun-version:
-    description: Bun version used to execute coding-tooling.
+    description: Bun version used to execute coding-tooling. Match the consumer pin when Bun is part of the repository environment.
     required: false
     default: 1.4.0
   install-mode:
@@ -37,7 +41,7 @@ inputs:
 
 outputs:
   report-path:
-    description: Path to the machine-readable validation report when operation=run.
+    description: Path to the machine-readable report when the selected operation produces one.
     value: ${{ steps.run.outputs.report-path }}
 
 runs:
@@ -76,6 +80,7 @@ runs:
         INPUT_TIER: ${{ inputs.tier }}
         INPUT_COMPONENT: ${{ inputs.component }}
         INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_ENVIRONMENT_PROFILE: ${{ inputs.environment-profile }}
         INPUT_REPORT_PATH: ${{ inputs.report-path }}
         INPUT_STRICT: ${{ inputs.strict }}
       run: |
@@ -83,8 +88,26 @@ runs:
           bun "${{ github.action_path }}/src/cli.ts" agent-capabilities validate .
           exit 0
         fi
+
+        if [[ "$INPUT_OPERATION" == "environment-verify" || "$INPUT_OPERATION" == "conformance" ]]; then
+          mkdir -p "$(dirname "$INPUT_REPORT_PATH")"
+          set +e
+          if [[ "$INPUT_OPERATION" == "environment-verify" ]]; then
+            bun "${{ github.action_path }}/src/cli.ts" environment verify \
+              --profile "$INPUT_ENVIRONMENT_PROFILE" --json > "$INPUT_REPORT_PATH"
+          else
+            bun "${{ github.action_path }}/src/cli.ts" conformance \
+              --config "$INPUT_CONFIG" --json > "$INPUT_REPORT_PATH"
+          fi
+          status=$?
+          set -e
+          cat "$INPUT_REPORT_PATH"
+          echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"
+          exit "$status"
+        fi
+
         if [[ "$INPUT_OPERATION" != "run" ]]; then
-          echo "::error::operation must be 'run' or 'agent-capabilities-validate'"
+          echo "::error::operation must be 'run', 'environment-verify', 'conformance', or 'agent-capabilities-validate'"
           exit 2
         fi
 
