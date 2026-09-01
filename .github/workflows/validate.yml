@@ -20,10 +20,6 @@ jobs:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
-      - name: Show pinned formatter patch
-        run: |
-          bun run format:write
-          git diff -- src/expectations.ts
       - name: Validate through the local Action
         uses: ./
         with:
