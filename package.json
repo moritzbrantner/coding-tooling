@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "bin": {
-    "coding-tooling": "./src/cli.ts"
+    "coding-tooling": "./src/entry.ts"
   },
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "findings": "bun src/entry.ts findings --json",
     "check": "bun run format && bun run lint && bun run typecheck && bun run test"
   },
   "devDependencies": {
