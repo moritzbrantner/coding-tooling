@@ -37,10 +37,7 @@ function configureTooling(root: string, command = "node"): void {
   });
 }
 
-function installConventions(
-  root: string,
-  sidecars: Record<string, unknown> = {},
-): void {
+function installConventions(root: string, sidecars: Record<string, unknown> = {}): void {
   writeJson(join(root, "conventions.json"), {
     schemaVersion: 1,
     registry: "coding-agent-conventions",
