@@ -1,0 +1,86 @@
+name: Implement issue 45
+
+on:
+  push:
+    branches: [issue-45-preserve-barrel-order]
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: issue-45-preserve-barrel-order
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Apply focused fix
+        shell: python
+        run: |
+          from pathlib import Path
+
+          apply = Path("src/generator-apply.ts")
+          text = apply.read_text()
+          old = '''  const nextModules = [...modules, operation.module].sort((a, b) => a.localeCompare(b));
+            const exports = nextModules.map((module) => `export * from "${module}";`).join("\\n");'''
+          new = '''  const insertionIndex = modules.findIndex((module) => module.localeCompare(operation.module) > 0);
+            const nextModules = [...modules];
+            nextModules.splice(insertionIndex === -1 ? nextModules.length : insertionIndex, 0, operation.module);
+            const exports = nextModules.map((module) => `export * from "${module}";`).join("\\n");'''
+          if old not in text:
+              raise SystemExit("barrel sorting marker not found")
+          apply.write_text(text.replace(old, new, 1))
+
+          tests = Path("tests/generator-apply.test.ts")
+          text = tests.read_text()
+          marker = '''  test("refuses TypeScript barrels that require interpretation", () => {'''
+          addition = r'''  test("preserves existing barrel order while inserting one export", () => {
+              const root = fixture();
+              localGenerator(root, "feature", [
+                {
+                  kind: "typescript-barrel-export",
+                  path: "src/data.ts",
+                  module: "./components/data/{{name | kebab}}",
+                },
+              ]);
+              mkdirSync(join(root, "src"), { recursive: true });
+              writeFileSync(
+                join(root, "src", "data.ts"),
+                '"use client";\n\nexport * from "./components/data/comparison-matrix";\nexport * from "./components/data/collapsible";\nexport * from "./components/data/typography";\n',
+              );
+
+              const result = applyGeneratorCommand(root, "feature", { name: "VisuallyHidden" });
+              expect(result.status).toBe("passed");
+              expect(readFileSync(join(root, "src", "data.ts"), "utf8")).toBe(
+                '"use client";\n\nexport * from "./components/data/comparison-matrix";\nexport * from "./components/data/collapsible";\nexport * from "./components/data/typography";\nexport * from "./components/data/visually-hidden";\n',
+              );
+            });
+
+          '''
+          if marker not in text:
+              raise SystemExit("barrel refusal test marker not found")
+          tests.write_text(text.replace(marker, addition + marker, 1))
+
+          docs = Path("docs/generators.md")
+          text = docs.read_text()
+          old = '''The target may contain an optional leading `"use client";`, blank lines, and `export * from "...";` declarations only. An existing export is a no-op; a missing export is inserted in lexical module order. Imports, executable statements, comments/sections, malformed exports, duplicates, or any other structure that would require interpretation fail as a generation conflict.'''
+          new = '''The target may contain an optional leading `"use client";`, blank lines, and `export * from "...";` declarations only. An existing export is a no-op; a missing export is inserted at a deterministic lexical insertion point while preserving the relative order of every existing export. The operation never normalizes or reorders pre-existing lines. Imports, executable statements, comments/sections, malformed exports, duplicates, or any other structure that would require interpretation fail as a generation conflict.'''
+          if old not in text:
+              raise SystemExit("barrel docs marker not found")
+          docs.write_text(text.replace(old, new, 1))
+      - run: bun run format:write
+      - run: bun run check
+      - name: Commit fix and remove helper workflow
+        run: |
+          rm .github/workflows/issue-45-implement.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: preserve existing barrel export order"
+          git push origin HEAD:issue-45-preserve-barrel-order
