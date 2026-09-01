@@ -40,10 +40,15 @@ function expectedAptPackages(expected: ResultEnvelope<Record<string, unknown>>):
   const inputs = (native as Record<string, unknown>).inputs;
   if (!inputs || typeof inputs !== "object") return [];
   const apt = (inputs as Record<string, unknown>).apt;
-  return Array.isArray(apt) ? apt.filter((value): value is string => typeof value === "string") : [];
+  return Array.isArray(apt)
+    ? apt.filter((value): value is string => typeof value === "string")
+    : [];
 }
 
-function nativeObservations(root: string, packages: string[]): {
+function nativeObservations(
+  root: string,
+  packages: string[],
+): {
   observations: NativeObservation[];
   diagnostics: Diagnostic[];
 } {
@@ -55,7 +60,10 @@ function nativeObservations(root: string, packages: string[]): {
   });
   if (probe.status !== 0) {
     return {
-      observations: packages.map((packageName) => ({ package: packageName, status: "unavailable" })),
+      observations: packages.map((packageName) => ({
+        package: packageName,
+        status: "unavailable",
+      })),
       diagnostics: [
         {
           code: "environment-native-verifier-unavailable",
@@ -106,7 +114,8 @@ function sourceObservation(
           diagnostics: [
             {
               code: "environment-source-profile-mismatch",
-              message: "Default environment fingerprint requires registry mode, but managed source mode is active",
+              message:
+                "Default environment fingerprint requires registry mode, but managed source mode is active",
               path: ".cargo/config.toml",
             },
           ],
