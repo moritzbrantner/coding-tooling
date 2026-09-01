@@ -3,10 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import {
-  bootstrapRepository,
-  repositoryFoundationRecommendation,
-} from "../src/bootstrap.ts";
+import { bootstrapRepository, repositoryFoundationRecommendation } from "../src/bootstrap.ts";
 
 function makeRepository(name: string): string {
   const parent = mkdtempSync(join(tmpdir(), "coding-tooling-bootstrap-"));
@@ -93,7 +90,10 @@ describe("repository foundation bootstrap", () => {
 
   test("keeps a plain Rust library baseline focused", () => {
     const root = makeRepository("geometry-kernel");
-    writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "geometry-kernel"\nversion = "0.1.0"\n');
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      '[package]\nname = "geometry-kernel"\nversion = "0.1.0"\n',
+    );
 
     const recommendation = repositoryFoundationRecommendation(root);
 
