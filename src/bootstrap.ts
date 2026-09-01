@@ -228,10 +228,6 @@ export function bootstrapRepository(
 
     const configPath = join(root, ".coding-tooling.json");
     const configPresent = existsSync(configPath);
-    if (!configPresent) {
-      writeFileSync(configPath, `${JSON.stringify(recommendation.config, null, 2)}\n`, "utf8");
-    }
-
     const conventionsPresent = existsSync(join(root, "conventions.json"));
     const conventions = conventionRegistryCommand(
       conventionsPresent ? "add" : "init",
@@ -249,11 +245,15 @@ export function bootstrapRepository(
         {
           ...recommendation,
           configPath: ".coding-tooling.json",
-          configChanged: !configPresent,
+          configChanged: false,
           conventions: conventions.data,
         },
         conventions.diagnostics,
       );
+    }
+
+    if (!configPresent) {
+      writeFileSync(configPath, `${JSON.stringify(recommendation.config, null, 2)}\n`, "utf8");
     }
 
     return envelope("passed", started, {
