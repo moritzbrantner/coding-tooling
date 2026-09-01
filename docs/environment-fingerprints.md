@@ -36,6 +36,20 @@ coding-tooling environment fingerprint --profile source-development --json
 
 The source-development fingerprint includes normalized package/Git/revision identities but not machine-specific checkout paths. Merely having a source-dependency declaration does not change the default profile.
 
-## Verification
+## Verification receipts
 
-This operation describes the **expected** environment only. A later `environment verify` operation compares observed machine evidence against the expected contract; raw machine/filesystem hashes are intentionally outside this model.
+`coding-tooling environment verify --json` computes the expected identity, observes the current environment, and emits a receipt. The machine never gets a separate filesystem-derived identity: `verifiedFingerprint` is populated only when the observed environment satisfies the expected contract.
+
+Verification currently composes the existing environment-v1 conformance checks for exact Bun/Rust observations, checks declared apt packages through `dpkg-query` when native requirements exist, and enforces the selected source profile. The default profile rejects an active managed source override; `source-development` requires the generated source configuration to match the exact declared package/Git/revision graph and any local exact revision checks.
+
+If the backend cannot verify a declared native apt requirement, the receipt is `unavailable` rather than claiming equivalence without evidence. A future Nix or non-Debian backend can add a semantic native-capability verifier without changing the fingerprint contract.
+
+A successful receipt has:
+
+```text
+expectedFingerprint == verifiedFingerprint
+```
+
+A failed or unavailable receipt keeps `verifiedFingerprint = null` and includes machine-readable diagnostics describing the mismatch.
+
+The same receipt is embedded in `coding-tooling conformance --json`, so agents can distinguish environment mismatch from repository/test failures before interpreting the latter as regressions.
