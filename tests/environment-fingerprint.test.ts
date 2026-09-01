@@ -47,10 +47,7 @@ describe("expected environment fingerprint", () => {
     const root = repository();
     const before = passedData(root);
 
-    writeFileSync(
-      join(root, "package.json"),
-      '{"packageManager":"bun@1.4.0","name":"fixture"}\n',
-    );
+    writeFileSync(join(root, "package.json"), '{"packageManager":"bun@1.4.0","name":"fixture"}\n');
     writeFileSync(join(root, "README.md"), "unrelated documentation\n");
     const after = passedData(root);
 
