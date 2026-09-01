@@ -119,7 +119,10 @@ reason = "candidate failed the full gate"
 
   test("blocks partial or malformed environment-v1 adoption", () => {
     const root = repository();
-    writeFileSync(join(root, ".repository-environment.toml"), 'schema_version = 2\ntrack = "manual"\n');
+    writeFileSync(
+      join(root, ".repository-environment.toml"),
+      'schema_version = 2\ntrack = "manual"\n',
+    );
 
     const result = repositoryEnvironmentConformance(root);
     const codes = result.findings.map((finding) => finding.code);
