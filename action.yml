@@ -3,7 +3,7 @@ description: Run version-pinned repository validation, environment verification,
 
 inputs:
   operation:
-    description: Operation to run: run, environment-verify, conformance, or agent-capabilities-validate.
+    description: "Operation to run: run, environment-verify, conformance, or agent-capabilities-validate."
     required: false
     default: run
   tier:
