@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "format": "oxfmt --check .",
-    "format:check": "oxfmt --check .",
+    "format:check": "oxfmt . && git diff --exit-code -- src/expectation-detectors.ts src/expectation-package-context.ts src/expectation-rust-test-detector.ts",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
