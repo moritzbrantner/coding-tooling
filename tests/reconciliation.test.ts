@@ -1,14 +1,37 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import { conventionRegistryCommand } from "../src/convention-registry.ts";
 import { writeExpectationConfig } from "../src/expectation-model.ts";
 import { reconcileTextFile } from "../src/reconciliation.ts";
 import { sourceDependencies } from "../src/source-deps.ts";
 
 function workspace(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
+}
+
+function write(root: string, relative: string, content: string): void {
+  const path = join(root, relative);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content, "utf8");
+}
+
+function conventionSource(): string {
+  const root = workspace("coding-tooling-convention-source-");
+  write(root, "conventions/testing/README.md", "## TEST-001 — Test narrowly\n\n- Keep tests focused.\n");
+  write(
+    root,
+    "registry/registry.json",
+    `${JSON.stringify({
+      schemaVersion: 1,
+      modules: {
+        testing: { sources: ["conventions/testing"], dependencies: [] },
+      },
+    }, null, 2)}\n`,
+  );
+  return root;
 }
 
 describe("deterministic reconciliation", () => {
@@ -73,6 +96,55 @@ describe("deterministic reconciliation", () => {
       expect(secondDeactivate.data.changed).toBe(false);
       expect(secondDeactivate.data.reconciliation).toBe("unchanged");
     } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("convention updates preserve unchanged files and reconcile only affected state", () => {
+    const source = conventionSource();
+    const root = workspace("coding-tooling-convention-reconcile-");
+    try {
+      const initialized = conventionRegistryCommand("init", ["testing"], {
+        root,
+        conventionsRoot: source,
+      });
+      expect(initialized.status).toBe("passed");
+      expect(initialized.data.changed).toBe(true);
+
+      const unchanged = conventionRegistryCommand("update", [], {
+        root,
+        conventionsRoot: source,
+      });
+      expect(unchanged.status).toBe("passed");
+      expect(unchanged.data.changed).toBe(false);
+      expect(unchanged.data.reconciliation).toBe("unchanged");
+      expect((unchanged.data.verified as string[]).length).toBeGreaterThan(0);
+
+      write(source, "README.md", "unrelated source change\n");
+      const unrelated = conventionRegistryCommand("update", [], {
+        root,
+        conventionsRoot: source,
+      });
+      expect(unrelated.data.changed).toBe(false);
+
+      write(
+        source,
+        "conventions/testing/README.md",
+        "## TEST-001 — Test narrowly\n\n- Keep tests focused.\n\nAdditional detail.\n",
+      );
+      const relevant = conventionRegistryCommand("update", [], {
+        root,
+        conventionsRoot: source,
+      });
+      expect(relevant.status).toBe("passed");
+      expect(relevant.data.changed).toBe(true);
+      expect(relevant.data.changedFiles).toEqual([
+        "modules/testing/conventions/testing/README.md",
+      ]);
+      expect(relevant.data.created).toEqual([]);
+      expect(relevant.data.removed).toEqual([]);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
       rmSync(root, { recursive: true, force: true });
     }
   });
