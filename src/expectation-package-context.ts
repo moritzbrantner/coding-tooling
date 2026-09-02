@@ -131,10 +131,9 @@ function tomlString(content: string, key: string): string | undefined {
 }
 
 function tomlBoolean(content: string, key: string): boolean | undefined {
-  const match = new RegExp(
-    `^\\s*${key}\\s*=\\s*(true|false)\\s*(?:#.*)?$`,
-    "m",
-  ).exec(content);
+  const match = content.match(
+    new RegExp(`^\\s*${key}\\s*=\\s*(true|false)\\s*(?:#.*)?$`, "m"),
+  );
   if (!match?.[1]) return undefined;
   return match[1] === "true";
 }
