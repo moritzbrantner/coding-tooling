@@ -47,7 +47,7 @@ export function selectedRemoteFiles(tree, limit = 24) {
         entry.type === "blob" &&
         (basename(entry.path) === "package.json" || CONTEXT_FILES.has(entry.path)),
     )
-    .sort(
+    .toSorted(
       (left, right) =>
         priority(left.path) - priority(right.path) || left.path.localeCompare(right.path),
     )
@@ -59,10 +59,14 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
     snapshot.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path),
   );
   const components = discoverComponents(snapshot, paths);
-  const technologies = [...new Set(components.flatMap((component) => component.technologies))].sort();
+  const technologies = [
+    ...new Set(components.flatMap((component) => component.technologies)),
+  ].toSorted();
   const findings = findingsFor(snapshot, paths, components);
   const incomplete =
-    snapshot.treeTruncated || snapshot.manifestFetchTruncated || snapshot.unreadablePaths.length > 0;
+    snapshot.treeTruncated ||
+    snapshot.manifestFetchTruncated ||
+    snapshot.unreadablePaths.length > 0;
   const highPriorityFindingCount = findings.filter((finding) => finding.severity === "high").length;
 
   return {
@@ -95,7 +99,8 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
       "Run coding-tooling locally for authoritative conformance, findings, environment verification, and validation execution.",
     ],
     agentHandoff: {
-      purpose: "Continue from remote structural evidence to authoritative local deterministic analysis.",
+      purpose:
+        "Continue from remote structural evidence to authoritative local deterministic analysis.",
       localCommands: [
         `git clone https://github.com/${snapshot.repository.fullName}.git`,
         `cd ${snapshot.repository.name}`,
@@ -193,7 +198,7 @@ function discoverComponents(snapshot, paths) {
       },
     });
   }
-  return components.sort(
+  return components.toSorted(
     (left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name),
   );
 }
@@ -201,7 +206,14 @@ function discoverComponents(snapshot, paths) {
 function findingsFor(snapshot, paths, components) {
   const findings = [];
   const add = (id, severity, title, evidence, recommendation, command) =>
-    findings.push({ id, severity, title, evidence, recommendation, ...(command ? { command } : {}) });
+    findings.push({
+      id,
+      severity,
+      title,
+      evidence,
+      recommendation,
+      ...(command ? { command } : {}),
+    });
   const config = parseJson(snapshot.files[".coding-tooling.json"]);
   if (!paths.has(".coding-tooling.json"))
     add(
@@ -282,7 +294,9 @@ function findingsFor(snapshot, paths, components) {
         "Declare an exact Rust toolchain and required components.",
       );
     else {
-      const channel = snapshot.files["rust-toolchain.toml"]?.match(/^\s*channel\s*=\s*"([^"]+)"/m)?.[1];
+      const channel = snapshot.files["rust-toolchain.toml"]?.match(
+        /^\s*channel\s*=\s*"([^"]+)"/m,
+      )?.[1];
       if (!/^\d+\.\d+\.\d+$/.test(channel ?? ""))
         add(
           "REMOTE-ENV-004",
@@ -355,7 +369,7 @@ function findingsFor(snapshot, paths, components) {
     );
 
   const rank = { high: 0, medium: 1, low: 2, info: 3 };
-  return findings.sort(
+  return findings.toSorted(
     (left, right) => rank[left.severity] - rank[right.severity] || left.id.localeCompare(right.id),
   );
 }
@@ -386,18 +400,14 @@ function isTestPath(path) {
 
 function isProductionSource(path) {
   const lower = path.toLowerCase();
-  if (
-    path.split("/").some((segment) => IGNORED_SOURCE_SEGMENTS.has(segment)) ||
-    isTestPath(path)
-  )
+  if (path.split("/").some((segment) => IGNORED_SOURCE_SEGMENTS.has(segment)) || isTestPath(path))
     return false;
   return !/\.stories\.[cm]?[jt]sx?$/.test(lower) && /\.(ts|tsx|js|jsx|mjs|cjs|rs|cs)$/.test(lower);
 }
 
 function stableId(value) {
   let hash = 2166136261;
-  for (const character of value)
-    hash = Math.imul((hash ^ character.charCodeAt(0)) >>> 0, 16777619);
+  for (const character of value) hash = Math.imul((hash ^ character.charCodeAt(0)) >>> 0, 16777619);
   return (hash >>> 0).toString(16).padStart(8, "0").toUpperCase();
 }
 

@@ -19,8 +19,7 @@ if (initial) {
 
 async function run(value) {
   const reference = parseRepositoryReference(value);
-  if (!reference)
-    return setStatus("Enter owner/repository or a github.com repository URL.", true);
+  if (!reference) return setStatus("Enter owner/repository or a github.com repository URL.", true);
   controller?.abort();
   controller = new AbortController();
   setStatus("Reading public GitHub metadata and structural evidence…");
@@ -93,7 +92,7 @@ async function loadSnapshot(reference, signal) {
     files,
     treeTruncated: Boolean(tree.truncated),
     manifestFetchTruncated: selectedPackages < packageCount,
-    unreadablePaths: unreadablePaths.sort(),
+    unreadablePaths: unreadablePaths.toSorted(),
   };
 }
 
