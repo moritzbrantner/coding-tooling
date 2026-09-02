@@ -85,7 +85,7 @@ describe("findings analysis coverage", () => {
     });
   });
 
-  test("reports Rust as unsupported for structural source-test analysis", () => {
+  test("reports Rust as unsupported for deeper structural source-test analysis", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(
@@ -98,9 +98,32 @@ describe("findings analysis coverage", () => {
 
     expect(result.technologies).toEqual(["rust"]);
     expect(result.unsupportedTechnologies).toEqual(["rust"]);
+    expect(detector(result, "rust-cargo-target-path")).toMatchObject({
+      status: "not-applicable",
+      subjects: 0,
+    });
     expect(detector(result, "typescript-source-test").status).toBe("not-applicable");
     expect(detector(result, "javascript-source-test").status).toBe("not-applicable");
     expect(detector(result, "source-unimplemented-stub")).toMatchObject({
+      status: "applied",
+      subjects: 1,
+    });
+  });
+
+  test("applies the explicit Cargo target path detector without claiming full Rust coverage", () => {
+    const root = fixture();
+    mkdirSync(join(root, "tests"), { recursive: true });
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      '[package]\nname = "rust-fixture"\nversion = "0.1.0"\n\n[[test]]\nname = "contract"\npath = "tests/contract.rs"\n',
+    );
+    writeFileSync(join(root, "tests", "contract.rs"), "#[test]\nfn contract() {}\n");
+
+    const result = coverage(root);
+
+    expect(result.technologies).toEqual(["rust"]);
+    expect(result.unsupportedTechnologies).toEqual(["rust"]);
+    expect(detector(result, "rust-cargo-target-path")).toMatchObject({
       status: "applied",
       subjects: 1,
     });
@@ -138,6 +161,10 @@ describe("findings analysis coverage", () => {
     expect(detector(result, "package-test-capability")).toMatchObject({
       status: "applied",
       subjects: 2,
+    });
+    expect(detector(result, "rust-cargo-target-path")).toMatchObject({
+      status: "not-applicable",
+      subjects: 0,
     });
     expect(detector(result, "source-debt-marker")).toMatchObject({
       status: "applied",
