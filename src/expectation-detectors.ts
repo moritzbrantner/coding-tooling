@@ -11,7 +11,10 @@ import {
   missingTypeScriptConfigFindings,
 } from "./expectation-package-detectors.ts";
 import { createDetectorContext } from "./expectation-package-context.ts";
-import { missingTestFindings } from "./expectation-test-detector.ts";
+import {
+  missingJavaScriptTestFindings,
+  missingTestFindings,
+} from "./expectation-test-detector.ts";
 import type { ExpectationRegistryEntry } from "./expectation-model.ts";
 import type { ExpectationDescriptor, RawFinding } from "./expectation-detector-types.ts";
 
@@ -26,6 +29,15 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingBenchmarkEvidenceFindings,
+  },
+  {
+    id: "javascript-source-test",
+    version: 1,
+    description:
+      "Production JavaScript source is deterministically reachable from a test or matching test artifact",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    detect: missingJavaScriptTestFindings,
   },
   {
     id: "package-aggregate-check",
@@ -48,7 +60,7 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     id: "package-test-capability",
     version: 1,
     description:
-      "TypeScript packages with production source expose a deterministic test capability",
+      "JavaScript/TypeScript packages with production source expose a deterministic test capability",
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingTestCapabilityFindings,
