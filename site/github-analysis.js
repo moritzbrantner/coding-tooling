@@ -26,9 +26,8 @@ export async function loadSnapshot(reference, options = {}) {
     (entry) => entry.path && entry.sha && ["blob", "tree"].includes(entry.type),
   );
   const selected = selectedRemoteFiles(entries);
-  const packageCount = entries.filter(
-    (entry) => entry.type === "blob" && entry.path.endsWith("package.json"),
-  ).length;
+  const eligible = selectedRemoteFiles(entries, entries.length);
+  const packageCount = eligible.filter((entry) => entry.path.endsWith("package.json")).length;
   const selectedPackages = selected.filter((entry) => entry.path.endsWith("package.json")).length;
   const files = {};
   const unreadablePaths = [];
