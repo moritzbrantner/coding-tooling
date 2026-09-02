@@ -88,6 +88,14 @@ function packageInfos(root: string, files: string[]): PackageInfo[] {
   return result.sort((left, right) => left.path.localeCompare(right.path));
 }
 
+function tomlSection(content: string, section: string): string | undefined {
+  const header = new RegExp(`^\\s*\\[${section}\\]\\s*$`, "m").exec(content);
+  if (!header || header.index === undefined) return undefined;
+  const rest = content.slice(header.index + header[0].length);
+  const next = /^\s*\[/m.exec(rest);
+  return next?.index === undefined ? rest : rest.slice(0, next.index);
+}
+
 function rustCrateName(manifestPath: string): string | undefined {
   let content: string;
   try {
@@ -96,19 +104,9 @@ function rustCrateName(manifestPath: string): string | undefined {
     return undefined;
   }
 
-  const sectionPattern = /^\s*\[([^\]]+)\]\s*$([\s\S]*?)(?=^\s*\[|\z)/gm;
-  let packageName: string | undefined;
-  let libraryName: string | undefined;
-  for (const match of content.matchAll(sectionPattern)) {
-    const sectionName = match[1]?.trim();
-    const body = match[2] ?? "";
-    const name = /^\s*name\s*=\s*["']([^"']+)["']/m.exec(body)?.[1];
-    if (!name) continue;
-    if (sectionName === "package") packageName = name;
-    if (sectionName === "lib") libraryName = name;
-  }
-
-  const name = libraryName ?? packageName;
+  const nameFrom = (section: string): string | undefined =>
+    /^\s*name\s*=\s*["']([^"']+)["']/m.exec(tomlSection(content, section) ?? "")?.[1];
+  const name = nameFrom("lib") ?? nameFrom("package");
   return name?.replaceAll("-", "_");
 }
 
