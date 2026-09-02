@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 
 import type { RawFinding } from "./expectation-detector-types.ts";
 import {
@@ -8,9 +7,11 @@ import {
   type RustPackageInfo,
 } from "./expectation-package-context.ts";
 import { relativePosix } from "./shared.ts";
+import { readFileSync } from "node:fs";
 
 const cfgTestPattern = /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/;
 const testAttributePattern = /#\s*\[\s*(?:[A-Za-z_][A-Za-z0-9_]*::)?test(?:\s*\([^\]]*\))?\s*\]/;
+const moduleDeclarationPattern = /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;\s*$/;
 
 function readSource(path: string): string | undefined {
   try {
@@ -31,59 +32,69 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function moduleSegments(source: string, rustPackage: RustPackageInfo): string[] | undefined {
-  const local = normalizePath(relative(rustPackage.directory, source));
-  if (local === "src/lib.rs") return [];
-  if (local === "src/main.rs" || local.startsWith("src/bin/")) return undefined;
-  if (!local.startsWith("src/") || !local.endsWith(".rs")) return undefined;
-
-  const segments = local.slice("src/".length).split("/");
-  const file = segments.pop();
-  if (!file) return undefined;
-  if (file !== "mod.rs") segments.push(file.slice(0, -".rs".length));
-  return segments;
-}
-
-function groupedUseReferences(
-  content: string,
-  crate: string,
-  segments: readonly string[],
-): boolean {
-  if (segments.length === 0) return false;
-  const grouped = new RegExp(`\\buse\\s+${crate}\\s*::\\s*\\{([\\s\\S]*?)\\}\\s*;`, "g");
-  const path = segments.map(escapeRegExp).join("\\s*::\\s*");
-  const member = new RegExp(`(?:^|,)\\s*${path}(?=\\s*(?:::|,|\\bas\\b|$))`, "m");
-  return [...content.matchAll(grouped)].some((match) => member.test(match[1] ?? ""));
-}
-
-function testReferencesSource(
-  source: string,
-  testFile: string,
-  rustPackage: RustPackageInfo,
-): boolean {
+function integrationImportsCrate(rustPackage: RustPackageInfo): boolean {
   if (!rustPackage.crateName) return false;
-  const content = readSource(testFile);
-  if (content === undefined) return false;
-
   const crate = escapeRegExp(rustPackage.crateName);
-  const segments = moduleSegments(source, rustPackage);
-  if (segments === undefined) return false;
+  const importPattern = new RegExp(
+    `\\b(?:use\\s+|extern\\s+crate\\s+)${crate}(?=\\s*(?:::|;|\\bas\\b))`,
+  );
+  return rustPackage.testFiles.some((testFile) => importPattern.test(readSource(testFile) ?? ""));
+}
 
-  if (segments.length === 0) {
-    return new RegExp(`\\b(?:use\\s+|extern\\s+crate\\s+)${crate}(?=\\s*(?:::|;))`).test(content);
+function moduleDirectory(source: string, rustPackage: RustPackageInfo): string {
+  const local = normalizePath(relative(rustPackage.directory, source));
+  if (local === "src/lib.rs") return join(rustPackage.directory, "src");
+  if (basename(source) === "mod.rs") return dirname(source);
+  return join(dirname(source), basename(source, ".rs"));
+}
+
+function declaredModules(
+  source: string,
+  rustPackage: RustPackageInfo,
+  sourceFiles: ReadonlySet<string>,
+): string[] {
+  const content = readSource(source);
+  if (content === undefined) return [];
+  const lines = content.split(/\r?\n/);
+  const directory = moduleDirectory(source, rustPackage);
+  const result: string[] = [];
+  let previousCode = "";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("//")) continue;
+    const match = moduleDeclarationPattern.exec(line);
+    if (match?.[1] && !previousCode.startsWith("#[")) {
+      const candidates = [
+        join(directory, `${match[1]}.rs`),
+        join(directory, match[1], "mod.rs"),
+      ].filter((candidate) => sourceFiles.has(candidate));
+      if (candidates.length === 1) result.push(candidates[0]!);
+    }
+    previousCode = trimmed;
   }
 
-  const path = [crate, ...segments.map(escapeRegExp)].join("\\s*::\\s*");
-  return (
-    new RegExp(`\\buse\\s+${path}(?=\\s*(?:::|\\{|;))`).test(content) ||
-    groupedUseReferences(content, crate, segments)
-  );
+  return result;
 }
 
-function hasIntegrationTestEvidence(source: string, rustPackage: RustPackageInfo): boolean {
-  return rustPackage.testFiles.some((testFile) =>
-    testReferencesSource(source, testFile, rustPackage),
+function librarySources(rustPackage: RustPackageInfo): string[] {
+  const sourceFiles = new Set(rustPackage.sourceFiles);
+  const root = rustPackage.sourceFiles.find(
+    (source) => normalizePath(relative(rustPackage.directory, source)) === "src/lib.rs",
   );
+  if (!root) return [];
+
+  const reachable = new Set<string>([root]);
+  const queue = [root];
+  while (queue.length > 0) {
+    const source = queue.shift()!;
+    for (const child of declaredModules(source, rustPackage, sourceFiles)) {
+      if (reachable.has(child)) continue;
+      reachable.add(child);
+      queue.push(child);
+    }
+  }
+  return [...reachable].toSorted();
 }
 
 function verification(root: string, rustPackage: RustPackageInfo): string[][] {
@@ -96,9 +107,9 @@ export function missingRustTestFindings({ root, rustPackages }: DetectorContext)
   const findings: RawFinding[] = [];
 
   for (const rustPackage of rustPackages) {
-    for (const source of rustPackage.sourceFiles) {
-      if (hasInlineTestEvidence(source) || hasIntegrationTestEvidence(source, rustPackage))
-        continue;
+    const integrationEvidence = integrationImportsCrate(rustPackage);
+    for (const source of librarySources(rustPackage)) {
+      if (integrationEvidence || hasInlineTestEvidence(source)) continue;
 
       const sourcePath = relativePosix(root, source);
       findings.push({
