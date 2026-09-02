@@ -195,6 +195,14 @@ function resolveVerifications(
       staleVerifications.push({ index, id: verification.id });
       continue;
     }
+    if (finding.disposition === "suppressed") {
+      invalidVerifications.push({
+        index,
+        id: verification.id,
+        reason: "finding is also suppressed; remove suppression before declaring verification evidence",
+      });
+      continue;
+    }
     const invalid = validateVerificationCommand(verification, finding, context);
     if (invalid) {
       invalidVerifications.push({ index, id: verification.id, reason: invalid });
@@ -202,6 +210,7 @@ function resolveVerifications(
     }
     evidenceByFindingId.set(finding.id, {
       id: verification.id,
+      version: verification.version,
       command: verification.command,
       reason: verification.reason,
     });
