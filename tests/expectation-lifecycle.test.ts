@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   analyzeExpectations,
   findingCommand,
+  findingsCommand,
   scaffoldFinding,
   type Finding,
   type ReconciliationReport,
@@ -29,6 +30,23 @@ function fixture(testScript: string): string {
   writeFileSync(join(root, "tsconfig.json"), "{}\n");
   writeFileSync(join(root, "src", "service.ts"), "export const service = true;\n");
   return root;
+}
+
+function addVerifierScript(root: string): void {
+  writeFileSync(
+    join(root, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "fixture",
+        scripts: {
+          test: "bun test",
+          "verify:service": "bun scripts/verify-service.ts",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 function sourceTestFinding(root: string): Finding {
@@ -98,6 +116,154 @@ describe("expectation lifecycle", () => {
     expect(findingCommand(root, finding.id).data.result).toBe("suppressed");
   });
 
+  test("uses explicit repository verification as auditable evidence instead of suppression", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    addVerifierScript(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          verifications: [
+            {
+              id: "VERIFY-SERVICE",
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              command: ["bun", "run", "verify:service"],
+              reason: "repository-owned contract verifies the generated metadata",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(analyzeExpectations(root).findings.some((item) => item.id === finding.id)).toBeFalse();
+    const all = analyzeExpectations(root, { includeSuppressed: true }).findings;
+    expect(all).toContainEqual(
+      expect.objectContaining({
+        id: finding.id,
+        disposition: "verified",
+        verificationEvidence: {
+          id: "VERIFY-SERVICE",
+          command: ["bun", "run", "verify:service"],
+          reason: "repository-owned contract verifies the generated metadata",
+        },
+      }),
+    );
+    expect(findingCommand(root, finding.id).data.result).toBe("verified");
+    expect(
+      (findingsCommand(root, { includeSuppressed: true }).data.counts as Record<string, number>)
+        .verified,
+    ).toBe(1);
+  });
+
+  test("invalid verification commands cannot silence findings", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          verifications: [
+            {
+              id: "VERIFY-MISSING",
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              command: ["bun", "run", "verify:missing"],
+              reason: "intended verifier",
+            },
+          ],
+        },
+        2,
+      )}\n`,
+    );
+
+    const analysis = analyzeExpectations(root, { includeSuppressed: true });
+    expect(analysis.findings).toContainEqual(
+      expect.objectContaining({ id: finding.id, disposition: "active" }),
+    );
+    expect(analysis.reconciliation.invalidVerifications).toEqual([
+      {
+        index: 0,
+        id: "VERIFY-MISSING",
+        reason: "package . does not expose scripts.verify:missing",
+      },
+    ]);
+  });
+
+  test("reports verification metadata as stale after the underlying finding is resolved", () => {
+    const root = fixture("bun test");
+    addVerifierScript(root);
+    mkdirSync(join(root, "tests"), { recursive: true });
+    writeFileSync(join(root, "tests", "service.test.ts"), "test(\"service\", () => {});\n");
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          verifications: [
+            {
+              id: "VERIFY-SERVICE",
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              command: ["bun", "run", "verify:service"],
+              reason: "legacy explicit verifier",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const analysis = analyzeExpectations(root, { includeSuppressed: true });
+    expect(
+      analysis.findings.some((item) => item.expectationId === "typescript-source-test"),
+    ).toBeFalse();
+    expect(analysis.reconciliation.staleVerifications).toEqual([
+      { index: 0, id: "VERIFY-SERVICE" },
+    ]);
+  });
+
+  test("reports duplicate verification relationships deterministically", () => {
+    const root = fixture("bun test");
+    addVerifierScript(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          verifications: [
+            {
+              id: "VERIFY-ONE",
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              command: ["bun", "run", "verify:service"],
+              reason: "primary verifier",
+            },
+            {
+              id: "VERIFY-TWO",
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              command: ["bun", "run", "verify:service"],
+              reason: "duplicate verifier",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(
+      analyzeExpectations(root, { includeSuppressed: true }).reconciliation.duplicateVerifications,
+    ).toEqual([1]);
+  });
+
   test("reports stale and duplicate persistent metadata", () => {
     const root = fixture("bun test");
     writeFileSync(
@@ -128,9 +294,12 @@ describe("expectation lifecycle", () => {
     expect(reconciliation.orphanedBaseline).toEqual(["CT-000000000000"]);
     expect(reconciliation.duplicateBaseline).toEqual(["CT-000000000000"]);
     expect(reconciliation.duplicateSuppressions).toEqual([1]);
+    expect(reconciliation.duplicateVerifications).toEqual([]);
     expect(reconciliation.duplicateInvariants).toEqual(["INV-1"]);
     expect(reconciliation.unknownExpectations).toEqual(["unknown-expectation"]);
     expect(reconciliation.staleSuppressions).toHaveLength(3);
+    expect(reconciliation.staleVerifications).toEqual([]);
+    expect(reconciliation.invalidVerifications).toEqual([]);
   });
 
   test("returns an explicit absent state for a valid inactive finding id", () => {
