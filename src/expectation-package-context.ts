@@ -125,7 +125,8 @@ function rustPackageInfos(root: string, files: string[]): RustPackageInfo[] {
     const directory = dirname(manifestPath);
     const packageFiles = files.filter((path) => {
       const owner = packageDirectories.find(
-        (candidate) => path === join(candidate, "Cargo.toml") || path.startsWith(`${candidate}${sep}`),
+        (candidate) =>
+          path === join(candidate, "Cargo.toml") || path.startsWith(`${candidate}${sep}`),
       );
       return owner === directory;
     });
