@@ -7,13 +7,16 @@ import { normalizePath } from "./expectation-package-context.ts";
 import type { RawFinding } from "./expectation-detector-types.ts";
 import { relativePosix } from "./shared.ts";
 
-const sourceExtensions = [".ts", ".tsx", ".mts", ".cts"];
+const typeScriptSourceExtensions = [".ts", ".tsx", ".mts", ".cts"];
+const javaScriptSourceExtensions = [".js", ".jsx", ".mjs", ".cjs"];
 const emittedJavaScriptExtensions = new Map([
   [".js", [".ts", ".tsx"]],
   [".jsx", [".tsx", ".ts"]],
   [".mjs", [".mts", ".ts"]],
   [".cjs", [".cts", ".ts"]],
 ]);
+
+type SourceKind = "typescript" | "javascript";
 
 function testIdentity(path: string, packageInfo: PackageInfo): string | undefined {
   const local = normalizePath(relative(packageInfo.directory, path));
@@ -48,13 +51,18 @@ function moduleSpecifiers(content: string): string[] {
   return result;
 }
 
-function sourceCandidates(importer: string, specifier: string): string[] {
+function sourceCandidates(
+  importer: string,
+  specifier: string,
+  sourceExtensions: readonly string[],
+  emittedAliases?: ReadonlyMap<string, readonly string[]>,
+): string[] {
   if (!specifier.startsWith(".")) return [];
   const base = resolve(dirname(importer), specifier);
   const extension = extname(base);
   if (sourceExtensions.includes(extension)) return [base];
 
-  const emittedCandidates = emittedJavaScriptExtensions.get(extension);
+  const emittedCandidates = emittedAliases?.get(extension);
   if (emittedCandidates) {
     const withoutExtension = base.slice(0, -extension.length);
     return emittedCandidates.map((candidate) => `${withoutExtension}${candidate}`);
@@ -67,8 +75,13 @@ function sourceCandidates(importer: string, specifier: string): string[] {
   ];
 }
 
-function reachableSources(packageInfo: PackageInfo): Set<string> {
-  const sources = new Set(packageInfo.sourceFiles.map((path) => resolve(path)));
+function reachableSources(
+  packageInfo: PackageInfo,
+  sourceFiles: readonly string[],
+  sourceExtensions: readonly string[],
+  emittedAliases?: ReadonlyMap<string, readonly string[]>,
+): Set<string> {
+  const sources = new Set(sourceFiles.map((path) => resolve(path)));
   const reachable = new Set<string>();
   const queued = new Set<string>(packageInfo.testFiles.map((path) => resolve(path)));
   const queue = [...queued];
@@ -82,8 +95,8 @@ function reachableSources(packageInfo: PackageInfo): Set<string> {
       continue;
     }
     for (const specifier of moduleSpecifiers(content)) {
-      const target = sourceCandidates(importer, specifier).find((candidate) =>
-        sources.has(resolve(candidate)),
+      const target = sourceCandidates(importer, specifier, sourceExtensions, emittedAliases).find(
+        (candidate) => sources.has(resolve(candidate)),
       );
       if (!target) continue;
       const resolvedTarget = resolve(target);
@@ -113,12 +126,24 @@ function matchingTest(
   return testReachability.has(resolve(source)) ? "<reachable-from-test>" : undefined;
 }
 
-function plannedTestPath(root: string, source: string, packageInfo: PackageInfo): string {
+function plannedTestPath(
+  root: string,
+  source: string,
+  packageInfo: PackageInfo,
+  sourceKind: SourceKind,
+): string {
   const local = normalizePath(relative(packageInfo.directory, source));
   const withoutSourceRoot = local.startsWith("src/") ? local.slice(4) : local;
   const extension = extname(withoutSourceRoot);
   const stem = withoutSourceRoot.slice(0, -extension.length);
-  const testExtension = extension === ".tsx" ? ".tsx" : ".ts";
+  const testExtension =
+    sourceKind === "typescript"
+      ? extension === ".tsx"
+        ? ".tsx"
+        : ".ts"
+      : extension === ".jsx" || extension === ".mjs" || extension === ".cjs"
+        ? extension
+        : ".js";
   return relativePosix(root, join(packageInfo.directory, "tests", `${stem}.test${testExtension}`));
 }
 
@@ -167,35 +192,71 @@ describe(${JSON.stringify(sourceLabel)}, () => {
   };
 }
 
-export function missingTestFindings({ root, packages }: DetectorContext): RawFinding[] {
+function missingSourceTestFindings(
+  root: string,
+  packageInfo: PackageInfo,
+  sourceFiles: readonly string[],
+  sourceExtensions: readonly string[],
+  sourceKind: SourceKind,
+  emittedAliases?: ReadonlyMap<string, readonly string[]>,
+): RawFinding[] {
+  if (!selectedTestScript(packageInfo)) return [];
+  const testReachability = reachableSources(
+    packageInfo,
+    sourceFiles,
+    sourceExtensions,
+    emittedAliases,
+  );
   const findings: RawFinding[] = [];
-  for (const packageInfo of packages) {
-    if (!selectedTestScript(packageInfo)) continue;
-    const testReachability = reachableSources(packageInfo);
-    for (const source of packageInfo.sourceFiles) {
-      if (matchingTest(source, packageInfo, testReachability)) continue;
-      const sourcePath = relativePosix(root, source);
-      const target = plannedTestPath(root, source, packageInfo);
-      findings.push({
-        subject: {
-          kind: "file",
-          key: sourcePath,
-          path: sourcePath,
-          description: `TypeScript source ${sourcePath}`,
-        },
-        requirement: {
-          kind: "test",
-          key: target,
-          description: "deterministic structural test reachability",
-          expectedArtifact: target,
-        },
-        message: `${sourcePath} is not deterministically reachable from a test`,
-        evidence: [{ kind: "file", path: sourcePath, detail: "production source file exists" }],
-        relatedFiles: [sourcePath],
-        verification: verificationForTest(packageInfo, root, target),
-        scaffold: testScaffold(source, target, packageInfo),
-      });
-    }
+  for (const source of sourceFiles) {
+    if (matchingTest(source, packageInfo, testReachability)) continue;
+    const sourcePath = relativePosix(root, source);
+    const target = plannedTestPath(root, source, packageInfo, sourceKind);
+    findings.push({
+      subject: {
+        kind: "file",
+        key: sourcePath,
+        path: sourcePath,
+        description: `${sourceKind === "typescript" ? "TypeScript" : "JavaScript"} source ${sourcePath}`,
+      },
+      requirement: {
+        kind: "test",
+        key: target,
+        description: "deterministic structural test reachability",
+        expectedArtifact: target,
+      },
+      message: `${sourcePath} is not deterministically reachable from a test`,
+      evidence: [{ kind: "file", path: sourcePath, detail: "production source file exists" }],
+      relatedFiles: [sourcePath],
+      verification: verificationForTest(packageInfo, root, target),
+      scaffold:
+        sourceKind === "typescript" ? testScaffold(source, target, packageInfo) : undefined,
+    });
   }
   return findings;
+}
+
+export function missingTestFindings({ root, packages }: DetectorContext): RawFinding[] {
+  return packages.flatMap((packageInfo) =>
+    missingSourceTestFindings(
+      root,
+      packageInfo,
+      packageInfo.sourceFiles,
+      typeScriptSourceExtensions,
+      "typescript",
+      emittedJavaScriptExtensions,
+    ),
+  );
+}
+
+export function missingJavaScriptTestFindings({ root, packages }: DetectorContext): RawFinding[] {
+  return packages.flatMap((packageInfo) =>
+    missingSourceTestFindings(
+      root,
+      packageInfo,
+      packageInfo.javaScriptSourceFiles,
+      javaScriptSourceExtensions,
+      "javascript",
+    ),
+  );
 }
