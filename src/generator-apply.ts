@@ -1,5 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { planGenerator, type GeneratorPlan, type PlannedGeneratorOperation } from "./generators.ts";
 import type { ResultEnvelope } from "./model.ts";
@@ -49,12 +57,31 @@ function outputPath(root: string, path: string): string {
   return absolute;
 }
 
-function assertWritableParent(root: string, path: string): void {
+function assertNoSymlinkComponents(root: string, path: string, logicalPath: string): void {
+  const absoluteRoot = resolve(root);
+  const local = relative(absoluteRoot, path);
+  let current = absoluteRoot;
+  for (const segment of local.split(sep).filter(Boolean)) {
+    current = join(current, segment);
+    if (!existsSync(current)) break;
+    if (lstatSync(current).isSymbolicLink()) {
+      throw new GenerationConflict(
+        logicalPath,
+        `Generated path crosses a symbolic link: ${relative(absoluteRoot, current)}`,
+      );
+    }
+  }
+}
+
+function assertWritableParent(root: string, path: string, logicalPath: string): void {
   const absoluteRoot = resolve(root);
   let current = dirname(path);
   while (withinRoot(absoluteRoot, current) && current !== absoluteRoot) {
     if (existsSync(current) && !statSync(current).isDirectory()) {
-      throw new GenerationConflict(path, `Generated path has a non-directory parent: ${current}`);
+      throw new GenerationConflict(
+        logicalPath,
+        `Generated path has a non-directory parent: ${current}`,
+      );
     }
     current = dirname(current);
   }
@@ -65,7 +92,8 @@ function createFileMutation(root: string, operation: PlannedGeneratorOperation):
     throw new Error(`Expected create-file operation, received ${operation.kind}`);
   }
   const absolutePath = outputPath(root, operation.path);
-  assertWritableParent(root, absolutePath);
+  assertNoSymlinkComponents(root, absolutePath, operation.path);
+  assertWritableParent(root, absolutePath, operation.path);
   if (!existsSync(absolutePath)) {
     return {
       operation,
@@ -98,6 +126,7 @@ function jsonSetMutation(root: string, operation: PlannedGeneratorOperation): Pr
     throw new Error(`Expected json-set operation, received ${operation.kind}`);
   }
   const absolutePath = outputPath(root, operation.path);
+  assertNoSymlinkComponents(root, absolutePath, operation.path);
   if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
     throw new GenerationConflict(
       operation.path,
@@ -161,6 +190,7 @@ function typescriptBarrelExportMutation(
     throw new Error(`Expected typescript-barrel-export operation, received ${operation.kind}`);
   }
   const absolutePath = outputPath(root, operation.path);
+  assertNoSymlinkComponents(root, absolutePath, operation.path);
   if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
     throw new GenerationConflict(
       operation.path,
@@ -230,8 +260,9 @@ function typescriptBarrelExportMutation(
 function prepareMutation(root: string, operation: PlannedGeneratorOperation): PreparedMutation {
   if (operation.kind === "create-file") return createFileMutation(root, operation);
   if (operation.kind === "json-set") return jsonSetMutation(root, operation);
-  if (operation.kind === "typescript-barrel-export")
+  if (operation.kind === "typescript-barrel-export") {
     return typescriptBarrelExportMutation(root, operation);
+  }
   const exhaustive: never = operation;
   throw new Error(`Unsupported planned generator operation: ${String(exhaustive)}`);
 }
@@ -289,6 +320,7 @@ export function applyGeneratorPlan(
   const touched: PreparedMutation[] = [];
   try {
     for (const mutation of writes) {
+      assertNoSymlinkComponents(root, mutation.absolutePath, mutation.operation.path);
       mkdirSync(dirname(mutation.absolutePath), { recursive: true });
       writeFile(mutation.absolutePath, mutation.desiredContent);
       touched.push(mutation);
