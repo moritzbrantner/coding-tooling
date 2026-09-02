@@ -47,7 +47,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
   {
     id: "package-test-capability",
     version: 1,
-    description: "TypeScript packages with production source expose a deterministic test capability",
+    description:
+      "TypeScript packages with production source expose a deterministic test capability",
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingTestCapabilityFindings,
