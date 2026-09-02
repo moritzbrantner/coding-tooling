@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Deterministic remote repository preflight from coding-tooling."
+    />
+    <title>coding-tooling · repository preflight</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <a href="https://github.com/moritzbrantner/coding-tooling">coding-tooling</a>
+      <span>remote preflight / schema v1</span>
+    </header>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">For humans and coding agents</p>
+        <h1>Load a GitHub repository.<br />Get structural evidence.</h1>
+        <p class="lede">
+          A zero-install, deterministic first pass over public repositories. No token, no code
+          execution, no LLM.
+        </p>
+        <form>
+          <label for="repository">GitHub repository</label>
+          <div class="input-row">
+            <input
+              id="repository"
+              name="repository"
+              placeholder="owner/repository or https://github.com/owner/repository"
+              autocomplete="off"
+              required
+            />
+            <button type="submit">Analyze repository</button>
+          </div>
+        </form>
+        <p id="status" class="status" role="status">
+          Remote preflight is intentionally narrower than the local coding-tooling CLI.
+        </p>
+      </section>
+
+      <div id="output" hidden>
+        <section class="section-heading">
+          <p class="eyebrow">Repository</p>
+          <h2 id="repo-name"></h2>
+          <p id="repo-description" class="muted"></p>
+        </section>
+        <section id="summary" class="metrics" aria-label="Analysis summary"></section>
+        <section>
+          <h2>Technologies</h2>
+          <div id="technologies" class="chips"></div>
+        </section>
+        <section>
+          <div class="section-heading">
+            <p class="eyebrow">Discovery</p>
+            <h2>Components and capabilities</h2>
+          </div>
+          <div id="components" class="stack"></div>
+        </section>
+        <section>
+          <div class="section-heading">
+            <p class="eyebrow">Actionable evidence</p>
+            <h2>Remote findings</h2>
+          </div>
+          <div id="findings" class="stack"></div>
+        </section>
+        <section>
+          <div class="section-heading row">
+            <div>
+              <p class="eyebrow">Agent handoff</p>
+              <h2>Continue locally</h2>
+            </div>
+            <button id="copy-commands" class="secondary">Copy commands</button>
+          </div>
+          <pre id="commands"></pre>
+        </section>
+        <section>
+          <div class="section-heading row">
+            <div>
+              <p class="eyebrow">Machine interface</p>
+              <h2>JSON result</h2>
+            </div>
+            <div class="buttons">
+              <button id="copy-json" class="secondary">Copy JSON</button>
+              <button id="download-json" class="secondary">Download</button>
+            </div>
+          </div>
+          <pre id="json" class="json"></pre>
+        </section>
+        <section class="boundary">
+          <h2>Boundary</h2>
+          <p>
+            This page reads public GitHub metadata, a recursive tree, and a bounded set of
+            manifests. It does not clone or run the repository. Use local
+            <code>coding-tooling</code> for conformance, environment verification, full findings,
+            and validation execution.
+          </p>
+        </section>
+      </div>
+    </main>
+    <footer>
+      <span>Deterministic mechanics, not semantic judgment.</span>
+      <span>Public repositories only.</span>
+    </footer>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
