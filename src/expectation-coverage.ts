@@ -6,11 +6,7 @@ import { productionSourceFiles } from "./expectation-gap-detectors.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { ExpectationDescriptor } from "./expectation-detector-types.ts";
 
-export type DetectorCoverageStatus =
-  | "applied"
-  | "not-applicable"
-  | "unsupported"
-  | "unavailable";
+export type DetectorCoverageStatus = "applied" | "not-applicable" | "unsupported" | "unavailable";
 
 export type DetectorCoverage = {
   id: string;
@@ -26,11 +22,7 @@ export type FindingsCoverage = {
   unsupportedTechnologies: string[];
 };
 
-type CoverageTarget =
-  | "repository-config"
-  | "packages"
-  | "typescript-source"
-  | "production-source";
+type CoverageTarget = "repository-config" | "packages" | "typescript-source" | "production-source";
 
 const coverageTargets: Record<string, CoverageTarget> = {
   "benchmark-evidence": "packages",
@@ -44,11 +36,7 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "typescript-source-test": "typescript-source",
 };
 
-function detectorSubjects(
-  root: string,
-  context: DetectorContext,
-  target: CoverageTarget,
-): number {
+function detectorSubjects(root: string, context: DetectorContext, target: CoverageTarget): number {
   switch (target) {
     case "repository-config":
       return existsSync(join(root, ".coding-tooling.json")) ? 1 : 0;
