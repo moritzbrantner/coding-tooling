@@ -48,6 +48,7 @@ export type FindingScaffold = {
 
 export type FindingVerificationEvidence = {
   id: string;
+  version: 1;
   command: string[];
   reason: string;
 };
@@ -82,6 +83,7 @@ export type ExpectationSuppression = {
 
 export type ExpectationVerification = {
   id: string;
+  version: 1;
   expectation: string;
   subject: string;
   command: string[];
@@ -205,6 +207,7 @@ export function loadExpectationConfig(
     verifications = value.verifications.map((item, index) => {
       if (
         !isRecord(item) ||
+        item.version !== 1 ||
         typeof item.id !== "string" ||
         !item.id.trim() ||
         typeof item.expectation !== "string" ||
@@ -214,13 +217,14 @@ export function loadExpectationConfig(
         typeof item.reason !== "string" ||
         !item.reason.trim() ||
         !Array.isArray(item.command) ||
-        item.command.length < 3 ||
+        item.command.length !== 3 ||
         !item.command.every((part) => typeof part === "string" && part.length > 0)
       ) {
         throw new Error(`${configuredPath}.verifications[${index}] is invalid`);
       }
       return {
         id: item.id,
+        version: 1,
         expectation: item.expectation,
         subject: item.subject,
         command: item.command as string[],
