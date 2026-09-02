@@ -1,0 +1,7 @@
+{
+  "name": "calibration-typescript-reachable",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  }
+}
