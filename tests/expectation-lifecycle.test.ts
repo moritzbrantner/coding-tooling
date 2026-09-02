@@ -178,6 +178,7 @@ describe("expectation lifecycle", () => {
             },
           ],
         },
+        null,
         2,
       )}\n`,
     );
@@ -199,7 +200,7 @@ describe("expectation lifecycle", () => {
     const root = fixture("bun test");
     addVerifierScript(root);
     mkdirSync(join(root, "tests"), { recursive: true });
-    writeFileSync(join(root, "tests", "service.test.ts"), "test(\"service\", () => {});\n");
+    writeFileSync(join(root, "tests", "service.test.ts"), 'test("service", () => {});\n');
     writeFileSync(
       join(root, ".coding-tooling.expectations.json"),
       `${JSON.stringify(
