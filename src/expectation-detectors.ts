@@ -1,3 +1,4 @@
+import { loadConfig } from "./core.ts";
 import {
   missingAggregateCheckFindings,
   missingCliWiringFindings,
@@ -12,6 +13,10 @@ import type { ExpectationDescriptor, RawFinding } from "./expectation-detector-t
 export { createDetectorContext };
 export type { ExpectationDescriptor, RawFinding };
 
+function applicability(subjects: number) {
+  return { status: subjects > 0 ? ("applied" as const) : ("not-applicable" as const), subjects };
+}
+
 export const expectationDescriptors: ExpectationDescriptor[] = [
   {
     id: "package-aggregate-check",
@@ -21,6 +26,7 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingAggregateCheckFindings,
+    coverage: (context) => applicability(context.packages.length),
   },
   {
     id: "package-cli-wiring",
@@ -29,6 +35,7 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingCliWiringFindings,
+    coverage: (context) => applicability(context.packages.length),
   },
   {
     id: "required-capability-available",
@@ -38,6 +45,7 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingRequiredCapabilityFindings,
+    coverage: (context) => applicability((loadConfig(context.root).requiredCapabilities ?? []).length),
   },
   {
     id: "typescript-project-config",
@@ -46,6 +54,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingTypeScriptConfigFindings,
+    coverage: (context) =>
+      applicability(context.packages.filter((packageInfo) => packageInfo.sourceFiles.length > 0).length),
   },
   {
     id: "typescript-source-test",
@@ -55,10 +65,21 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingTestFindings,
+    coverage: (context) =>
+      applicability(
+        context.packages
+          .filter((packageInfo) => {
+            const scripts = packageInfo.manifest.scripts ?? {};
+            return typeof scripts["test:unit"] === "string" || typeof scripts.test === "string";
+          })
+          .reduce((total, packageInfo) => total + packageInfo.sourceFiles.length, 0),
+      ),
   },
 ];
 expectationDescriptors.sort((left, right) => left.id.localeCompare(right.id));
 
 export function expectationRegistry(): ExpectationRegistryEntry[] {
-  return expectationDescriptors.map(({ detect: _detect, ...descriptor }) => ({ ...descriptor }));
+  return expectationDescriptors.map(({ detect: _detect, coverage: _coverage, ...descriptor }) => ({
+    ...descriptor,
+  }));
 }
