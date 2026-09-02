@@ -56,7 +56,8 @@ export function entryMain(argv = process.argv.slice(2)): number {
       const value = argv[index]!;
       if (!value.startsWith("--")) continue;
       if (!knownFlags.has(value)) return expectationUsage();
-      if ((value === "--config" || value === "--report") && !argv[index + 1]) return expectationUsage();
+      if ((value === "--config" || value === "--report") && !argv[index + 1])
+        return expectationUsage();
       if (value === "--config" || value === "--report") index += 1;
     }
     const root = repositoryRoot();
