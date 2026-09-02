@@ -24,6 +24,8 @@ describe("composite action contract", () => {
     const source = actionSource();
 
     expect(source).toContain("if: inputs.operation == 'run'");
-    expect(source).not.toContain("if: inputs.operation == 'run' || inputs.operation == 'environment-fingerprint'");
+    expect(source).not.toContain(
+      "if: inputs.operation == 'run' || inputs.operation == 'environment-fingerprint'",
+    );
   });
 });
