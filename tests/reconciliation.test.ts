@@ -20,6 +20,9 @@ function write(root: string, relative: string, content: string): void {
 
 function conventionSource(): string {
   const root = workspace("coding-tooling-convention-source-");
+  write(root, "README.md", "# Conventions\n");
+  write(root, "principles/README.md", "# Principles\n");
+  write(root, "technologies/README.md", "# Technologies\n");
   write(
     root,
     "conventions/testing/README.md",
