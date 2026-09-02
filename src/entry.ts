@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { main } from "./cli.ts";
 import {
   baselineFindings,
+  findingCommand,
   findingsCommand,
   scaffoldFinding,
   type ExpectationEnvelope,
@@ -19,7 +20,8 @@ function expectationExitCode(status: ExpectationEnvelope["status"]): number {
 
 function expectationUsage(): never {
   console.error(`Usage:
-  coding-tooling findings [--new|--baseline] [--json]
+  coding-tooling findings [--new|--baseline] [--all] [--json]
+  coding-tooling finding <finding-id> [--json]
   coding-tooling baseline [--json]
   coding-tooling scaffold <finding-id> [--json]`);
   process.exit(2);
@@ -27,7 +29,12 @@ function expectationUsage(): never {
 
 export function entryMain(argv = process.argv.slice(2)): number {
   const command = argv[0];
-  if (command !== "findings" && command !== "baseline" && command !== "scaffold") {
+  if (
+    command !== "findings" &&
+    command !== "finding" &&
+    command !== "baseline" &&
+    command !== "scaffold"
+  ) {
     return main(argv);
   }
 
@@ -37,12 +44,17 @@ export function entryMain(argv = process.argv.slice(2)): number {
   if (command === "findings") {
     const onlyNew = argv.includes("--new");
     const onlyBaseline = argv.includes("--baseline");
+    const includeSuppressed = argv.includes("--all");
     const unknown = argv
       .slice(1)
-      .filter((value) => !["--new", "--baseline", "--json"].includes(value));
+      .filter((value) => !["--new", "--baseline", "--all", "--json"].includes(value));
     if (unknown.length > 0 || (onlyNew && onlyBaseline)) return expectationUsage();
     const state: FindingState | undefined = onlyNew ? "new" : onlyBaseline ? "baseline" : undefined;
-    result = findingsCommand(root, { state });
+    result = findingsCommand(root, { state, includeSuppressed });
+  } else if (command === "finding") {
+    const id = argv[1];
+    if (!id || argv.slice(2).some((value) => value !== "--json")) return expectationUsage();
+    result = findingCommand(root, id);
   } else if (command === "baseline") {
     if (argv.slice(1).some((value) => value !== "--json")) return expectationUsage();
     result = baselineFindings(root);
