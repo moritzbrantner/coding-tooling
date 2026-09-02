@@ -130,6 +130,15 @@ function tomlString(content: string, key: string): string | undefined {
   return new RegExp(`^\\s*${key}\\s*=\\s*["']([^"']+)["']`, "m").exec(content)?.[1];
 }
 
+function tomlBoolean(content: string, key: string): boolean | undefined {
+  const match = new RegExp(
+    `^\\s*${key}\\s*=\\s*(true|false)\\s*(?:#.*)?$`,
+    "m",
+  ).exec(content);
+  if (!match?.[1]) return undefined;
+  return match[1] === "true";
+}
+
 type RustManifestInfo = {
   crateName?: string;
   autotests: boolean;
@@ -142,7 +151,7 @@ function rustManifestInfo(manifestPath: string): RustManifestInfo {
   const librarySection = tomlSection(content, "lib") ?? "";
   const packageName = tomlString(packageSection, "name");
   const libraryName = tomlString(librarySection, "name");
-  const autotests = !/^\s*autotests\s*=\s*false\s*$/m.test(packageSection);
+  const autotests = tomlBoolean(packageSection, "autotests") !== false;
   const explicitTestPaths = tomlArraySections(content, "test")
     .map((section) => {
       const path = tomlString(section, "path");
@@ -157,17 +166,6 @@ function rustManifestInfo(manifestPath: string): RustManifestInfo {
     autotests,
     explicitTestPaths,
   };
-}
-
-function hasCargoLock(root: string, directory: string): boolean {
-  let current = directory;
-  while (true) {
-    if (existsSync(join(current, "Cargo.lock"))) return true;
-    if (current === root) return false;
-    const parent = dirname(current);
-    if (parent === current || !current.startsWith(`${root}${sep}`)) return false;
-    current = parent;
-  }
 }
 
 function isProductionRustSource(local: string): boolean {
@@ -214,7 +212,7 @@ function rustPackageInfos(root: string, files: string[]): RustPackageInfo[] {
       integrationTestRoots,
       rustFiles,
       sourceFiles,
-      hasLockfile: hasCargoLock(root, directory),
+      hasLockfile: existsSync(join(directory, "Cargo.lock")),
     });
   }
 
