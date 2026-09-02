@@ -13,6 +13,7 @@ import {
   missingTypeScriptConfigFindings,
 } from "../src/expectation-package-detectors.ts";
 import { createDetectorContext } from "../src/expectation-package-context.ts";
+import { missingRustTestFindings } from "../src/expectation-rust-test-detector.ts";
 import { missingTestFindings } from "../src/expectation-test-detector.ts";
 
 const roots: string[] = [];
@@ -50,6 +51,7 @@ describe("expectation detector registry contract", () => {
       "package-aggregate-check",
       "package-cli-wiring",
       "required-capability-available",
+      "rust-source-test",
       "typescript-project-config",
       "typescript-source-test",
     ]);
@@ -57,6 +59,7 @@ describe("expectation detector registry contract", () => {
       ["package-aggregate-check", 1],
       ["package-cli-wiring", 1],
       ["required-capability-available", 1],
+      ["rust-source-test", 1],
       ["typescript-project-config", 1],
       ["typescript-source-test", 2],
     ]);
@@ -96,9 +99,10 @@ describe("expectation detector registry contract", () => {
       missingCliWiringFindings(context),
       missingRequiredCapabilityFindings(context),
       missingTypeScriptConfigFindings(context),
+      missingRustTestFindings(context),
       missingTestFindings(context),
     ];
 
-    expect(batches.map((batch) => batch.length)).toEqual([1, 1, 0, 1, 1]);
+    expect(batches.map((batch) => batch.length)).toEqual([1, 1, 0, 1, 0, 1]);
   });
 });
