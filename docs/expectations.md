@@ -1,8 +1,8 @@
 # Repository expectations
 
-`coding-tooling` can deterministically inspect a partially built repository for missing puzzle pieces. The same expectation model is intended to complement generators: generators create known structure up front, while expectations audit existing structure and expose what is absent.
+`coding-tooling` can deterministically inspect a partially built repository for missing puzzle pieces. Expectations complement generators: generators create known structure up front, while expectations audit existing structure and expose what is absent.
 
-The MVP is deliberately deterministic. It does not use an LLM, modify source files while inspecting, or infer behavioral correctness from names alone.
+The trusted finding stream is deliberately deterministic. It does not use an LLM, modify source files while inspecting, or claim behavioral correctness from weak evidence.
 
 ## Commands
 
@@ -10,17 +10,25 @@ The MVP is deliberately deterministic. It does not use an LLM, modify source fil
 coding-tooling findings
 coding-tooling findings --new
 coding-tooling findings --baseline
+coding-tooling findings --all
+coding-tooling finding CT-0123456789AB
 coding-tooling baseline
 coding-tooling scaffold CT-0123456789AB
 ```
 
-`findings` is read-only. `baseline` writes the current active finding IDs to `.coding-tooling.expectations.json`. `scaffold` is an explicit mutation and is available only when a finding has a deterministic boilerplate action.
+`findings` and `finding` are read-only. `findings --all` also exposes suppressed findings. `baseline` writes the current active finding IDs to `.coding-tooling.expectations.json`. `scaffold` is an explicit mutation and is available only when a finding has a deterministic boilerplate action.
 
-Findings have stable semantic IDs derived from the expectation, subject, and required condition. Moving unrelated code or changing line numbers therefore does not renumber the work queue.
+## Versioned detector registry
+
+Every deterministic expectation is registered with an ID and a contract version. Findings carry `expectationId`, `expectationVersion`, `policyKind`, and an optional `conventionId` for convention-backed detectors.
+
+Semantic finding IDs are derived from the expectation ID and contract version plus the semantic subject and required condition. Unrelated edits and line-number changes therefore do not renumber findings. A detector implementation can be fixed without changing its contract version, while an intentional semantic contract change can increment the version and deliberately invalidate old finding IDs.
+
+The built-in completeness detectors are advisory evidence by default. They become blocking only through explicit repository enforcement. This keeps detector mechanics in `coding-tooling` without turning the implementation into an independent hidden policy source.
 
 ## Initial expectations
 
-The first batch intentionally covers several kinds of absence instead of specializing the model around tests:
+The first batch covers several kinds of structural absence:
 
 - `typescript-source-test`: a TypeScript source file in a package with a test command has neither a conventionally matching test artifact nor a test that directly imports the source module.
 - `package-aggregate-check`: a package exposes multiple verification scripts but no aggregate `check` or `verify` script.
@@ -28,9 +36,7 @@ The first batch intentionally covers several kinds of absence instead of special
 - `package-cli-wiring`: a CLI entrypoint is not wired through `package.json`, or configured bin wiring points to a missing file.
 - `required-capability-available`: `.coding-tooling.json` declares a required capability that no discovered component provides.
 
-These expectations are warnings by default. Repositories can explicitly promote selected expectation IDs to errors.
-
-The TypeScript test expectation is structural, not a claim about behavioral coverage. A conventionally matching test or a direct deterministic test import satisfies the MVP rule; deeper endpoint/test-case cardinality can be added later using deterministic AST or build metadata where justified.
+The TypeScript test expectation is structural, not a claim about behavioral coverage. A matching test artifact or conservative direct test import satisfies the current contract. A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold is offered only when the configured test script actually invokes `bun test`. Other test runners receive a verification hint but no guessed framework-specific scaffold.
 
 ## Persistent metadata
 
@@ -46,31 +52,43 @@ The TypeScript test expectation is structural, not a claim about behavioral cove
 }
 ```
 
-A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject.
+A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject. Invariants are explicit repository knowledge for agents; the analyzer does not synthesize them.
 
-Invariants are explicit repository knowledge for agents. They are returned with the finding report but are not guessed or synthesized by the analyzer.
+Persistent metadata is reconciled against the current deterministic finding stream. Reports identify orphaned baseline IDs, stale suppressions, duplicate metadata, and references to unknown expectation IDs so accepted debt does not silently become a graveyard.
 
-## Baselines
+## Finding lifecycle
 
-Baselining does not hide existing debt. Findings remain visible with `state: "baseline"` so an orchestrator can still assign them to an agent. New findings have `state: "new"`.
+Findings have two independent lifecycle dimensions:
 
-Only a new finding promoted to `error` makes `findings` fail. A baselined error remains visible without blocking the repository. Re-running `baseline` rewrites the ledger from the currently active finding set, so resolved debt disappears instead of accumulating stale IDs.
+- `state: "new" | "baseline"` describes whether active debt has been accepted into the current baseline.
+- `disposition: "active" | "suppressed"` describes whether the finding is intentionally excluded from normal active output.
 
-## Agent-facing finding contract
+Normal `findings` output hides suppressed findings, preserving the existing operational view. `findings --all` and `finding <id>` keep them inspectable together with the suppression reason. Baselining does not hide debt: active findings remain visible with `state: "baseline"`.
+
+Only an active, new finding promoted to `error` makes `findings` fail. Re-running `baseline` rewrites the baseline from the current active finding set, so resolved debt disappears.
+
+## Agent-facing contract
 
 Each finding contains:
 
-- a semantic ID and expectation ID;
-- severity and baseline state;
-- a subject and missing requirement;
-- deterministic evidence;
-- related files;
+- a stable semantic ID and versioned expectation identity;
+- policy provenance, severity, baseline state, and disposition;
+- a semantic subject and missing requirement;
+- deterministic evidence and related files;
 - focused verification commands when derivable;
 - deterministic relationships to other findings when known;
 - an optional explicit scaffold action.
 
-The intent is to make a finding usable as an atomic work unit. An orchestrator can hand an agent `CT-...` instead of asking it to explore the repository and rediscover where a known structural gap is located.
+`coding-tooling finding CT-... --json` deterministically reports whether one finding is `active`, `suppressed`, or `absent`. This lets an orchestrator revalidate a work item without rediscovering repository context.
+
+Task management remains outside `coding-tooling`. A coordinator may persist a relationship such as `TASK-123 -> CT-0123456789AB`, but `coding-tooling` owns only whether the finding currently exists and what deterministic evidence supports it.
+
+## Scaffolding boundary
+
+Finding scaffolds do not maintain a separate mutation engine. They are converted to a generator plan and applied through the shared generator mutation machinery, inheriting its conflict handling, idempotency, rollback behavior, and repository-path safety. The finding is re-analyzed afterward; scaffolding succeeds only when the original finding is no longer active.
+
+The shared generator path rejects symbolic-link components in existing output paths so repository-local paths cannot cause a scaffold or structured update to follow a symlink outside the repository.
 
 ## Analysis cost
 
-Expectations should use the cheapest deterministic source that can prove the fact: filesystem/manifests first, repository configuration next, then static/AST or compiler metadata only for rules that need it. Probabilistic local-agent analysis should remain a separate layer until there is evidence that it belongs in the trusted finding stream.
+Expectations should use the cheapest deterministic source that can prove the fact: filesystem/manifests first, repository configuration next, then static/AST or compiler metadata only for rules that need it. Probabilistic local-agent analysis should remain a separate enrichment layer until there is evidence that it belongs in the trusted finding stream.
