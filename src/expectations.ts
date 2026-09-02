@@ -118,8 +118,7 @@ function reconcile(config: ExpectationConfig, allFindings: Finding[]): Reconcili
   const seenSuppressions = new Set<string>();
   const duplicateSuppressions: number[] = [];
   for (const [index, suppression] of (config.suppressions ?? []).entries()) {
-    const key =
-      `${suppression.id ?? ""}\0${suppression.expectation ?? ""}\0${suppression.subject ?? ""}`;
+    const key = `${suppression.id ?? ""}\0${suppression.expectation ?? ""}\0${suppression.subject ?? ""}`;
     if (seenSuppressions.has(key)) duplicateSuppressions.push(index);
     seenSuppressions.add(key);
   }
@@ -188,9 +187,7 @@ export function findingsCommand(
       : analysis.findings;
     const blocking = analysis.findings.some(
       (finding) =>
-        finding.disposition === "active" &&
-        finding.state === "new" &&
-        finding.severity === "error",
+        finding.disposition === "active" && finding.state === "new" && finding.severity === "error",
     );
     return {
       schemaVersion: 1,
