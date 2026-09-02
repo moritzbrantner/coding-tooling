@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
-import { extname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { extname, resolve } from "node:path";
 
 import type { DetectorContext, PackageInfo } from "./expectation-package-context.ts";
 import type { RawFinding } from "./expectation-detector-types.ts";
@@ -195,7 +195,22 @@ function benchmarkScript(packageInfo: PackageInfo): { name: string; command: str
   return undefined;
 }
 
-function hasBenchmarkArtifact(packageInfo: PackageInfo): boolean {
+function commandReferencesExistingBenchmarkArtifact(
+  packageInfo: PackageInfo,
+  command: string,
+): boolean {
+  return command.split(/\s+/).some((rawToken) => {
+    const token = rawToken.replace(/^["'`]|["'`]$/g, "");
+    if (!sourceExtensions.has(extname(token))) return false;
+    const candidate = resolve(packageInfo.directory, token);
+    const local = relativePosix(packageInfo.directory, candidate);
+    if (local === ".." || local.startsWith("../")) return false;
+    return existsSync(candidate);
+  });
+}
+
+function hasBenchmarkArtifact(packageInfo: PackageInfo, command: string): boolean {
+  if (commandReferencesExistingBenchmarkArtifact(packageInfo, command)) return true;
   return walkFiles(packageInfo.directory, 8).some((path) => {
     const local = relativePosix(packageInfo.directory, path);
     return (
@@ -211,7 +226,7 @@ export function missingBenchmarkEvidenceFindings({
 }: DetectorContext): RawFinding[] {
   return packages.flatMap((packageInfo) => {
     const script = benchmarkScript(packageInfo);
-    if (!script || hasBenchmarkArtifact(packageInfo)) return [];
+    if (!script || hasBenchmarkArtifact(packageInfo, script.command)) return [];
     const manifestPath = relativePosix(root, packageInfo.manifestPath);
     const packageLabel = packageInfo.path === "." ? "repository package" : packageInfo.path;
     return [
