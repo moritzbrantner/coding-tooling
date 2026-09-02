@@ -151,10 +151,7 @@ function selectedTestScript(packageInfo: PackageInfo): string | undefined {
   return scripts["test:unit"] ?? scripts.test;
 }
 
-export function missingTestCapabilityFindings({
-  root,
-  packages,
-}: DetectorContext): RawFinding[] {
+export function missingTestCapabilityFindings({ root, packages }: DetectorContext): RawFinding[] {
   return packages.flatMap((packageInfo) => {
     if (packageInfo.sourceFiles.length === 0 || selectedTestScript(packageInfo)) return [];
     const manifestPath = relativePosix(root, packageInfo.manifestPath);
@@ -191,9 +188,7 @@ export function missingTestCapabilityFindings({
   });
 }
 
-function benchmarkScript(
-  packageInfo: PackageInfo,
-): { name: string; command: string } | undefined {
+function benchmarkScript(packageInfo: PackageInfo): { name: string; command: string } | undefined {
   const scripts = packageInfo.manifest.scripts ?? {};
   for (const name of ["benchmark", "benchmark:smoke", "bench"]) {
     const command = scripts[name];
