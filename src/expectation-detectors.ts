@@ -1,4 +1,10 @@
 import {
+  missingBenchmarkEvidenceFindings,
+  missingTestCapabilityFindings,
+  sourceDebtMarkerFindings,
+  sourceUnimplementedStubFindings,
+} from "./expectation-gap-detectors.ts";
+import {
   missingAggregateCheckFindings,
   missingCliWiringFindings,
   missingRequiredCapabilityFindings,
@@ -13,6 +19,14 @@ export { createDetectorContext };
 export type { ExpectationDescriptor, RawFinding };
 
 export const expectationDescriptors: ExpectationDescriptor[] = [
+  {
+    id: "benchmark-evidence",
+    version: 1,
+    description: "Declared benchmark capabilities have a conventional benchmark artifact",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    detect: missingBenchmarkEvidenceFindings,
+  },
   {
     id: "package-aggregate-check",
     version: 1,
@@ -31,6 +45,15 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     detect: missingCliWiringFindings,
   },
   {
+    id: "package-test-capability",
+    version: 1,
+    description:
+      "TypeScript packages with production source expose a deterministic test capability",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    detect: missingTestCapabilityFindings,
+  },
+  {
     id: "required-capability-available",
     version: 1,
     description:
@@ -38,6 +61,22 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingRequiredCapabilityFindings,
+  },
+  {
+    id: "source-debt-marker",
+    version: 1,
+    description: "Production source TODO/FIXME markers are visible as explicit repository debt",
+    defaultSeverity: "info",
+    policyKind: "advisory",
+    detect: sourceDebtMarkerFindings,
+  },
+  {
+    id: "source-unimplemented-stub",
+    version: 1,
+    description: "Production source does not retain explicit unimplemented runtime stubs",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    detect: sourceUnimplementedStubFindings,
   },
   {
     id: "typescript-project-config",
