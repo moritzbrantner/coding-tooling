@@ -36,23 +36,25 @@ Coverage contains:
 - `detectors`: every registered expectation with its version, `applied | not-applicable | unsupported | unavailable` status, and deterministic subject count;
 - `unsupportedTechnologies`: discovered source technologies that currently have no structural source-test detector.
 
-The initial structural source-test support is TypeScript. JavaScript-only, Rust, and .NET components are therefore reported explicitly as unsupported for that structural analysis until dedicated detectors land. This does not stop other cross-language detectors, such as TODO/FIXME or explicit unimplemented-stub scanning, from reporting themselves as applied.
+Structural source-test support currently covers TypeScript and JavaScript package source. Rust and .NET components remain explicitly unsupported for structural source-test analysis until dedicated detectors land. This does not stop other cross-language detectors, such as TODO/FIXME or explicit unimplemented-stub scanning, from reporting themselves as applied.
 
 Coverage is evidence about what was analyzed, not a confidence score and not a substitute for findings. A portfolio aggregator should interpret `0 findings` together with coverage rather than collapsing covered-clean and unsupported repositories into the same state.
 
 ## Initial expectations
 
-The first batch covers several kinds of structural absence:
+The structural expectations include several kinds of absence:
 
 - `typescript-source-test`: production TypeScript source in a package with a test command has neither a conventionally matching test artifact nor a conservative static import path from a test to that source.
+- `javascript-source-test`: production `.js`, `.jsx`, `.mjs`, or `.cjs` source in a package with a test command has neither a conventionally matching test artifact nor conservative relative `import` / `require()` reachability from a test.
+- `package-test-capability`: a JavaScript/TypeScript package contains production source but exposes neither `test` nor `test:unit`.
 - `package-aggregate-check`: a package exposes multiple verification scripts but no aggregate `check` or `verify` script.
 - `typescript-project-config`: a package contains TypeScript source but no `tsconfig.json`.
 - `package-cli-wiring`: a CLI entrypoint is not wired through `package.json`, or configured bin wiring points to a missing file.
 - `required-capability-available`: `.coding-tooling.json` declares a required capability that no discovered component provides.
 
-The TypeScript test expectation is structural, not a claim about behavioral coverage. Version 2 follows conservative relative static imports transitively from test files, so a helper reached through a tested public seam counts as structurally test-reachable. It deliberately does not require every implementation file to be imported directly by a test. Obvious support artifacts such as Storybook stories, test/spec files, fixture-named files, and files under `src/test`, `src/tests`, or `src/__tests__` are not treated as production source. Bare package imports and unresolved aliases are not guessed, so false negatives remain preferable to false coverage claims.
+The TypeScript and JavaScript test expectations are structural, not claims about behavioral coverage. They follow conservative relative static imports transitively from test files, so a helper reached through a tested public seam counts as structurally test-reachable. They deliberately do not require every implementation file to be imported directly by a test. Obvious support artifacts such as Storybook stories, test/spec files, fixture-named files, and files under `src/test`, `src/tests`, or `src/__tests__` are not treated as production source. Bare package imports, unresolved aliases, package-export resolution, and dynamic import targets are not guessed, so false negatives remain preferable to false coverage claims.
 
-A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold is offered only when the configured test script actually invokes `bun test`. Other test runners receive a verification hint but no guessed framework-specific scaffold.
+A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold is offered only for the existing TypeScript finding when the configured test script actually invokes `bun test`. JavaScript findings do not currently synthesize a placeholder scaffold; other test runners receive a verification hint but no guessed framework-specific scaffold.
 
 ## Persistent metadata
 

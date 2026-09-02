@@ -22,13 +22,20 @@ export type FindingsCoverage = {
   unsupportedTechnologies: string[];
 };
 
-type CoverageTarget = "repository-config" | "packages" | "typescript-source" | "production-source";
+type CoverageTarget =
+  | "repository-config"
+  | "packages"
+  | "typescript-source"
+  | "javascript-source"
+  | "script-source"
+  | "production-source";
 
 const coverageTargets: Record<string, CoverageTarget> = {
   "benchmark-evidence": "packages",
+  "javascript-source-test": "javascript-source",
   "package-aggregate-check": "packages",
   "package-cli-wiring": "packages",
-  "package-test-capability": "typescript-source",
+  "package-test-capability": "script-source",
   "required-capability-available": "repository-config",
   "source-debt-marker": "production-source",
   "source-unimplemented-stub": "production-source",
@@ -47,31 +54,29 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
         (total, packageInfo) => total + packageInfo.sourceFiles.length,
         0,
       );
+    case "javascript-source":
+      return context.packages.reduce(
+        (total, packageInfo) => total + packageInfo.javaScriptSourceFiles.length,
+        0,
+      );
+    case "script-source":
+      return context.packages.reduce(
+        (total, packageInfo) =>
+          total + packageInfo.sourceFiles.length + packageInfo.javaScriptSourceFiles.length,
+        0,
+      );
     case "production-source":
       return productionSourceFiles(root).length;
   }
 }
 
-function unsupportedTechnologies(root: string, context: DetectorContext): string[] {
+function unsupportedTechnologies(root: string): string[] {
   const components = discoverComponents(root);
-  const typeScriptPackagePaths = new Set(
-    context.packages
-      .filter((packageInfo) => packageInfo.sourceFiles.length > 0)
-      .map((packageInfo) => packageInfo.path),
-  );
   const unsupported = new Set<string>();
 
   for (const component of components) {
     if (component.technologies.includes("rust")) unsupported.add("rust");
     if (component.technologies.includes("dotnet")) unsupported.add("dotnet");
-    if (
-      component.kind === "package" &&
-      component.technologies.includes("javascript") &&
-      !component.technologies.includes("typescript") &&
-      !typeScriptPackagePaths.has(component.path)
-    ) {
-      unsupported.add("javascript");
-    }
   }
 
   return [...unsupported].sort();
@@ -109,6 +114,6 @@ export function analyzeFindingsCoverage(
     schemaVersion: 1,
     technologies,
     detectors,
-    unsupportedTechnologies: unsupportedTechnologies(root, context),
+    unsupportedTechnologies: unsupportedTechnologies(root),
   };
 }

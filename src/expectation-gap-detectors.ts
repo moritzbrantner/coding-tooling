@@ -153,7 +153,8 @@ function selectedTestScript(packageInfo: PackageInfo): string | undefined {
 
 export function missingTestCapabilityFindings({ root, packages }: DetectorContext): RawFinding[] {
   return packages.flatMap((packageInfo) => {
-    if (packageInfo.sourceFiles.length === 0 || selectedTestScript(packageInfo)) return [];
+    const sourceFiles = [...packageInfo.sourceFiles, ...packageInfo.javaScriptSourceFiles];
+    if (sourceFiles.length === 0 || selectedTestScript(packageInfo)) return [];
     const manifestPath = relativePosix(root, packageInfo.manifestPath);
     const packageLabel = packageInfo.path === "." ? "repository package" : packageInfo.path;
     return [
@@ -170,18 +171,15 @@ export function missingTestCapabilityFindings({ root, packages }: DetectorContex
           description: "a deterministic test or test:unit package script",
           expectedArtifact: `${manifestPath}#scripts.test`,
         },
-        message: `${packageLabel} contains production TypeScript source but exposes no test capability`,
+        message: `${packageLabel} contains production JavaScript/TypeScript source but exposes no test capability`,
         evidence: [
           {
             kind: "manifest" as const,
             path: manifestPath,
-            detail: `${packageInfo.sourceFiles.length} production TypeScript source file${packageInfo.sourceFiles.length === 1 ? "" : "s"} discovered without test/test:unit script`,
+            detail: `${sourceFiles.length} production JavaScript/TypeScript source file${sourceFiles.length === 1 ? "" : "s"} discovered without test/test:unit script`,
           },
         ],
-        relatedFiles: [
-          manifestPath,
-          ...packageInfo.sourceFiles.map((path) => relativePosix(root, path)),
-        ],
+        relatedFiles: [manifestPath, ...sourceFiles.map((path) => relativePosix(root, path))],
         verification: [],
       },
     ];

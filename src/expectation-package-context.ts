@@ -16,6 +16,7 @@ export type PackageInfo = {
   manifest: PackageManifest;
   testFiles: string[];
   sourceFiles: string[];
+  javaScriptSourceFiles: string[];
   usesBun: boolean;
 };
 
@@ -25,7 +26,8 @@ export type DetectorContext = {
 };
 
 const testFilePattern = /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/;
-const sourceFilePattern = /\.(?:[cm]?ts|tsx)$/;
+const typeScriptSourceFilePattern = /\.(?:[cm]?ts|tsx)$/;
+const javaScriptSourceFilePattern = /\.(?:[cm]?js|jsx)$/;
 const storyFilePattern = /\.(?:stories|story)\.(?:[cm]?[jt]sx?)$/;
 const fixtureFilePattern = /\.(?:fixture|fixtures)\.(?:[cm]?[jt]sx?)$/;
 
@@ -33,11 +35,19 @@ export function normalizePath(path: string): string {
   return path.split(sep).join("/");
 }
 
-function isProductionTypeScriptSource(local: string): boolean {
-  if (!local.startsWith("src/") || !sourceFilePattern.test(local)) return false;
-  if (local.endsWith(".d.ts") || testFilePattern.test(local)) return false;
+function isProductionSource(local: string, sourcePattern: RegExp): boolean {
+  if (!local.startsWith("src/") || !sourcePattern.test(local)) return false;
+  if (testFilePattern.test(local)) return false;
   if (storyFilePattern.test(local) || fixtureFilePattern.test(local)) return false;
   return !/^src\/(?:test|tests|__tests__)\//.test(local);
+}
+
+function isProductionTypeScriptSource(local: string): boolean {
+  return !local.endsWith(".d.ts") && isProductionSource(local, typeScriptSourceFilePattern);
+}
+
+function isProductionJavaScriptSource(local: string): boolean {
+  return isProductionSource(local, javaScriptSourceFilePattern);
 }
 
 function packageInfos(root: string): PackageInfo[] {
@@ -61,6 +71,9 @@ function packageInfos(root: string): PackageInfo[] {
     const sourceFiles = packageFiles.filter((path) =>
       isProductionTypeScriptSource(normalizePath(relative(directory, path))),
     );
+    const javaScriptSourceFiles = packageFiles.filter((path) =>
+      isProductionJavaScriptSource(normalizePath(relative(directory, path))),
+    );
     const testFiles = packageFiles.filter((path) => testFilePattern.test(normalizePath(path)));
     result.push({
       directory,
@@ -69,6 +82,7 @@ function packageInfos(root: string): PackageInfo[] {
       manifest,
       testFiles,
       sourceFiles,
+      javaScriptSourceFiles,
       usesBun:
         existsSync(join(directory, "bun.lock")) ||
         existsSync(join(directory, "bun.lockb")) ||
