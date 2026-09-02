@@ -7,7 +7,7 @@ import { readJson } from "./shared.ts";
 
 export type FindingSeverity = "info" | "warning" | "error";
 export type FindingState = "new" | "baseline";
-export type FindingDisposition = "active" | "suppressed";
+export type FindingDisposition = "active" | "suppressed" | "verified";
 export type FindingRelationshipKind =
   | "requires"
   | "blocks"
@@ -46,6 +46,13 @@ export type FindingScaffold = {
   content: string;
 };
 
+export type FindingVerificationEvidence = {
+  id: string;
+  version: 1;
+  command: string[];
+  reason: string;
+};
+
 export type Finding = {
   id: string;
   expectationId: string;
@@ -56,6 +63,7 @@ export type Finding = {
   state: FindingState;
   disposition: FindingDisposition;
   suppressionReason?: string;
+  verificationEvidence?: FindingVerificationEvidence;
   subject: FindingSubject;
   requirement: FindingRequirement;
   message: string;
@@ -73,6 +81,15 @@ export type ExpectationSuppression = {
   reason: string;
 };
 
+export type ExpectationVerification = {
+  id: string;
+  version: 1;
+  expectation: string;
+  subject: string;
+  command: string[];
+  reason: string;
+};
+
 export type RepositoryInvariant = {
   id: string;
   scope: string;
@@ -84,6 +101,7 @@ export type ExpectationConfig = {
   schemaVersion: 1;
   baseline?: string[];
   suppressions?: ExpectationSuppression[];
+  verifications?: ExpectationVerification[];
   invariants?: RepositoryInvariant[];
   enforcement?: Record<string, FindingSeverity>;
 };
@@ -100,9 +118,12 @@ export type ExpectationRegistryEntry = {
 export type ReconciliationReport = {
   orphanedBaseline: string[];
   staleSuppressions: Array<{ index: number; reason: string }>;
+  staleVerifications: Array<{ index: number; id: string }>;
+  invalidVerifications: Array<{ index: number; id: string; reason: string }>;
   unknownExpectations: string[];
   duplicateBaseline: string[];
   duplicateSuppressions: number[];
+  duplicateVerifications: number[];
   duplicateInvariants: string[];
 };
 
@@ -178,6 +199,40 @@ export function loadExpectationConfig(
     });
   }
 
+  let verifications: ExpectationVerification[] | undefined;
+  if (value.verifications !== undefined) {
+    if (!Array.isArray(value.verifications)) {
+      throw new Error(`${configuredPath}.verifications must be an array`);
+    }
+    verifications = value.verifications.map((item, index) => {
+      if (
+        !isRecord(item) ||
+        item.version !== 1 ||
+        typeof item.id !== "string" ||
+        !item.id.trim() ||
+        typeof item.expectation !== "string" ||
+        !item.expectation.trim() ||
+        typeof item.subject !== "string" ||
+        !item.subject.trim() ||
+        typeof item.reason !== "string" ||
+        !item.reason.trim() ||
+        !Array.isArray(item.command) ||
+        item.command.length !== 3 ||
+        !item.command.every((part) => typeof part === "string" && part.length > 0)
+      ) {
+        throw new Error(`${configuredPath}.verifications[${index}] is invalid`);
+      }
+      return {
+        id: item.id,
+        version: 1,
+        expectation: item.expectation,
+        subject: item.subject,
+        command: item.command as string[],
+        reason: item.reason,
+      };
+    });
+  }
+
   let invariants: RepositoryInvariant[] | undefined;
   if (value.invariants !== undefined) {
     if (!Array.isArray(value.invariants)) {
@@ -228,7 +283,7 @@ export function loadExpectationConfig(
     }
   }
 
-  return { schemaVersion: 1, baseline, suppressions, invariants, enforcement };
+  return { schemaVersion: 1, baseline, suppressions, verifications, invariants, enforcement };
 }
 
 export function writeExpectationConfig(root: string, config: ExpectationConfig): void {

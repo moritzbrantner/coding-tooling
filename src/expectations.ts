@@ -17,10 +17,13 @@ import {
   type ExpectationConfig,
   type ExpectationEnvelope,
   type ExpectationSuppression,
+  type ExpectationVerification,
   type Finding,
   type FindingState,
+  type FindingVerificationEvidence,
   type ReconciliationReport,
 } from "./expectation-model.ts";
+import type { DetectorContext, PackageInfo } from "./expectation-package-context.ts";
 import type { GeneratorPlan } from "./generators.ts";
 
 export { expectationRegistry, loadExpectationConfig };
@@ -35,6 +38,7 @@ export type {
   ExpectationOperation,
   ExpectationRegistryEntry,
   ExpectationSuppression,
+  ExpectationVerification,
   Finding,
   FindingDisposition,
   FindingEvidence,
@@ -45,9 +49,12 @@ export type {
   FindingSeverity,
   FindingState,
   FindingSubject,
+  FindingVerificationEvidence,
   ReconciliationReport,
   RepositoryInvariant,
 } from "./expectation-model.ts";
+
+const supportedVerificationManagers = new Set(["bun", "npm", "pnpm", "yarn"]);
 
 function materializeFinding(
   descriptor: ExpectationDescriptor,
@@ -102,10 +109,147 @@ function suppressionMatchesFinding(suppression: ExpectationSuppression, finding:
   return true;
 }
 
-function reconcile(config: ExpectationConfig, allFindings: Finding[]): ReconciliationReport {
+function verificationMatchesFinding(
+  verification: ExpectationVerification,
+  finding: Finding,
+): boolean {
+  return (
+    verification.expectation === finding.expectationId &&
+    verification.subject === finding.subject.key
+  );
+}
+
+function packageOwnsSubject(packageInfo: PackageInfo, subjectPath: string): boolean {
+  if (packageInfo.path === ".") return true;
+  return subjectPath === packageInfo.path || subjectPath.startsWith(`${packageInfo.path}/`);
+}
+
+function owningPackage(context: DetectorContext, finding: Finding): PackageInfo | undefined {
+  const subjectPath = finding.subject.path ?? finding.subject.key;
+  return context.packages
+    .filter((packageInfo) => packageOwnsSubject(packageInfo, subjectPath))
+    .reduce<PackageInfo | undefined>(
+      (best, candidate) =>
+        best === undefined || candidate.path.length > best.path.length ? candidate : best,
+      undefined,
+    );
+}
+
+function validateVerificationCommand(
+  verification: ExpectationVerification,
+  finding: Finding,
+  context: DetectorContext,
+): string | undefined {
+  const [manager, run, script] = verification.command;
+  if (!manager || !supportedVerificationManagers.has(manager) || run !== "run" || !script) {
+    return "command must use bun/npm/pnpm/yarn run <script>";
+  }
+  const packageInfo = owningPackage(context, finding);
+  if (!packageInfo) return "finding subject is not owned by a discovered package";
+  const configured = packageInfo.manifest.scripts?.[script];
+  if (typeof configured !== "string" || !configured.trim()) {
+    return `package ${packageInfo.path} does not expose scripts.${script}`;
+  }
+  return undefined;
+}
+
+type VerificationResolution = {
+  evidenceByFindingId: Map<string, FindingVerificationEvidence>;
+  staleVerifications: Array<{ index: number; id: string }>;
+  invalidVerifications: Array<{ index: number; id: string; reason: string }>;
+  duplicateVerifications: number[];
+  unknownExpectations: string[];
+};
+
+function resolveVerifications(
+  config: ExpectationConfig,
+  allFindings: Finding[],
+  context: DetectorContext,
+): VerificationResolution {
+  const knownExpectations = new Set(expectationDescriptors.map((descriptor) => descriptor.id));
+  const evidenceByFindingId = new Map<string, FindingVerificationEvidence>();
+  const staleVerifications: Array<{ index: number; id: string }> = [];
+  const invalidVerifications: Array<{ index: number; id: string; reason: string }> = [];
+  const duplicateVerifications: number[] = [];
+  const unknownExpectations = new Set<string>();
+  const seenIds = new Set<string>();
+  const seenSubjects = new Set<string>();
+
+  for (const [index, verification] of (config.verifications ?? []).entries()) {
+    const subjectKey = `${verification.expectation}\0${verification.subject}`;
+    if (seenIds.has(verification.id) || seenSubjects.has(subjectKey)) {
+      duplicateVerifications.push(index);
+      continue;
+    }
+    seenIds.add(verification.id);
+    seenSubjects.add(subjectKey);
+
+    if (!knownExpectations.has(verification.expectation)) {
+      unknownExpectations.add(verification.expectation);
+      continue;
+    }
+    const finding = allFindings.find((candidate) =>
+      verificationMatchesFinding(verification, candidate),
+    );
+    if (!finding) {
+      staleVerifications.push({ index, id: verification.id });
+      continue;
+    }
+    if (finding.disposition === "suppressed") {
+      invalidVerifications.push({
+        index,
+        id: verification.id,
+        reason:
+          "finding is also suppressed; remove suppression before declaring verification evidence",
+      });
+      continue;
+    }
+    const invalid = validateVerificationCommand(verification, finding, context);
+    if (invalid) {
+      invalidVerifications.push({ index, id: verification.id, reason: invalid });
+      continue;
+    }
+    evidenceByFindingId.set(finding.id, {
+      id: verification.id,
+      version: verification.version,
+      command: verification.command,
+      reason: verification.reason,
+    });
+  }
+
+  return {
+    evidenceByFindingId,
+    staleVerifications,
+    invalidVerifications,
+    duplicateVerifications,
+    unknownExpectations: [...unknownExpectations].sort(),
+  };
+}
+
+function applyVerificationEvidence(
+  findings: Finding[],
+  resolution: VerificationResolution,
+): Finding[] {
+  return findings.map((finding) => {
+    const verificationEvidence = resolution.evidenceByFindingId.get(finding.id);
+    if (!verificationEvidence) return finding;
+    return {
+      ...finding,
+      disposition: "verified" as const,
+      suppressionReason: undefined,
+      verificationEvidence,
+    };
+  });
+}
+
+function reconcile(
+  config: ExpectationConfig,
+  allFindings: Finding[],
+  verificationResolution: VerificationResolution,
+): ReconciliationReport {
   const allIds = new Set(allFindings.map((finding) => finding.id));
   const knownExpectations = new Set(expectationDescriptors.map((descriptor) => descriptor.id));
-  const unknownExpectations = new Set<string>();
+  const unknownExpectations = new Set<string>(verificationResolution.unknownExpectations);
   for (const expectation of Object.keys(config.enforcement ?? {})) {
     if (!knownExpectations.has(expectation)) unknownExpectations.add(expectation);
   }
@@ -132,9 +276,12 @@ function reconcile(config: ExpectationConfig, allFindings: Finding[]): Reconcili
   return {
     orphanedBaseline: [...new Set(config.baseline ?? [])].filter((id) => !allIds.has(id)).sort(),
     staleSuppressions,
+    staleVerifications: verificationResolution.staleVerifications,
+    invalidVerifications: verificationResolution.invalidVerifications,
     unknownExpectations: [...unknownExpectations].sort(),
     duplicateBaseline: duplicateValues(config.baseline ?? []),
     duplicateSuppressions,
+    duplicateVerifications: verificationResolution.duplicateVerifications,
     duplicateInvariants: duplicateValues(
       (config.invariants ?? []).map((invariant) => invariant.id),
     ),
@@ -152,7 +299,7 @@ export function analyzeExpectations(
 } {
   const config = loadExpectationConfig(root);
   const context = createDetectorContext(root);
-  const allFindings = expectationDescriptors
+  const materialized = expectationDescriptors
     .flatMap((descriptor) =>
       descriptor.detect(context).map((raw) => materializeFinding(descriptor, raw, config)),
     )
@@ -162,7 +309,9 @@ export function analyzeExpectations(
         left.expectationId.localeCompare(right.expectationId) ||
         left.id.localeCompare(right.id),
     );
-  const reconciliation = reconcile(config, allFindings);
+  const verificationResolution = resolveVerifications(config, materialized, context);
+  const allFindings = applyVerificationEvidence(materialized, verificationResolution);
+  const reconciliation = reconcile(config, allFindings, verificationResolution);
   const coverage = analyzeFindingsCoverage(root, context, expectationDescriptors);
   const visible = options.includeSuppressed
     ? allFindings
@@ -175,6 +324,7 @@ function findingCounts(findings: Finding[]): Record<string, number> {
     total: findings.length,
     active: findings.filter((finding) => finding.disposition === "active").length,
     suppressed: findings.filter((finding) => finding.disposition === "suppressed").length,
+    verified: findings.filter((finding) => finding.disposition === "verified").length,
     new: findings.filter((finding) => finding.state === "new").length,
     baseline: findings.filter((finding) => finding.state === "baseline").length,
     info: findings.filter((finding) => finding.severity === "info").length,
