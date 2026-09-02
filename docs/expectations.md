@@ -31,12 +31,15 @@ The built-in completeness detectors are advisory evidence by default. They becom
 The first batch covers several kinds of structural absence:
 
 - `typescript-source-test`: production TypeScript source in a package with a test command has neither a conventionally matching test artifact nor a conservative static import path from a test to that source.
+- `rust-source-test`: production Rust source has neither inline test evidence nor an integration test that directly names the source module through the crate's public path.
 - `package-aggregate-check`: a package exposes multiple verification scripts but no aggregate `check` or `verify` script.
 - `typescript-project-config`: a package contains TypeScript source but no `tsconfig.json`.
 - `package-cli-wiring`: a CLI entrypoint is not wired through `package.json`, or configured bin wiring points to a missing file.
 - `required-capability-available`: `.coding-tooling.json` declares a required capability that no discovered component provides.
 
 The TypeScript test expectation is structural, not a claim about behavioral coverage. Version 2 follows conservative relative static imports transitively from test files, so a helper reached through a tested public seam counts as structurally test-reachable. It deliberately does not require every implementation file to be imported directly by a test. Obvious support artifacts such as Storybook stories, test/spec files, fixture-named files, and files under `src/test`, `src/tests`, or `src/__tests__` are not treated as production source. Bare package imports and unresolved aliases are not guessed, so false negatives remain preferable to false coverage claims.
+
+The Rust test expectation is similarly structural and intentionally narrower than a coverage engine. Inline evidence requires both `#[cfg(test)]` and a test attribute in the source file. Integration evidence currently recognizes direct `use crate_name::module...` paths, including parent modules along that path, and a direct crate-root import for `lib.rs`. Grouped imports, re-exports, macros, aliases, binary entrypoints, and other relationships that would require Rust semantic analysis are not guessed. A missing Rust finding carries a deterministic `cargo test --locked --manifest-path ...` verification command but no default scaffold: creating a TODO, ignored, or empty Rust test would not be executable evidence.
 
 A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold is offered only when the configured test script actually invokes `bun test`. Other test runners receive a verification hint but no guessed framework-specific scaffold.
 
