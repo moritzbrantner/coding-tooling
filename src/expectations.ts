@@ -128,7 +128,11 @@ function owningPackage(context: DetectorContext, finding: Finding): PackageInfo 
   const subjectPath = finding.subject.path ?? finding.subject.key;
   return context.packages
     .filter((packageInfo) => packageOwnsSubject(packageInfo, subjectPath))
-    .toSorted((left, right) => right.path.length - left.path.length)[0];
+    .reduce<PackageInfo | undefined>(
+      (best, candidate) =>
+        best === undefined || candidate.path.length > best.path.length ? candidate : best,
+      undefined,
+    );
 }
 
 function validateVerificationCommand(
