@@ -48,7 +48,9 @@ describe("public contract verification", () => {
       "partial",
     );
     expect(
-      surfaces.filter((surface) => surface.kind === "package-export").every((surface) => surface.discovery.status === "complete"),
+      surfaces
+        .filter((surface) => surface.kind === "package-export")
+        .every((surface) => surface.discovery.status === "complete"),
     ).toBe(true);
   });
 
@@ -59,7 +61,7 @@ describe("public contract verification", () => {
       JSON.stringify({
         name: "fixture-package",
         exports: "./src/index.ts",
-        scripts: { test: "node -e \"process.exit(0)\"" },
+        scripts: { test: 'node -e "process.exit(0)"' },
       }),
     );
     writeFileSync(
@@ -97,7 +99,7 @@ describe("public contract verification", () => {
       JSON.stringify({
         name: "fixture-package",
         exports: "./src/index.ts",
-        scripts: { test: "node -e \"process.exit(0)\"" },
+        scripts: { test: 'node -e "process.exit(0)"' },
       }),
     );
     writeFileSync(
