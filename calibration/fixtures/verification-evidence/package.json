@@ -1,0 +1,8 @@
+{
+  "name": "calibration-verification-evidence",
+  "private": true,
+  "scripts": {
+    "test": "bun test",
+    "verify:tokens": "bun scripts/verify-tokens.ts"
+  }
+}
