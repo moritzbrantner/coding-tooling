@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 
 import { readJson, relativePosix, walkFiles } from "./shared.ts";
@@ -19,9 +19,19 @@ export type PackageInfo = {
   usesBun: boolean;
 };
 
+export type RustPackageInfo = {
+  directory: string;
+  path: string;
+  manifestPath: string;
+  crateName?: string;
+  testFiles: string[];
+  sourceFiles: string[];
+};
+
 export type DetectorContext = {
   root: string;
   packages: PackageInfo[];
+  rustPackages: RustPackageInfo[];
 };
 
 const testFilePattern = /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/;
@@ -40,8 +50,7 @@ function isProductionTypeScriptSource(local: string): boolean {
   return !/^src\/(?:test|tests|__tests__)\//.test(local);
 }
 
-function packageInfos(root: string): PackageInfo[] {
-  const files = walkFiles(root, 8).sort();
+function packageInfos(root: string, files: string[]): PackageInfo[] {
   const manifestPaths = files.filter((path) => basename(path) === "package.json");
   const packageDirectories = manifestPaths
     .map((path) => dirname(path))
@@ -79,6 +88,74 @@ function packageInfos(root: string): PackageInfo[] {
   return result.sort((left, right) => left.path.localeCompare(right.path));
 }
 
+function rustCrateName(manifestPath: string): string | undefined {
+  let content: string;
+  try {
+    content = readFileSync(manifestPath, "utf8");
+  } catch {
+    return undefined;
+  }
+
+  const sectionPattern = /^\s*\[([^\]]+)\]\s*$([\s\S]*?)(?=^\s*\[|\z)/gm;
+  let packageName: string | undefined;
+  let libraryName: string | undefined;
+  for (const match of content.matchAll(sectionPattern)) {
+    const sectionName = match[1]?.trim();
+    const body = match[2] ?? "";
+    const name = /^\s*name\s*=\s*["']([^"']+)["']/m.exec(body)?.[1];
+    if (!name) continue;
+    if (sectionName === "package") packageName = name;
+    if (sectionName === "lib") libraryName = name;
+  }
+
+  const name = libraryName ?? packageName;
+  return name?.replaceAll("-", "_");
+}
+
+function isProductionRustSource(local: string): boolean {
+  return local.startsWith("src/") && local.endsWith(".rs");
+}
+
+function rustPackageInfos(root: string, files: string[]): RustPackageInfo[] {
+  const manifestPaths = files.filter((path) => basename(path) === "Cargo.toml");
+  const packageDirectories = manifestPaths
+    .map((path) => dirname(path))
+    .sort((left, right) => right.length - left.length);
+  const result: RustPackageInfo[] = [];
+
+  for (const manifestPath of manifestPaths) {
+    const directory = dirname(manifestPath);
+    const packageFiles = files.filter((path) => {
+      const owner = packageDirectories.find(
+        (candidate) => path === join(candidate, "Cargo.toml") || path.startsWith(`${candidate}${sep}`),
+      );
+      return owner === directory;
+    });
+    const sourceFiles = packageFiles.filter((path) =>
+      isProductionRustSource(normalizePath(relative(directory, path))),
+    );
+    const testFiles = packageFiles.filter((path) => {
+      const local = normalizePath(relative(directory, path));
+      return local.startsWith("tests/") && local.endsWith(".rs");
+    });
+    result.push({
+      directory,
+      path: relativePosix(root, directory),
+      manifestPath,
+      crateName: rustCrateName(manifestPath),
+      testFiles,
+      sourceFiles,
+    });
+  }
+
+  return result.sort((left, right) => left.path.localeCompare(right.path));
+}
+
 export function createDetectorContext(root: string): DetectorContext {
-  return { root, packages: packageInfos(root) };
+  const files = walkFiles(root, 8).sort();
+  return {
+    root,
+    packages: packageInfos(root, files),
+    rustPackages: rustPackageInfos(root, files),
+  };
 }
