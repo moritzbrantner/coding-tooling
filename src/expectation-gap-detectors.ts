@@ -51,7 +51,10 @@ function readSource(path: string): string | undefined {
   }
 }
 
-function markerEvidence(content: string, pattern: RegExp): { line: number; count: number } | undefined {
+function markerEvidence(
+  content: string,
+  pattern: RegExp,
+): { line: number; count: number } | undefined {
   let firstLine: number | undefined;
   let count = 0;
   for (const [index, line] of content.split(/\r?\n/).entries()) {
@@ -148,7 +151,10 @@ function selectedTestScript(packageInfo: PackageInfo): string | undefined {
   return scripts["test:unit"] ?? scripts.test;
 }
 
-export function missingTestCapabilityFindings({ root, packages }: DetectorContext): RawFinding[] {
+export function missingTestCapabilityFindings({
+  root,
+  packages,
+}: DetectorContext): RawFinding[] {
   return packages.flatMap((packageInfo) => {
     if (packageInfo.sourceFiles.length === 0 || selectedTestScript(packageInfo)) return [];
     const manifestPath = relativePosix(root, packageInfo.manifestPath);
@@ -175,14 +181,19 @@ export function missingTestCapabilityFindings({ root, packages }: DetectorContex
             detail: `${packageInfo.sourceFiles.length} production TypeScript source file${packageInfo.sourceFiles.length === 1 ? "" : "s"} discovered without test/test:unit script`,
           },
         ],
-        relatedFiles: [manifestPath, ...packageInfo.sourceFiles.map((path) => relativePosix(root, path))],
+        relatedFiles: [
+          manifestPath,
+          ...packageInfo.sourceFiles.map((path) => relativePosix(root, path)),
+        ],
         verification: [],
       },
     ];
   });
 }
 
-function benchmarkScript(packageInfo: PackageInfo): { name: string; command: string } | undefined {
+function benchmarkScript(
+  packageInfo: PackageInfo,
+): { name: string; command: string } | undefined {
   const scripts = packageInfo.manifest.scripts ?? {};
   for (const name of ["benchmark", "benchmark:smoke", "bench"]) {
     const command = scripts[name];
@@ -201,7 +212,10 @@ function hasBenchmarkArtifact(packageInfo: PackageInfo): boolean {
   });
 }
 
-export function missingBenchmarkEvidenceFindings({ root, packages }: DetectorContext): RawFinding[] {
+export function missingBenchmarkEvidenceFindings({
+  root,
+  packages,
+}: DetectorContext): RawFinding[] {
   return packages.flatMap((packageInfo) => {
     const script = benchmarkScript(packageInfo);
     if (!script || hasBenchmarkArtifact(packageInfo)) return [];
