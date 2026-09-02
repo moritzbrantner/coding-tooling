@@ -22,7 +22,9 @@ function readSource(path: string): string | undefined {
 
 function hasInlineTestEvidence(source: string): boolean {
   const content = readSource(source);
-  return content !== undefined && cfgTestPattern.test(content) && testAttributePattern.test(content);
+  return (
+    content !== undefined && cfgTestPattern.test(content) && testAttributePattern.test(content)
+  );
 }
 
 function escapeRegExp(value: string): string {
@@ -79,18 +81,14 @@ function testReferencesSource(
 }
 
 function hasIntegrationTestEvidence(source: string, rustPackage: RustPackageInfo): boolean {
-  return rustPackage.testFiles.some((testFile) => testReferencesSource(source, testFile, rustPackage));
+  return rustPackage.testFiles.some((testFile) =>
+    testReferencesSource(source, testFile, rustPackage),
+  );
 }
 
 function verification(root: string, rustPackage: RustPackageInfo): string[][] {
   return [
-    [
-      "cargo",
-      "test",
-      "--locked",
-      "--manifest-path",
-      relativePosix(root, rustPackage.manifestPath),
-    ],
+    ["cargo", "test", "--locked", "--manifest-path", relativePosix(root, rustPackage.manifestPath)],
   ];
 }
 
@@ -99,7 +97,8 @@ export function missingRustTestFindings({ root, rustPackages }: DetectorContext)
 
   for (const rustPackage of rustPackages) {
     for (const source of rustPackage.sourceFiles) {
-      if (hasInlineTestEvidence(source) || hasIntegrationTestEvidence(source, rustPackage)) continue;
+      if (hasInlineTestEvidence(source) || hasIntegrationTestEvidence(source, rustPackage))
+        continue;
 
       const sourcePath = relativePosix(root, source);
       findings.push({
@@ -115,7 +114,9 @@ export function missingRustTestFindings({ root, rustPackages }: DetectorContext)
           description: "conservative Rust test evidence",
         },
         message: `${sourcePath} has no conservative Rust test evidence`,
-        evidence: [{ kind: "file", path: sourcePath, detail: "production Rust source file exists" }],
+        evidence: [
+          { kind: "file", path: sourcePath, detail: "production Rust source file exists" },
+        ],
         relatedFiles: [sourcePath],
         verification: verification(root, rustPackage),
       });
