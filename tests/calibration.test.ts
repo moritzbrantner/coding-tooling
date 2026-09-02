@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  calibrationCommand,
-  scoreCalibration,
-  type CalibrationLabel,
-} from "../src/calibration.ts";
+import { calibrationCommand, scoreCalibration, type CalibrationLabel } from "../src/calibration.ts";
 import { repositoryRoot } from "../src/shared.ts";
 
 describe("detector calibration", () => {
@@ -14,11 +10,7 @@ describe("detector calibration", () => {
       { subject: "src/clean.ts", requirement: "test", expected: "satisfied" },
       { subject: "src/ambiguous.ts", requirement: "test", expected: "unknown" },
     ];
-    const result = scoreCalibration(
-      labels,
-      new Set(["src/clean.ts\0test"]),
-      new Map(),
-    );
+    const result = scoreCalibration(labels, new Set(["src/clean.ts\0test"]), new Map());
 
     expect(result.metrics).toEqual({
       truePositive: 0,
