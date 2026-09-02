@@ -20,6 +20,7 @@ import {
 } from "../src/expectation-package-detectors.ts";
 import { createDetectorContext } from "../src/expectation-package-context.ts";
 import { missingCargoTargetPathFindings } from "../src/expectation-rust-detector.ts";
+import { missingRustTestFindings } from "../src/expectation-rust-test-detector.ts";
 import {
   missingJavaScriptTestFindings,
   missingTestFindings,
@@ -64,6 +65,7 @@ describe("expectation detector registry contract", () => {
       "package-test-capability",
       "required-capability-available",
       "rust-cargo-target-path",
+      "rust-source-test",
       "source-debt-marker",
       "source-unimplemented-stub",
       "typescript-project-config",
@@ -77,6 +79,7 @@ describe("expectation detector registry contract", () => {
       ["package-test-capability", 1],
       ["required-capability-available", 1],
       ["rust-cargo-target-path", 1],
+      ["rust-source-test", 1],
       ["source-debt-marker", 1],
       ["source-unimplemented-stub", 1],
       ["typescript-project-config", 1],
@@ -121,12 +124,13 @@ describe("expectation detector registry contract", () => {
       missingTestCapabilityFindings(context),
       missingRequiredCapabilityFindings(context),
       missingCargoTargetPathFindings(context),
+      missingRustTestFindings(context),
       sourceDebtMarkerFindings(context),
       sourceUnimplementedStubFindings(context),
       missingTypeScriptConfigFindings(context),
       missingTestFindings(context),
     ];
 
-    expect(batches.map((batch) => batch.length)).toEqual([0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1]);
+    expect(batches.map((batch) => batch.length)).toEqual([0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1]);
   });
 });
