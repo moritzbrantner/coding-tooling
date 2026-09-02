@@ -27,4 +27,7 @@ jobs:
           install-mode: none
           strict: true
       - name: Inspect deterministic repository findings
-        run: bun run findings
+        uses: ./
+        with:
+          operation: findings
+          report-path: .artifacts/coding-tooling/findings.json
