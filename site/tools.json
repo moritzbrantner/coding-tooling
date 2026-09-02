@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "registry": "moritzbrantner-agent-tools",
+  "tools": [
+    {
+      "id": "coding-tooling",
+      "role": "repository-analysis-and-deterministic-validation",
+      "discovery": "https://moritzbrantner.github.io/coding-tooling/agent-tool.json"
+    },
+    {
+      "id": "coding-agent-conventions",
+      "role": "shared-engineering-policy-catalog",
+      "discovery": "https://moritzbrantner.github.io/coding-agent-conventions/agent-tool.json"
+    },
+    {
+      "id": "reusable-workflows",
+      "role": "hosted-ci-capability-catalog",
+      "discovery": "https://moritzbrantner.github.io/reusable-workflows/agent-tool.json"
+    },
+    {
+      "id": "runtime-profiler",
+      "role": "runtime-evidence-capture-and-bundle-validation",
+      "discovery": "https://moritzbrantner.github.io/runtime-profiler/agent-tool.json"
+    },
+    {
+      "id": "moonlight",
+      "role": "baseline-candidate-evaluation-and-reporting",
+      "discovery": "https://moritzbrantner.github.io/moonlight/agent-tool.json"
+    }
+  ]
+}
