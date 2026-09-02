@@ -11,10 +11,7 @@ import {
   missingTypeScriptConfigFindings,
 } from "./expectation-package-detectors.ts";
 import { createDetectorContext } from "./expectation-package-context.ts";
-import {
-  missingJavaScriptTestFindings,
-  missingTestFindings,
-} from "./expectation-test-detector.ts";
+import { missingJavaScriptTestFindings, missingTestFindings } from "./expectation-test-detector.ts";
 import type { ExpectationRegistryEntry } from "./expectation-model.ts";
 import type { ExpectationDescriptor, RawFinding } from "./expectation-detector-types.ts";
 
