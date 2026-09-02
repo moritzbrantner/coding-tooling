@@ -69,11 +69,34 @@ describe("Rust test expectations", () => {
     expect(context.rustPackages[0]?.sourceFiles).toHaveLength(4);
   });
 
-  test("does not guess unsupported grouped import reachability", () => {
+  test("recognizes simple rustfmt-style grouped module imports", () => {
     const root = fixture();
     writeFileSync(
       join(root, "tests", "service_contract.rs"),
-      "use rust_fixture::{orphan::value};\n\n#[test]\nfn orphan_is_reachable() { assert_eq!(value(), 2); }\n",
+      [
+        "use rust_fixture::{orphan::value, service::value as service_value};",
+        "",
+        "#[test]",
+        "fn modules_are_reachable() {",
+        "    assert_eq!(value(), 2);",
+        "    assert_eq!(service_value(), 3);",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    expect(missingRustTestFindings(createDetectorContext(root))).toEqual([]);
+  });
+
+  test("does not guess through public re-exports", () => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "src", "lib.rs"),
+      "pub mod inline;\npub mod orphan;\nmod service;\npub use service::value;\n",
+    );
+    writeFileSync(
+      join(root, "tests", "service_contract.rs"),
+      "use rust_fixture::value;\n\n#[test]\nfn public_value_is_reachable() { assert_eq!(value(), 3); }\n",
     );
 
     const findings = missingRustTestFindings(createDetectorContext(root));
