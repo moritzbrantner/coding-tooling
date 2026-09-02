@@ -131,6 +131,27 @@ describe("Rust test expectations", () => {
     ]);
   });
 
+  test("preserves inline tests after quote character literals", () => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "src", "inline.rs"),
+      [
+        "pub const QUOTE: char = '\\"';",
+        "",
+        "#[cfg(test)]",
+        "mod tests {",
+        "    #[test]",
+        "    fn quote_is_preserved() {",
+        "        assert_eq!(super::QUOTE, '\\"');",
+        "    }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+
+    expect(findingSubjects(root)).toEqual(["src/lib.rs", "src/orphan.rs", "src/service.rs"]);
+  });
+
   test("does not accept comments or strings as integration import evidence", () => {
     const root = fixture();
     writeFileSync(
@@ -173,7 +194,7 @@ describe("Rust test expectations", () => {
     expect(missingRustTestFindings(createDetectorContext(root))).toEqual([]);
   });
 
-  test("honors Cargo autotests and explicit test targets", () => {
+  test("honors Cargo autotests comments and explicit test targets", () => {
     const root = fixture();
     writeFileSync(
       join(root, "tests", "isolated.rs"),
@@ -181,7 +202,7 @@ describe("Rust test expectations", () => {
     );
     writeFileSync(
       join(root, "Cargo.toml"),
-      '[package]\nname = "rust-fixture"\nversion = "0.1.0"\nedition = "2024"\nautotests = false\n',
+      '[package]\nname = "rust-fixture"\nversion = "0.1.0"\nedition = "2024"\nautotests = false # intentionally disabled\n',
     );
     expect(findingSubjects(root)).toEqual(["src/lib.rs", "src/orphan.rs", "src/service.rs"]);
 
@@ -209,12 +230,30 @@ describe("Rust test expectations", () => {
     expect(missingRustTestFindings(createDetectorContext(root))).toEqual([]);
   });
 
-  test("omits --locked when no package or workspace lockfile exists", () => {
+  test("omits --locked when the package has no lockfile", () => {
     const root = fixture();
     rmSync(join(root, "Cargo.lock"));
     const findings = missingRustTestFindings(createDetectorContext(root));
 
     expect(findings[0]?.verification).toEqual([["cargo", "test", "--manifest-path", "Cargo.toml"]]);
+  });
+
+  test("does not inherit an unrelated ancestor Cargo lockfile", () => {
+    const root = fixture();
+    const nested = join(root, "standalone");
+    mkdirSync(join(nested, "src"), { recursive: true });
+    writeFileSync(
+      join(nested, "Cargo.toml"),
+      '[package]\nname = "standalone"\nversion = "0.1.0"\nedition = "2024"\n',
+    );
+    writeFileSync(join(nested, "src", "lib.rs"), "pub fn value() -> u8 { 1 }\n");
+
+    const finding = missingRustTestFindings(createDetectorContext(root)).find(
+      (item) => item.subject.key === "standalone/src/lib.rs",
+    );
+    expect(finding?.verification).toEqual([
+      ["cargo", "test", "--manifest-path", "standalone/Cargo.toml"],
+    ]);
   });
 
   test("follows ordinary nested library module declarations", () => {
@@ -232,6 +271,23 @@ describe("Rust test expectations", () => {
       "src/orphan.rs",
       "src/routes/handler.rs",
       "src/routes/mod.rs",
+      "src/service.rs",
+    ]);
+  });
+
+  test("resolves out-of-line children declared inside inline module scopes", () => {
+    const root = fixture();
+    mkdirSync(join(root, "src", "outer"), { recursive: true });
+    writeFileSync(join(root, "src", "outer", "service.rs"), "pub fn nested() -> u8 { 4 }\n");
+    writeFileSync(
+      join(root, "src", "lib.rs"),
+      "pub mod inline;\npub mod orphan;\npub mod outer { pub mod service; }\npub mod service;\n",
+    );
+
+    expect(findingSubjects(root)).toEqual([
+      "src/lib.rs",
+      "src/orphan.rs",
+      "src/outer/service.rs",
       "src/service.rs",
     ]);
   });
