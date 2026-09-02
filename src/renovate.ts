@@ -26,10 +26,7 @@ const renovateConfigPaths = [
   ".renovaterc.json5",
 ] as const;
 
-const dependabotConfigPaths = [
-  ".github/dependabot.yml",
-  ".github/dependabot.yaml",
-] as const;
+const dependabotConfigPaths = [".github/dependabot.yml", ".github/dependabot.yaml"] as const;
 
 type PackageManifest = {
   renovate?: unknown;
@@ -73,9 +70,7 @@ export function renovateFoundationRecommendation(
   };
 }
 
-export function installRenovateFoundation(
-  root = repositoryRoot(),
-): RenovateFoundationInstall {
+export function installRenovateFoundation(root = repositoryRoot()): RenovateFoundationInstall {
   const resolvedRoot = resolve(root);
   const recommendation = renovateFoundationRecommendation(resolvedRoot);
   const blockedByDependabot =
