@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "name": "complete-exact-adoption",
+      "packageManager": "bun@__BUN_VERSION__",
+      "adopt": true,
+      "expectedCodes": [],
+      "exactCodes": true
+    },
+    {
+      "name": "partial-adoption",
+      "config": "schema_version = 1\n\n[policy]\ntrack = \"latest-stable\"\n",
+      "expectedCodes": ["environment-script-missing"]
+    },
+    {
+      "name": "floating-bun-pin",
+      "packageManager": "bun@latest",
+      "expectedCodes": ["environment-v1-not-adopted", "environment-toolchain-pin-floating"]
+    },
+    {
+      "name": "valid-compatibility-hold",
+      "packageManager": "bun@__BUN_VERSION__",
+      "adopt": true,
+      "extraConfig": "\n[compatibility_holds.bun]\ncandidate = \"9.9.9\"\ntested_revision = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\nreason = \"candidate failed the full gate\"\n",
+      "expectedCodes": ["environment-compatibility-hold"]
+    },
+    {
+      "name": "malformed-compatibility-hold",
+      "adopt": true,
+      "extraConfig": "\n[compatibility_holds.rust]\ncandidate = \"stable\"\ntested_revision = \"short\"\nreason = \"invalid fixture\"\n",
+      "expectedCodes": ["environment-compatibility-hold-invalid"]
+    }
+  ]
+}
