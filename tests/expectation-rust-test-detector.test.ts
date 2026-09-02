@@ -136,13 +136,13 @@ describe("Rust test expectations", () => {
     writeFileSync(
       join(root, "src", "inline.rs"),
       [
-        "pub const QUOTE: char = '\\"';",
+        `pub const QUOTE: char = '"';`,
         "",
         "#[cfg(test)]",
         "mod tests {",
         "    #[test]",
         "    fn quote_is_preserved() {",
-        "        assert_eq!(super::QUOTE, '\\"');",
+        `        assert_eq!(super::QUOTE, '"');`,
         "    }",
         "}",
         "",
