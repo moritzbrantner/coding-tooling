@@ -1,14 +1,6 @@
 import { createHash } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { existsSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import { join, relative, resolve, sep } from "node:path";
 
 import { resolveConventionSource } from "./conventions.ts";
 import type {
@@ -18,6 +10,11 @@ import type {
   ResultOperation,
   ResultStatus,
 } from "./model.ts";
+import {
+  reconcileTextFile,
+  reconciliationChanged,
+  type ReconcileFileResult,
+} from "./reconciliation.ts";
 import { readJson, runCommand, walkFiles } from "./shared.ts";
 
 type RegistryConfiguration = {
@@ -78,6 +75,15 @@ type RuleBriefing = {
   path: string;
 };
 
+type MaterializationResult = {
+  lock: ConventionLock;
+  created: string[];
+  changed: string[];
+  removed: string[];
+  unchanged: string[];
+  lockReconciliation: ReconcileFileResult;
+};
+
 const manifestName = "conventions.json";
 const lockName = "conventions.lock.json";
 const installDirectory = ".conventions";
@@ -93,8 +99,8 @@ function hash(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-function writeJson(path: string, value: unknown): void {
-  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
+function writeJson(path: string, value: unknown): ReconcileFileResult {
+  return reconcileTextFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 function revision(root: string): string {
@@ -496,17 +502,31 @@ function managedDestination(installRoot: string, path: string): string {
   return absolute;
 }
 
-function materialize(root: string, snapshot: Snapshot): ConventionLock {
+function materialize(root: string, snapshot: Snapshot): MaterializationResult {
   const installRoot = join(root, installDirectory);
-  rmSync(installRoot, { recursive: true, force: true });
-  mkdirSync(installRoot, { recursive: true });
+  const desiredPaths = new Set(snapshot.files.keys());
+  const removed: string[] = [];
+
+  for (const absolute of walkFiles(installRoot, 20).sort()) {
+    const path = relative(installRoot, absolute).split(sep).join("/");
+    if (!isManagedPath(path) || desiredPaths.has(path)) continue;
+    rmSync(absolute, { force: true });
+    removed.push(path);
+  }
+
   const hashes: Record<string, string> = {};
+  const created: string[] = [];
+  const changed: string[] = [];
+  const unchanged: string[] = [];
   for (const [path, content] of snapshot.files) {
     const absolute = managedDestination(installRoot, path);
-    mkdirSync(dirname(absolute), { recursive: true });
-    writeFileSync(absolute, content);
+    const reconciliation = reconcileTextFile(absolute, content);
+    if (reconciliation === "created") created.push(path);
+    else if (reconciliation === "changed") changed.push(path);
+    else unchanged.push(path);
     hashes[path] = hash(content);
   }
+
   const lock: ConventionLock = {
     schemaVersion: 1,
     sourceRevision: snapshot.sourceRevision,
@@ -514,8 +534,25 @@ function materialize(root: string, snapshot: Snapshot): ConventionLock {
     resolvedModules: snapshot.resolvedModules,
     files: hashes,
   };
-  writeJson(join(root, lockName), lock);
-  return lock;
+  const lockReconciliation = writeJson(join(root, lockName), lock);
+  return { lock, created, changed, removed, unchanged, lockReconciliation };
+}
+
+function materializationData(result: MaterializationResult): Record<string, unknown> {
+  const changed =
+    result.created.length > 0 ||
+    result.changed.length > 0 ||
+    result.removed.length > 0 ||
+    reconciliationChanged(result.lockReconciliation);
+  return {
+    changed,
+    reconciliation: changed ? "changed" : "unchanged",
+    created: result.created,
+    changedFiles: result.changed,
+    removed: result.removed,
+    verified: result.unchanged,
+    lockReconciliation: result.lockReconciliation,
+  };
 }
 
 function currentFileHashes(root: string): Record<string, string> {
@@ -628,6 +665,8 @@ export function conventionRegistryCommand(
         root,
         manifest: join(root, manifestName),
         modules: existing.modules,
+        changed: false,
+        reconciliation: "unchanged",
         unchanged: true,
       });
     }
@@ -641,12 +680,14 @@ export function conventionRegistryCommand(
         registry: "coding-agent-conventions",
         modules: requested,
       };
-      materialize(root, snapshot);
-      writeJson(join(root, manifestName), consumer);
+      const materialized = materialize(root, snapshot);
+      const manifestReconciliation = writeJson(join(root, manifestName), consumer);
       return envelope("conventions-init", "passed", started, {
         root,
         modules: requested,
         profile: options.profile,
+        ...materializationData(materialized),
+        manifestReconciliation,
       });
     }
 
@@ -667,13 +708,20 @@ export function conventionRegistryCommand(
       );
       const snapshot = buildSnapshot(source.root, source.registry, requested);
       const consumer: ConsumerManifest = { ...existing, modules: requested };
-      const lock = materialize(root, snapshot);
-      writeJson(join(root, manifestName), consumer);
+      const materialized = materialize(root, snapshot);
+      const manifestReconciliation = writeJson(join(root, manifestName), consumer);
+      const materialization = materializationData(materialized);
+      const changed =
+        materialization.changed === true || reconciliationChanged(manifestReconciliation);
       return envelope("conventions-add", "passed", started, {
         root,
         requestedModules: requested,
-        resolvedModules: lock.resolvedModules,
-        sourceRevision: lock.sourceRevision,
+        resolvedModules: materialized.lock.resolvedModules,
+        sourceRevision: materialized.lock.sourceRevision,
+        ...materialization,
+        changed,
+        reconciliation: changed ? "changed" : "unchanged",
+        manifestReconciliation,
       });
     }
 
@@ -691,12 +739,13 @@ export function conventionRegistryCommand(
       });
     }
 
-    const lock = materialize(root, snapshot);
+    const materialized = materialize(root, snapshot);
     return envelope("conventions-update", "passed", started, {
       root,
       requestedModules: existing.modules,
-      resolvedModules: lock.resolvedModules,
-      sourceRevision: lock.sourceRevision,
+      resolvedModules: materialized.lock.resolvedModules,
+      sourceRevision: materialized.lock.sourceRevision,
+      ...materializationData(materialized),
     });
   } catch (error) {
     return envelope(`conventions-${action}`, "error", started, { root }, [
