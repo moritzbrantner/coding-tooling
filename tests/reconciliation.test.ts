@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -20,16 +26,24 @@ function write(root: string, relative: string, content: string): void {
 
 function conventionSource(): string {
   const root = workspace("coding-tooling-convention-source-");
-  write(root, "conventions/testing/README.md", "## TEST-001 — Test narrowly\n\n- Keep tests focused.\n");
+  write(
+    root,
+    "conventions/testing/README.md",
+    "## TEST-001 — Test narrowly\n\n- Keep tests focused.\n",
+  );
   write(
     root,
     "registry/registry.json",
-    `${JSON.stringify({
-      schemaVersion: 1,
-      modules: {
-        testing: { sources: ["conventions/testing"], dependencies: [] },
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        modules: {
+          testing: { sources: ["conventions/testing"], dependencies: [] },
+        },
       },
-    }, null, 2)}\n`,
+      null,
+      2,
+    )}\n`,
   );
   return root;
 }
