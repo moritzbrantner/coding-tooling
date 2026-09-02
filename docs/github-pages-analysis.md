@@ -12,7 +12,7 @@ The local CLI remains authoritative for `inspect`, `bootstrap plan`, conformance
 
 The page returns a `schemaVersion: 1`, `operation: "remote-preflight"` JSON result containing repository provenance, discovered package/Rust/.NET components, declared capabilities, findings, limitations, and an agent handoff with the local command sequence.
 
-Remote findings cover conservative signals such as missing `.coding-tooling.json`, CI, exact Node/Rust pins, dependency-update automation, structural test evidence, and package validation scripts. They do not claim behavioral coverage, security, or runtime performance.
+Remote findings cover conservative signals such as missing `.coding-tooling.json`, CI, exact Node/Bun/Rust pins, dependency-update automation, structural test evidence, and package validation scripts. Fixture, generated, vendor, build-output, and dependency trees are excluded from component discovery so test data and derived files cannot masquerade as repository toolchains. They do not claim behavioral coverage, security, or runtime performance.
 
 If GitHub truncates the recursive tree, the bounded manifest budget cannot cover all package manifests, or selected text blobs cannot be read, the result is explicitly `incomplete`.
 
