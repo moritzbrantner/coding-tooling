@@ -48,9 +48,13 @@ describe("findings analysis coverage", () => {
       status: "applied",
       subjects: 1,
     });
+    expect(detector(result, "javascript-source-test")).toMatchObject({
+      status: "not-applicable",
+      subjects: 0,
+    });
   });
 
-  test("distinguishes JavaScript-only repositories from covered clean TypeScript", () => {
+  test("reports JavaScript structural analysis as applied", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(
@@ -62,10 +66,18 @@ describe("findings analysis coverage", () => {
     const result = coverage(root);
 
     expect(result.technologies).toEqual(["javascript"]);
-    expect(result.unsupportedTechnologies).toEqual(["javascript"]);
+    expect(result.unsupportedTechnologies).toEqual([]);
+    expect(detector(result, "javascript-source-test")).toMatchObject({
+      status: "applied",
+      subjects: 1,
+    });
     expect(detector(result, "typescript-source-test")).toMatchObject({
       status: "not-applicable",
       subjects: 0,
+    });
+    expect(detector(result, "package-test-capability")).toMatchObject({
+      status: "applied",
+      subjects: 1,
     });
     expect(detector(result, "source-debt-marker")).toMatchObject({
       status: "applied",
@@ -87,6 +99,7 @@ describe("findings analysis coverage", () => {
     expect(result.technologies).toEqual(["rust"]);
     expect(result.unsupportedTechnologies).toEqual(["rust"]);
     expect(detector(result, "typescript-source-test").status).toBe("not-applicable");
+    expect(detector(result, "javascript-source-test").status).toBe("not-applicable");
     expect(detector(result, "source-unimplemented-stub")).toMatchObject({
       status: "applied",
       subjects: 1,
@@ -103,6 +116,7 @@ describe("findings analysis coverage", () => {
     );
     writeFileSync(join(root, "web", "tsconfig.json"), "{}\n");
     writeFileSync(join(root, "web", "src", "index.ts"), "export const value = 1;\n");
+    writeFileSync(join(root, "web", "src", "legacy.js"), "export const legacy = 1;\n");
     writeFileSync(
       join(root, "engine", "Cargo.toml"),
       '[package]\nname = "engine"\nversion = "0.1.0"\n',
@@ -117,9 +131,17 @@ describe("findings analysis coverage", () => {
       status: "applied",
       subjects: 1,
     });
-    expect(detector(result, "source-debt-marker")).toMatchObject({
+    expect(detector(result, "javascript-source-test")).toMatchObject({
+      status: "applied",
+      subjects: 1,
+    });
+    expect(detector(result, "package-test-capability")).toMatchObject({
       status: "applied",
       subjects: 2,
+    });
+    expect(detector(result, "source-debt-marker")).toMatchObject({
+      status: "applied",
+      subjects: 3,
     });
   });
 
