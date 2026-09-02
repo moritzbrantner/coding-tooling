@@ -1,3 +1,4 @@
+import { analyzeFindingsCoverage, type FindingsCoverage } from "./expectation-coverage.ts";
 import { applyGeneratorPlan } from "./generator-apply.ts";
 import {
   createDetectorContext,
@@ -23,6 +24,11 @@ import {
 import type { GeneratorPlan } from "./generators.ts";
 
 export { expectationRegistry, loadExpectationConfig };
+export type {
+  DetectorCoverage,
+  DetectorCoverageStatus,
+  FindingsCoverage,
+} from "./expectation-coverage.ts";
 export type {
   ExpectationConfig,
   ExpectationEnvelope,
@@ -142,6 +148,7 @@ export function analyzeExpectations(
   findings: Finding[];
   config: ExpectationConfig;
   reconciliation: ReconciliationReport;
+  coverage: FindingsCoverage;
 } {
   const config = loadExpectationConfig(root);
   const context = createDetectorContext(root);
@@ -156,10 +163,11 @@ export function analyzeExpectations(
         left.id.localeCompare(right.id),
     );
   const reconciliation = reconcile(config, allFindings);
+  const coverage = analyzeFindingsCoverage(root, context, expectationDescriptors);
   const visible = options.includeSuppressed
     ? allFindings
     : allFindings.filter((finding) => finding.disposition === "active");
-  return { findings: addRelationships(visible), config, reconciliation };
+  return { findings: addRelationships(visible), config, reconciliation, coverage };
 }
 
 function findingCounts(findings: Finding[]): Record<string, number> {
@@ -199,6 +207,7 @@ export function findingsCommand(
         state: options.state ?? "all",
         includeSuppressed: options.includeSuppressed === true,
         registry: expectationRegistry(),
+        coverage: analysis.coverage,
         counts: findingCounts(findings),
         findings,
         invariants: analysis.config.invariants ?? [],
@@ -248,6 +257,7 @@ export function findingCommand(root: string, id: string): ExpectationEnvelope {
         id,
         result: finding?.disposition ?? "absent",
         finding,
+        coverage: analysis.coverage,
         reconciliation: analysis.reconciliation,
       },
       diagnostics: [],
