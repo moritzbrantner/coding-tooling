@@ -79,7 +79,8 @@ export function installRenovateFoundation(
   const resolvedRoot = resolve(root);
   const recommendation = renovateFoundationRecommendation(resolvedRoot);
   const blockedByDependabot =
-    recommendation.existingConfigPath === null && recommendation.dependabotConfigPath !== null;
+    recommendation.existingConfigPath === null &&
+    recommendation.dependabotConfigPath !== null;
 
   if (recommendation.existingConfigPath === null && !blockedByDependabot) {
     writeFileSync(
