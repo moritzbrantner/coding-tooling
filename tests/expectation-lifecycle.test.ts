@@ -128,6 +128,7 @@ describe("expectation lifecycle", () => {
           verifications: [
             {
               id: "VERIFY-SERVICE",
+              version: 1,
               expectation: "typescript-source-test",
               subject: "src/service.ts",
               command: ["bun", "run", "verify:service"],
@@ -148,6 +149,7 @@ describe("expectation lifecycle", () => {
         disposition: "verified",
         verificationEvidence: {
           id: "VERIFY-SERVICE",
+          version: 1,
           command: ["bun", "run", "verify:service"],
           reason: "repository-owned contract verifies the generated metadata",
         },
@@ -171,6 +173,7 @@ describe("expectation lifecycle", () => {
           verifications: [
             {
               id: "VERIFY-MISSING",
+              version: 1,
               expectation: "typescript-source-test",
               subject: "src/service.ts",
               command: ["bun", "run", "verify:missing"],
@@ -196,6 +199,46 @@ describe("expectation lifecycle", () => {
     ]);
   });
 
+  test("does not let verification metadata override an explicit suppression", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    addVerifierScript(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suppressions: [{ id: finding.id, reason: "deliberately ignored for now" }],
+          verifications: [
+            {
+              id: "VERIFY-SERVICE",
+              version: 1,
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              command: ["bun", "run", "verify:service"],
+              reason: "repository-owned contract verifies the generated metadata",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const analysis = analyzeExpectations(root, { includeSuppressed: true });
+    expect(analysis.findings).toContainEqual(
+      expect.objectContaining({ id: finding.id, disposition: "suppressed" }),
+    );
+    expect(analysis.reconciliation.invalidVerifications).toEqual([
+      {
+        index: 0,
+        id: "VERIFY-SERVICE",
+        reason:
+          "finding is also suppressed; remove suppression before declaring verification evidence",
+      },
+    ]);
+  });
+
   test("reports verification metadata as stale after the underlying finding is resolved", () => {
     const root = fixture("bun test");
     addVerifierScript(root);
@@ -209,6 +252,7 @@ describe("expectation lifecycle", () => {
           verifications: [
             {
               id: "VERIFY-SERVICE",
+              version: 1,
               expectation: "typescript-source-test",
               subject: "src/service.ts",
               command: ["bun", "run", "verify:service"],
@@ -241,6 +285,7 @@ describe("expectation lifecycle", () => {
           verifications: [
             {
               id: "VERIFY-ONE",
+              version: 1,
               expectation: "typescript-source-test",
               subject: "src/service.ts",
               command: ["bun", "run", "verify:service"],
@@ -248,6 +293,7 @@ describe("expectation lifecycle", () => {
             },
             {
               id: "VERIFY-TWO",
+              version: 1,
               expectation: "typescript-source-test",
               subject: "src/service.ts",
               command: ["bun", "run", "verify:service"],
