@@ -75,12 +75,7 @@ describe("explicit Cargo target path findings", () => {
 
     expect(findings).toHaveLength(4);
     expect(new Set(findings.map((finding) => finding.requirement.expectedArtifact))).toEqual(
-      new Set([
-        "src/custom.rs",
-        "src/worker.rs",
-        "examples/demo.rs",
-        "benches/throughput.rs",
-      ]),
+      new Set(["src/custom.rs", "src/worker.rs", "examples/demo.rs", "benches/throughput.rs"]),
     );
   });
 
