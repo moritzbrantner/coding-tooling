@@ -186,7 +186,7 @@ function advanceBraces(
       state.depth += 1;
     } else if (code[index] === "}") {
       state.depth = Math.max(0, state.depth - 1);
-      while (state.scopes.at(-1)?.depth > state.depth) state.scopes.pop();
+      while ((state.scopes.at(-1)?.depth ?? 0) > state.depth) state.scopes.pop();
     }
   }
 }
