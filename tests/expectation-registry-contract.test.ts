@@ -19,7 +19,10 @@ import {
   missingTypeScriptConfigFindings,
 } from "../src/expectation-package-detectors.ts";
 import { createDetectorContext } from "../src/expectation-package-context.ts";
-import { missingTestFindings } from "../src/expectation-test-detector.ts";
+import {
+  missingJavaScriptTestFindings,
+  missingTestFindings,
+} from "../src/expectation-test-detector.ts";
 
 const roots: string[] = [];
 
@@ -54,6 +57,7 @@ describe("expectation detector registry contract", () => {
 
     expect(registry.map((entry) => entry.id)).toEqual([
       "benchmark-evidence",
+      "javascript-source-test",
       "package-aggregate-check",
       "package-cli-wiring",
       "package-test-capability",
@@ -65,6 +69,7 @@ describe("expectation detector registry contract", () => {
     ]);
     expect(registry.map((entry) => [entry.id, entry.version])).toEqual([
       ["benchmark-evidence", 1],
+      ["javascript-source-test", 1],
       ["package-aggregate-check", 1],
       ["package-cli-wiring", 1],
       ["package-test-capability", 1],
@@ -107,6 +112,7 @@ describe("expectation detector registry contract", () => {
     const context = createDetectorContext(fixture());
     const batches: RawFinding[][] = [
       missingBenchmarkEvidenceFindings(context),
+      missingJavaScriptTestFindings(context),
       missingAggregateCheckFindings(context),
       missingCliWiringFindings(context),
       missingTestCapabilityFindings(context),
@@ -117,6 +123,6 @@ describe("expectation detector registry contract", () => {
       missingTestFindings(context),
     ];
 
-    expect(batches.map((batch) => batch.length)).toEqual([0, 1, 1, 0, 0, 0, 0, 1, 1]);
+    expect(batches.map((batch) => batch.length)).toEqual([0, 0, 1, 1, 0, 0, 0, 0, 1, 1]);
   });
 });
