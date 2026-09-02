@@ -132,7 +132,7 @@ describe("Rust test expectations", () => {
       [
         "pub mod inline;",
         "pub mod orphan;",
-        "#[cfg(feature = \"optional\")]",
+        '#[cfg(feature = "optional")]',
         "pub mod optional;",
         "pub mod service;",
         "",
