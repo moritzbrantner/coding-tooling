@@ -20,6 +20,7 @@ function conventionSource(): string {
   const root = workspace("versioned-runner-source-");
   write(root, "README.md", "# Conventions\n");
   write(root, "principles/README.md", "## PRINCIPLE-001 — Be explicit\n");
+  write(root, "conventions/README.md", "# General conventions\n");
   write(root, "technologies/typescript/README.md", "## TS-003 — Prefer type aliases\n");
   write(
     root,
