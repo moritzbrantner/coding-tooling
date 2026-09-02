@@ -72,6 +72,7 @@ A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold i
   "verifications": [
     {
       "id": "VERIFY-TOKENS",
+      "version": 1,
       "expectation": "typescript-source-test",
       "subject": "src/token-metadata.ts",
       "command": ["bun", "run", "verify:tokens"],
@@ -83,9 +84,9 @@ A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold i
 }
 ```
 
-A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject. A verification is intentionally different: it must identify one exact expectation and semantic subject and point to an existing repository package script through `bun`, `npm`, `pnpm`, or `yarn` using `run <script>`. `coding-tooling` does not infer verification from script names and does not accept arbitrary shell commands as evidence in this contract.
+A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject. A verification is intentionally different: it is an explicitly versioned relationship that must identify one exact expectation and semantic subject and point to an existing repository package script through `bun`, `npm`, `pnpm`, or `yarn` using exactly `run <script>`. `coding-tooling` does not infer verification from script names and does not accept arbitrary shell commands as evidence in this contract.
 
-A valid verification changes the finding disposition to `verified` and preserves the verifier ID, exact command, and rationale on the finding. Missing scripts, unsupported command shapes, stale relationships, duplicate relationships, and unknown expectations are reported through reconciliation instead of silently satisfying debt. Invariants are explicit repository knowledge for agents; the analyzer does not synthesize them.
+A valid verification changes the finding disposition to `verified` and preserves the verifier ID, relationship version, exact command, and rationale on the finding. Missing scripts, unsupported command shapes, stale relationships, duplicate relationships, unknown expectations, and simultaneous suppression-plus-verification metadata are reported through reconciliation instead of silently satisfying debt. Invariants are explicit repository knowledge for agents; the analyzer does not synthesize them.
 
 Persistent metadata is reconciled against the current deterministic finding stream. Reports identify orphaned baseline IDs, stale suppressions and verifications, invalid verifier commands, duplicate metadata, and references to unknown expectation IDs so accepted debt and evidence do not silently become a graveyard.
 
@@ -109,7 +110,7 @@ Each finding contains:
 - a semantic subject and missing requirement;
 - deterministic evidence and related files;
 - focused verification commands when derivable;
-- explicit non-test `verificationEvidence` when repository metadata satisfies the requirement;
+- explicit non-test `verificationEvidence` with a relationship version when repository metadata satisfies the requirement;
 - deterministic relationships to other findings when known;
 - an optional explicit scaffold action.
 
