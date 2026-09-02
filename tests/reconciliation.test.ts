@@ -142,9 +142,7 @@ describe("deterministic reconciliation", () => {
       });
       expect(relevant.status).toBe("passed");
       expect(relevant.data.changed).toBe(true);
-      expect(relevant.data.changedFiles).toEqual([
-        "modules/testing/conventions/testing/README.md",
-      ]);
+      expect(relevant.data.changedFiles).toEqual(["modules/testing/conventions/testing/README.md"]);
       expect(relevant.data.created).toEqual([]);
       expect(relevant.data.removed).toEqual([]);
     } finally {
