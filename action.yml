@@ -1,9 +1,9 @@
 name: Run coding tooling
-description: Run version-pinned repository validation, environment verification, conformance, findings, or agent capability validation.
+description: Run version-pinned repository validation, environment verification, conformance, findings, public-contract verification, or agent capability validation.
 
 inputs:
   operation:
-    description: "Operation to run: run, environment-verify, conformance, findings, or agent-capabilities-validate."
+    description: "Operation to run: run, environment-verify, conformance, findings, public-contract, or agent-capabilities-validate."
     required: false
     default: run
   tier:
@@ -23,7 +23,7 @@ inputs:
     required: false
     default: default
   report-path:
-    description: Repository-relative JSON report path for run, environment-verify, conformance, and findings.
+    description: Repository-relative JSON report path for report-producing operations.
     required: false
     default: .artifacts/coding-tooling/report.json
   strict:
@@ -52,7 +52,7 @@ runs:
       with:
         bun-version: ${{ inputs.bun-version }}
     - name: Install consumer dependencies
-      if: inputs.operation == 'run'
+      if: inputs.operation == 'run' || inputs.operation == 'public-contract'
       shell: bash
       env:
         INPUT_INSTALL_MODE: ${{ inputs.install-mode }}
@@ -89,6 +89,18 @@ runs:
           exit 0
         fi
 
+        if [[ "$INPUT_OPERATION" == "public-contract" ]]; then
+          mkdir -p "$(dirname "$INPUT_REPORT_PATH")"
+          set +e
+          bun "${{ github.action_path }}/src/entry.ts" contract verify \
+            --config "$INPUT_CONFIG" --report "$INPUT_REPORT_PATH" --json
+          status=$?
+          set -e
+          cat "$INPUT_REPORT_PATH"
+          echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"
+          exit "$status"
+        fi
+
         if [[ "$INPUT_OPERATION" == "environment-verify" || "$INPUT_OPERATION" == "conformance" || "$INPUT_OPERATION" == "findings" ]]; then
           mkdir -p "$(dirname "$INPUT_REPORT_PATH")"
           set +e
@@ -109,7 +121,7 @@ runs:
         fi
 
         if [[ "$INPUT_OPERATION" != "run" ]]; then
-          echo "::error::operation must be 'run', 'environment-verify', 'conformance', 'findings', or 'agent-capabilities-validate'"
+          echo "::error::operation must be 'run', 'environment-verify', 'conformance', 'findings', 'public-contract', or 'agent-capabilities-validate'"
           exit 2
         fi
 
