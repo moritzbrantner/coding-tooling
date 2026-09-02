@@ -16,7 +16,7 @@ coding-tooling baseline
 coding-tooling scaffold CT-0123456789AB
 ```
 
-`findings` and `finding` are read-only. `findings --all` also exposes suppressed findings. `baseline` writes the current active finding IDs to `.coding-tooling.expectations.json`. `scaffold` is an explicit mutation and is available only when a finding has a deterministic boilerplate action.
+`findings` and `finding` are read-only. `findings --all` also exposes suppressed and explicitly verified findings. `baseline` writes the current active finding IDs to `.coding-tooling.expectations.json`. `scaffold` is an explicit mutation and is available only when a finding has a deterministic boilerplate action.
 
 ## Versioned detector registry
 
@@ -34,9 +34,9 @@ Coverage contains:
 
 - `technologies`: technologies discovered through the existing repository/component discovery model;
 - `detectors`: every registered expectation with its version, `applied | not-applicable | unsupported | unavailable` status, and deterministic subject count;
-- `unsupportedTechnologies`: discovered source technologies that currently have no structural source-test detector.
+- `unsupportedTechnologies`: discovered source technologies whose deeper structural analysis remains incomplete.
 
-Structural source-test support currently covers TypeScript and JavaScript package source. Rust gains a smaller exact detector for explicitly declared Cargo target paths, but Rust still remains in `unsupportedTechnologies` because deeper crate/module/test reachability is not yet proven. .NET also remains unsupported for structural source-test analysis. Cross-language detectors such as TODO/FIXME or explicit unimplemented-stub scanning can still report themselves as applied.
+Structural source-test support covers TypeScript and JavaScript package source and a conservative Rust source/module surface. Rust also has an exact explicit-Cargo-target-path detector. Rust remains in `unsupportedTechnologies` because conditional modules, re-exports, function-level behavior, and other ambiguous relationships are not claimed as proven. .NET remains unsupported for structural source-test analysis. Cross-language detectors such as TODO/FIXME or explicit unimplemented-stub scanning can still report themselves as applied.
 
 Coverage is evidence about what was analyzed, not a confidence score and not a substitute for findings. A portfolio aggregator should interpret `0 findings` together with coverage rather than collapsing covered-clean and unsupported repositories into the same state.
 
@@ -47,6 +47,7 @@ The structural expectations include several kinds of absence:
 - `typescript-source-test`: production TypeScript source in a package with a test command has neither a conventionally matching test artifact nor a conservative static import path from a test to that source.
 - `javascript-source-test`: production `.js`, `.jsx`, `.mjs`, or `.cjs` source in a package with a test command has neither a conventionally matching test artifact nor conservative relative `import` / `require()` reachability from a test.
 - `rust-cargo-target-path`: an explicitly declared Cargo `[lib]`, `[[bin]]`, `[[test]]`, `[[example]]`, or `[[bench]]` `path` points to a file that exists.
+- `rust-source-test`: a mechanically reachable Rust source file has recognized inline or integration-test evidence through the conservative Rust module graph.
 - `package-test-capability`: a JavaScript/TypeScript package contains production source but exposes neither `test` nor `test:unit`.
 - `package-aggregate-check`: a package exposes multiple verification scripts but no aggregate `check` or `verify` script.
 - `typescript-project-config`: a package contains TypeScript source but no `tsconfig.json`.
@@ -55,38 +56,49 @@ The structural expectations include several kinds of absence:
 
 The TypeScript and JavaScript test expectations are structural, not claims about behavioral coverage. They follow conservative relative static imports transitively from test files, so a helper reached through a tested public seam counts as structurally test-reachable. They deliberately do not require every implementation file to be imported directly by a test. Obvious support artifacts such as Storybook stories, test/spec files, fixture-named files, and files under `src/test`, `src/tests`, or `src/__tests__` are not treated as production source. Bare package imports, unresolved aliases, package-export resolution, and dynamic import targets are not guessed, so false negatives remain preferable to false coverage claims.
 
-The first Rust rule is narrower. It parses only explicit Cargo target tables and simple quoted `name` / `path` assignments, then checks the declared path on disk. Implicit Cargo defaults such as `src/lib.rs` or `src/main.rs`, module declarations, unit-test modules, and source-to-test reachability remain outside this contract and therefore keep Rust marked as deeper-analysis unsupported.
+The Rust contracts remain deliberately narrower. Cargo target validation parses only explicit target tables and simple quoted `name` / `path` assignments. Rust source-test reachability starts from established crate roots, follows only mechanically resolvable unconditional file-module edges, recognizes inline `#[cfg(test)]` modules, conservative integration-test crate references, test-support `#[path]` modules, and `CARGO_BIN_EXE_*` evidence. Conditional module relationships and deeper semantic behavior remain outside the proven surface.
 
 A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold is offered only for the existing TypeScript finding when the configured test script actually invokes `bun test`. JavaScript and Rust findings do not synthesize placeholder tests; other test runners receive a verification hint but no guessed framework-specific scaffold.
 
 ## Persistent metadata
 
-`.coding-tooling.expectations.json` contains only deliberate repository policy and accepted debt:
+`.coding-tooling.expectations.json` contains deliberate repository policy, accepted debt, and explicit deterministic evidence relationships:
 
 ```json
 {
   "schemaVersion": 1,
   "baseline": [],
   "suppressions": [],
+  "verifications": [
+    {
+      "id": "VERIFY-TOKENS",
+      "expectation": "typescript-source-test",
+      "subject": "src/token-metadata.ts",
+      "command": ["bun", "run", "verify:tokens"],
+      "reason": "token metadata is checked by the repository-owned token verifier"
+    }
+  ],
   "invariants": [],
   "enforcement": {}
 }
 ```
 
-A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject. Invariants are explicit repository knowledge for agents; the analyzer does not synthesize them.
+A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject. A verification is intentionally different: it must identify one exact expectation and semantic subject and point to an existing repository package script through `bun`, `npm`, `pnpm`, or `yarn` using `run <script>`. `coding-tooling` does not infer verification from script names and does not accept arbitrary shell commands as evidence in this contract.
 
-Persistent metadata is reconciled against the current deterministic finding stream. Reports identify orphaned baseline IDs, stale suppressions, duplicate metadata, and references to unknown expectation IDs so accepted debt does not silently become a graveyard.
+A valid verification changes the finding disposition to `verified` and preserves the verifier ID, exact command, and rationale on the finding. Missing scripts, unsupported command shapes, stale relationships, duplicate relationships, and unknown expectations are reported through reconciliation instead of silently satisfying debt. Invariants are explicit repository knowledge for agents; the analyzer does not synthesize them.
+
+Persistent metadata is reconciled against the current deterministic finding stream. Reports identify orphaned baseline IDs, stale suppressions and verifications, invalid verifier commands, duplicate metadata, and references to unknown expectation IDs so accepted debt and evidence do not silently become a graveyard.
 
 ## Finding lifecycle
 
 Findings have two independent lifecycle dimensions:
 
 - `state: "new" | "baseline"` describes whether active debt has been accepted into the current baseline.
-- `disposition: "active" | "suppressed"` describes whether the finding is intentionally excluded from normal active output.
+- `disposition: "active" | "suppressed" | "verified"` distinguishes actionable findings, intentionally suppressed findings, and findings satisfied by explicit deterministic non-test evidence.
 
-Normal `findings` output hides suppressed findings, preserving the existing operational view. `findings --all` and `finding <id>` keep them inspectable together with the suppression reason. Baselining does not hide debt: active findings remain visible with `state: "baseline"`.
+Normal `findings` output includes only active findings. `findings --all` and `finding <id>` keep suppressed and verified findings inspectable together with their suppression reason or verification evidence. Baselining does not hide debt, and verified findings are not added to a newly written baseline because they are already satisfied by explicit evidence.
 
-Only an active, new finding promoted to `error` makes `findings` fail. Re-running `baseline` rewrites the baseline from the current active finding set, so resolved debt disappears.
+Only an active, new finding promoted to `error` makes `findings` fail. Re-running `baseline` rewrites the baseline from the current active finding set, so resolved or verified debt does not linger there.
 
 ## Agent-facing contract
 
@@ -97,10 +109,11 @@ Each finding contains:
 - a semantic subject and missing requirement;
 - deterministic evidence and related files;
 - focused verification commands when derivable;
+- explicit non-test `verificationEvidence` when repository metadata satisfies the requirement;
 - deterministic relationships to other findings when known;
 - an optional explicit scaffold action.
 
-`coding-tooling finding CT-... --json` deterministically reports whether one finding is `active`, `suppressed`, or `absent`. This lets an orchestrator revalidate a work item without rediscovering repository context.
+`coding-tooling finding CT-... --json` deterministically reports whether one finding is `active`, `suppressed`, `verified`, or `absent`. This lets an orchestrator revalidate a work item without rediscovering repository context.
 
 Task management remains outside `coding-tooling`. A coordinator may persist a relationship such as `TASK-123 -> CT-0123456789AB`, but `coding-tooling` owns only whether the finding currently exists and what deterministic evidence supports it.
 
