@@ -3,6 +3,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { calibrationCommand, type CalibrationEnvelope } from "./calibration.ts";
 import { main } from "./cli.ts";
 import {
   baselineFindings,
@@ -14,7 +15,9 @@ import {
 } from "./expectations.ts";
 import { repositoryRoot } from "./shared.ts";
 
-function expectationExitCode(status: ExpectationEnvelope["status"]): number {
+function expectationExitCode(
+  status: ExpectationEnvelope["status"] | CalibrationEnvelope["status"],
+): number {
   return status === "passed" ? 0 : status === "failed" ? 1 : status === "unavailable" ? 2 : 3;
 }
 
@@ -23,7 +26,8 @@ function expectationUsage(): never {
   coding-tooling findings [--new|--baseline] [--all] [--json]
   coding-tooling finding <finding-id> [--json]
   coding-tooling baseline [--json]
-  coding-tooling scaffold <finding-id> [--json]`);
+  coding-tooling scaffold <finding-id> [--json]
+  coding-tooling calibration [--json]`);
   process.exit(2);
 }
 
@@ -33,15 +37,19 @@ export function entryMain(argv = process.argv.slice(2)): number {
     command !== "findings" &&
     command !== "finding" &&
     command !== "baseline" &&
-    command !== "scaffold"
+    command !== "scaffold" &&
+    command !== "calibration"
   ) {
     return main(argv);
   }
 
   const root = repositoryRoot();
   const compact = argv.includes("--json");
-  let result: ExpectationEnvelope;
-  if (command === "findings") {
+  let result: ExpectationEnvelope | CalibrationEnvelope;
+  if (command === "calibration") {
+    if (argv.slice(1).some((value) => value !== "--json")) return expectationUsage();
+    result = calibrationCommand(root);
+  } else if (command === "findings") {
     const onlyNew = argv.includes("--new");
     const onlyBaseline = argv.includes("--baseline");
     const includeSuppressed = argv.includes("--all");
