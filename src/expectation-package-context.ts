@@ -26,9 +26,18 @@ export type DetectorContext = {
 
 const testFilePattern = /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/;
 const sourceFilePattern = /\.(?:[cm]?ts|tsx)$/;
+const storyFilePattern = /\.(?:stories|story)\.(?:[cm]?[jt]sx?)$/;
+const fixtureFilePattern = /\.(?:fixture|fixtures)\.(?:[cm]?[jt]sx?)$/;
 
 export function normalizePath(path: string): string {
   return path.split(sep).join("/");
+}
+
+function isProductionTypeScriptSource(local: string): boolean {
+  if (!local.startsWith("src/") || !sourceFilePattern.test(local)) return false;
+  if (local.endsWith(".d.ts") || testFilePattern.test(local)) return false;
+  if (storyFilePattern.test(local) || fixtureFilePattern.test(local)) return false;
+  return !/^src\/(?:test|tests|__tests__)\//.test(local);
 }
 
 function packageInfos(root: string): PackageInfo[] {
@@ -49,15 +58,9 @@ function packageInfos(root: string): PackageInfo[] {
       );
       return owner === directory;
     });
-    const sourceFiles = packageFiles.filter((path) => {
-      const local = normalizePath(relative(directory, path));
-      return (
-        local.startsWith("src/") &&
-        sourceFilePattern.test(local) &&
-        !local.endsWith(".d.ts") &&
-        !testFilePattern.test(local)
-      );
-    });
+    const sourceFiles = packageFiles.filter((path) =>
+      isProductionTypeScriptSource(normalizePath(relative(directory, path))),
+    );
     const testFiles = packageFiles.filter((path) => testFilePattern.test(normalizePath(path)));
     result.push({
       directory,

@@ -30,13 +30,15 @@ The built-in completeness detectors are advisory evidence by default. They becom
 
 The first batch covers several kinds of structural absence:
 
-- `typescript-source-test`: a TypeScript source file in a package with a test command has neither a conventionally matching test artifact nor a test that directly imports the source module.
+- `typescript-source-test`: production TypeScript source in a package with a test command has neither a conventionally matching test artifact nor a conservative static import path from a test to that source.
 - `package-aggregate-check`: a package exposes multiple verification scripts but no aggregate `check` or `verify` script.
 - `typescript-project-config`: a package contains TypeScript source but no `tsconfig.json`.
 - `package-cli-wiring`: a CLI entrypoint is not wired through `package.json`, or configured bin wiring points to a missing file.
 - `required-capability-available`: `.coding-tooling.json` declares a required capability that no discovered component provides.
 
-The TypeScript test expectation is structural, not a claim about behavioral coverage. A matching test artifact or conservative direct test import satisfies the current contract. A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold is offered only when the configured test script actually invokes `bun test`. Other test runners receive a verification hint but no guessed framework-specific scaffold.
+The TypeScript test expectation is structural, not a claim about behavioral coverage. Version 2 follows conservative relative static imports transitively from test files, so a helper reached through a tested public seam counts as structurally test-reachable. It deliberately does not require every implementation file to be imported directly by a test. Obvious support artifacts such as Storybook stories, test/spec files, fixture-named files, and files under `src/test`, `src/tests`, or `src/__tests__` are not treated as production source. Bare package imports and unresolved aliases are not guessed, so false negatives remain preferable to false coverage claims.
+
+A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold is offered only when the configured test script actually invokes `bun test`. Other test runners receive a verification hint but no guessed framework-specific scaffold.
 
 ## Persistent metadata
 

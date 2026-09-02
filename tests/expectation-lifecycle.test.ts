@@ -44,7 +44,7 @@ describe("expectation lifecycle", () => {
     const root = fixture("vitest run");
     const finding = sourceTestFinding(root);
 
-    expect(finding.expectationVersion).toBe(1);
+    expect(finding.expectationVersion).toBe(2);
     expect(finding.policyKind).toBe("advisory");
     expect(finding.scaffold).toBeUndefined();
     expect(finding.verification).toEqual([["bun", "run", "test", "--", "tests/service.test.ts"]]);

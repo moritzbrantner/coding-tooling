@@ -53,7 +53,13 @@ describe("expectation detector registry contract", () => {
       "typescript-project-config",
       "typescript-source-test",
     ]);
-    expect(registry.every((entry) => entry.version === 1)).toBeTrue();
+    expect(registry.map((entry) => [entry.id, entry.version])).toEqual([
+      ["package-aggregate-check", 1],
+      ["package-cli-wiring", 1],
+      ["required-capability-available", 1],
+      ["typescript-project-config", 1],
+      ["typescript-source-test", 2],
+    ]);
     expect(registry.every((entry) => entry.policyKind === "advisory")).toBeTrue();
     expect(expectationDescriptors.map((entry) => entry.id)).toEqual(
       registry.map((entry) => entry.id),
