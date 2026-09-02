@@ -179,10 +179,7 @@ export function missingTestCapabilityFindings({ root, packages }: DetectorContex
             detail: `${sourceFiles.length} production JavaScript/TypeScript source file${sourceFiles.length === 1 ? "" : "s"} discovered without test/test:unit script`,
           },
         ],
-        relatedFiles: [
-          manifestPath,
-          ...sourceFiles.map((path) => relativePosix(root, path)),
-        ],
+        relatedFiles: [manifestPath, ...sourceFiles.map((path) => relativePosix(root, path))],
         verification: [],
       },
     ];
