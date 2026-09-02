@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "id": "coding-tooling",
+  "kind": "browser-repository-preflight",
+  "baseUrl": "https://moritzbrantner.github.io/coding-tooling/",
+  "description": "Deterministic zero-install structural preflight for public GitHub repositories, with machine-readable output and local coding-tooling handoff.",
+  "operations": [
+    {
+      "id": "tool-registry",
+      "transport": "static-json",
+      "href": "https://moritzbrantner.github.io/coding-tooling/tools.json",
+      "description": "Discover the other public coding-agent tools and their stable agent-tool.json contracts."
+    },
+    {
+      "id": "analyze-repository",
+      "transport": "html",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/?repo={owner}/{repository}",
+      "description": "Human-readable public GitHub repository preflight."
+    },
+    {
+      "id": "analysis-json",
+      "transport": "browser-json-view",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}",
+      "description": "Browser-executed schema-v1 remote-preflight JSON for coding agents."
+    }
+  ],
+  "authoritativeLocalOperations": [
+    "coding-tooling inspect --json",
+    "coding-tooling bootstrap plan --json",
+    "coding-tooling conformance --json",
+    "coding-tooling findings --json",
+    "coding-tooling plan --tier fast --json",
+    "coding-tooling run --tier fast --strict --json"
+  ],
+  "limitations": [
+    "Remote analysis supports public GitHub repositories only and uses anonymous GitHub API data.",
+    "GitHub Pages cannot execute repository commands; local coding-tooling remains authoritative for conformance, environment verification, findings, validation, and mutations.",
+    "The analysis-json view is browser-executed rather than a server-side application/json HTTP API."
+  ]
+}
