@@ -109,9 +109,13 @@ function suppressionMatchesFinding(suppression: ExpectationSuppression, finding:
   return true;
 }
 
-function verificationMatchesFinding(verification: ExpectationVerification, finding: Finding): boolean {
+function verificationMatchesFinding(
+  verification: ExpectationVerification,
+  finding: Finding,
+): boolean {
   return (
-    verification.expectation === finding.expectationId && verification.subject === finding.subject.key
+    verification.expectation === finding.expectationId &&
+    verification.subject === finding.subject.key
   );
 }
 
