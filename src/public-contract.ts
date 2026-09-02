@@ -460,9 +460,7 @@ export function publicContractCommand(
     );
     const unsupportedAnalyzers = [
       ...(results.some((surface) => surface.kind === "rust-crate") ? ["rust-item-api"] : []),
-      ...(results.some((surface) => surface.kind === "dotnet-assembly")
-        ? ["dotnet-item-api"]
-        : []),
+      ...(results.some((surface) => surface.kind === "dotnet-assembly") ? ["dotnet-item-api"] : []),
       ...(results.some((surface) => surface.kind === "github-action") ? ["github-action-io"] : []),
       ...(results.some((surface) => surface.kind === "reusable-workflow")
         ? ["workflow-call-io"]
