@@ -197,7 +197,9 @@ function rustPackageInfos(root: string, files: string[]): RustPackageInfo[] {
     );
     const manifest = rustManifestInfo(manifestPath);
     const automaticTestRoots = manifest.autotests
-      ? rustFiles.filter((path) => /^tests\/[^/]+\.rs$/.test(normalizePath(relative(directory, path))))
+      ? rustFiles.filter((path) =>
+          /^tests\/[^/]+\.rs$/.test(normalizePath(relative(directory, path))),
+        )
       : [];
     const explicitTestRoots = manifest.explicitTestPaths
       .map((path) => join(directory, path))
