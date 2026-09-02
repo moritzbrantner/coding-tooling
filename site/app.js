@@ -1,4 +1,4 @@
-import { analyzeSnapshot, parseRepositoryReference, selectedRemoteFiles } from "./preflight.js";
+import { analysisJson } from "./github-analysis.js";
 
 const form = document.querySelector("form");
 const input = document.querySelector("#repository");
@@ -18,102 +18,21 @@ if (initial) {
 }
 
 async function run(value) {
-  const reference = parseRepositoryReference(value);
-  if (!reference) return setStatus("Enter owner/repository or a github.com repository URL.", true);
   controller?.abort();
   controller = new AbortController();
   setStatus("Reading public GitHub metadata and structural evidence…");
   output.hidden = true;
 
   try {
-    const snapshot = await loadSnapshot(reference, controller.signal);
-    const analysis = analyzeSnapshot(snapshot);
-    history.replaceState(null, "", `?repo=${encodeURIComponent(snapshot.repository.fullName)}`);
-    input.value = snapshot.repository.fullName;
+    const analysis = await analysisJson(value, { signal: controller.signal });
+    history.replaceState(null, "", `?repo=${encodeURIComponent(analysis.repository.fullName)}`);
+    input.value = analysis.repository.fullName;
     render(analysis);
-    setStatus(`Analyzed ${snapshot.repository.fullName}.`);
+    setStatus(`Analyzed ${analysis.repository.fullName}.`);
   } catch (error) {
     if (error?.name === "AbortError") return;
     setStatus(error instanceof Error ? error.message : String(error), true);
   }
-}
-
-async function loadSnapshot(reference, signal) {
-  const repository = await githubJson(`/repos/${reference.owner}/${reference.name}`, signal);
-  const tree = await githubJson(
-    `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`,
-    signal,
-  );
-  const entries = (tree.tree ?? []).filter(
-    (entry) => entry.path && entry.sha && ["blob", "tree"].includes(entry.type),
-  );
-  const selected = selectedRemoteFiles(entries);
-  const packageCount = entries.filter(
-    (entry) => entry.type === "blob" && entry.path.endsWith("package.json"),
-  ).length;
-  const selectedPackages = selected.filter((entry) => entry.path.endsWith("package.json")).length;
-  const files = {};
-  const unreadablePaths = [];
-
-  await Promise.all(
-    selected.map(async (entry) => {
-      try {
-        const blob = await githubJson(
-          `/repos/${reference.owner}/${reference.name}/git/blobs/${entry.sha}`,
-          signal,
-        );
-        if (blob.encoding !== "base64") throw new Error("Unsupported GitHub blob encoding");
-        files[entry.path] = new TextDecoder().decode(
-          Uint8Array.from(atob(blob.content.replace(/\n/g, "")), (character) =>
-            character.charCodeAt(0),
-          ),
-        );
-      } catch (error) {
-        if (error?.name === "AbortError") throw error;
-        unreadablePaths.push(entry.path);
-      }
-    }),
-  );
-
-  return {
-    repository: {
-      owner: repository.owner.login,
-      name: repository.name,
-      fullName: repository.full_name,
-      defaultBranch: repository.default_branch,
-      htmlUrl: repository.html_url,
-      description: repository.description,
-      archived: repository.archived,
-      fork: repository.fork,
-      stars: repository.stargazers_count,
-      openIssues: repository.open_issues_count,
-    },
-    tree: entries,
-    files,
-    treeTruncated: Boolean(tree.truncated),
-    manifestFetchTruncated: selectedPackages < packageCount,
-    unreadablePaths: unreadablePaths.toSorted(),
-  };
-}
-
-async function githubJson(path, signal) {
-  const response = await fetch(`https://api.github.com${path}`, {
-    signal,
-    headers: {
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  });
-  if (response.ok) return response.json();
-  if (response.status === 404)
-    throw new Error(
-      "Repository not found. This zero-token Pages preflight supports public GitHub repositories only.",
-    );
-  if (response.status === 403)
-    throw new Error(
-      "GitHub rejected the anonymous request, usually because the public API rate limit was reached. Run coding-tooling locally for an unthrottled analysis.",
-    );
-  throw new Error(`GitHub API request failed (${response.status}).`);
 }
 
 function render(analysis) {
@@ -142,6 +61,9 @@ function render(analysis) {
   document.querySelector("#copy-json").onclick = () => navigator.clipboard.writeText(json);
   document.querySelector("#download-json").onclick = () =>
     download(`${analysis.repository.name}-coding-tooling-preflight.json`, json);
+  const machineUrl = new URL("./analysis.json/", location.href);
+  machineUrl.searchParams.set("repo", analysis.repository.fullName);
+  document.querySelector("#analysis-json-link").href = machineUrl.href;
 }
 
 function renderComponents(components) {
