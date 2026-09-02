@@ -39,6 +39,15 @@ describe("detector calibration", () => {
 
     expect(result.status).toBe("passed");
     expect(result.data.failedCases).toEqual([]);
-    expect(result.data.caseCount).toBeGreaterThanOrEqual(8);
+    expect(result.data.caseCount).toBe(9);
+    expect(result.data.metrics).toEqual({
+      truePositive: 4,
+      falsePositive: 0,
+      falseNegative: 0,
+      trueNegative: 8,
+      unknown: 1,
+      precision: 1,
+      recall: 1,
+    });
   });
 });
