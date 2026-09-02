@@ -85,6 +85,14 @@ describe("repository gap detectors", () => {
     expect(finding?.severity).toBe("warning");
   });
 
+  test("accepts an existing benchmark runner referenced by the declared script", () => {
+    const root = fixture({ test: "bun test", bench: "bun scripts/run-benchmarks.ts" });
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    writeFileSync(join(root, "scripts", "run-benchmarks.ts"), "export {};\n");
+
+    expect(expectationIds(root)).not.toContain("benchmark-evidence");
+  });
+
   test("requires benchmark evidence only after a benchmark capability is declared", () => {
     const root = fixture({ test: "bun test", benchmark: "bun run scripts/perf.ts" });
     writeFileSync(join(root, "src", "service.ts"), "export const service = true;\n");
