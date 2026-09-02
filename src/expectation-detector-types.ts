@@ -1,4 +1,5 @@
 import type {
+  ExpectationCoverageStatus,
   ExpectationRegistryEntry,
   FindingEvidence,
   FindingRequirement,
@@ -17,6 +18,12 @@ export type RawFinding = {
   scaffold?: FindingScaffold;
 };
 
+export type DetectorApplicability = {
+  status: ExpectationCoverageStatus;
+  subjects: number;
+};
+
 export type ExpectationDescriptor = ExpectationRegistryEntry & {
   detect: (context: DetectorContext) => RawFinding[];
+  coverage: (context: DetectorContext) => DetectorApplicability;
 };
