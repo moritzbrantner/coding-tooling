@@ -1,11 +1,19 @@
 import { readFileSync } from "node:fs";
-import { dirname, extname, join, relative } from "node:path";
+import { dirname, extname, join, relative, resolve } from "node:path";
 
 import type { FindingScaffold } from "./expectation-model.ts";
 import type { PackageInfo, DetectorContext } from "./expectation-package-context.ts";
 import { normalizePath } from "./expectation-package-context.ts";
 import type { RawFinding } from "./expectation-detector-types.ts";
 import { relativePosix } from "./shared.ts";
+
+const sourceExtensions = [".ts", ".tsx", ".mts", ".cts"];
+const emittedJavaScriptExtensions = new Map([
+  [".js", [".ts", ".tsx"]],
+  [".jsx", [".tsx", ".ts"]],
+  [".mjs", [".mts", ".ts"]],
+  [".cjs", [".cts", ".ts"]],
+]);
 
 function testIdentity(path: string, packageInfo: PackageInfo): string | undefined {
   const local = normalizePath(relative(packageInfo.directory, path));
@@ -40,32 +48,69 @@ function moduleSpecifiers(content: string): string[] {
   return result;
 }
 
-function testDirectlyReferencesSource(source: string, testFile: string): boolean {
-  let content: string;
-  try {
-    content = readFileSync(testFile, "utf8");
-  } catch {
-    return false;
+function sourceCandidates(importer: string, specifier: string): string[] {
+  if (!specifier.startsWith(".")) return [];
+  const base = resolve(dirname(importer), specifier);
+  const extension = extname(base);
+  if (sourceExtensions.includes(extension)) return [base];
+
+  const emittedCandidates = emittedJavaScriptExtensions.get(extension);
+  if (emittedCandidates) {
+    const withoutExtension = base.slice(0, -extension.length);
+    return emittedCandidates.map((candidate) => `${withoutExtension}${candidate}`);
   }
-  const relativeImport = normalizePath(relative(dirname(testFile), source));
-  const specifier = relativeImport.startsWith(".") ? relativeImport : `./${relativeImport}`;
-  const extension = extname(specifier);
-  const extensionless = extension ? specifier.slice(0, -extension.length) : specifier;
-  return moduleSpecifiers(content).some(
-    (candidate) => candidate === specifier || candidate === extensionless,
-  );
+
+  if (extension) return [];
+  return [
+    ...sourceExtensions.map((candidate) => `${base}${candidate}`),
+    ...sourceExtensions.map((candidate) => join(base, `index${candidate}`)),
+  ];
 }
 
-function matchingTest(source: string, packageInfo: PackageInfo): string | undefined {
+function reachableSources(packageInfo: PackageInfo): Set<string> {
+  const sources = new Set(packageInfo.sourceFiles.map((path) => resolve(path)));
+  const reachable = new Set<string>();
+  const queued = new Set<string>(packageInfo.testFiles.map((path) => resolve(path)));
+  const queue = [...queued];
+
+  while (queue.length > 0) {
+    const importer = queue.shift()!;
+    let content: string;
+    try {
+      content = readFileSync(importer, "utf8");
+    } catch {
+      continue;
+    }
+    for (const specifier of moduleSpecifiers(content)) {
+      const target = sourceCandidates(importer, specifier).find((candidate) =>
+        sources.has(resolve(candidate)),
+      );
+      if (!target) continue;
+      const resolvedTarget = resolve(target);
+      if (reachable.has(resolvedTarget)) continue;
+      reachable.add(resolvedTarget);
+      if (!queued.has(resolvedTarget)) {
+        queued.add(resolvedTarget);
+        queue.push(resolvedTarget);
+      }
+    }
+  }
+
+  return reachable;
+}
+
+function matchingTest(
+  source: string,
+  packageInfo: PackageInfo,
+  testReachability: ReadonlySet<string>,
+): string | undefined {
   const identity = sourceIdentity(source, packageInfo);
-  return packageInfo.testFiles.find((testFile) => {
+  const matching = packageInfo.testFiles.find((testFile) => {
     const test = testIdentity(testFile, packageInfo);
-    return (
-      test === identity ||
-      test?.startsWith(`${identity}-`) === true ||
-      testDirectlyReferencesSource(source, testFile)
-    );
+    return test === identity || test?.startsWith(`${identity}-`) === true;
   });
+  if (matching) return matching;
+  return testReachability.has(resolve(source)) ? "<reachable-from-test>" : undefined;
 }
 
 function plannedTestPath(root: string, source: string, packageInfo: PackageInfo): string {
@@ -126,8 +171,9 @@ export function missingTestFindings({ root, packages }: DetectorContext): RawFin
   const findings: RawFinding[] = [];
   for (const packageInfo of packages) {
     if (!selectedTestScript(packageInfo)) continue;
+    const testReachability = reachableSources(packageInfo);
     for (const source of packageInfo.sourceFiles) {
-      if (matchingTest(source, packageInfo)) continue;
+      if (matchingTest(source, packageInfo, testReachability)) continue;
       const sourcePath = relativePosix(root, source);
       const target = plannedTestPath(root, source, packageInfo);
       findings.push({
@@ -140,11 +186,11 @@ export function missingTestFindings({ root, packages }: DetectorContext): RawFin
         requirement: {
           kind: "test",
           key: target,
-          description: "deterministic structural test evidence",
+          description: "deterministic structural test reachability",
           expectedArtifact: target,
         },
-        message: `${sourcePath} has no matching structural test evidence`,
-        evidence: [{ kind: "file", path: sourcePath, detail: "source file exists" }],
+        message: `${sourcePath} is not deterministically reachable from a test`,
+        evidence: [{ kind: "file", path: sourcePath, detail: "production source file exists" }],
         relatedFiles: [sourcePath],
         verification: verificationForTest(packageInfo, root, target),
         scaffold: testScaffold(source, target, packageInfo),
