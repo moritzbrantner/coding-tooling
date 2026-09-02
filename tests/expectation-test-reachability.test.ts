@@ -39,16 +39,12 @@ describe("TypeScript test reachability", () => {
     const findings = missingTestFindings(createDetectorContext(fixture()));
 
     expect(findings.map((finding) => finding.subject.key)).toEqual(["src/orphan.ts"]);
-    expect(findings[0]?.requirement.description).toBe(
-      "deterministic structural test reachability",
-    );
+    expect(findings[0]?.requirement.description).toBe("deterministic structural test reachability");
   });
 
   test("does not classify stories or test fixtures as production source", () => {
     const context = createDetectorContext(fixture());
-    const sourcePaths = context.packages[0]!.sourceFiles.map((path) =>
-      path.replaceAll("\\", "/"),
-    );
+    const sourcePaths = context.packages[0]!.sourceFiles.map((path) => path.replaceAll("\\", "/"));
 
     expect(sourcePaths.some((path) => path.endsWith("/src/widget.stories.tsx"))).toBeFalse();
     expect(sourcePaths.some((path) => path.endsWith("/src/test/fixture.ts"))).toBeFalse();
