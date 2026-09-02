@@ -10,6 +10,9 @@ import {
 import { walkFiles } from "./shared.ts";
 
 export type CalibrationExpectation = "finding" | "satisfied" | "unknown";
+export type CalibrationEnvelope = Omit<ExpectationEnvelope, "operation"> & {
+  operation: "calibration";
+};
 
 export type CalibrationLabel = {
   subject: string;
@@ -215,7 +218,7 @@ function evaluateCase(root: string, calibration: CalibrationCase): CalibrationCa
   };
 }
 
-export function calibrationCommand(root: string): ExpectationEnvelope {
+export function calibrationCommand(root: string): CalibrationEnvelope {
   const started = Date.now();
   try {
     const cases = loadCases(root);
