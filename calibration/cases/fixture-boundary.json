@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "nested-fixture-package-boundary",
+  "detector": "package-test-capability",
+  "fixture": "calibration/fixtures/fixture-boundary",
+  "labels": [
+    {
+      "subject": "tests/fixtures/consumer",
+      "requirement": "test-capability",
+      "expected": "satisfied"
+    }
+  ]
+}
