@@ -75,7 +75,9 @@ describe("Rust test expectations", () => {
 
     expect(context.rustPackages[0]?.crateName).toBe("rust_fixture");
     expect(context.rustPackages[0]?.sourceFiles).toHaveLength(4);
-    expect(context.rustPackages[0]?.integrationTestRoots).toEqual([join(root, "tests", "isolated.rs")]);
+    expect(context.rustPackages[0]?.integrationTestRoots).toEqual([
+      join(root, "tests", "isolated.rs"),
+    ]);
     expect(context.rustPackages[0]?.hasLockfile).toBeTrue();
   });
 
@@ -212,9 +214,7 @@ describe("Rust test expectations", () => {
     rmSync(join(root, "Cargo.lock"));
     const findings = missingRustTestFindings(createDetectorContext(root));
 
-    expect(findings[0]?.verification).toEqual([
-      ["cargo", "test", "--manifest-path", "Cargo.toml"],
-    ]);
+    expect(findings[0]?.verification).toEqual([["cargo", "test", "--manifest-path", "Cargo.toml"]]);
   });
 
   test("follows ordinary nested library module declarations", () => {
