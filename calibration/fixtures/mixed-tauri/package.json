@@ -1,0 +1,7 @@
+{
+  "name": "calibration-mixed-tauri",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  }
+}
