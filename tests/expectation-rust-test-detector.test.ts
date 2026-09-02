@@ -44,24 +44,28 @@ function fixture(): string {
   writeFileSync(join(root, "src", "orphan.rs"), "pub fn value() -> u8 { 2 }\n");
   writeFileSync(join(root, "src", "service.rs"), "pub fn value() -> u8 { 3 }\n");
   writeFileSync(
-    join(root, "tests", "service_contract.rs"),
-    "use rust_fixture::service::value;\n\n#[test]\nfn service_is_reachable() { assert_eq!(value(), 3); }\n",
+    join(root, "tests", "isolated.rs"),
+    "#[test]\nfn isolated() { assert_eq!(1 + 1, 2); }\n",
   );
   return root;
 }
 
 describe("Rust test expectations", () => {
-  test("reports only Rust sources without conservative test evidence", () => {
+  test("reports declared library sources without inline or integration evidence", () => {
     const findings = missingRustTestFindings(createDetectorContext(fixture()));
 
-    expect(findings.map((finding) => finding.subject.key)).toEqual(["src/orphan.rs"]);
+    expect(findings.map((finding) => finding.subject.key)).toEqual([
+      "src/lib.rs",
+      "src/orphan.rs",
+      "src/service.rs",
+    ]);
     expect(findings[0]?.verification).toEqual([
       ["cargo", "test", "--locked", "--manifest-path", "Cargo.toml"],
     ]);
-    expect(findings[0]?.scaffold).toBeUndefined();
+    expect(findings.every((finding) => finding.scaffold === undefined)).toBeTrue();
   });
 
-  test("recognizes crate names with Cargo hyphens and direct module paths", () => {
+  test("recognizes crate names with Cargo hyphens", () => {
     const root = fixture();
     const context = createDetectorContext(root);
 
@@ -69,10 +73,20 @@ describe("Rust test expectations", () => {
     expect(context.rustPackages[0]?.sourceFiles).toHaveLength(4);
   });
 
-  test("recognizes simple rustfmt-style grouped module imports", () => {
+  test("treats a public integration import as structural evidence for the library graph", () => {
     const root = fixture();
     writeFileSync(
-      join(root, "tests", "service_contract.rs"),
+      join(root, "tests", "isolated.rs"),
+      "use rust_fixture::service::value;\n\n#[test]\nfn service_is_reachable() { assert_eq!(value(), 3); }\n",
+    );
+
+    expect(missingRustTestFindings(createDetectorContext(root))).toEqual([]);
+  });
+
+  test("recognizes rustfmt-style grouped imports at the public crate seam", () => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "tests", "isolated.rs"),
       [
         "use rust_fixture::{orphan::value, service::value as service_value};",
         "",
@@ -88,19 +102,46 @@ describe("Rust test expectations", () => {
     expect(missingRustTestFindings(createDetectorContext(root))).toEqual([]);
   });
 
-  test("does not guess through public re-exports", () => {
+  test("follows ordinary nested module declarations", () => {
     const root = fixture();
+    mkdirSync(join(root, "src", "routes"), { recursive: true });
+    writeFileSync(join(root, "src", "routes", "mod.rs"), "mod handler;\n");
+    writeFileSync(join(root, "src", "routes", "handler.rs"), "pub fn handle() {}\n");
     writeFileSync(
       join(root, "src", "lib.rs"),
-      "pub mod inline;\npub mod orphan;\nmod service;\npub use service::value;\n",
-    );
-    writeFileSync(
-      join(root, "tests", "service_contract.rs"),
-      "use rust_fixture::value;\n\n#[test]\nfn public_value_is_reachable() { assert_eq!(value(), 3); }\n",
+      "pub mod inline;\npub mod orphan;\npub mod routes;\npub mod service;\n",
     );
 
     const findings = missingRustTestFindings(createDetectorContext(root));
     expect(findings.map((finding) => finding.subject.key)).toEqual([
+      "src/lib.rs",
+      "src/orphan.rs",
+      "src/routes/handler.rs",
+      "src/routes/mod.rs",
+      "src/service.rs",
+    ]);
+  });
+
+  test("ignores binary, undeclared, and attributed module files rather than guessing", () => {
+    const root = fixture();
+    writeFileSync(join(root, "src", "main.rs"), "fn main() {}\n");
+    writeFileSync(join(root, "src", "unused.rs"), "pub fn unused() {}\n");
+    writeFileSync(join(root, "src", "optional.rs"), "pub fn optional() {}\n");
+    writeFileSync(
+      join(root, "src", "lib.rs"),
+      [
+        "pub mod inline;",
+        "pub mod orphan;",
+        "#[cfg(feature = \"optional\")]",
+        "pub mod optional;",
+        "pub mod service;",
+        "",
+      ].join("\n"),
+    );
+
+    const findings = missingRustTestFindings(createDetectorContext(root));
+    expect(findings.map((finding) => finding.subject.key)).toEqual([
+      "src/lib.rs",
       "src/orphan.rs",
       "src/service.rs",
     ]);
