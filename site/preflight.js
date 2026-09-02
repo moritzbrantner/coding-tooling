@@ -10,7 +10,7 @@ const SCRIPT_CAPABILITIES = {
 };
 
 const CONTEXT_FILES = new Set([".coding-tooling.json", ".node-version", "rust-toolchain.toml"]);
-const IGNORED_SOURCE_SEGMENTS = new Set([
+const IGNORED_ANALYSIS_SEGMENTS = new Set([
   ".git",
   ".next",
   ".turbo",
@@ -45,6 +45,7 @@ export function selectedRemoteFiles(tree, limit = 24) {
     .filter(
       (entry) =>
         entry.type === "blob" &&
+        !isIgnoredAnalysisPath(entry.path) &&
         (basename(entry.path) === "package.json" || CONTEXT_FILES.has(entry.path)),
     )
     .toSorted(
@@ -117,7 +118,8 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
 function discoverComponents(snapshot, paths) {
   const components = [];
   for (const entry of snapshot.tree.filter(
-    (candidate) => basename(candidate.path) === "package.json",
+    (candidate) =>
+      basename(candidate.path) === "package.json" && !isIgnoredAnalysisPath(candidate.path),
   )) {
     const manifest = parseJson(snapshot.files[entry.path]);
     if (!manifest) continue;
@@ -164,7 +166,8 @@ function discoverComponents(snapshot, paths) {
   }
 
   for (const entry of snapshot.tree.filter(
-    (candidate) => basename(candidate.path) === "Cargo.toml",
+    (candidate) =>
+      basename(candidate.path) === "Cargo.toml" && !isIgnoredAnalysisPath(candidate.path),
   )) {
     const directory = dirname(entry.path);
     components.push({
@@ -181,7 +184,9 @@ function discoverComponents(snapshot, paths) {
     });
   }
 
-  for (const entry of snapshot.tree.filter((candidate) => /\.(sln|csproj)$/.test(candidate.path))) {
+  for (const entry of snapshot.tree.filter(
+    (candidate) => /\.(sln|csproj)$/.test(candidate.path) && !isIgnoredAnalysisPath(candidate.path),
+  )) {
     const directory = dirname(entry.path);
     const path = directory || ".";
     if (components.some((component) => component.kind === "dotnet" && component.path === path))
@@ -266,7 +271,21 @@ function findingsFor(snapshot, paths, components) {
     );
 
   if (components.some((component) => component.kind === "package")) {
-    if (!paths.has(".node-version"))
+    const packageManager = parseJson(snapshot.files["package.json"])?.packageManager;
+    const bunVersion =
+      typeof packageManager === "string" && packageManager.startsWith("bun@")
+        ? packageManager.slice("bun@".length)
+        : null;
+    if (bunVersion !== null) {
+      if (!/^\d+\.\d+\.\d+$/.test(bunVersion))
+        add(
+          "REMOTE-ENV-005",
+          "high",
+          "Bun toolchain pin is not exact",
+          "package.json packageManager does not contain an exact bun@x.y.z version.",
+          "Use an exact Bun packageManager version for deterministic environment identity.",
+        );
+    } else if (!paths.has(".node-version"))
       add(
         "REMOTE-ENV-001",
         "medium",
@@ -398,10 +417,13 @@ function isTestPath(path) {
   );
 }
 
+function isIgnoredAnalysisPath(path) {
+  return path.split("/").some((segment) => IGNORED_ANALYSIS_SEGMENTS.has(segment));
+}
+
 function isProductionSource(path) {
   const lower = path.toLowerCase();
-  if (path.split("/").some((segment) => IGNORED_SOURCE_SEGMENTS.has(segment)) || isTestPath(path))
-    return false;
+  if (isIgnoredAnalysisPath(path) || isTestPath(path)) return false;
   return !/\.stories\.[cm]?[jt]sx?$/.test(lower) && /\.(ts|tsx|js|jsx|mjs|cjs|rs|cs)$/.test(lower);
 }
 
