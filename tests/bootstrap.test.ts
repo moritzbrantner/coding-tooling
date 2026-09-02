@@ -69,6 +69,11 @@ describe("repository foundation bootstrap", () => {
       ]),
     );
     expect(recommendation.config.profile).toBe("repository-foundation-v1");
+    expect(recommendation.renovate).toMatchObject({
+      configPath: "renovate.json",
+      existingConfigPath: null,
+      preset: "github>moritzbrantner/coding-agent-conventions",
+    });
     expect(recommendation.config.requiredCapabilities).toEqual([
       "format:check",
       "lint",
@@ -97,7 +102,7 @@ describe("repository foundation bootstrap", () => {
 
     const recommendation = repositoryFoundationRecommendation(root);
 
-    expect(recommendation.modules).toEqual(["environment", "git", "rust"]);
+    expect(recommendation.modules).toEqual(["dependencies", "environment", "git", "rust"]);
     expect(recommendation.config.requiredCapabilities).toEqual([
       "format:check",
       "lint",
@@ -105,6 +110,31 @@ describe("repository foundation bootstrap", () => {
       "test:unit",
     ]);
     expect(recommendation.config.tiers?.performance).toEqual(["benchmark:smoke"]);
+  });
+
+  test("surfaces Dependabot overlap before applying the foundation", () => {
+    const root = makeRepository("dependabot-repository");
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      '[package]\nname = "dependabot-repository"\nversion = "0.1.0"\n',
+    );
+    mkdirSync(join(root, ".github"), { recursive: true });
+    writeFileSync(join(root, ".github/dependabot.yml"), "version: 2\nupdates: []\n");
+
+    const plan = bootstrapRepository("plan", { root });
+    const apply = bootstrapRepository("apply", { root });
+
+    expect(plan.status).toBe("passed");
+    expect(plan.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "dependency-updater-overlap" }),
+    );
+    expect(plan.data).toMatchObject({
+      renovate: { dependabotConfigPath: ".github/dependabot.yml" },
+    });
+    expect(apply.status).toBe("failed");
+    expect(apply.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "dependency-updater-overlap" }),
+    );
   });
 
   test("does not apply a foundation to an empty repository", () => {
