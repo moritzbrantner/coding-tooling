@@ -97,6 +97,22 @@ export type ExpectationRegistryEntry = {
   conventionId?: string;
 };
 
+export type ExpectationCoverageStatus = "applied" | "not-applicable";
+
+export type ExpectationDetectorCoverage = {
+  id: string;
+  version: number;
+  status: ExpectationCoverageStatus;
+  subjects: number;
+};
+
+export type FindingsCoverageReport = {
+  technologies: string[];
+  sourceLanguages: string[];
+  unsupportedTechnologies: string[];
+  detectors: ExpectationDetectorCoverage[];
+};
+
 export type ReconciliationReport = {
   orphanedBaseline: string[];
   staleSuppressions: Array<{ index: number; reason: string }>;
