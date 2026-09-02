@@ -49,8 +49,9 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
   },
   {
     id: "typescript-source-test",
-    version: 1,
-    description: "TypeScript source has conservative structural test evidence",
+    version: 2,
+    description:
+      "Production TypeScript source is deterministically reachable from a test or matching test artifact",
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingTestFindings,
