@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import { writeExpectationConfig } from "../src/expectation-model.ts";
 import { reconcileTextFile } from "../src/reconciliation.ts";
 import { sourceDependencies } from "../src/source-deps.ts";
 
@@ -20,6 +21,18 @@ describe("deterministic reconciliation", () => {
       expect(readFileSync(path, "utf8")).toBe("desired\n");
       expect(reconcileTextFile(path, "next\n")).toBe("changed");
       expect(reconcileTextFile(path, "next\n")).toBe("unchanged");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("expectation configuration only writes when desired state changes", () => {
+    const root = workspace("coding-tooling-expectation-reconcile-");
+    try {
+      expect(writeExpectationConfig(root, { schemaVersion: 1 })).toBe("created");
+      expect(writeExpectationConfig(root, { schemaVersion: 1 })).toBe("unchanged");
+      expect(writeExpectationConfig(root, { schemaVersion: 1, baseline: [] })).toBe("changed");
+      expect(writeExpectationConfig(root, { schemaVersion: 1, baseline: [] })).toBe("unchanged");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
