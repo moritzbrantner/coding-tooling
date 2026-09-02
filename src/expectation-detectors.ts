@@ -12,6 +12,7 @@ import {
 } from "./expectation-package-detectors.ts";
 import { createDetectorContext } from "./expectation-package-context.ts";
 import { missingCargoTargetPathFindings } from "./expectation-rust-detector.ts";
+import { missingRustTestFindings } from "./expectation-rust-test-detector.ts";
 import { missingJavaScriptTestFindings, missingTestFindings } from "./expectation-test-detector.ts";
 import type { ExpectationRegistryEntry } from "./expectation-model.ts";
 import type { ExpectationDescriptor, RawFinding } from "./expectation-detector-types.ts";
@@ -79,6 +80,15 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingCargoTargetPathFindings,
+  },
+  {
+    id: "rust-source-test",
+    version: 1,
+    description:
+      "Reachable Rust source has mechanically provable inline or integration-test reachability",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    detect: missingRustTestFindings,
   },
   {
     id: "source-debt-marker",
