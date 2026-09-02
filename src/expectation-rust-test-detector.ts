@@ -28,7 +28,10 @@ function blankNonNewlines(chars: string[], start: number, end: number): void {
   }
 }
 
-function rawStringAt(content: string, index: number): { openEnd: number; close: string } | undefined {
+function rawStringAt(
+  content: string,
+  index: number,
+): { openEnd: number; close: string } | undefined {
   let cursor = index;
   if (content[cursor] === "r") {
     cursor += 1;
