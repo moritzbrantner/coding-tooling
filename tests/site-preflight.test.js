@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { analysisJson } from "../site/github-analysis.js";
 import {
   analyzeSnapshot,
   parseRepositoryReference,
@@ -134,6 +135,37 @@ describe("GitHub Pages repository preflight", () => {
     expect(manifestBounded.summary.status).toBe("incomplete");
     expect(manifestBounded.findings.map((finding) => finding.id)).toContain("REMOTE-SOURCE-002");
   });
+
+  test("analysisJson resolves a repository through the public GitHub API seam", async () => {
+    const requests = [];
+    const analysis = await analysisJson("example/repo", {
+      now: new Date("2026-09-02T20:00:00.000Z"),
+      fetchImpl: async (url) => {
+        requests.push(url);
+        if (url === "https://api.github.com/repos/example/repo")
+          return jsonResponse({
+            owner: { login: "example" },
+            name: "repo",
+            full_name: "example/repo",
+            default_branch: "main",
+            html_url: "https://github.com/example/repo",
+            description: "fixture",
+            archived: false,
+            fork: false,
+            stargazers_count: 3,
+            open_issues_count: 1,
+          });
+        if (url === "https://api.github.com/repos/example/repo/git/trees/main?recursive=1")
+          return jsonResponse({ tree: [], truncated: false });
+        throw new Error(`Unexpected request: ${url}`);
+      },
+    });
+
+    expect(analysis.operation).toBe("remote-preflight");
+    expect(analysis.repository.fullName).toBe("example/repo");
+    expect(analysis.generatedAt).toBe("2026-09-02T20:00:00.000Z");
+    expect(requests).toHaveLength(2);
+  });
 });
 
 function repository(overrides) {
@@ -161,4 +193,12 @@ function repository(overrides) {
 
 function blob(path, sha) {
   return { path, sha, type: "blob" };
+}
+
+function jsonResponse(value, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => value,
+  };
 }
