@@ -73,6 +73,23 @@ describe("repository environment conformance", () => {
     );
   });
 
+  test("blocks floating Node pins", () => {
+    const root = repository();
+    adoptEnvironment(root);
+    writeFileSync(join(root, ".node-version"), "24\n");
+
+    const result = repositoryEnvironmentConformance(root);
+
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({
+        code: "environment-toolchain-pin-floating",
+        status: "failed",
+        severity: "error",
+        path: ".node-version",
+      }),
+    );
+  });
+
   test("distinguishes an installed-version mismatch", () => {
     const root = repository("bun@0.0.1");
     adoptEnvironment(root);

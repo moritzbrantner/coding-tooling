@@ -114,6 +114,19 @@ function toolchainInputs(root: string, diagnostics: Diagnostic[]): unknown {
     }
   }
 
+  const nodePath = join(root, ".node-version");
+  if (existsSync(nodePath)) {
+    const version = text(nodePath).trim();
+    toolchains.node = { version };
+    if (!exactVersion(version)) {
+      diagnostics.push({
+        code: "environment-fingerprint-toolchain-floating",
+        message: "Node must use an exact x.y.z repository pin before it can be fingerprinted",
+        path: ".node-version",
+      });
+    }
+  }
+
   const rustPath = join(root, "rust-toolchain.toml");
   if (existsSync(rustPath)) {
     const source = text(rustPath);

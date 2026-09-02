@@ -73,6 +73,20 @@ describe("expected environment fingerprint", () => {
     expect(after.layers.config.digest).toBe(before.layers.config.digest);
   });
 
+  test("includes an exact Node pin in toolchain identity", () => {
+    const root = repository();
+    const before = passedData(root);
+
+    writeFileSync(join(root, ".node-version"), "24.20.0\n");
+    const after = passedData(root);
+
+    expect(after.fingerprint).not.toBe(before.fingerprint);
+    expect(after.layers.toolchain.digest).not.toBe(before.layers.toolchain.digest);
+    expect(after.layers.toolchain.inputs).toEqual(
+      expect.objectContaining({ node: { version: "24.20.0" } }),
+    );
+  });
+
   test("changes only dependency and combined identity when a lockfile changes", () => {
     const root = repository();
     const before = passedData(root);
@@ -198,6 +212,22 @@ reason = "a human explanation that is not environment identity"
       expect.objectContaining({
         code: "environment-fingerprint-toolchain-floating",
         path: "package.json",
+      }),
+    );
+  });
+
+  test("refuses floating Node declarations", () => {
+    const root = repository();
+    writeFileSync(join(root, ".node-version"), "24\n");
+
+    const result = expectedEnvironmentFingerprint(root);
+
+    expect(result.status).toBe("failed");
+    expect(result.data.fingerprint).toBeNull();
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "environment-fingerprint-toolchain-floating",
+        path: ".node-version",
       }),
     );
   });

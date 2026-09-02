@@ -11,7 +11,7 @@ export type EnvironmentFinding = {
 };
 
 export type EnvironmentToolchain = {
-  tool: "bun" | "rust";
+  tool: "bun" | "node" | "rust";
   path: string;
   declaredVersion: string | null;
   observedVersion: string | null;
@@ -63,6 +63,28 @@ function bunToolchain(root: string): EnvironmentToolchain | null {
   return {
     tool: "bun",
     path: "package.json",
+    declaredVersion,
+    observedVersion,
+    status:
+      observedVersion === null
+        ? "unavailable"
+        : exactVersion(declaredVersion) && observedVersion === declaredVersion
+          ? "passed"
+          : "failed",
+  };
+}
+
+function nodeToolchain(root: string): EnvironmentToolchain | null {
+  const path = join(root, ".node-version");
+  if (!existsSync(path)) return null;
+  const declaredVersion = text(path).trim();
+  const observedVersion = commandVersion("node", ["--version"], root, (value) => {
+    const version = value.match(/^v?(\d+\.\d+\.\d+)$/)?.[1];
+    return version ?? null;
+  });
+  return {
+    tool: "node",
+    path: ".node-version",
     declaredVersion,
     observedVersion,
     status:
@@ -286,7 +308,7 @@ export function repositoryEnvironmentConformance(root: string): {
     }
   }
 
-  const toolchains = [bunToolchain(root), rustToolchain(root)]
+  const toolchains = [bunToolchain(root), nodeToolchain(root), rustToolchain(root)]
     .filter((value): value is EnvironmentToolchain => value !== null)
     .sort((left, right) => left.tool.localeCompare(right.tool));
 
