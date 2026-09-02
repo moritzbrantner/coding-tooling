@@ -21,6 +21,7 @@ type MutableTarget = {
   declaredPath?: string;
 };
 
+const packageTablePattern = /^\s*\[package\]\s*(?:#.*)?$/;
 const targetTablePattern = /^\s*\[lib\]\s*(?:#.*)?$/;
 const targetArrayPattern = /^\s*\[\[(bin|test|example|bench)\]\]\s*(?:#.*)?$/;
 const anyTablePattern = /^\s*\[.*\]\s*(?:#.*)?$/;
@@ -39,6 +40,35 @@ function parseTomlString(value: string): string | undefined {
   return undefined;
 }
 
+function readManifest(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+export function cargoPackageName(manifestPath: string): string | undefined {
+  const content = readManifest(manifestPath);
+  if (content === undefined) return undefined;
+  let inPackage = false;
+  for (const line of content.split(/\r?\n/)) {
+    if (packageTablePattern.test(line)) {
+      inPackage = true;
+      continue;
+    }
+    if (anyTablePattern.test(line)) {
+      inPackage = false;
+      continue;
+    }
+    if (!inPackage) continue;
+    const assignment = stringAssignmentPattern.exec(line);
+    if (assignment?.[1] !== "name" || !assignment[2]) continue;
+    return parseTomlString(assignment[2]);
+  }
+  return undefined;
+}
+
 function cargoManifestPaths(root: string): string[] {
   return walkFiles(root, 8)
     .filter((path) => path.endsWith("Cargo.toml"))
@@ -46,12 +76,8 @@ function cargoManifestPaths(root: string): string[] {
 }
 
 function parseExplicitTargets(root: string, manifestPath: string): ExplicitCargoTarget[] {
-  let content: string;
-  try {
-    content = readFileSync(manifestPath, "utf8");
-  } catch {
-    return [];
-  }
+  const content = readManifest(manifestPath);
+  if (content === undefined) return [];
 
   const targets: MutableTarget[] = [];
   let current: MutableTarget | undefined;
