@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "mixed-tauri-rust",
+  "detector": "rust-source-test",
+  "fixture": "calibration/fixtures/mixed-tauri",
+  "coverage": "applied",
+  "labels": [
+    {
+      "subject": "src-tauri/src/lib.rs",
+      "requirement": "rust-structural-test-reachability",
+      "expected": "satisfied"
+    }
+  ]
+}
