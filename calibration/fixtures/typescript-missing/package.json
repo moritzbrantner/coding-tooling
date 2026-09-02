@@ -1,0 +1,7 @@
+{
+  "name": "calibration-typescript-missing",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  }
+}
