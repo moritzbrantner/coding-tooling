@@ -17,3 +17,17 @@ Remote findings cover conservative signals such as missing `.coding-tooling.json
 If GitHub truncates the recursive tree, the bounded manifest budget cannot cover all package manifests, or selected text blobs cannot be read, the result is explicitly `incomplete`.
 
 A repository can be deep-linked with `?repo=owner/repository` so a human or agent can share the same preflight entry point.
+
+## `analysis.json` machine interface
+
+The shared browser implementation exports an async `analysisJson(repository, options?)` function from `site/github-analysis.js`. The normal UI and the machine view both call this function, so there is one analysis path rather than duplicated logic.
+
+The Pages machine view is available at:
+
+```text
+https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository
+```
+
+It renders only the JSON envelope and is intended for browser-capable agents and tools that can execute the page JavaScript.
+
+This is deliberately not described as a conventional HTTP JSON API. GitHub Pages cannot execute server-side code, so a plain `curl` request receives the static HTML shell rather than a dynamically generated `application/json` response. A true HTTP `analysis.json?repo=...` endpoint would require a separate serverless/runtime deployment and should be introduced only if that additional operational dependency is justified.
