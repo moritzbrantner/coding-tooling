@@ -31,6 +31,7 @@ export type ResultOperation =
   | "bootstrap"
   | "plan"
   | "run"
+  | "contract"
   | "source-deps"
   | "dependencies"
   | "agent-capabilities"
@@ -74,6 +75,10 @@ export type ToolingConfig = {
   optionalCapabilities?: Capability[];
   capabilityCommands?: Record<string, Partial<Record<Capability, string[]>>>;
   conventionRefs?: string[];
+  contracts?: {
+    enforcement?: "observe" | "protect-new" | "strict";
+    manifest?: string;
+  };
 };
 
 export type PlannedCheck = {
