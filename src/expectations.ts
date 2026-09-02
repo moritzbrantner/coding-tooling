@@ -199,7 +199,8 @@ function resolveVerifications(
       invalidVerifications.push({
         index,
         id: verification.id,
-        reason: "finding is also suppressed; remove suppression before declaring verification evidence",
+        reason:
+          "finding is also suppressed; remove suppression before declaring verification evidence",
       });
       continue;
     }
