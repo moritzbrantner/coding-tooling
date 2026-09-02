@@ -159,7 +159,7 @@ export function sourceDependencies(
     }
 
     const rendered = renderSourceDependencies(root, configPath);
-    let reconciliation = "unchanged" as const | "created" | "changed";
+    let reconciliation: "created" | "changed" | "unchanged" = "unchanged";
     if (action === "activate") {
       if (existing !== undefined && !managed) {
         throw new Error(
