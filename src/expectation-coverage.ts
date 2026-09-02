@@ -6,7 +6,11 @@ import { productionSourceFiles } from "./expectation-gap-detectors.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { ExpectationDescriptor } from "./expectation-detector-types.ts";
 
-export type DetectorCoverageStatus = "applied" | "not-applicable" | "unsupported" | "unavailable";
+export type DetectorCoverageStatus =
+  | "applied"
+  | "not-applicable"
+  | "unsupported"
+  | "unavailable";
 
 export type DetectorCoverage = {
   id: string;
@@ -40,14 +44,21 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "typescript-source-test": "typescript-source",
 };
 
-function detectorSubjects(root: string, context: DetectorContext, target: CoverageTarget): number {
+function detectorSubjects(
+  root: string,
+  context: DetectorContext,
+  target: CoverageTarget,
+): number {
   switch (target) {
     case "repository-config":
       return existsSync(join(root, ".coding-tooling.json")) ? 1 : 0;
     case "packages":
       return context.packages.length;
     case "typescript-source":
-      return context.packages.reduce((total, packageInfo) => total + packageInfo.sourceFiles.length, 0);
+      return context.packages.reduce(
+        (total, packageInfo) => total + packageInfo.sourceFiles.length,
+        0,
+      );
     case "production-source":
       return productionSourceFiles(root).length;
   }
@@ -84,7 +95,9 @@ export function analyzeFindingsCoverage(
   descriptors: readonly ExpectationDescriptor[],
 ): FindingsCoverage {
   const components = discoverComponents(root);
-  const technologies = [...new Set(components.flatMap((component) => component.technologies))].sort();
+  const technologies = [
+    ...new Set(components.flatMap((component) => component.technologies)),
+  ].sort();
   const detectors = descriptors.map((descriptor) => {
     const target = coverageTargets[descriptor.id];
     if (!target) {
