@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { findingsCommand } from "../src/expectations.ts";
 import type { FindingsCoverage } from "../src/expectation-coverage.ts";
+import { findingsCommand } from "../src/expectations.ts";
 
 const roots: string[] = [];
 
@@ -33,7 +33,10 @@ describe("findings analysis coverage", () => {
   test("reports TypeScript structural analysis as applied when TypeScript source exists", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });
-    writeFileSync(join(root, "package.json"), '{"name":"ts-fixture","scripts":{"test":"bun test"}}\n');
+    writeFileSync(
+      join(root, "package.json"),
+      '{"name":"ts-fixture","scripts":{"test":"bun test"}}\n',
+    );
     writeFileSync(join(root, "tsconfig.json"), "{}\n");
     writeFileSync(join(root, "src", "index.ts"), "export const value = 1;\n");
 
@@ -50,7 +53,10 @@ describe("findings analysis coverage", () => {
   test("distinguishes JavaScript-only repositories from covered clean TypeScript", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });
-    writeFileSync(join(root, "package.json"), '{"name":"js-fixture","scripts":{"test":"node --test"}}\n');
+    writeFileSync(
+      join(root, "package.json"),
+      '{"name":"js-fixture","scripts":{"test":"node --test"}}\n',
+    );
     writeFileSync(join(root, "src", "index.js"), "export const value = 1;\n");
 
     const result = coverage(root);
@@ -70,7 +76,10 @@ describe("findings analysis coverage", () => {
   test("reports Rust as unsupported for structural source-test analysis", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });
-    writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "rust-fixture"\nversion = "0.1.0"\n');
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      '[package]\nname = "rust-fixture"\nversion = "0.1.0"\n',
+    );
     writeFileSync(join(root, "src", "lib.rs"), "pub fn value() -> u8 { 1 }\n");
 
     const result = coverage(root);
@@ -88,7 +97,10 @@ describe("findings analysis coverage", () => {
     const root = fixture();
     mkdirSync(join(root, "web", "src"), { recursive: true });
     mkdirSync(join(root, "engine", "src"), { recursive: true });
-    writeFileSync(join(root, "web", "package.json"), '{"name":"web","scripts":{"test":"bun test"}}\n');
+    writeFileSync(
+      join(root, "web", "package.json"),
+      '{"name":"web","scripts":{"test":"bun test"}}\n',
+    );
     writeFileSync(join(root, "web", "tsconfig.json"), "{}\n");
     writeFileSync(join(root, "web", "src", "index.ts"), "export const value = 1;\n");
     writeFileSync(
