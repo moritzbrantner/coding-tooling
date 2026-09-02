@@ -5,6 +5,7 @@ import {
   missingTypeScriptConfigFindings,
 } from "./expectation-package-detectors.ts";
 import { createDetectorContext } from "./expectation-package-context.ts";
+import { missingRustTestFindings } from "./expectation-rust-test-detector.ts";
 import { missingTestFindings } from "./expectation-test-detector.ts";
 import type { ExpectationRegistryEntry } from "./expectation-model.ts";
 import type { ExpectationDescriptor, RawFinding } from "./expectation-detector-types.ts";
@@ -38,6 +39,15 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingRequiredCapabilityFindings,
+  },
+  {
+    id: "rust-source-test",
+    version: 1,
+    description:
+      "Production Rust source has conservative inline or integration-test evidence",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    detect: missingRustTestFindings,
   },
   {
     id: "typescript-project-config",
