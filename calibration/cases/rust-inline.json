@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "rust-inline-test-evidence",
+  "detector": "rust-source-test",
+  "fixture": "calibration/fixtures/rust-inline",
+  "coverage": "applied",
+  "labels": [
+    {
+      "subject": "src/lib.rs",
+      "requirement": "rust-structural-test-reachability",
+      "expected": "satisfied"
+    },
+    {
+      "subject": "src/service.rs",
+      "requirement": "rust-structural-test-reachability",
+      "expected": "satisfied"
+    }
+  ]
+}

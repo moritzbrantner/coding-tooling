@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "rust-conditional-module-unknown",
+  "detector": "rust-source-test",
+  "fixture": "calibration/fixtures/rust-conditional",
+  "coverage": "applied",
+  "labels": [
+    {
+      "subject": "src/lib.rs",
+      "requirement": "rust-structural-test-reachability",
+      "expected": "finding"
+    },
+    {
+      "subject": "src/optional.rs",
+      "requirement": "rust-structural-test-reachability",
+      "expected": "unknown"
+    }
+  ]
+}

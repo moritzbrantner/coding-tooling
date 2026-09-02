@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "typescript-transitive-reachability",
+  "detector": "typescript-source-test",
+  "fixture": "calibration/fixtures/typescript-reachable",
+  "coverage": "applied",
+  "labels": [
+    {
+      "subject": "src/index.ts",
+      "requirement": "tests/index.test.ts",
+      "expected": "satisfied"
+    },
+    {
+      "subject": "src/helper.ts",
+      "requirement": "tests/helper.test.ts",
+      "expected": "satisfied"
+    }
+  ]
+}

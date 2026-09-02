@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "typescript-missing-test",
+  "detector": "typescript-source-test",
+  "fixture": "calibration/fixtures/typescript-missing",
+  "coverage": "applied",
+  "labels": [
+    {
+      "subject": "src/service.ts",
+      "requirement": "tests/service.test.ts",
+      "expected": "finding"
+    }
+  ]
+}

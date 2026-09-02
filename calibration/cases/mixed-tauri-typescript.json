@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "mixed-tauri-typescript",
+  "detector": "typescript-source-test",
+  "fixture": "calibration/fixtures/mixed-tauri",
+  "coverage": "applied",
+  "labels": [
+    {
+      "subject": "src/index.ts",
+      "requirement": "tests/index.test.ts",
+      "expected": "satisfied"
+    }
+  ]
+}

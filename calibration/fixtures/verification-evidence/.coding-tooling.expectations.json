@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "verifications": [
+    {
+      "id": "VERIFY-TOKENS",
+      "version": 1,
+      "expectation": "typescript-source-test",
+      "subject": "src/token-metadata.ts",
+      "command": ["bun", "run", "verify:tokens"],
+      "reason": "Calibration fixture models explicit repository-owned verification evidence."
+    }
+  ]
+}
