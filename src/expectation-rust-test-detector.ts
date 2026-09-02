@@ -42,6 +42,18 @@ function moduleSegments(source: string, rustPackage: RustPackageInfo): string[] 
   return segments;
 }
 
+function groupedUseReferences(
+  content: string,
+  crate: string,
+  segments: readonly string[],
+): boolean {
+  if (segments.length === 0) return false;
+  const grouped = new RegExp(`\\buse\\s+${crate}\\s*::\\s*\\{([\\s\\S]*?)\\}\\s*;`, "g");
+  const path = segments.map(escapeRegExp).join("\\s*::\\s*");
+  const member = new RegExp(`(?:^|,)\\s*${path}(?=\\s*(?:::|,|\\bas\\b|$))`, "m");
+  return [...content.matchAll(grouped)].some((match) => member.test(match[1] ?? ""));
+}
+
 function testReferencesSource(
   source: string,
   testFile: string,
@@ -60,7 +72,10 @@ function testReferencesSource(
   }
 
   const path = [crate, ...segments.map(escapeRegExp)].join("\\s*::\\s*");
-  return new RegExp(`\\buse\\s+${path}(?=\\s*(?:::|\\{|;))`).test(content);
+  return (
+    new RegExp(`\\buse\\s+${path}(?=\\s*(?:::|\\{|;))`).test(content) ||
+    groupedUseReferences(content, crate, segments)
+  );
 }
 
 function hasIntegrationTestEvidence(source: string, rustPackage: RustPackageInfo): boolean {
