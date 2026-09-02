@@ -1,0 +1,4 @@
+[package]
+name = "calibration-rust-missing"
+version = "0.1.0"
+edition = "2024"
