@@ -30,7 +30,7 @@ const unimplementedPatterns = [
   /\bthrow\s+new\s+Error\s*\(\s*["'`]Not implemented\b/i,
 ];
 
-function productionSourceFiles(root: string): string[] {
+export function productionSourceFiles(root: string): string[] {
   return walkFiles(root, 8)
     .filter((path) => {
       const local = relativePosix(root, path);
