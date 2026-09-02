@@ -229,8 +229,7 @@ function missingSourceTestFindings(
       evidence: [{ kind: "file", path: sourcePath, detail: "production source file exists" }],
       relatedFiles: [sourcePath],
       verification: verificationForTest(packageInfo, root, target),
-      scaffold:
-        sourceKind === "typescript" ? testScaffold(source, target, packageInfo) : undefined,
+      scaffold: sourceKind === "typescript" ? testScaffold(source, target, packageInfo) : undefined,
     });
   }
   return findings;
