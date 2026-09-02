@@ -43,8 +43,7 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
   {
     id: "rust-source-test",
     version: 1,
-    description:
-      "Production Rust source has conservative inline or integration-test evidence",
+    description: "Production Rust source has conservative inline or integration-test evidence",
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingRustTestFindings,
