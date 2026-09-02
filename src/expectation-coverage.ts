@@ -5,6 +5,7 @@ import { discoverComponents } from "./core.ts";
 import { productionSourceFiles } from "./expectation-gap-detectors.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { ExpectationDescriptor } from "./expectation-detector-types.ts";
+import { explicitCargoTargets } from "./expectation-rust-detector.ts";
 
 export type DetectorCoverageStatus = "applied" | "not-applicable" | "unsupported" | "unavailable";
 
@@ -28,6 +29,7 @@ type CoverageTarget =
   | "typescript-source"
   | "javascript-source"
   | "script-source"
+  | "rust-explicit-targets"
   | "production-source";
 
 const coverageTargets: Record<string, CoverageTarget> = {
@@ -37,6 +39,7 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "package-cli-wiring": "packages",
   "package-test-capability": "script-source",
   "required-capability-available": "repository-config",
+  "rust-cargo-target-path": "rust-explicit-targets",
   "source-debt-marker": "production-source",
   "source-unimplemented-stub": "production-source",
   "typescript-project-config": "typescript-source",
@@ -65,6 +68,8 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
           total + packageInfo.sourceFiles.length + packageInfo.javaScriptSourceFiles.length,
         0,
       );
+    case "rust-explicit-targets":
+      return explicitCargoTargets(root).length;
     case "production-source":
       return productionSourceFiles(root).length;
   }

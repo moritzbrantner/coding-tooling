@@ -36,7 +36,7 @@ Coverage contains:
 - `detectors`: every registered expectation with its version, `applied | not-applicable | unsupported | unavailable` status, and deterministic subject count;
 - `unsupportedTechnologies`: discovered source technologies that currently have no structural source-test detector.
 
-Structural source-test support currently covers TypeScript and JavaScript package source. Rust and .NET components remain explicitly unsupported for structural source-test analysis until dedicated detectors land. This does not stop other cross-language detectors, such as TODO/FIXME or explicit unimplemented-stub scanning, from reporting themselves as applied.
+Structural source-test support currently covers TypeScript and JavaScript package source. Rust gains a smaller exact detector for explicitly declared Cargo target paths, but Rust still remains in `unsupportedTechnologies` because deeper crate/module/test reachability is not yet proven. .NET also remains unsupported for structural source-test analysis. Cross-language detectors such as TODO/FIXME or explicit unimplemented-stub scanning can still report themselves as applied.
 
 Coverage is evidence about what was analyzed, not a confidence score and not a substitute for findings. A portfolio aggregator should interpret `0 findings` together with coverage rather than collapsing covered-clean and unsupported repositories into the same state.
 
@@ -46,6 +46,7 @@ The structural expectations include several kinds of absence:
 
 - `typescript-source-test`: production TypeScript source in a package with a test command has neither a conventionally matching test artifact nor a conservative static import path from a test to that source.
 - `javascript-source-test`: production `.js`, `.jsx`, `.mjs`, or `.cjs` source in a package with a test command has neither a conventionally matching test artifact nor conservative relative `import` / `require()` reachability from a test.
+- `rust-cargo-target-path`: an explicitly declared Cargo `[lib]`, `[[bin]]`, `[[test]]`, `[[example]]`, or `[[bench]]` `path` points to a file that exists.
 - `package-test-capability`: a JavaScript/TypeScript package contains production source but exposes neither `test` nor `test:unit`.
 - `package-aggregate-check`: a package exposes multiple verification scripts but no aggregate `check` or `verify` script.
 - `typescript-project-config`: a package contains TypeScript source but no `tsconfig.json`.
@@ -54,7 +55,9 @@ The structural expectations include several kinds of absence:
 
 The TypeScript and JavaScript test expectations are structural, not claims about behavioral coverage. They follow conservative relative static imports transitively from test files, so a helper reached through a tested public seam counts as structurally test-reachable. They deliberately do not require every implementation file to be imported directly by a test. Obvious support artifacts such as Storybook stories, test/spec files, fixture-named files, and files under `src/test`, `src/tests`, or `src/__tests__` are not treated as production source. Bare package imports, unresolved aliases, package-export resolution, and dynamic import targets are not guessed, so false negatives remain preferable to false coverage claims.
 
-A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold is offered only for the existing TypeScript finding when the configured test script actually invokes `bun test`. JavaScript findings do not currently synthesize a placeholder scaffold; other test runners receive a verification hint but no guessed framework-specific scaffold.
+The first Rust rule is narrower. It parses only explicit Cargo target tables and simple quoted `name` / `path` assignments, then checks the declared path on disk. Implicit Cargo defaults such as `src/lib.rs` or `src/main.rs`, module declarations, unit-test modules, and source-to-test reachability remain outside this contract and therefore keep Rust marked as deeper-analysis unsupported.
+
+A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold is offered only for the existing TypeScript finding when the configured test script actually invokes `bun test`. JavaScript and Rust findings do not synthesize placeholder tests; other test runners receive a verification hint but no guessed framework-specific scaffold.
 
 ## Persistent metadata
 

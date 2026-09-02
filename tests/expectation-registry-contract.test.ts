@@ -19,6 +19,7 @@ import {
   missingTypeScriptConfigFindings,
 } from "../src/expectation-package-detectors.ts";
 import { createDetectorContext } from "../src/expectation-package-context.ts";
+import { missingCargoTargetPathFindings } from "../src/expectation-rust-detector.ts";
 import {
   missingJavaScriptTestFindings,
   missingTestFindings,
@@ -62,6 +63,7 @@ describe("expectation detector registry contract", () => {
       "package-cli-wiring",
       "package-test-capability",
       "required-capability-available",
+      "rust-cargo-target-path",
       "source-debt-marker",
       "source-unimplemented-stub",
       "typescript-project-config",
@@ -74,6 +76,7 @@ describe("expectation detector registry contract", () => {
       ["package-cli-wiring", 1],
       ["package-test-capability", 1],
       ["required-capability-available", 1],
+      ["rust-cargo-target-path", 1],
       ["source-debt-marker", 1],
       ["source-unimplemented-stub", 1],
       ["typescript-project-config", 1],
@@ -117,12 +120,13 @@ describe("expectation detector registry contract", () => {
       missingCliWiringFindings(context),
       missingTestCapabilityFindings(context),
       missingRequiredCapabilityFindings(context),
+      missingCargoTargetPathFindings(context),
       sourceDebtMarkerFindings(context),
       sourceUnimplementedStubFindings(context),
       missingTypeScriptConfigFindings(context),
       missingTestFindings(context),
     ];
 
-    expect(batches.map((batch) => batch.length)).toEqual([0, 0, 1, 1, 0, 0, 0, 0, 1, 1]);
+    expect(batches.map((batch) => batch.length)).toEqual([0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1]);
   });
 });

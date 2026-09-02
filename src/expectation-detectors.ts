@@ -11,6 +11,7 @@ import {
   missingTypeScriptConfigFindings,
 } from "./expectation-package-detectors.ts";
 import { createDetectorContext } from "./expectation-package-context.ts";
+import { missingCargoTargetPathFindings } from "./expectation-rust-detector.ts";
 import { missingJavaScriptTestFindings, missingTestFindings } from "./expectation-test-detector.ts";
 import type { ExpectationRegistryEntry } from "./expectation-model.ts";
 import type { ExpectationDescriptor, RawFinding } from "./expectation-detector-types.ts";
@@ -70,6 +71,14 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingRequiredCapabilityFindings,
+  },
+  {
+    id: "rust-cargo-target-path",
+    version: 1,
+    description: "Explicit Cargo lib/bin/test/example/bench target paths exist",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    detect: missingCargoTargetPathFindings,
   },
   {
     id: "source-debt-marker",
