@@ -6,6 +6,12 @@
   "description": "Deterministic zero-install structural preflight for public GitHub repositories, with machine-readable output and local coding-tooling handoff.",
   "operations": [
     {
+      "id": "tool-registry",
+      "transport": "static-json",
+      "href": "https://moritzbrantner.github.io/coding-tooling/tools.json",
+      "description": "Discover the other public coding-agent tools and their stable agent-tool.json contracts."
+    },
+    {
       "id": "analyze-repository",
       "transport": "html",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/?repo={owner}/{repository}",
