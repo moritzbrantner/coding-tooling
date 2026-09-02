@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { analysisJson } from "../site/github-analysis.js";
+import { analysisJson, loadSnapshot } from "../site/github-analysis.js";
 import {
   analyzeSnapshot,
   parseRepositoryReference,
@@ -136,6 +136,57 @@ describe("GitHub Pages repository preflight", () => {
     expect(manifestBounded.findings.map((finding) => finding.id)).toContain("REMOTE-SOURCE-002");
   });
 
+  test("does not count ignored manifests against the remote fetch budget", async () => {
+    const snapshot = await loadSnapshot(
+      { owner: "example", name: "repo" },
+      {
+        fetchImpl: async (url) => {
+          if (url === "https://api.github.com/repos/example/repo")
+            return jsonResponse(githubRepositoryMetadata());
+          if (url === "https://api.github.com/repos/example/repo/git/trees/main?recursive=1")
+            return jsonResponse({
+              tree: [
+                blob("package.json", "root"),
+                blob("fixtures/app/package.json", "fixture-app"),
+                blob("fixtures/other/package.json", "fixture-other"),
+                blob("vendor/tool/package.json", "vendor-tool"),
+              ],
+              truncated: false,
+            });
+          if (url === "https://api.github.com/repos/example/repo/git/blobs/root")
+            return encodedBlob(JSON.stringify({ name: "repo", packageManager: "bun@1.4.0" }));
+          throw new Error(`Unexpected request: ${url}`);
+        },
+      },
+    );
+
+    expect(snapshot.manifestFetchTruncated).toBe(false);
+    expect(Object.keys(snapshot.files)).toEqual(["package.json"]);
+  });
+
+  test("still marks a real eligible manifest budget overflow incomplete", async () => {
+    const manifests = Array.from({ length: 25 }, (_, index) =>
+      blob(`packages/package-${String(index).padStart(2, "0")}/package.json`, `package-${index}`),
+    );
+    const snapshot = await loadSnapshot(
+      { owner: "example", name: "repo" },
+      {
+        fetchImpl: async (url) => {
+          if (url === "https://api.github.com/repos/example/repo")
+            return jsonResponse(githubRepositoryMetadata());
+          if (url === "https://api.github.com/repos/example/repo/git/trees/main?recursive=1")
+            return jsonResponse({ tree: manifests, truncated: false });
+          if (url.includes("/git/blobs/package-"))
+            return encodedBlob(JSON.stringify({ name: "fixture" }));
+          throw new Error(`Unexpected request: ${url}`);
+        },
+      },
+    );
+
+    expect(snapshot.manifestFetchTruncated).toBe(true);
+    expect(Object.keys(snapshot.files)).toHaveLength(24);
+  });
+
   test("analysisJson resolves a repository through the public GitHub API seam", async () => {
     const requests = [];
     const analysis = await analysisJson("example/repo", {
@@ -143,18 +194,7 @@ describe("GitHub Pages repository preflight", () => {
       fetchImpl: async (url) => {
         requests.push(url);
         if (url === "https://api.github.com/repos/example/repo")
-          return jsonResponse({
-            owner: { login: "example" },
-            name: "repo",
-            full_name: "example/repo",
-            default_branch: "main",
-            html_url: "https://github.com/example/repo",
-            description: "fixture",
-            archived: false,
-            fork: false,
-            stargazers_count: 3,
-            open_issues_count: 1,
-          });
+          return jsonResponse(githubRepositoryMetadata());
         if (url === "https://api.github.com/repos/example/repo/git/trees/main?recursive=1")
           return jsonResponse({ tree: [], truncated: false });
         throw new Error(`Unexpected request: ${url}`);
@@ -191,8 +231,27 @@ function repository(overrides) {
   };
 }
 
+function githubRepositoryMetadata() {
+  return {
+    owner: { login: "example" },
+    name: "repo",
+    full_name: "example/repo",
+    default_branch: "main",
+    html_url: "https://github.com/example/repo",
+    description: "fixture",
+    archived: false,
+    fork: false,
+    stargazers_count: 3,
+    open_issues_count: 1,
+  };
+}
+
 function blob(path, sha) {
   return { path, sha, type: "blob" };
+}
+
+function encodedBlob(content) {
+  return jsonResponse({ encoding: "base64", content: btoa(content) });
 }
 
 function jsonResponse(value, status = 200) {
