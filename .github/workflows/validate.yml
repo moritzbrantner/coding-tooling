@@ -26,5 +26,10 @@ jobs:
           tier: self
           install-mode: none
           strict: true
+      - name: Show formatter correction
+        if: failure()
+        run: |
+          bun run format:write
+          git diff -- src/expectations.ts
       - name: Inspect deterministic repository findings
         run: bun run findings
