@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -35,7 +35,51 @@ ${extraConfig}`,
   );
 }
 
+type ContractCase = {
+  name: string;
+  packageManager?: string;
+  adopt?: boolean;
+  config?: string;
+  extraConfig?: string;
+  expectedCodes: string[];
+  exactCodes?: boolean;
+};
+
+function contractCases(): ContractCase[] {
+  const fixturePath = join(import.meta.dir, "fixtures", "environment-v1", "cases.json");
+  const fixture = JSON.parse(readFileSync(fixturePath, "utf8")) as {
+    schemaVersion: number;
+    cases: ContractCase[];
+  };
+  expect(fixture.schemaVersion).toBe(1);
+  return fixture.cases;
+}
+
 describe("repository environment conformance", () => {
+  test("matches the environment-v1 contract fixture matrix", () => {
+    for (const fixture of contractCases()) {
+      const packageManager = fixture.packageManager?.replace("__BUN_VERSION__", Bun.version);
+      const root = repository(packageManager);
+
+      if (fixture.adopt) {
+        adoptEnvironment(root, fixture.extraConfig ?? "");
+      } else if (fixture.config !== undefined) {
+        writeFileSync(join(root, ".repository-environment.toml"), fixture.config);
+      }
+
+      const result = repositoryEnvironmentConformance(root);
+      const codes = result.findings.map((finding) => finding.code);
+
+      if (fixture.exactCodes) {
+        expect(codes, fixture.name).toEqual(fixture.expectedCodes);
+      } else {
+        for (const code of fixture.expectedCodes) {
+          expect(codes, fixture.name).toContain(code);
+        }
+      }
+    }
+  });
+
   test("reports exact observed Bun pins as passed", () => {
     const version = Bun.version;
     const root = repository(`bun@${version}`);
@@ -132,6 +176,30 @@ reason = "candidate failed the full gate"
         reason: "candidate failed the full gate",
       },
     ]);
+  });
+
+  test("blocks malformed compatibility holds", () => {
+    const root = repository();
+    adoptEnvironment(
+      root,
+      `
+[compatibility_holds.rust]
+candidate = "stable"
+tested_revision = "short"
+reason = "invalid fixture"
+`,
+    );
+
+    const result = repositoryEnvironmentConformance(root);
+
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({
+        code: "environment-compatibility-hold-invalid",
+        status: "failed",
+        severity: "error",
+        path: ".repository-environment.toml",
+      }),
+    );
   });
 
   test("blocks partial or malformed environment-v1 adoption", () => {
