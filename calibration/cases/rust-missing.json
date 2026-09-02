@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "rust-missing-test-evidence",
+  "detector": "rust-source-test",
+  "fixture": "calibration/fixtures/rust-missing",
+  "coverage": "applied",
+  "labels": [
+    {
+      "subject": "src/lib.rs",
+      "requirement": "rust-structural-test-reachability",
+      "expected": "finding"
+    },
+    {
+      "subject": "src/service.rs",
+      "requirement": "rust-structural-test-reachability",
+      "expected": "finding"
+    }
+  ]
+}
