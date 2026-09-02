@@ -1,10 +1,4 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -34,16 +28,12 @@ function conventionSource(): string {
   write(
     root,
     "registry/registry.json",
-    `${JSON.stringify(
-      {
-        schemaVersion: 1,
-        modules: {
-          testing: { sources: ["conventions/testing"], dependencies: [] },
-        },
+    JSON.stringify({
+      schemaVersion: 1,
+      modules: {
+        testing: { sources: ["conventions/testing"], dependencies: [] },
       },
-      null,
-      2,
-    )}\n`,
+    }),
   );
   return root;
 }
@@ -80,7 +70,7 @@ describe("deterministic reconciliation", () => {
     try {
       writeFileSync(
         join(root, ".coding-tooling.source-deps.json"),
-        `${JSON.stringify({
+        JSON.stringify({
           schemaVersion: 1,
           cargo: {
             patches: [
@@ -91,7 +81,7 @@ describe("deterministic reconciliation", () => {
               },
             ],
           },
-        })}\n`,
+        }),
       );
 
       const first = sourceDependencies(root, "activate");
