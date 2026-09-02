@@ -26,6 +26,20 @@ Semantic finding IDs are derived from the expectation ID and contract version pl
 
 The built-in completeness detectors are advisory evidence by default. They become blocking only through explicit repository enforcement. This keeps detector mechanics in `coding-tooling` without turning the implementation into an independent hidden policy source.
 
+## Analysis coverage
+
+`findings --json` includes deterministic `coverage` metadata alongside the finding stream. This prevents `0 findings` from being treated as proof of cleanliness when the repository contains technology for which no structural detector exists yet.
+
+Coverage contains:
+
+- `technologies`: technologies discovered through the existing repository/component discovery model;
+- `detectors`: every registered expectation with its version, `applied | not-applicable | unsupported | unavailable` status, and deterministic subject count;
+- `unsupportedTechnologies`: discovered source technologies that currently have no structural source-test detector.
+
+The initial structural source-test support is TypeScript. JavaScript-only, Rust, and .NET components are therefore reported explicitly as unsupported for that structural analysis until dedicated detectors land. This does not stop other cross-language detectors, such as TODO/FIXME or explicit unimplemented-stub scanning, from reporting themselves as applied.
+
+Coverage is evidence about what was analyzed, not a confidence score and not a substitute for findings. A portfolio aggregator should interpret `0 findings` together with coverage rather than collapsing covered-clean and unsupported repositories into the same state.
+
 ## Initial expectations
 
 The first batch covers several kinds of structural absence:
