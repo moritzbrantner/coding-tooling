@@ -95,7 +95,7 @@ function librarySources(rustPackage: RustPackageInfo): string[] {
       queue.push(child);
     }
   }
-  return [...reachable].toSorted();
+  return [...reachable].sort();
 }
 
 function verification(root: string, rustPackage: RustPackageInfo): string[][] {
