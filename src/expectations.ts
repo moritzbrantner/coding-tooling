@@ -118,7 +118,8 @@ function reconcile(config: ExpectationConfig, allFindings: Finding[]): Reconcili
   const seenSuppressions = new Set<string>();
   const duplicateSuppressions: number[] = [];
   for (const [index, suppression] of (config.suppressions ?? []).entries()) {
-    const key = `${suppression.id ?? ""}\0${suppression.expectation ?? ""}\0${suppression.subject ?? ""}`;
+    const key =
+      `${suppression.id ?? ""}\0${suppression.expectation ?? ""}\0${suppression.subject ?? ""}`;
     if (seenSuppressions.has(key)) duplicateSuppressions.push(index);
     seenSuppressions.add(key);
   }
@@ -129,7 +130,9 @@ function reconcile(config: ExpectationConfig, allFindings: Finding[]): Reconcili
     unknownExpectations: [...unknownExpectations].sort(),
     duplicateBaseline: duplicateValues(config.baseline ?? []),
     duplicateSuppressions,
-    duplicateInvariants: duplicateValues((config.invariants ?? []).map((invariant) => invariant.id)),
+    duplicateInvariants: duplicateValues(
+      (config.invariants ?? []).map((invariant) => invariant.id),
+    ),
   };
 }
 

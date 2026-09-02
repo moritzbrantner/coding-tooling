@@ -16,7 +16,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
   {
     id: "package-aggregate-check",
     version: 1,
-    description: "Packages with multiple verification scripts expose an aggregate check/verify entrypoint",
+    description:
+      "Packages with multiple verification scripts expose an aggregate check/verify entrypoint",
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingAggregateCheckFindings,
@@ -32,7 +33,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
   {
     id: "required-capability-available",
     version: 1,
-    description: "Explicitly required repository capabilities are provided by a discovered component",
+    description:
+      "Explicitly required repository capabilities are provided by a discovered component",
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingRequiredCapabilityFindings,

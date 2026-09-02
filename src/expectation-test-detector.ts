@@ -77,7 +77,9 @@ function plannedTestPath(root: string, source: string, packageInfo: PackageInfo)
   return relativePosix(root, join(packageInfo.directory, "tests", `${stem}.test${testExtension}`));
 }
 
-function selectedTestScript(packageInfo: PackageInfo): { name: string; command: string } | undefined {
+function selectedTestScript(
+  packageInfo: PackageInfo,
+): { name: string; command: string } | undefined {
   const scripts = packageInfo.manifest.scripts ?? {};
   for (const name of ["test:unit", "test"]) {
     const command = scripts[name];
@@ -111,7 +113,12 @@ function testScaffold(
   return {
     kind: "create-file",
     path: target,
-    content: `import { describe, test } from "bun:test";\n\ndescribe(${JSON.stringify(sourceLabel)}, () => {\n  test.todo("add deterministic coverage");\n});\n`,
+    content: `import { describe, test } from "bun:test";
+
+describe(${JSON.stringify(sourceLabel)}, () => {
+  test.todo("add deterministic coverage");
+});
+`,
   };
 }
 
