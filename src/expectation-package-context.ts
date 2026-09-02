@@ -24,8 +24,10 @@ export type RustPackageInfo = {
   path: string;
   manifestPath: string;
   crateName?: string;
-  testFiles: string[];
+  integrationTestRoots: string[];
+  rustFiles: string[];
   sourceFiles: string[];
+  hasLockfile: boolean;
 };
 
 export type DetectorContext = {
@@ -88,6 +90,14 @@ function packageInfos(root: string, files: string[]): PackageInfo[] {
   return result.sort((left, right) => left.path.localeCompare(right.path));
 }
 
+function readText(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
 function tomlSection(content: string, section: string): string | undefined {
   const header = new RegExp(`^\\s*\\[${section}\\]\\s*$`, "m").exec(content);
   if (!header || header.index === undefined) return undefined;
@@ -96,18 +106,68 @@ function tomlSection(content: string, section: string): string | undefined {
   return next?.index === undefined ? rest : rest.slice(0, next.index);
 }
 
-function rustCrateName(manifestPath: string): string | undefined {
-  let content: string;
-  try {
-    content = readFileSync(manifestPath, "utf8");
-  } catch {
-    return undefined;
-  }
+function tomlArraySections(content: string, section: string): string[] {
+  const result: string[] = [];
+  const lines = content.split(/\r?\n/);
+  let collecting = false;
+  let body: string[] = [];
 
-  const nameFrom = (section: string): string | undefined =>
-    /^\s*name\s*=\s*["']([^"']+)["']/m.exec(tomlSection(content, section) ?? "")?.[1];
-  const name = nameFrom("lib") ?? nameFrom("package");
-  return name?.replaceAll("-", "_");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("[")) {
+      if (collecting) result.push(body.join("\n"));
+      collecting = trimmed === `[[${section}]]`;
+      body = [];
+      continue;
+    }
+    if (collecting) body.push(line);
+  }
+  if (collecting) result.push(body.join("\n"));
+  return result;
+}
+
+function tomlString(content: string, key: string): string | undefined {
+  return new RegExp(`^\\s*${key}\\s*=\\s*["']([^"']+)["']`, "m").exec(content)?.[1];
+}
+
+type RustManifestInfo = {
+  crateName?: string;
+  autotests: boolean;
+  explicitTestPaths: string[];
+};
+
+function rustManifestInfo(manifestPath: string): RustManifestInfo {
+  const content = readText(manifestPath) ?? "";
+  const packageSection = tomlSection(content, "package") ?? "";
+  const librarySection = tomlSection(content, "lib") ?? "";
+  const packageName = tomlString(packageSection, "name");
+  const libraryName = tomlString(librarySection, "name");
+  const autotests = !/^\s*autotests\s*=\s*false\s*$/m.test(packageSection);
+  const explicitTestPaths = tomlArraySections(content, "test")
+    .map((section) => {
+      const path = tomlString(section, "path");
+      if (path) return path;
+      const name = tomlString(section, "name");
+      return name ? `tests/${name}.rs` : undefined;
+    })
+    .filter((path): path is string => path !== undefined);
+
+  return {
+    crateName: (libraryName ?? packageName)?.replaceAll("-", "_"),
+    autotests,
+    explicitTestPaths,
+  };
+}
+
+function hasCargoLock(root: string, directory: string): boolean {
+  let current = directory;
+  while (true) {
+    if (existsSync(join(current, "Cargo.lock"))) return true;
+    if (current === root) return false;
+    const parent = dirname(current);
+    if (parent === current || !current.startsWith(`${root}${sep}`)) return false;
+    current = parent;
+  }
 }
 
 function isProductionRustSource(local: string): boolean {
@@ -130,20 +190,29 @@ function rustPackageInfos(root: string, files: string[]): RustPackageInfo[] {
       );
       return owner === directory;
     });
-    const sourceFiles = packageFiles.filter((path) =>
+    const rustFiles = packageFiles.filter((path) => path.endsWith(".rs"));
+    const rustFileSet = new Set(rustFiles);
+    const sourceFiles = rustFiles.filter((path) =>
       isProductionRustSource(normalizePath(relative(directory, path))),
     );
-    const testFiles = packageFiles.filter((path) => {
-      const local = normalizePath(relative(directory, path));
-      return local.startsWith("tests/") && local.endsWith(".rs");
-    });
+    const manifest = rustManifestInfo(manifestPath);
+    const automaticTestRoots = manifest.autotests
+      ? rustFiles.filter((path) => /^tests\/[^/]+\.rs$/.test(normalizePath(relative(directory, path))))
+      : [];
+    const explicitTestRoots = manifest.explicitTestPaths
+      .map((path) => join(directory, path))
+      .filter((path) => rustFileSet.has(path));
+    const integrationTestRoots = [...new Set([...automaticTestRoots, ...explicitTestRoots])].sort();
+
     result.push({
       directory,
       path: relativePosix(root, directory),
       manifestPath,
-      crateName: rustCrateName(manifestPath),
-      testFiles,
+      crateName: manifest.crateName,
+      integrationTestRoots,
+      rustFiles,
       sourceFiles,
+      hasLockfile: hasCargoLock(root, directory),
     });
   }
 
