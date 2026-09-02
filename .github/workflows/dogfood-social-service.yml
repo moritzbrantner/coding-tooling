@@ -1,0 +1,31 @@
+name: Dogfood social-service Rust findings
+
+on:
+  push:
+    branches:
+      - feat/rust-source-test-expectation
+
+permissions:
+  contents: read
+
+jobs:
+  findings:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out coding-tooling
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - name: Install coding-tooling dependencies
+        run: bun install --frozen-lockfile
+      - name: Check out social-service dogfood branch
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          repository: moritzbrantner/social-service
+          ref: test/dogfood-http-feature-gate-scaffolding
+          path: social-service
+      - name: Inspect social-service findings
+        working-directory: social-service
+        run: bun ../src/entry.ts findings --json
