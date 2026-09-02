@@ -50,6 +50,10 @@ function fixture(): string {
   return root;
 }
 
+function findingSubjects(root: string): string[] {
+  return missingRustTestFindings(createDetectorContext(root)).map((finding) => finding.subject.key);
+}
+
 describe("Rust test expectations", () => {
   test("reports declared library sources without inline or integration evidence", () => {
     const findings = missingRustTestFindings(createDetectorContext(fixture()));
@@ -65,12 +69,14 @@ describe("Rust test expectations", () => {
     expect(findings.every((finding) => finding.scaffold === undefined)).toBeTrue();
   });
 
-  test("recognizes crate names with Cargo hyphens", () => {
+  test("recognizes crate names and executable Cargo test roots", () => {
     const root = fixture();
     const context = createDetectorContext(root);
 
     expect(context.rustPackages[0]?.crateName).toBe("rust_fixture");
     expect(context.rustPackages[0]?.sourceFiles).toHaveLength(4);
+    expect(context.rustPackages[0]?.integrationTestRoots).toEqual([join(root, "tests", "isolated.rs")]);
+    expect(context.rustPackages[0]?.hasLockfile).toBeTrue();
   });
 
   test("treats a public integration import as structural evidence for the library graph", () => {
@@ -102,7 +108,116 @@ describe("Rust test expectations", () => {
     expect(missingRustTestFindings(createDetectorContext(root))).toEqual([]);
   });
 
-  test("follows ordinary nested module declarations", () => {
+  test("does not accept comments or strings as inline test evidence", () => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "src", "inline.rs"),
+      [
+        "pub fn value() -> u8 { 1 }",
+        'const FAKE: &str = r#"#[cfg(test)] #[test]"#;',
+        "// #[cfg(test)]",
+        "// #[test]",
+        "",
+      ].join("\n"),
+    );
+
+    expect(findingSubjects(root)).toEqual([
+      "src/inline.rs",
+      "src/lib.rs",
+      "src/orphan.rs",
+      "src/service.rs",
+    ]);
+  });
+
+  test("does not accept comments or strings as integration import evidence", () => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "tests", "isolated.rs"),
+      [
+        'const FAKE: &str = "use rust_fixture::service::value;";',
+        "// use rust_fixture::orphan::value;",
+        "#[test]",
+        "fn isolated() { assert_eq!(1 + 1, 2); }",
+        "",
+      ].join("\n"),
+    );
+
+    expect(findingSubjects(root)).toEqual(["src/lib.rs", "src/orphan.rs", "src/service.rs"]);
+  });
+
+  test("does not count an unreachable nested integration helper", () => {
+    const root = fixture();
+    mkdirSync(join(root, "tests", "common"), { recursive: true });
+    writeFileSync(
+      join(root, "tests", "common", "mod.rs"),
+      "use rust_fixture::service::value;\npub fn helper() -> u8 { value() }\n",
+    );
+
+    expect(findingSubjects(root)).toEqual(["src/lib.rs", "src/orphan.rs", "src/service.rs"]);
+  });
+
+  test("follows modules reachable from a Cargo integration-test root", () => {
+    const root = fixture();
+    mkdirSync(join(root, "tests", "common"), { recursive: true });
+    writeFileSync(
+      join(root, "tests", "common", "mod.rs"),
+      "use rust_fixture::service::value;\npub fn helper() -> u8 { value() }\n",
+    );
+    writeFileSync(
+      join(root, "tests", "isolated.rs"),
+      "mod common;\n\n#[test]\nfn service_is_reachable() { assert_eq!(common::helper(), 3); }\n",
+    );
+
+    expect(missingRustTestFindings(createDetectorContext(root))).toEqual([]);
+  });
+
+  test("honors Cargo autotests and explicit test targets", () => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "tests", "isolated.rs"),
+      "use rust_fixture::service::value;\n\n#[test]\nfn service_is_reachable() { assert_eq!(value(), 3); }\n",
+    );
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      '[package]\nname = "rust-fixture"\nversion = "0.1.0"\nedition = "2024"\nautotests = false\n',
+    );
+    expect(findingSubjects(root)).toEqual(["src/lib.rs", "src/orphan.rs", "src/service.rs"]);
+
+    mkdirSync(join(root, "tests", "custom"), { recursive: true });
+    writeFileSync(
+      join(root, "tests", "custom", "contract.rs"),
+      "use rust_fixture::service::value;\n\n#[test]\nfn service_is_reachable() { assert_eq!(value(), 3); }\n",
+    );
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      [
+        "[package]",
+        'name = "rust-fixture"',
+        'version = "0.1.0"',
+        'edition = "2024"',
+        "autotests = false",
+        "",
+        "[[test]]",
+        'name = "contract"',
+        'path = "tests/custom/contract.rs"',
+        "",
+      ].join("\n"),
+    );
+
+    expect(missingRustTestFindings(createDetectorContext(root))).toEqual([]);
+  });
+
+  test("omits --locked when no package or workspace lockfile exists", () => {
+    const root = fixture();
+    rmSync(join(root, "Cargo.lock"));
+    const findings = missingRustTestFindings(createDetectorContext(root));
+
+    expect(findings[0]?.verification).toEqual([
+      ["cargo", "test", "--manifest-path", "Cargo.toml"],
+    ]);
+  });
+
+  test("follows ordinary nested library module declarations", () => {
     const root = fixture();
     mkdirSync(join(root, "src", "routes"), { recursive: true });
     writeFileSync(join(root, "src", "routes", "mod.rs"), "mod handler;\n");
@@ -112,8 +227,7 @@ describe("Rust test expectations", () => {
       "pub mod inline;\npub mod orphan;\npub mod routes;\npub mod service;\n",
     );
 
-    const findings = missingRustTestFindings(createDetectorContext(root));
-    expect(findings.map((finding) => finding.subject.key)).toEqual([
+    expect(findingSubjects(root)).toEqual([
       "src/lib.rs",
       "src/orphan.rs",
       "src/routes/handler.rs",
@@ -139,11 +253,6 @@ describe("Rust test expectations", () => {
       ].join("\n"),
     );
 
-    const findings = missingRustTestFindings(createDetectorContext(root));
-    expect(findings.map((finding) => finding.subject.key)).toEqual([
-      "src/lib.rs",
-      "src/orphan.rs",
-      "src/service.rs",
-    ]);
+    expect(findingSubjects(root)).toEqual(["src/lib.rs", "src/orphan.rs", "src/service.rs"]);
   });
 });
