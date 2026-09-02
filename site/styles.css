@@ -1,0 +1,413 @@
+:root {
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color: #17201d;
+  background: #f5f3ed;
+  --paper: #fffdf8;
+  --muted: #64706b;
+  --line: #d8d4ca;
+  --accent: #126c52;
+  --danger: #a53e38;
+  --warning: #a86c17;
+  --shadow: 0 18px 48px rgb(25 37 32 / 8%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at 85% 0%, rgb(18 108 82 / 8%), transparent 28rem), #f5f3ed;
+}
+
+header,
+main,
+footer {
+  width: min(1180px, calc(100% - 40px));
+  margin-inline: auto;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font:
+    700 0.78rem ui-monospace,
+    monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.hero {
+  max-width: 960px;
+  padding: 86px 0 70px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: var(--accent);
+  font:
+    800 0.75rem ui-monospace,
+    monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  text-wrap: pretty;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(3rem, 8vw, 6.8rem);
+  line-height: 0.94;
+  letter-spacing: -0.065em;
+}
+
+h2 {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.5rem);
+  letter-spacing: -0.035em;
+}
+
+h3 {
+  margin: 0;
+  font-size: 1.12rem;
+}
+
+.lede {
+  max-width: 780px;
+  margin: 28px 0 36px;
+  color: var(--muted);
+  font-size: 1.14rem;
+  line-height: 1.6;
+}
+
+form {
+  padding: 22px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+label {
+  display: block;
+  margin-bottom: 9px;
+  font-weight: 750;
+}
+
+.input-row,
+.row,
+.buttons {
+  display: flex;
+  gap: 10px;
+}
+
+input {
+  min-width: 0;
+  flex: 1;
+  padding: 14px 15px;
+  border: 1px solid #aaa59b;
+  border-radius: 4px;
+  background: #fff;
+  color: inherit;
+  font:
+    600 0.95rem ui-monospace,
+    monospace;
+}
+
+button {
+  padding: 13px 17px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--accent);
+  color: white;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid rgb(18 108 82 / 25%);
+  outline-offset: 2px;
+}
+
+button.secondary {
+  border-color: var(--line);
+  background: var(--paper);
+  color: inherit;
+}
+
+.status {
+  min-height: 24px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.status[data-state="error"] {
+  color: var(--danger);
+}
+
+section {
+  margin: 0 0 64px;
+}
+
+.section-heading {
+  margin-bottom: 22px;
+}
+
+.section-heading.row {
+  align-items: end;
+  justify-content: space-between;
+}
+
+.muted {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 22px;
+  background: var(--paper);
+}
+
+.metric strong {
+  font-size: 1.55rem;
+  letter-spacing: -0.04em;
+}
+
+.metric span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chip {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--paper);
+  font:
+    700 0.75rem ui-monospace,
+    monospace;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+.card,
+.finding,
+.boundary {
+  padding: 22px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.card ul {
+  margin: 18px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+  line-height: 1.8;
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.finding {
+  border-left: 5px solid var(--line);
+}
+
+.finding-high {
+  border-left-color: var(--danger);
+}
+
+.finding-medium {
+  border-left-color: var(--warning);
+}
+
+.finding-label {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font:
+    800 0.72rem ui-monospace,
+    monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.finding p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.finding .recommendation {
+  color: inherit;
+}
+
+.command {
+  display: block;
+  padding: 10px 12px;
+  background: #efede6;
+  overflow-x: auto;
+}
+
+pre {
+  margin: 0;
+  padding: 20px;
+  background: #17201d;
+  color: #f7f5ee;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.json {
+  max-height: 650px;
+  overflow: auto;
+  font-size: 0.78rem;
+}
+
+.empty {
+  padding: 20px;
+  border: 1px dashed #aaa59b;
+  color: var(--muted);
+}
+
+.boundary p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 28px 0 48px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 760px) {
+  .hero {
+    padding-top: 52px;
+  }
+
+  .input-row,
+  .row,
+  footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .buttons button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 500px) {
+  header,
+  main,
+  footer {
+    width: calc(100% - 24px);
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    font-size: clamp(2.7rem, 15vw, 4rem);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #e8ece9;
+    background: #101514;
+    --paper: #171d1b;
+    --muted: #a6afaa;
+    --line: #35403c;
+    --accent: #72c3a4;
+    --danger: #ef8d85;
+    --warning: #e0b064;
+    --shadow: none;
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 85% 0%, rgb(114 195 164 / 9%), transparent 28rem), #101514;
+  }
+
+  input {
+    border-color: #46514d;
+    background: #0f1413;
+    color: inherit;
+  }
+
+  .command {
+    background: #101514;
+  }
+
+  pre {
+    background: #090d0c;
+  }
+
+  button {
+    background: #2e765f;
+  }
+}
