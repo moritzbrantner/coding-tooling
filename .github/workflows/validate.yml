@@ -26,3 +26,5 @@ jobs:
           tier: self
           install-mode: none
           strict: true
+      - name: Inspect deterministic repository findings
+        run: bun run findings
