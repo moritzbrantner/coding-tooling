@@ -11,8 +11,9 @@ import { relativePosix } from "./shared.ts";
 
 const cfgTestPattern = /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/;
 const testAttributePattern = /#\s*\[\s*(?:[A-Za-z_][A-Za-z0-9_]*::)?test(?:\s*\([^\]]*\))?\s*\]/;
-const moduleDeclarationPattern =
-  /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;\s*$/;
+const moduleItemPattern =
+  /\b(?:pub(?:\s*\([^)]*\))?\s+)?(?:unsafe\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*([;{])/g;
+const trailingAttributePattern = /(?:#\s*\[[^\]]*\]\s*)+$/;
 
 function readSource(path: string): string | undefined {
   try {
@@ -48,6 +49,39 @@ function rawStringAt(
   }
   if (content[cursor] !== '"') return undefined;
   return { openEnd: cursor + 1, close: `"${"#".repeat(hashes)}` };
+}
+
+function characterLiteralEnd(content: string, index: number): number | undefined {
+  let quote = index;
+  if (content[index] === "b" && content[index + 1] === "'") {
+    quote = index + 1;
+  } else if (content[index] !== "'") {
+    return undefined;
+  }
+
+  let cursor = quote + 1;
+  if (cursor >= content.length || content[cursor] === "\n" || content[cursor] === "\r") {
+    return undefined;
+  }
+
+  if (content[cursor] === "\\") {
+    cursor += 1;
+    if (content[cursor] === "u" && content[cursor + 1] === "{") {
+      const close = content.indexOf("}", cursor + 2);
+      if (close < 0) return undefined;
+      cursor = close + 1;
+    } else if (content[cursor] === "x") {
+      cursor += 3;
+    } else {
+      cursor += 1;
+    }
+  } else {
+    const codePoint = content.codePointAt(cursor);
+    if (codePoint === undefined) return undefined;
+    cursor += codePoint > 0xffff ? 2 : 1;
+  }
+
+  return content[cursor] === "'" ? cursor + 1 : undefined;
 }
 
 function rustCodeOnly(content: string): string {
@@ -91,6 +125,13 @@ function rustCodeOnly(content: string): string {
       continue;
     }
 
+    const characterEnd = characterLiteralEnd(content, index);
+    if (characterEnd !== undefined) {
+      blankNonNewlines(chars, index, characterEnd);
+      index = characterEnd;
+      continue;
+    }
+
     if (content[index] === '"') {
       let cursor = index + 1;
       while (cursor < content.length) {
@@ -129,6 +170,27 @@ function moduleDirectory(source: string, roots: ReadonlySet<string>): string {
   return join(dirname(source), basename(source, ".rs"));
 }
 
+type ModuleScope = {
+  name: string;
+  depth: number;
+};
+
+function advanceBraces(
+  code: string,
+  start: number,
+  end: number,
+  state: { depth: number; scopes: ModuleScope[] },
+): void {
+  for (let index = start; index < end; index += 1) {
+    if (code[index] === "{") {
+      state.depth += 1;
+    } else if (code[index] === "}") {
+      state.depth = Math.max(0, state.depth - 1);
+      while (state.scopes.at(-1)?.depth > state.depth) state.scopes.pop();
+    }
+  }
+}
+
 function declaredModules(
   source: string,
   rustFiles: ReadonlySet<string>,
@@ -136,26 +198,42 @@ function declaredModules(
 ): string[] {
   const content = readSource(source);
   if (content === undefined) return [];
-  const lines = rustCodeOnly(content).split(/\r?\n/);
+  const code = rustCodeOnly(content);
   const directory = moduleDirectory(source, roots);
-  const result: string[] = [];
-  let previousCode = "";
+  const result = new Set<string>();
+  const state = { depth: 0, scopes: [] as ModuleScope[] };
+  let scanPosition = 0;
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    const match = moduleDeclarationPattern.exec(line);
-    if (match?.[1] && !previousCode.startsWith("#[")) {
+  for (const match of code.matchAll(moduleItemPattern)) {
+    if (match.index === undefined || !match[1] || !match[2]) continue;
+    advanceBraces(code, scanPosition, match.index, state);
+
+    const expectedDepth = state.scopes.at(-1)?.depth ?? 0;
+    const attributed = trailingAttributePattern.test(code.slice(scanPosition, match.index));
+    const atModuleItemDepth = state.depth === expectedDepth;
+    const name = match[1];
+    const terminator = match[2];
+
+    if (atModuleItemDepth && !attributed && terminator === ";") {
+      const scopeDirectory = join(directory, ...state.scopes.map((scope) => scope.name));
       const candidates = [
-        join(directory, `${match[1]}.rs`),
-        join(directory, match[1], "mod.rs"),
+        join(scopeDirectory, `${name}.rs`),
+        join(scopeDirectory, name, "mod.rs"),
       ].filter((candidate) => rustFiles.has(candidate));
-      if (candidates.length === 1) result.push(candidates[0]!);
+      if (candidates.length === 1) result.add(candidates[0]!);
     }
-    previousCode = trimmed;
+
+    if (terminator === "{") {
+      state.depth += 1;
+      if (atModuleItemDepth && !attributed) {
+        state.scopes.push({ name, depth: state.depth });
+      }
+    }
+
+    scanPosition = match.index + match[0].length;
   }
 
-  return result;
+  return [...result].sort();
 }
 
 function reachableModules(roots: readonly string[], rustPackage: RustPackageInfo): string[] {
