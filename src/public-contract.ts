@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 
 import { check, discoverComponents, loadConfig } from "./core.ts";
 import {
@@ -132,7 +132,8 @@ function packageSurfaces(root: string): PublicContractSurface[] {
     const component = relativePosix(root, dirname(file));
     const name = manifest.name ?? (component === "." ? basename(root) : basename(dirname(file)));
     const exports = packageExportKeys(manifest.exports);
-    if (exports.length === 0 && (manifest.main || manifest.module || manifest.types)) exports.push(".");
+    if (exports.length === 0 && (manifest.main || manifest.module || manifest.types))
+      exports.push(".");
     for (const exported of exports) {
       surfaces.push({
         id: surfaceId("package-export", name, exported),
@@ -157,7 +158,8 @@ function packageSurfaces(root: string): PublicContractSurface[] {
         subject: bin,
         discovery: {
           status: "partial",
-          reason: "The executable is discovered from package metadata; subcommands and flags are not enumerated yet.",
+          reason:
+            "The executable is discovered from package metadata; subcommands and flags are not enumerated yet.",
         },
       });
     }
@@ -181,7 +183,10 @@ function rustSurfaces(root: string): PublicContractSurface[] {
     }
     const directory = dirname(file);
     const component = relativePosix(root, directory);
-    const name = cargoPackageName(content, component === "." ? basename(root) : basename(directory));
+    const name = cargoPackageName(
+      content,
+      component === "." ? basename(root) : basename(directory),
+    );
     if (existsSync(join(directory, "src", "lib.rs")) || /^\s*\[lib\]/m.test(content)) {
       surfaces.push({
         id: surfaceId("rust-crate", name),
@@ -190,7 +195,8 @@ function rustSurfaces(root: string): PublicContractSurface[] {
         subject: name,
         discovery: {
           status: "partial",
-          reason: "The public crate boundary is known, but item-level rustdoc public API discovery is not implemented yet.",
+          reason:
+            "The public crate boundary is known, but item-level rustdoc public API discovery is not implemented yet.",
         },
       });
     }
@@ -211,7 +217,8 @@ function dotnetSurfaces(root: string): PublicContractSurface[] {
       subject: name,
       discovery: {
         status: "partial",
-        reason: "The assembly boundary is known, but item-level ApiCompat surface discovery is not implemented yet.",
+        reason:
+          "The assembly boundary is known, but item-level ApiCompat surface discovery is not implemented yet.",
       },
     });
   }
@@ -232,7 +239,10 @@ function openApiSurfaces(root: string): PublicContractSurface[] {
   const surfaces: PublicContractSurface[] = [];
   const files = walkFiles(root, 5).filter((path) => {
     const name = basename(path).toLowerCase();
-    return name.endsWith(".json") && (name === "openapi.json" || name === "swagger.json" || name.startsWith("openapi."));
+    return (
+      name.endsWith(".json") &&
+      (name === "openapi.json" || name === "swagger.json" || name.startsWith("openapi."))
+    );
   });
   for (const file of files) {
     const document = readJson<OpenApiDocument>(file);
@@ -241,7 +251,9 @@ function openApiSurfaces(root: string): PublicContractSurface[] {
     for (const path of Object.keys(document.paths).sort()) {
       const operations = document.paths[path];
       if (!operations || typeof operations !== "object") continue;
-      for (const method of Object.keys(operations).filter((value) => httpMethods.has(value.toLowerCase())).sort()) {
+      for (const method of Object.keys(operations)
+        .filter((value) => httpMethods.has(value.toLowerCase()))
+        .sort()) {
         const upper = method.toUpperCase();
         surfaces.push({
           id: surfaceId("http-operation", upper, path),
@@ -267,13 +279,16 @@ function githubSurfaces(root: string): PublicContractSurface[] {
       subject: ".",
       discovery: {
         status: "partial",
-        reason: "The action boundary is known, but action inputs and outputs are not enumerated yet.",
+        reason:
+          "The action boundary is known, but action inputs and outputs are not enumerated yet.",
       },
     });
     break;
   }
 
-  for (const file of walkFiles(join(root, ".github", "workflows"), 1).filter((path) => /\.ya?ml$/i.test(path))) {
+  for (const file of walkFiles(join(root, ".github", "workflows"), 1).filter((path) =>
+    /\.ya?ml$/i.test(path),
+  )) {
     let content = "";
     try {
       content = readFileSync(file, "utf8");
@@ -289,7 +304,8 @@ function githubSurfaces(root: string): PublicContractSurface[] {
       subject: relative,
       discovery: {
         status: "partial",
-        reason: "The reusable workflow boundary is known, but workflow_call inputs, secrets, and outputs are not enumerated yet.",
+        reason:
+          "The reusable workflow boundary is known, but workflow_call inputs, secrets, and outputs are not enumerated yet.",
       },
     });
   }
@@ -310,10 +326,17 @@ export function discoverPublicContract(root: string): PublicContractSurface[] {
   return [...unique.values()].sort((left, right) => left.id.localeCompare(right.id));
 }
 
+function validateRepositoryPath(path: string): void {
+  if (!path || isAbsolute(path) || path.split(/[\\/]/).includes(".."))
+    throw new Error(`Public contract manifest path must stay inside the repository: ${path}`);
+}
+
 function loadManifest(root: string, path: string): PublicContractManifest {
+  validateRepositoryPath(path);
   if (!existsSync(join(root, path))) return { schemaVersion: 1, verifications: [] };
   const manifest = readJson<PublicContractManifest>(join(root, path));
-  if (!manifest || manifest.schemaVersion !== 1) throw new Error(`${path} must use schemaVersion 1`);
+  if (!manifest || manifest.schemaVersion !== 1)
+    throw new Error(`${path} must use schemaVersion 1`);
   return manifest;
 }
 
@@ -324,24 +347,28 @@ function validateVerifications(
   const surfaceIds = new Set(surfaces.map((surface) => surface.id));
   const ids = new Set<string>();
   for (const verification of verifications) {
-    if (!verification.id?.trim()) throw new Error("Public contract verification id must not be empty");
-    if (ids.has(verification.id)) throw new Error(`Duplicate public contract verification id: ${verification.id}`);
+    if (!verification.id?.trim())
+      throw new Error("Public contract verification id must not be empty");
+    if (ids.has(verification.id))
+      throw new Error(`Duplicate public contract verification id: ${verification.id}`);
     ids.add(verification.id);
     if (!surfaceIds.has(verification.surface))
       throw new Error(`Unknown public contract surface: ${verification.surface}`);
     if (!capabilities.includes(verification.capability))
       throw new Error(`Unknown public contract capability: ${verification.capability}`);
-    if (![
-      "behavioral",
-      "contract",
-      "render",
-      "interaction",
-      "accessibility",
-      "visual",
-      "package",
-      "compile",
-      "reachability",
-    ].includes(verification.kind))
+    if (
+      ![
+        "behavioral",
+        "contract",
+        "render",
+        "interaction",
+        "accessibility",
+        "visual",
+        "package",
+        "compile",
+        "reachability",
+      ].includes(verification.kind)
+    )
       throw new Error(`Unknown public contract evidence kind: ${verification.kind}`);
   }
 }
@@ -379,6 +406,8 @@ export function publicContractCommand(
   try {
     const config = loadConfig(root, configPath);
     const enforcement = config.contracts?.enforcement ?? "observe";
+    if (!["observe", "protect-new", "strict"].includes(enforcement))
+      throw new Error(`Unknown public contract enforcement mode: ${String(enforcement)}`);
     const manifestPath = config.contracts?.manifest ?? ".coding-tooling.contracts.json";
     const surfaces = discoverPublicContract(root);
     const manifest = loadManifest(root, manifestPath);
@@ -392,13 +421,17 @@ export function publicContractCommand(
         const surface = surfaces.find((candidate) => candidate.id === verification.surface)!;
         const component = verification.component ?? surface.component;
         const key = `${component}\u0000${verification.capability}`;
-        if (!executions.has(key)) executions.set(key, check(root, verification.capability, component).status);
+        if (!executions.has(key))
+          executions.set(key, check(root, verification.capability, component).status);
         const evidence: PublicContractEvidence = {
           ...verification,
           component,
           outcome: executions.get(key)!,
         };
-        bySurface.set(verification.surface, [...(bySurface.get(verification.surface) ?? []), evidence]);
+        bySurface.set(verification.surface, [
+          ...(bySurface.get(verification.surface) ?? []),
+          evidence,
+        ]);
       }
     } else {
       for (const verification of verifications) {
@@ -421,14 +454,19 @@ export function publicContractCommand(
     const verified = results.filter((surface) => surface.status === "verified").length;
     const unsupported = results.filter((surface) => surface.discovery.status === "partial").length;
     const failedEvidence = results.reduce(
-      (total, surface) => total + surface.evidence.filter((item) => item.outcome !== "passed").length,
+      (total, surface) =>
+        total + surface.evidence.filter((item) => item.outcome !== "passed").length,
       0,
     );
     const unsupportedAnalyzers = [
       ...(results.some((surface) => surface.kind === "rust-crate") ? ["rust-item-api"] : []),
-      ...(results.some((surface) => surface.kind === "dotnet-assembly") ? ["dotnet-item-api"] : []),
+      ...(results.some((surface) => surface.kind === "dotnet-assembly")
+        ? ["dotnet-item-api"]
+        : []),
       ...(results.some((surface) => surface.kind === "github-action") ? ["github-action-io"] : []),
-      ...(results.some((surface) => surface.kind === "reusable-workflow") ? ["workflow-call-io"] : []),
+      ...(results.some((surface) => surface.kind === "reusable-workflow")
+        ? ["workflow-call-io"]
+        : []),
       ...(results.some((surface) => surface.kind === "cli-command") ? ["cli-subcommands"] : []),
     ];
     const report: PublicContractReport = {
@@ -453,7 +491,8 @@ export function publicContractCommand(
     if (enforcement === "protect-new") {
       diagnostics.push({
         code: "public-contract-protect-new-not-yet-supported",
-        message: "protect-new requires base-versus-head contract comparison and is not implemented in schemaVersion 1 yet.",
+        message:
+          "protect-new requires base-versus-head contract comparison and is not implemented in schemaVersion 1 yet.",
       });
       return reportEnvelope("unavailable", started, report, diagnostics);
     }
@@ -484,7 +523,10 @@ export function publicContractCommand(
       unsupportedAnalyzers: [],
     };
     return reportEnvelope("error", started, report, [
-      { code: "invalid-public-contract", message: error instanceof Error ? error.message : String(error) },
+      {
+        code: "invalid-public-contract",
+        message: error instanceof Error ? error.message : String(error),
+      },
     ]);
   }
 }
