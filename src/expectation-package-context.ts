@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 
+import { discoverComponents } from "./core.ts";
 import { readJson, relativePosix, walkFiles } from "./shared.ts";
 
 export type PackageManifest = {
@@ -22,6 +23,8 @@ export type PackageInfo = {
 export type DetectorContext = {
   root: string;
   packages: PackageInfo[];
+  technologies: string[];
+  sourceLanguages: string[];
 };
 
 const testFilePattern = /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/;
@@ -79,6 +82,25 @@ function packageInfos(root: string): PackageInfo[] {
   return result.sort((left, right) => left.path.localeCompare(right.path));
 }
 
+function sourceLanguages(root: string): { technologies: string[]; sourceLanguages: string[] } {
+  const components = discoverComponents(root);
+  const technologies = [...new Set(components.flatMap((component) => component.technologies))].sort();
+  const languages = new Set<string>();
+  for (const component of components) {
+    if (component.kind === "rust") languages.add("rust");
+    else if (component.kind === "dotnet") languages.add("dotnet");
+    else if (component.technologies.includes("typescript")) languages.add("typescript");
+    else languages.add("javascript");
+  }
+  return { technologies, sourceLanguages: [...languages].sort() };
+}
+
 export function createDetectorContext(root: string): DetectorContext {
-  return { root, packages: packageInfos(root) };
+  const discovered = sourceLanguages(root);
+  return {
+    root,
+    packages: packageInfos(root),
+    technologies: discovered.technologies,
+    sourceLanguages: discovered.sourceLanguages,
+  };
 }
