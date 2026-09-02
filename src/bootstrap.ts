@@ -10,6 +10,11 @@ import {
   type ResultEnvelope,
   type ToolingConfig,
 } from "./model.ts";
+import {
+  installRenovateFoundation,
+  renovateFoundationRecommendation,
+  type RenovateFoundationRecommendation,
+} from "./renovate.ts";
 import { readJson, repositoryRoot, walkFiles } from "./shared.ts";
 
 type PackageManifest = {
@@ -82,8 +87,7 @@ function recommendedModules(
   components: Component[],
   technologies: string[],
 ): string[] {
-  const modules = new Set<string>(["environment", "git"]);
-  if (components.length > 1) modules.add("dependencies");
+  const modules = new Set<string>(["dependencies", "environment", "git"]);
   if (basename(root).toLowerCase().includes("template")) modules.add("template-authoring");
   if (technologies.includes("react")) modules.add("ui");
   if (technologies.includes("dockerfile")) modules.add("dockerfile");
@@ -189,6 +193,7 @@ export function repositoryFoundationRecommendation(root = repositoryRoot()): {
   technologies: string[];
   modules: string[];
   config: ToolingConfig;
+  renovate: RenovateFoundationRecommendation;
 } {
   const resolvedRoot = resolve(root);
   const components = discoverComponents(resolvedRoot);
@@ -199,7 +204,18 @@ export function repositoryFoundationRecommendation(root = repositoryRoot()): {
     technologies,
     modules: recommendedModules(resolvedRoot, components, technologies),
     config: recommendedConfig(components, technologies, resolvedRoot),
+    renovate: renovateFoundationRecommendation(resolvedRoot),
   };
+}
+
+function dependencyUpdaterDiagnostics(renovate: RenovateFoundationRecommendation) {
+  if (!renovate.dependabotConfigPath || renovate.existingConfigPath) return [];
+  return [
+    {
+      code: "dependency-updater-overlap",
+      message: `${renovate.dependabotConfigPath} already configures Dependabot updates; migrate it explicitly before installing Renovate`,
+    },
+  ];
 }
 
 function envelope(
@@ -235,7 +251,14 @@ export function bootstrapRepository(
         },
       ]);
     }
-    if (action === "plan") return envelope("passed", started, recommendation);
+
+    const updaterDiagnostics = dependencyUpdaterDiagnostics(recommendation.renovate);
+    if (action === "plan") {
+      return envelope("passed", started, recommendation, updaterDiagnostics);
+    }
+    if (updaterDiagnostics.length > 0) {
+      return envelope("failed", started, recommendation, updaterDiagnostics);
+    }
 
     const configPath = join(root, ".coding-tooling.json");
     const configPresent = existsSync(configPath);
@@ -263,12 +286,14 @@ export function bootstrapRepository(
       );
     }
 
+    const renovate = installRenovateFoundation(root);
     if (!configPresent) {
       writeFileSync(configPath, `${JSON.stringify(recommendation.config, null, 2)}\n`, "utf8");
     }
 
     return envelope("passed", started, {
       ...recommendation,
+      renovate,
       configPath: ".coding-tooling.json",
       configChanged: !configPresent,
       conventions: conventions.data,
