@@ -26,8 +26,10 @@ type ModuleDeclaration = {
   pathOverride?: string;
 };
 
-const inlineTestModulePattern = /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*(?:#\s*\[[^\]]+\]\s*)*(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{/m;
-const moduleDeclarationPattern = /((?:\s*#\s*\[[^\]]+\]\s*)*)\s*(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g;
+const inlineTestModulePattern =
+  /#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]\s*(?:#\s*\[[^\]]+\]\s*)*(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+[A-Za-z_][A-Za-z0-9_]*\s*\{/m;
+const moduleDeclarationPattern =
+  /((?:\s*#\s*\[[^\]]+\]\s*)*)\s*(?:pub(?:\s*\([^)]*\))?\s+)?mod\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/g;
 const cfgAttributePattern = /#\s*\[\s*cfg\s*\(/;
 const pathAttributePattern = /#\s*\[\s*path\s*=\s*"([^"\r\n]+)"\s*\]/;
 const excludedSourcePathPattern = /^src\/(?:test|tests|__tests__|generated|gen)\//;
@@ -86,7 +88,11 @@ function rustComponentContexts(root: string): RustComponentTestContext[] {
         if (target.name) binaryRoots.set(target.name, join(root, target.resolvedPath));
       }
       const defaultMain = join(component.directory, "src", "main.rs");
-      if (crateName && existsSync(defaultMain) && ![...binaryRoots.values()].includes(defaultMain)) {
+      if (
+        crateName &&
+        existsSync(defaultMain) &&
+        ![...binaryRoots.values()].includes(defaultMain)
+      ) {
         binaryRoots.set(crateName, defaultMain);
       }
       for (const source of sourceFiles) {
@@ -102,7 +108,9 @@ function rustComponentContexts(root: string): RustComponentTestContext[] {
       const explicitIntegrationRoots = componentTargets
         .filter((target) => target.kind === "test")
         .map((target) => join(root, target.resolvedPath));
-      const integrationRoots = [...new Set([...directIntegrationRoots, ...explicitIntegrationRoots])]
+      const integrationRoots = [
+        ...new Set([...directIntegrationRoots, ...explicitIntegrationRoots]),
+      ]
         .filter((path) => existsSync(path))
         .sort();
       const sourceRoots = [libRoot, ...binaryRoots.values()]
@@ -199,9 +207,13 @@ function integrationTestSources(component: RustComponentTestContext): Set<string
 function externalSeeds(component: RustComponentTestContext): string[] {
   const tests = integrationTestSources(component);
   const seeds = new Set<string>();
-  const crateIdentifier = component.crateName ? rustCrateIdentifier(component.crateName) : undefined;
+  const crateIdentifier = component.crateName
+    ? rustCrateIdentifier(component.crateName)
+    : undefined;
   const cratePattern = crateIdentifier
-    ? new RegExp(`\\b(?:extern\\s+crate\\s+${escapeRegex(crateIdentifier)}\\b|${escapeRegex(crateIdentifier)}\\s*::)`)
+    ? new RegExp(
+        `\\b(?:extern\\s+crate\\s+${escapeRegex(crateIdentifier)}\\b|${escapeRegex(crateIdentifier)}\\s*::)`,
+      )
     : undefined;
   let referencesLibrary = false;
 
