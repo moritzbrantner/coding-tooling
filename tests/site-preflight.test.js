@@ -24,12 +24,16 @@ describe("GitHub Pages repository preflight", () => {
       blob("package.json", "2"),
       blob(".coding-tooling.json", "3"),
       blob(".node-version", "4"),
+      blob("fixtures/app/package.json", "5"),
     ];
     expect(selectedRemoteFiles(tree, 3).map((entry) => entry.path)).toEqual([
       ".coding-tooling.json",
       ".node-version",
       "package.json",
     ]);
+    expect(selectedRemoteFiles(tree).map((entry) => entry.path)).not.toContain(
+      "fixtures/app/package.json",
+    );
   });
 
   test("returns a ready result for a repository with structural foundation evidence", () => {
@@ -61,6 +65,62 @@ describe("GitHub Pages repository preflight", () => {
     expect(analysis.summary.status).toBe("ready");
     expect(analysis.technologies).toEqual(["javascript", "typescript"]);
     expect(analysis.findings).toEqual([]);
+  });
+
+  test("ignores fixture components and accepts an exact Bun toolchain pin", () => {
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [
+          blob("package.json", "1"),
+          blob("bun.lock", "2"),
+          blob("src/index.ts", "3"),
+          blob("tests/index.test.ts", "4"),
+          blob(".coding-tooling.json", "5"),
+          blob("AGENTS.md", "6"),
+          blob("renovate.json", "7"),
+          blob(".github/workflows/validate.yml", "8"),
+          blob("fixtures/app/package.json", "9"),
+          blob("fixtures/rust/Cargo.toml", "10"),
+          blob("fixtures/dotnet/App.csproj", "11"),
+        ],
+        files: {
+          "package.json": JSON.stringify({
+            name: "fixture",
+            packageManager: "bun@1.4.0",
+            scripts: { "format:check": "fmt", lint: "lint", typecheck: "tsc", test: "test" },
+          }),
+          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+          "fixtures/app/package.json": JSON.stringify({ name: "ignored-fixture" }),
+        },
+      }),
+    );
+    expect(analysis.components.map((component) => [component.kind, component.path])).toEqual([
+      ["package", "."],
+    ]);
+    expect(analysis.findings).toEqual([]);
+  });
+
+  test("reports a non-exact Bun toolchain pin", () => {
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [
+          blob("package.json", "1"),
+          blob(".coding-tooling.json", "2"),
+          blob("AGENTS.md", "3"),
+          blob("renovate.json", "4"),
+          blob(".github/workflows/validate.yml", "5"),
+        ],
+        files: {
+          "package.json": JSON.stringify({
+            name: "fixture",
+            packageManager: "bun@1.4",
+            scripts: { "format:check": "fmt", lint: "lint", typecheck: "tsc", test: "test" },
+          }),
+          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+        },
+      }),
+    );
+    expect(analysis.findings.map((finding) => finding.id)).toEqual(["REMOTE-ENV-005"]);
   });
 
   test("marks truncated or bounded GitHub evidence incomplete", () => {
