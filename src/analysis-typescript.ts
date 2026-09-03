@@ -30,13 +30,21 @@ function insideRoot(root: string, path: string): boolean {
 function diagnosticPath(root: string, configPath: string, path: string): string {
   const normalized = path.trim();
   if (isAbsolute(normalized)) {
-    return insideRoot(root, normalized) ? relativePosix(root, normalized) : normalized.split(sep).join("/");
+    return insideRoot(root, normalized)
+      ? relativePosix(root, normalized)
+      : normalized.split(sep).join("/");
   }
 
   const fromProvider = resolve(providerRoot, normalized);
   const fromProject = resolve(dirname(configPath), normalized);
-  const absolute = existsSync(fromProvider) ? fromProvider : existsSync(fromProject) ? fromProject : fromProvider;
-  return insideRoot(root, absolute) ? relativePosix(root, absolute) : normalized.split(sep).join("/");
+  const absolute = existsSync(fromProvider)
+    ? fromProvider
+    : existsSync(fromProject)
+      ? fromProject
+      : fromProvider;
+  return insideRoot(root, absolute)
+    ? relativePosix(root, absolute)
+    : normalized.split(sep).join("/");
 }
 
 function compilerCommand(args: string[]) {
