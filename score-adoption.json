@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "coding-tooling/score-adoption-registry/v1",
+  "reusableWorkflow": {
+    "repository": "moritzbrantner/reusable-workflows",
+    "path": ".github/workflows/coding-tooling-score-history.yml",
+    "revision": "27bcfd648f5fdf3f08b3e4b1adc96ccce28508bc"
+  },
+  "repositories": [
+    {
+      "repository": "moritzbrantner/audio-analysis",
+      "rolloutWave": 1,
+      "target": "history",
+      "scoreProfileVersion": "coding-tooling/repository-score-profile/v1",
+      "historyBranch": "score-history",
+      "dashboardGroup": "media"
+    },
+    {
+      "repository": "moritzbrantner/collision-lab",
+      "rolloutWave": 1,
+      "target": "history",
+      "scoreProfileVersion": "coding-tooling/repository-score-profile/v1",
+      "historyBranch": "score-history",
+      "dashboardGroup": "lab"
+    },
+    {
+      "repository": "moritzbrantner/moenarch-foundation",
+      "rolloutWave": 1,
+      "target": "history",
+      "scoreProfileVersion": "coding-tooling/repository-score-profile/v1",
+      "historyBranch": "score-history",
+      "dashboardGroup": "foundation"
+    },
+    {
+      "repository": "moritzbrantner/nlp-stack",
+      "rolloutWave": 1,
+      "target": "history",
+      "scoreProfileVersion": "coding-tooling/repository-score-profile/v1",
+      "historyBranch": "score-history",
+      "dashboardGroup": "language"
+    },
+    {
+      "repository": "moritzbrantner/rust-kernels",
+      "rolloutWave": 1,
+      "target": "history",
+      "scoreProfileVersion": "coding-tooling/repository-score-profile/v1",
+      "historyBranch": "score-history",
+      "dashboardGroup": "foundation"
+    }
+  ]
+}
