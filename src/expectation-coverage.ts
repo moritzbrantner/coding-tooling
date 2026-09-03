@@ -128,7 +128,11 @@ export function analyzeFindingsCoverage(
       };
     }
     if (target === "typescript-analysis-projects") {
-      return { id: descriptor.id, version: descriptor.version, ...semanticTypeScriptCoverage(context) };
+      return {
+        id: descriptor.id,
+        version: descriptor.version,
+        ...semanticTypeScriptCoverage(context),
+      };
     }
     const subjects = detectorSubjects(root, context, target);
     return {
