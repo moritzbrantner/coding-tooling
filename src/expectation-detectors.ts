@@ -1,3 +1,4 @@
+import { typeScriptAssignabilityFindings } from "./expectation-analysis-detector.ts";
 import {
   missingBenchmarkEvidenceFindings,
   missingTestCapabilityFindings,
@@ -122,6 +123,15 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingTestFindings,
+  },
+  {
+    id: "typescript-type-assignability",
+    version: 1,
+    description:
+      "TypeScript compiler assignment-compatibility diagnostics are exposed as deterministic evidence",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    detect: typeScriptAssignabilityFindings,
   },
 ];
 expectationDescriptors.sort((left, right) => left.id.localeCompare(right.id));
