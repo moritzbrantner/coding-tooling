@@ -92,6 +92,36 @@ describe("public contract verification", () => {
     });
   });
 
+  test("rejects capabilities that cannot prove the declared evidence kind", () => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ name: "fixture-package", exports: "./src/index.ts" }),
+    );
+    writeFileSync(
+      join(root, ".coding-tooling.contracts.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        verifications: [
+          {
+            id: "root-export-behavior",
+            surface: "package-export:fixture-package:.",
+            kind: "behavioral",
+            capability: "lint",
+          },
+        ],
+      }),
+    );
+
+    const result = publicContractCommand(root);
+
+    expect(result.status).toBe("error");
+    expect(result.diagnostics[0]?.code).toBe("invalid-public-contract");
+    expect(result.diagnostics[0]?.message).toContain(
+      "evidence kind 'behavioral' cannot use capability 'lint'",
+    );
+  });
+
   test("does not count reachability alone as public-contract verification", () => {
     const root = fixture();
     writeFileSync(
@@ -123,6 +153,38 @@ describe("public contract verification", () => {
     expect(data.surfaces[0]?.evidence[0]?.outcome).toBe("passed");
   });
 
+  test("separates unavailable evidence from failed evidence", () => {
+    const root = fixture();
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ name: "fixture-package", exports: "./src/index.ts" }),
+    );
+    writeFileSync(
+      join(root, ".coding-tooling.contracts.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        verifications: [
+          {
+            id: "root-export-behavior",
+            surface: "package-export:fixture-package:.",
+            kind: "behavioral",
+            capability: "test:unit",
+          },
+        ],
+      }),
+    );
+
+    const result = publicContractCommand(root, { execute: false });
+    const data = result.data as unknown as PublicContractReport;
+
+    expect(data.summary).toMatchObject({
+      failedEvidence: 0,
+      unavailableEvidence: 1,
+      errorEvidence: 0,
+      strictReady: false,
+    });
+  });
+
   test("keeps incomplete Rust item discovery separate from verification", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });
@@ -134,8 +196,26 @@ describe("public contract verification", () => {
 
     const data = report(root);
 
-    expect(data.summary).toMatchObject({ discovered: 1, verified: 0, unsupported: 1 });
+    expect(data.summary).toMatchObject({ discovered: 1, verified: 0, incompleteDiscovery: 1 });
     expect(data.unsupportedAnalyzers).toContain("rust-item-api");
+  });
+
+  test("does not treat zero discovered surfaces as perfect verification", () => {
+    const root = fixture();
+
+    const result = publicContractCommand(root);
+    const data = result.data as unknown as PublicContractReport;
+
+    expect(result.status).toBe("passed");
+    expect(data.summary).toMatchObject({
+      discovered: 0,
+      verified: 0,
+      unverified: 0,
+      incompleteDiscovery: 0,
+      strictReady: false,
+    });
+    expect(data.summary.verifiedRatio).toBeNull();
+    expect(result.diagnostics[0]?.code).toBe("public-contract-no-discovered-surfaces");
   });
 
   test("strict mode fails rather than treating unknown or unverified surfaces as clean", () => {
