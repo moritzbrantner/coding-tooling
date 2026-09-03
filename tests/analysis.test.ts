@@ -66,27 +66,39 @@ describe("language analysis providers", () => {
     writeFileSync(join(root, "src", "value.ts"), 'export const value: string = "ok";\n');
 
     const result = analyzeRepository(root);
+    const typeScript = result.data.providers.find((item) => item.id === "typescript-compiler");
+    const dotnet = result.data.providers.find((item) => item.id === "dotnet-roslyn");
 
     expect(result.status).toBe("passed");
-    expect(result.data.providers).toHaveLength(1);
-    expect(result.data.providers[0]?.status).toBe("applied");
+    expect(typeScript?.status).toBe("applied");
+    expect(dotnet?.status).toBe("not-applicable");
     expect(result.data.diagnostics).toEqual([]);
+    expect(result.data.actions).toEqual([]);
   });
 
-  test("marks TypeScript analysis not applicable when no project exists", () => {
+  test("marks absent language projects not applicable", () => {
     const root = fixture(false);
 
     const result = analyzeRepository(root);
 
     expect(result.status).toBe("passed");
     expect(result.data.diagnostics).toEqual([]);
-    expect(result.data.providers).toEqual([
-      expect.objectContaining({
-        id: "typescript-compiler",
-        status: "not-applicable",
-        projects: [],
-        diagnostics: [],
-      }),
-    ]);
+    expect(result.data.actions).toEqual([]);
+    expect(result.data.providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "dotnet-roslyn",
+          status: "not-applicable",
+          projects: [],
+          diagnostics: [],
+        }),
+        expect.objectContaining({
+          id: "typescript-compiler",
+          status: "not-applicable",
+          projects: [],
+          diagnostics: [],
+        }),
+      ]),
+    );
   });
 });
