@@ -1,5 +1,11 @@
 import { parseRepositoryReference } from "./preflight.js";
 
+const publishedCoverage = {
+  branch: "coding-tooling-observations",
+  path: ".coding-tooling/test-coverage.json",
+  format: "coding-tooling-snapshot-v1",
+};
+
 const coverageCandidates = [
   { path: "coverage/coverage-summary.json", format: "istanbul-summary" },
   { path: "coverage-summary.json", format: "istanbul-summary" },
@@ -20,6 +26,46 @@ export async function testCoverageJson(value, options = {}) {
     fetchImpl,
     signal,
   );
+
+  const published = await readPublishedCoverage(reference, repository, fetchImpl, signal);
+  if (published) {
+    if (published.status === "unreadable") {
+      return resultEnvelope(repository, now, {
+        status: "incomplete",
+        coverage: null,
+        sources: [published.source],
+        source: null,
+        publication: null,
+        treeTruncated: false,
+      });
+    }
+
+    const defaultBranch = await githubJson(
+      `/repos/${reference.owner}/${reference.name}/branches/${encodeURIComponent(repository.default_branch)}`,
+      fetchImpl,
+      signal,
+    );
+    const freshness =
+      published.snapshot.repository.revision === defaultBranch.commit?.sha ? "current" : "stale";
+    const source = {
+      path: publishedCoverage.path,
+      branch: publishedCoverage.branch,
+      format: publishedCoverage.format,
+    };
+    return resultEnvelope(repository, now, {
+      status: "available",
+      coverage: published.snapshot.coverage,
+      sources: [{ ...source, status: "read" }],
+      source,
+      publication: {
+        revision: published.snapshot.repository.revision,
+        generatedAt: published.snapshot.generatedAt,
+        freshness,
+      },
+      treeTruncated: false,
+    });
+  }
+
   const tree = await githubJson(
     `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`,
     fetchImpl,
@@ -51,6 +97,7 @@ export async function testCoverageJson(value, options = {}) {
         coverage,
         sources,
         source: { path: candidate.path, format: candidate.format },
+        publication: null,
         treeTruncated: Boolean(tree.truncated),
       });
     } catch (error) {
@@ -69,8 +116,90 @@ export async function testCoverageJson(value, options = {}) {
     coverage: null,
     sources,
     source: null,
+    publication: null,
     treeTruncated: Boolean(tree.truncated),
   });
+}
+
+async function readPublishedCoverage(reference, repository, fetchImpl, signal) {
+  const resource = await githubOptionalJson(
+    `/repos/${reference.owner}/${reference.name}/contents/${publishedCoverage.path}?ref=${encodeURIComponent(publishedCoverage.branch)}`,
+    fetchImpl,
+    signal,
+  );
+  if (!resource) return null;
+
+  const source = {
+    path: publishedCoverage.path,
+    branch: publishedCoverage.branch,
+    format: publishedCoverage.format,
+    status: "unreadable",
+  };
+  try {
+    if (resource.type !== "file" || resource.encoding !== "base64")
+      throw new Error("Published coverage snapshot is not a readable file");
+    const snapshot = parsePublishedSnapshot(decodeBase64(resource.content), repository.full_name);
+    return { status: "read", snapshot, source: { ...source, status: "read" } };
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    return {
+      status: "unreadable",
+      source: {
+        ...source,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
+export function parsePublishedSnapshot(content, expectedRepository) {
+  const parsed = JSON.parse(content);
+  if (parsed?.schemaVersion !== 1 || parsed?.kind !== "coding-tooling-test-coverage-snapshot")
+    throw new Error("Unsupported published coverage snapshot schema");
+  if (parsed?.repository?.fullName !== expectedRepository)
+    throw new Error("Published coverage snapshot repository does not match the requested repository");
+  if (!/^[0-9a-f]{40}$/i.test(parsed?.repository?.revision ?? ""))
+    throw new Error("Published coverage snapshot revision is not an exact Git commit SHA");
+  if (!parsed.generatedAt || Number.isNaN(Date.parse(parsed.generatedAt)))
+    throw new Error("Published coverage snapshot has an invalid generation timestamp");
+
+  return {
+    ...parsed,
+    coverage: normalizePublishedCoverage(parsed.coverage),
+  };
+}
+
+function normalizePublishedCoverage(value) {
+  if (!value || typeof value !== "object") throw new Error("Published snapshot has no coverage");
+  const coverage = {
+    lines: publishedMetric(value.lines),
+    statements: publishedMetric(value.statements),
+    functions: publishedMetric(value.functions),
+    branches: publishedMetric(value.branches),
+  };
+  if (!Object.values(coverage).some(Boolean)) throw new Error("Published snapshot has no coverage totals");
+  return coverage;
+}
+
+function publishedMetric(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "object") throw new Error("Published coverage metric is invalid");
+  const covered = Number(value.covered);
+  const total = Number(value.total);
+  const percent = Number(value.percent);
+  if (
+    !Number.isFinite(covered) ||
+    !Number.isFinite(total) ||
+    covered < 0 ||
+    total < 0 ||
+    covered > total
+  )
+    throw new Error("Published coverage metric counts are invalid");
+  return {
+    covered,
+    total,
+    percent: Number.isFinite(percent) ? percent : percentage(covered, total),
+  };
 }
 
 export function parseCoverage(content, format) {
@@ -168,12 +297,14 @@ function resultEnvelope(repository, now, observation) {
     summary: {
       status: observation.status,
       source: observation.source,
+      ...(observation.publication ? { freshness: observation.publication.freshness } : {}),
     },
     coverage: observation.coverage,
+    publication: observation.publication,
     sources: observation.sources,
     limitations: [
       "This browser-only observation does not execute repository tests or generate coverage.",
-      "Schema version 1 reads recognized coverage reports committed on the repository default branch only.",
+      "Schema version 1 prefers a normalized snapshot published on coding-tooling-observations and falls back to recognized reports committed on the default branch.",
       "Missing coverage evidence is reported as unavailable rather than inferred as zero coverage.",
       ...(observation.treeTruncated
         ? ["GitHub truncated the recursive tree, so coverage discovery may be incomplete."]
@@ -182,24 +313,42 @@ function resultEnvelope(repository, now, observation) {
   };
 }
 
+async function githubOptionalJson(path, fetchImpl, signal) {
+  const response = await fetchImpl(`https://api.github.com${path}`, {
+    signal,
+    headers: githubHeaders(),
+  });
+  if (response.ok) return response.json();
+  if (response.status === 404) return null;
+  throw githubError(response.status);
+}
+
 async function githubJson(path, fetchImpl, signal) {
   const response = await fetchImpl(`https://api.github.com${path}`, {
     signal,
-    headers: {
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
+    headers: githubHeaders(),
   });
   if (response.ok) return response.json();
-  if (response.status === 404)
-    throw new Error(
+  throw githubError(response.status);
+}
+
+function githubHeaders() {
+  return {
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+}
+
+function githubError(status) {
+  if (status === 404)
+    return new Error(
       "Repository not found. This zero-token Pages observation supports public GitHub repositories only.",
     );
-  if (response.status === 403)
-    throw new Error(
+  if (status === 403)
+    return new Error(
       "GitHub rejected the anonymous request, usually because the public API rate limit was reached.",
     );
-  throw new Error(`GitHub API request failed (${response.status}).`);
+  return new Error(`GitHub API request failed (${status}).`);
 }
 
 function decodeBase64(value) {
