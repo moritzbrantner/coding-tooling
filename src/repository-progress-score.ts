@@ -11,7 +11,8 @@ import {
   type RepositoryScoreRating,
 } from "./repository-score.ts";
 
-export const REPOSITORY_SCORE_PROFILE_VERSION = "coding-tooling/repository-score-profile/v1" as const;
+export const REPOSITORY_SCORE_PROFILE_VERSION =
+  "coding-tooling/repository-score-profile/v1" as const;
 
 export type RepositoryProgressScoreCategory = RepositoryCategoryScore["id"] | "verification";
 
