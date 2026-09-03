@@ -172,6 +172,7 @@ export const typeScriptAnalysisProvider: AnalysisProvider = {
         capabilities: ["syntax", "semantic", "diagnostics"],
         projects: [],
         diagnostics: [],
+        actions: [],
         reason: "No tsconfig.json project was discovered",
       };
     }
@@ -185,6 +186,7 @@ export const typeScriptAnalysisProvider: AnalysisProvider = {
         capabilities: ["syntax", "semantic", "diagnostics"],
         projects: configs.map((path) => relativePosix(root, path)),
         diagnostics: [],
+        actions: [],
         reason: compiler.reason,
       };
     }
@@ -199,6 +201,7 @@ export const typeScriptAnalysisProvider: AnalysisProvider = {
       capabilities: ["syntax", "semantic", "diagnostics"],
       projects,
       diagnostics,
+      actions: [],
     };
   },
 };
