@@ -31,6 +31,23 @@ The normalized provider contract is independent of that transport choice, so the
 
 The TypeScript provider currently advertises no `code-actions` capability. A type error can be deterministic evidence without there being one mechanically correct repair.
 
+## Roslyn-backed .NET provider
+
+`dotnet-roslyn` discovers SDK-style C# project files and delegates project-aware semantic analysis to the installed .NET SDK/MSBuild/Roslyn build pipeline. It invokes each project with `--no-restore`, deterministic compilation, full diagnostic paths, and no provider-owned package installation.
+
+The provider normalizes compiler and analyzer diagnostics into the same provider/code/severity/project/location envelope as TypeScript. Its reported provider version is the installed .NET SDK version that owns the invoked Roslyn toolchain.
+
+The boundary is conservative:
+
+- no `.csproj` means `not-applicable`;
+- missing `dotnet`, an unsupported target SDK, or a missing `project.assets.json` means `unavailable`, not clean;
+- a nonzero build that yields normal compiler/analyzer diagnostics remains an `applied` analysis result carrying those diagnostics;
+- an unexplained build failure with no normalizable diagnostics is `failed`;
+- the provider uses `--no-restore`, so analysis never decides to contact package sources or repair dependency state;
+- it advertises no code actions yet. A direct Roslyn workspace bridge is deferred until richer symbol queries or provider-native fixes justify that dependency and lifecycle.
+
+Running the compiler can update ordinary ignored build artifacts such as `bin/` and `obj/`; it does not modify authored source files.
+
 ## First diagnostic-to-finding adapter
 
 `typescript-type-assignability@1` is the first explicit provider-to-expectation mapping. It promotes only TypeScript `TS2322` assignment-compatibility diagnostics.
@@ -67,13 +84,13 @@ Application is guarded and transactional:
 
 This contract intentionally uses whole-file guarded replacements rather than naked line/offset edits. Provider-native edits can still be converted into a desired document, but the mutation boundary is anchored to exact before/after content rather than stale source coordinates.
 
-`coding-tooling analyze` now exposes an `actions` collection in its machine-readable result. Providers should leave it empty unless they can produce a deterministic repair; the existence of a diagnostic does not imply that an action exists.
+`coding-tooling analyze` exposes an `actions` collection in its machine-readable result. Providers should leave it empty unless they can produce a deterministic repair; the existence of a diagnostic does not imply that an action exists.
 
 ## Next independently implementable slices
 
-### 1. Roslyn-backed .NET provider
+### 1. .NET diagnostic-to-finding adapter
 
-Add a narrow .NET provider that delegates project-aware compilation and analyzer execution to the installed SDK/MSBuild/Roslyn pipeline and emits the same normalized envelope. Start with diagnostics. A direct Roslyn workspace bridge is justified later for richer symbol queries and provider-native code fixes.
+Calibrate a narrowly selected Roslyn diagnostic before promoting it into a versioned `CT-*` expectation. Preserve SDK/provider provenance exactly as with TypeScript rather than turning all build errors into findings.
 
 ### 2. First provider-native action
 
