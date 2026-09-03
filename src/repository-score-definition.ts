@@ -56,7 +56,7 @@ function canonicalize(value: unknown): unknown {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .filter(([, entry]) => entry !== undefined)
-        .toSorted(([left], [right]) => left.localeCompare(right))
+        .sort(([left], [right]) => left.localeCompare(right))
         .map(([key, entry]) => [key, canonicalize(entry)]),
     );
   }
@@ -89,7 +89,7 @@ export function repositoryScoreDefinition(
           weight: severityWeights[audit.severity],
           scoreModel: audit.scoreModel,
         }))
-        .toSorted((left, right) => left.id.localeCompare(right.id)),
+        .sort((left, right) => left.id.localeCompare(right.id)),
     },
     verification: {
       formula: "passed-obligation-ratio-v1",
