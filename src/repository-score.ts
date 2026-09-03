@@ -24,11 +24,7 @@ export type RepositoryScoreCategory =
   | "performance"
   | "other";
 
-export type RepositoryScoreRating =
-  | "good"
-  | "needs-improvement"
-  | "poor"
-  | "unavailable";
+export type RepositoryScoreRating = "good" | "needs-improvement" | "poor" | "unavailable";
 export type RepositoryScoreCompleteness = "complete" | "incomplete" | "unavailable";
 
 export type RepositoryAuditScore = {
@@ -126,9 +122,7 @@ function categoryForExpectation(id: string): RepositoryScoreCategory {
 function weightedAverage(values: Array<{ score: number; weight: number }>): number | null {
   const weight = values.reduce((sum, value) => sum + value.weight, 0);
   if (weight === 0) return null;
-  return Math.round(
-    values.reduce((sum, value) => sum + value.score * value.weight, 0) / weight,
-  );
+  return Math.round(values.reduce((sum, value) => sum + value.score * value.weight, 0) / weight);
 }
 
 function rating(score: number | null): RepositoryScoreRating {
@@ -144,11 +138,12 @@ function unresolved(findings: readonly ScoreFinding[], expectationId: string): S
   );
 }
 
-function countSubjects(subjects: Iterable<string>, failedSubjects: Iterable<string>): ScoreSubjects {
+function countSubjects(
+  subjects: Iterable<string>,
+  failedSubjects: Iterable<string>,
+): ScoreSubjects {
   const subjectSet = new Set(subjects);
-  const failedSet = new Set(
-    [...failedSubjects].filter((subject) => subjectSet.has(subject)),
-  );
+  const failedSet = new Set([...failedSubjects].filter((subject) => subjectSet.has(subject)));
   return { subjects: subjectSet.size, failedSubjects: failedSet.size };
 }
 
@@ -187,10 +182,7 @@ function packageForFindingPath(packages: readonly PackageInfo[], path: string): 
   return packages.some((packageInfo) => packageInfo.path === ".") ? "." : undefined;
 }
 
-function directFindingSubjects(
-  findings: readonly ScoreFinding[],
-  expectationId: string,
-): string[] {
+function directFindingSubjects(findings: readonly ScoreFinding[], expectationId: string): string[] {
   return unresolved(findings, expectationId).map((finding) => finding.subject.key);
 }
 
@@ -208,10 +200,7 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
 
   models.set(
     "javascript-source-test",
-    countSubjects(
-      javascriptSources,
-      directFindingSubjects(findings, "javascript-source-test"),
-    ),
+    countSubjects(javascriptSources, directFindingSubjects(findings, "javascript-source-test")),
   );
   models.set(
     "typescript-source-test",
@@ -223,10 +212,7 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
   );
   models.set(
     "source-unimplemented-stub",
-    countSubjects(
-      productionSources,
-      directFindingSubjects(findings, "source-unimplemented-stub"),
-    ),
+    countSubjects(productionSources, directFindingSubjects(findings, "source-unimplemented-stub")),
   );
 
   const testCapabilityPackages = context.packages
@@ -248,10 +234,7 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
     .map((packageInfo) => packageInfo.path);
   models.set(
     "typescript-project-config",
-    countSubjects(
-      typeScriptPackages,
-      directFindingSubjects(findings, "typescript-project-config"),
-    ),
+    countSubjects(typeScriptPackages, directFindingSubjects(findings, "typescript-project-config")),
   );
 
   const aggregatePackages = context.packages
@@ -259,10 +242,7 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
     .map((packageInfo) => packageInfo.path);
   models.set(
     "package-aggregate-check",
-    countSubjects(
-      aggregatePackages,
-      directFindingSubjects(findings, "package-aggregate-check"),
-    ),
+    countSubjects(aggregatePackages, directFindingSubjects(findings, "package-aggregate-check")),
   );
 
   const benchmarkPackages = context.packages
@@ -270,18 +250,19 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
     .map((packageInfo) => packageInfo.path);
   models.set(
     "benchmark-evidence",
-    countSubjects(
-      benchmarkPackages,
-      directFindingSubjects(findings, "benchmark-evidence"),
-    ),
+    countSubjects(benchmarkPackages, directFindingSubjects(findings, "benchmark-evidence")),
   );
 
-  const cliPackages = context.packages.filter(packageHasCliSurface).map((packageInfo) => packageInfo.path);
+  const cliPackages = context.packages
+    .filter(packageHasCliSurface)
+    .map((packageInfo) => packageInfo.path);
   const cliFailures = unresolved(findings, "package-cli-wiring")
     .map((finding) =>
       finding.subject.kind === "package"
         ? finding.subject.key
-        : packageForFindingPath(context.packages, finding.subject.path),
+        : finding.subject.path
+          ? packageForFindingPath(context.packages, finding.subject.path)
+          : undefined,
     )
     .filter((value): value is string => value !== undefined);
   models.set("package-cli-wiring", countSubjects(cliPackages, cliFailures));
@@ -296,8 +277,7 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
   );
 
   const cargoTargets = explicitCargoTargets(root).map(
-    (target) =>
-      `${target.manifestPath}#${target.kind}:${target.name ?? target.declaredPath}`,
+    (target) => `${target.manifestPath}#${target.kind}:${target.name ?? target.declaredPath}`,
   );
   models.set(
     "rust-cargo-target-path",
@@ -306,10 +286,7 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
 
   models.set(
     "rust-source-test",
-    countSubjects(
-      rustTestSurfaces(root),
-      directFindingSubjects(findings, "rust-source-test"),
-    ),
+    countSubjects(rustTestSurfaces(root), directFindingSubjects(findings, "rust-source-test")),
   );
 
   const typeScriptProvider = context.analysisProvider("typescript-compiler");
@@ -358,7 +335,8 @@ export function scoreExpectationEvidence(
         subjects: subjectModel?.subjects ?? null,
         failedSubjects: subjectModel?.failedSubjects ?? null,
         activeFindings: matching.filter((finding) => finding.disposition === "active").length,
-        suppressedFindings: matching.filter((finding) => finding.disposition === "suppressed").length,
+        suppressedFindings: matching.filter((finding) => finding.disposition === "suppressed")
+          .length,
         verifiedFindings: matching.filter((finding) => finding.disposition === "verified").length,
         score: auditScore,
       };
@@ -410,7 +388,8 @@ export function scoreExpectationEvidence(
     categories,
     audits,
     coverage: {
-      appliedDetectors: coverage.detectors.filter((detector) => detector.status === "applied").length,
+      appliedDetectors: coverage.detectors.filter((detector) => detector.status === "applied")
+        .length,
       modeledDetectors: audits.length - unmodeledDetectors,
       unmodeledDetectors,
       incompleteDetectors,
