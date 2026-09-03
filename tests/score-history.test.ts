@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+// @ts-expect-error The runtime history writer is intentionally plain JavaScript for CI portability.
 import {
   appendScoreHistory,
   SCORE_HISTORY_RETENTION,
