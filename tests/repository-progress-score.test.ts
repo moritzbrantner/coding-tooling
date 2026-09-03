@@ -4,15 +4,9 @@ import {
   combineRepositoryScore,
   type RepositoryVerificationScore,
 } from "../src/repository-progress-score.ts";
-import type {
-  RepositoryAuditScore,
-  RepositoryScoreDocument,
-} from "../src/repository-score.ts";
+import type { RepositoryAuditScore, RepositoryScoreDocument } from "../src/repository-score.ts";
 
-function audit(
-  id: string,
-  options: Partial<RepositoryAuditScore> = {},
-): RepositoryAuditScore {
+function audit(id: string, options: Partial<RepositoryAuditScore> = {}): RepositoryAuditScore {
   return {
     id,
     version: 1,
