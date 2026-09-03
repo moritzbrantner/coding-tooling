@@ -48,20 +48,32 @@ The boundary is conservative:
 
 Running the compiler can update ordinary ignored build artifacts such as `bin/` and `obj/`; it does not modify authored source files.
 
-## First diagnostic-to-finding adapter
+## Diagnostic-to-finding adapters
 
-`typescript-type-assignability@1` is the first explicit provider-to-expectation mapping. It promotes only TypeScript `TS2322` assignment-compatibility diagnostics.
+Provider diagnostics enter the `CT-*` finding stream only through explicit, versioned mappings.
 
-The adapter is deliberately narrow:
+`typescript-type-assignability@1` promotes only TypeScript `TS2322` assignment-compatibility diagnostics. `dotnet-type-assignability@1` is its Roslyn counterpart and promotes only `CS0029` implicit-conversion diagnostics.
+
+Both adapters follow the same contract:
 
 - one advisory `CT-*` finding is emitted per affected file;
-- repeated `TS2322` diagnostics in a file are aggregated as analysis evidence;
+- repeated matching diagnostics in a file are aggregated as analysis evidence;
 - the finding ID depends on the file and versioned requirement, not source line numbers, so unrelated line movement does not renumber it;
 - provider ID, provider version, diagnostic code, message, project, and source location remain attached as `analysisEvidence`;
-- unrelated TypeScript diagnostics remain visible through `coding-tooling analyze` but are not silently promoted into repository findings;
+- unrelated provider diagnostics remain visible through `coding-tooling analyze` but are not silently promoted into repository findings;
 - the finding remains a warning unless a repository explicitly chooses stronger enforcement.
 
-Coverage for the adapter is based on whether the TypeScript provider actually analyzed projects, not merely on the presence of `.ts` files.
+Coverage for each semantic adapter is based on whether its provider actually analyzed projects, not merely on the presence of source files. An unrestored .NET project therefore counts as a discovered project with `unavailable` semantic coverage rather than as not applicable or clean.
+
+## Prepared calibration
+
+Compiler-backed detectors may need deterministic environment preparation before the provider can run while the provider itself must remain conservative. Calibration supports a small closed preparation set rather than arbitrary shell hooks.
+
+The first preparation is `dotnet-restore`. A calibration case names one project inside its committed fixture. Calibration copies the fixture to a temporary directory, restores that copy with the installed SDK, evaluates findings there, and removes the temporary copy afterward. The committed fixture remains source-only; generated `obj/`/`bin/` state is never checked in, and normal `dotnet-roslyn` analysis still uses `--no-restore`.
+
+If the SDK or restore preparation is unavailable, the calibration case is reported as unavailable rather than being scored as a false negative. Overall calibration becomes `unavailable` when no correctness regression exists but one or more required prepared cases cannot run in the current environment.
+
+Calibration now performs one full finding analysis per case and derives active findings from their dispositions instead of analyzing the same fixture twice. This keeps compiler-backed calibration bounded without weakening evidence.
 
 ## Deterministic action contract
 
@@ -88,19 +100,15 @@ This contract intentionally uses whole-file guarded replacements rather than nak
 
 ## Next independently implementable slices
 
-### 1. .NET diagnostic-to-finding adapter
-
-Calibrate a narrowly selected Roslyn diagnostic before promoting it into a versioned `CT-*` expectation. Preserve SDK/provider provenance exactly as with TypeScript rather than turning all build errors into findings.
-
-### 2. First provider-native action
+### 1. First provider-native action
 
 Once a provider can expose a mechanically unambiguous native fix, translate it into the guarded action contract and dogfood preview/apply/re-analyze behavior. Do not synthesize missing business logic merely because a declaration is incomplete.
 
-### 3. Rust provider
+### 2. Rust provider
 
 Prefer Cargo/rustc/Clippy facts for batch verification and introduce rust-analyzer only for semantic queries that those interfaces do not expose cleanly. Keep existing conservative structural Rust expectations until a richer provider proves stronger evidence.
 
-### 4. Syntax fallback
+### 3. Syntax fallback
 
 Introduce Tree-sitter only for portable, syntax-level facts where no richer provider is available. Syntax-derived evidence must remain distinguishable from compiler-resolved semantic evidence.
 
