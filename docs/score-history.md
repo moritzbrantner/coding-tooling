@@ -18,15 +18,18 @@ Each normal score entry records:
 
 - commit SHA and canonical UTC commit timestamp;
 - score-profile version for comparable historical trends;
+- provenance identifying the exact coding-tooling producer commit, GitHub Actions run and attempt, and validation tier;
 - overall score, rating, and completeness;
 - structural and verification component scores;
 - latest category scores;
 - verification status and passed/failed/error/blocked check counts;
 - active, suppressed, and verified finding counts.
 
+Provenance describes how a snapshot was produced; it does not participate in the score formula or score-profile identity. Existing historical entries created before provenance was introduced remain valid and are not backfilled with inferred values. A rerun for an existing main commit replaces both the score evidence and provenance so the retained entry points to the exact attempt that produced its current value.
+
 The workflow deliberately runs scoring even when repository validation fails. A failed or blocked validation therefore lowers the verification pillar and remains visible in history rather than causing the commit to disappear from the trend.
 
-If score production itself fails after producing a machine-readable score error envelope, history retains an explicit tombstone for that commit instead of omitting it. A tombstone has `score: null`, `verification.status: error`, the active score-profile version, and compact diagnostics describing the score-production failure. The workflow publishes that tombstone first and then fails red so the history remains durable while Actions still surfaces the infrastructure failure. A later successful rerun for the same commit replaces the tombstone through the normal commit-SHA deduplication path.
+If score production itself fails after producing a machine-readable score error envelope, history retains an explicit tombstone for that commit instead of omitting it. A tombstone has `score: null`, `verification.status: error`, the active score-profile version, the same production provenance, and compact diagnostics describing the score-production failure. The workflow publishes that tombstone first and then fails red so the history remains durable while Actions still surfaces the infrastructure failure. A later successful rerun for the same commit replaces the tombstone through the normal commit-SHA deduplication path.
 
 ## Pages surface
 
@@ -38,6 +41,6 @@ If score production itself fails after producing a machine-readable score error 
 - the latest category breakdown;
 - a recent commit evidence table with verification status, passed/failed/error/blocked counts, and score-production diagnostics when present.
 
-Unscored error tombstones remain visible in the recent-commit table but do not become chart points or borrow a delta from an older scored commit.
+Unscored error tombstones remain visible in the recent-commit table but do not become chart points or borrow a delta from an older scored commit. The raw history JSON additionally exposes provenance for agents and deeper debugging.
 
 The page is static and performs no repository execution. Local or CI `coding-tooling run` plus `coding-tooling score` remains authoritative for producing each score snapshot.

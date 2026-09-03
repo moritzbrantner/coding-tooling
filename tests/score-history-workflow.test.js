@@ -32,6 +32,17 @@ describe("score history workflow", () => {
     expect(workflow.slice(verificationStep, scoreStep)).toContain("continue-on-error: true");
   });
 
+  test("records producer, workflow, and validation-tier provenance", () => {
+    const appendStep = workflow.indexOf("- name: Append score snapshot");
+    const publishStep = workflow.indexOf("- name: Publish history branch");
+    const appendBody = workflow.slice(appendStep, publishStep);
+
+    expect(appendBody).toContain('--producer-commit "$GITHUB_SHA"');
+    expect(appendBody).toContain('--workflow-run-id "$GITHUB_RUN_ID"');
+    expect(appendBody).toContain('--workflow-run-attempt "$GITHUB_RUN_ATTEMPT"');
+    expect(appendBody).toContain('--validation-tier "self"');
+  });
+
   test("runs only for main pushes or explicit dispatch", () => {
     expect(workflow).toContain("branches: [main]");
     expect(workflow).not.toContain("branches: [score-history]");

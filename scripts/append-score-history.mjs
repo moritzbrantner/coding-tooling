@@ -69,6 +69,29 @@ function errorVerification() {
   };
 }
 
+function snapshotProvenance(metadata) {
+  if (
+    !metadata?.producerCommit ||
+    !metadata?.workflowRunId ||
+    !metadata?.workflowRunAttempt ||
+    !metadata?.validationTier
+  ) {
+    throw new Error(
+      "producer commit, workflow run id/attempt, and validation tier provenance are required",
+    );
+  }
+  const workflowRunAttempt = Number(metadata.workflowRunAttempt);
+  if (!Number.isInteger(workflowRunAttempt) || workflowRunAttempt <= 0) {
+    throw new Error("workflow run attempt must be a positive integer");
+  }
+  return {
+    producerCommit: String(metadata.producerCommit),
+    workflowRunId: String(metadata.workflowRunId),
+    workflowRunAttempt,
+    validationTier: String(metadata.validationTier),
+  };
+}
+
 export function appendScoreHistory(existing, scoreEnvelope, metadata) {
   if (scoreEnvelope?.schemaVersion !== 1 || scoreEnvelope?.operation !== "score") {
     throw new Error("score report is not a coding-tooling score envelope");
@@ -103,12 +126,14 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
     throw new Error(`score history belongs to ${history.repository}, not ${metadata.repository}`);
   }
 
+  const provenance = snapshotProvenance(metadata);
   const diagnostics = compactDiagnostics(scoreEnvelope.diagnostics);
   const entry = score
     ? {
         commit: metadata.commit,
         timestamp: canonicalTimestamp(metadata.timestamp),
         scoreProfileVersion,
+        provenance,
         score: numberOrNull(score.score),
         rating: score.rating,
         completeness: score.completeness,
@@ -127,6 +152,7 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
         commit: metadata.commit,
         timestamp: canonicalTimestamp(metadata.timestamp),
         scoreProfileVersion,
+        provenance,
         score: null,
         rating: "unavailable",
         completeness: "unavailable",
@@ -164,9 +190,23 @@ export function main(argv = process.argv.slice(2)) {
   const repository = option(argv, "repository");
   const commit = option(argv, "commit");
   const timestamp = option(argv, "timestamp");
-  if (!historyPath || !scorePath || !repository || !commit || !timestamp) {
+  const producerCommit = option(argv, "producer-commit");
+  const workflowRunId = option(argv, "workflow-run-id");
+  const workflowRunAttempt = option(argv, "workflow-run-attempt");
+  const validationTier = option(argv, "validation-tier");
+  if (
+    !historyPath ||
+    !scorePath ||
+    !repository ||
+    !commit ||
+    !timestamp ||
+    !producerCommit ||
+    !workflowRunId ||
+    !workflowRunAttempt ||
+    !validationTier
+  ) {
     throw new Error(
-      "Usage: append-score-history --history <path> --score <path> --repository <owner/repo> --commit <sha> --timestamp <iso>",
+      "Usage: append-score-history --history <path> --score <path> --repository <owner/repo> --commit <sha> --timestamp <iso> --producer-commit <sha> --workflow-run-id <id> --workflow-run-attempt <n> --validation-tier <tier>",
     );
   }
 
@@ -176,6 +216,10 @@ export function main(argv = process.argv.slice(2)) {
     repository,
     commit,
     timestamp,
+    producerCommit,
+    workflowRunId,
+    workflowRunAttempt,
+    validationTier,
   });
   writeFileSync(absoluteHistory, `${JSON.stringify(updated, null, 2)}\n`, "utf8");
 }
