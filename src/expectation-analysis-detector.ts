@@ -19,8 +19,7 @@ const typeScriptAssignability: DiagnosticFindingConfig = {
   subjectLabel: "TypeScript source",
   requirementDescription: "TypeScript assignments are type-compatible",
   singularMessage: (path) => `TypeScript reports an incompatible assignment in ${path}`,
-  pluralMessage: (path, count) =>
-    `TypeScript reports ${count} incompatible assignments in ${path}`,
+  pluralMessage: (path, count) => `TypeScript reports ${count} incompatible assignments in ${path}`,
 };
 
 const dotNetAssignability: DiagnosticFindingConfig = {
