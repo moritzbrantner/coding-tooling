@@ -39,9 +39,10 @@ describe("detector calibration", () => {
 
     expect(result.status).toBe("passed");
     expect(result.data.failedCases).toEqual([]);
-    expect(result.data.caseCount).toBe(10);
+    expect(result.data.unavailableCases).toEqual([]);
+    expect(result.data.caseCount).toBe(11);
     expect(result.data.metrics).toEqual({
-      truePositive: 5,
+      truePositive: 6,
       falsePositive: 0,
       falseNegative: 0,
       trueNegative: 8,

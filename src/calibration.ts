@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
 
 import {
   analyzeExpectations,
@@ -7,7 +8,7 @@ import {
   type Finding,
   type FindingDisposition,
 } from "./expectations.ts";
-import { walkFiles } from "./shared.ts";
+import { commandAvailable, runCommand, walkFiles } from "./shared.ts";
 
 export type CalibrationExpectation = "finding" | "satisfied" | "unknown";
 export type CalibrationEnvelope = Omit<ExpectationEnvelope, "operation"> & {
@@ -21,11 +22,17 @@ export type CalibrationLabel = {
   disposition?: Exclude<FindingDisposition, "active">;
 };
 
+export type CalibrationPreparation = {
+  kind: "dotnet-restore";
+  project: string;
+};
+
 export type CalibrationCase = {
   schemaVersion: 1;
   id: string;
   detector: string;
   fixture: string;
+  preparation?: CalibrationPreparation;
   coverage?: "applied" | "not-applicable" | "unsupported" | "unavailable";
   labels: CalibrationLabel[];
 };
@@ -44,11 +51,31 @@ export type CalibrationCaseResult = {
   id: string;
   detector: string;
   fixture: string;
+  preparation?: CalibrationPreparation;
+  preparationStatus?: "applied" | "unavailable";
+  unavailableReason?: string;
   coverage: string | undefined;
   expectedCoverage: string | undefined;
   metrics: CalibrationMetrics;
   unlabeledFindings: string[];
   dispositionMismatches: string[];
+};
+
+type PreparedFixture = {
+  root: string;
+  preparationStatus?: "applied" | "unavailable";
+  unavailableReason?: string;
+  cleanup(): void;
+};
+
+const emptyMetrics: CalibrationMetrics = {
+  truePositive: 0,
+  falsePositive: 0,
+  falseNegative: 0,
+  trueNegative: 0,
+  unknown: 0,
+  precision: null,
+  recall: null,
 };
 
 function ratio(numerator: number, denominator: number): number | null {
@@ -123,6 +150,25 @@ function findingKey(finding: Finding): string {
   return `${finding.subject.key}\0${finding.requirement.key}`;
 }
 
+function preparation(value: unknown, path: string): CalibrationPreparation | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${path} preparation is invalid`);
+  }
+  const candidate = value as Partial<CalibrationPreparation>;
+  if (
+    candidate.kind !== "dotnet-restore" ||
+    typeof candidate.project !== "string" ||
+    !candidate.project
+  ) {
+    throw new Error(`${path} preparation is invalid`);
+  }
+  if (isAbsolute(candidate.project) || candidate.project.split(/[\\/]/).includes("..")) {
+    throw new Error(`${path} preparation project must stay inside the fixture`);
+  }
+  return candidate as CalibrationPreparation;
+}
+
 function parseCase(path: string): CalibrationCase {
   let value: unknown;
   try {
@@ -161,7 +207,10 @@ function parseCase(path: string): CalibrationCase {
       throw new Error(`${path} labels[${index}].disposition is invalid`);
     }
   }
-  return candidate as CalibrationCase;
+  return {
+    ...(candidate as CalibrationCase),
+    preparation: preparation(candidate.preparation, path),
+  };
 }
 
 function loadCases(root: string): CalibrationCase[] {
@@ -191,31 +240,105 @@ function aggregateMetrics(values: readonly CalibrationMetrics[]): CalibrationMet
   };
 }
 
-function evaluateCase(root: string, calibration: CalibrationCase): CalibrationCaseResult {
-  const fixtureRoot = resolve(root, calibration.fixture);
-  const activeAnalysis = analyzeExpectations(fixtureRoot);
-  const fullAnalysis = analyzeExpectations(fixtureRoot, { includeSuppressed: true });
-  const activeFindings = activeAnalysis.findings.filter(
-    (finding) => finding.expectationId === calibration.detector,
-  );
-  const allFindings = fullAnalysis.findings.filter(
-    (finding) => finding.expectationId === calibration.detector,
-  );
-  const activeKeys = new Set(activeFindings.map(findingKey));
-  const allByKey = new Map(allFindings.map((finding) => [findingKey(finding), finding]));
-  const scored = scoreCalibration(calibration.labels, activeKeys, allByKey);
-  const coverage = fullAnalysis.coverage.detectors.find(
-    (detector) => detector.id === calibration.detector,
-  )?.status;
+function isWithin(root: string, path: string): boolean {
+  const absoluteRoot = resolve(root);
+  const absolutePath = resolve(path);
+  return absolutePath === absoluteRoot || absolutePath.startsWith(`${absoluteRoot}${sep}`);
+}
 
+function prepareFixture(sourceRoot: string, calibration: CalibrationCase): PreparedFixture {
+  if (!calibration.preparation) {
+    return { root: sourceRoot, cleanup() {} };
+  }
+
+  const temporaryParent = mkdtempSync(join(tmpdir(), "coding-tooling-calibration-"));
+  const temporaryRoot = join(temporaryParent, "fixture");
+  cpSync(sourceRoot, temporaryRoot, { recursive: true });
+
+  const cleanup = () => rmSync(temporaryParent, { recursive: true, force: true });
+  const project = resolve(temporaryRoot, calibration.preparation.project);
+  if (!isWithin(temporaryRoot, project) || !existsSync(project)) {
+    cleanup();
+    throw new Error(
+      `${calibration.id} preparation project does not exist: ${calibration.preparation.project}`,
+    );
+  }
+  if (!commandAvailable("dotnet")) {
+    return {
+      root: temporaryRoot,
+      preparationStatus: "unavailable",
+      unavailableReason: "dotnet SDK is unavailable for calibration preparation",
+      cleanup,
+    };
+  }
+
+  const result = runCommand(
+    "dotnet",
+    ["restore", project, "--ignore-failed-sources", "--nologo", "--property:NuGetAudit=false"],
+    temporaryRoot,
+  );
+  if (result.status !== 0) {
+    const detail = [result.error, result.stderr.trim(), result.stdout.trim()].find(Boolean);
+    return {
+      root: temporaryRoot,
+      preparationStatus: "unavailable",
+      unavailableReason: detail ?? "dotnet restore preparation failed",
+      cleanup,
+    };
+  }
+
+  return { root: temporaryRoot, preparationStatus: "applied", cleanup };
+}
+
+function unavailableCase(calibration: CalibrationCase, reason: string): CalibrationCaseResult {
   return {
     id: calibration.id,
     detector: calibration.detector,
     fixture: calibration.fixture,
-    coverage,
+    preparation: calibration.preparation,
+    preparationStatus: "unavailable",
+    unavailableReason: reason,
+    coverage: undefined,
     expectedCoverage: calibration.coverage,
-    ...scored,
+    metrics: { ...emptyMetrics },
+    unlabeledFindings: [],
+    dispositionMismatches: [],
   };
+}
+
+function evaluateCase(root: string, calibration: CalibrationCase): CalibrationCaseResult {
+  const fixtureSource = resolve(root, calibration.fixture);
+  const prepared = prepareFixture(fixtureSource, calibration);
+  try {
+    if (prepared.unavailableReason) {
+      return unavailableCase(calibration, prepared.unavailableReason);
+    }
+
+    const fullAnalysis = analyzeExpectations(prepared.root, { includeSuppressed: true });
+    const allFindings = fullAnalysis.findings.filter(
+      (finding) => finding.expectationId === calibration.detector,
+    );
+    const activeFindings = allFindings.filter((finding) => finding.disposition === "active");
+    const activeKeys = new Set(activeFindings.map(findingKey));
+    const allByKey = new Map(allFindings.map((finding) => [findingKey(finding), finding]));
+    const scored = scoreCalibration(calibration.labels, activeKeys, allByKey);
+    const coverage = fullAnalysis.coverage.detectors.find(
+      (detector) => detector.id === calibration.detector,
+    )?.status;
+
+    return {
+      id: calibration.id,
+      detector: calibration.detector,
+      fixture: calibration.fixture,
+      preparation: calibration.preparation,
+      preparationStatus: prepared.preparationStatus,
+      coverage,
+      expectedCoverage: calibration.coverage,
+      ...scored,
+    };
+  } finally {
+    prepared.cleanup();
+  }
 }
 
 export function calibrationCommand(root: string): CalibrationEnvelope {
@@ -223,15 +346,21 @@ export function calibrationCommand(root: string): CalibrationEnvelope {
   try {
     const cases = loadCases(root);
     const results = cases.map((calibration) => evaluateCase(root, calibration));
-    const detectorNames = [...new Set(results.map((result) => result.detector))].sort();
+    const availableResults = results.filter((result) => !result.unavailableReason);
+    const detectorNames = [...new Set(availableResults.map((result) => result.detector))].sort();
     const detectors = detectorNames.map((detector) => ({
       detector,
       metrics: aggregateMetrics(
-        results.filter((result) => result.detector === detector).map((result) => result.metrics),
+        availableResults
+          .filter((result) => result.detector === detector)
+          .map((result) => result.metrics),
       ),
     }));
-    const metrics = aggregateMetrics(results.map((result) => result.metrics));
-    const failedCases = results
+    const metrics = aggregateMetrics(availableResults.map((result) => result.metrics));
+    const unavailableCases = results
+      .filter((result) => result.unavailableReason)
+      .map((result) => result.id);
+    const failedCases = availableResults
       .filter(
         (result) =>
           result.metrics.falsePositive > 0 ||
@@ -245,7 +374,8 @@ export function calibrationCommand(root: string): CalibrationEnvelope {
     return {
       schemaVersion: 1,
       operation: "calibration",
-      status: failedCases.length === 0 ? "passed" : "failed",
+      status:
+        failedCases.length > 0 ? "failed" : unavailableCases.length > 0 ? "unavailable" : "passed",
       durationMs: Date.now() - started,
       data: {
         root,
@@ -254,8 +384,12 @@ export function calibrationCommand(root: string): CalibrationEnvelope {
         detectors,
         cases: results,
         failedCases,
+        unavailableCases,
       },
-      diagnostics: [],
+      diagnostics: unavailableCases.map((id) => ({
+        code: "calibration-case-unavailable",
+        message: `${id} could not be prepared in this environment`,
+      })),
     };
   } catch (error) {
     return {

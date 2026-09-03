@@ -85,6 +85,25 @@ describe("findings analysis coverage", () => {
     });
   });
 
+  test("reports unavailable .NET semantic analysis with a discovered project subject", () => {
+    const root = fixture();
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(
+      join(root, "Fixture.csproj"),
+      '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net999.0</TargetFramework></PropertyGroup></Project>\n',
+    );
+    writeFileSync(join(root, "src", "Value.cs"), "namespace Fixture; public class Value {}\n");
+
+    const result = coverage(root);
+
+    expect(result.technologies).toContain("dotnet");
+    expect(result.unsupportedTechnologies).toContain("dotnet");
+    expect(detector(result, "dotnet-type-assignability")).toMatchObject({
+      status: "unavailable",
+      subjects: 1,
+    });
+  }, 15000);
+
   test("reports Rust as unsupported for deeper structural source-test analysis", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });

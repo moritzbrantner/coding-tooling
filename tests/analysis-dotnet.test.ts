@@ -74,7 +74,7 @@ describe("Roslyn-backed .NET analysis", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  test("normalizes a real Roslyn compiler diagnostic from a restored project", () => {
+  test("normalizes a real Roslyn conversion diagnostic", () => {
     if (!commandAvailable("dotnet")) return;
     const { root, projectPath } = project(
       "namespace Fixture; public static class Value { public static string Get() => 123; }\n",
@@ -97,7 +97,7 @@ describe("Roslyn-backed .NET analysis", () => {
       project: "Fixture.csproj",
       location: { path: "src/Value.cs", startLine: 1 },
     });
-  });
+  }, 15000);
 
   test("passes a restored C# project with no compiler diagnostics", () => {
     if (!commandAvailable("dotnet")) return;
@@ -110,5 +110,5 @@ describe("Roslyn-backed .NET analysis", () => {
 
     expect(result.status).toBe("applied");
     expect(result.diagnostics).toEqual([]);
-  });
+  }, 15000);
 });

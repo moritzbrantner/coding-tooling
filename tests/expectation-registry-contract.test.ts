@@ -3,7 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { typeScriptAssignabilityFindings } from "../src/expectation-analysis-detector.ts";
+import {
+  dotNetAssignabilityFindings,
+  typeScriptAssignabilityFindings,
+} from "../src/expectation-analysis-detector.ts";
 import type { RawFinding } from "../src/expectation-detector-types.ts";
 import { expectationDescriptors, expectationRegistry } from "../src/expectation-detectors.ts";
 import {
@@ -60,6 +63,7 @@ describe("expectation detector registry contract", () => {
 
     expect(registry.map((entry) => entry.id)).toEqual([
       "benchmark-evidence",
+      "dotnet-type-assignability",
       "javascript-source-test",
       "package-aggregate-check",
       "package-cli-wiring",
@@ -75,6 +79,7 @@ describe("expectation detector registry contract", () => {
     ]);
     expect(registry.map((entry) => [entry.id, entry.version])).toEqual([
       ["benchmark-evidence", 1],
+      ["dotnet-type-assignability", 1],
       ["javascript-source-test", 1],
       ["package-aggregate-check", 1],
       ["package-cli-wiring", 1],
@@ -121,6 +126,7 @@ describe("expectation detector registry contract", () => {
     const context = createDetectorContext(fixture());
     const batches: RawFinding[][] = [
       missingBenchmarkEvidenceFindings(context),
+      dotNetAssignabilityFindings(context),
       missingJavaScriptTestFindings(context),
       missingAggregateCheckFindings(context),
       missingCliWiringFindings(context),
@@ -135,6 +141,8 @@ describe("expectation detector registry contract", () => {
       typeScriptAssignabilityFindings(context),
     ];
 
-    expect(batches.map((batch) => batch.length)).toEqual([0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0]);
+    expect(batches.map((batch) => batch.length)).toEqual([
+      0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0,
+    ]);
   });
 });
