@@ -12,7 +12,7 @@ Each commit appears at most once. Re-running the workflow for the same commit re
 
 ## Snapshot semantics
 
-Each entry records:
+Each normal score entry records:
 
 - commit SHA and canonical UTC commit timestamp;
 - score-profile version for comparable historical trends;
@@ -24,6 +24,8 @@ Each entry records:
 
 The workflow deliberately runs scoring even when repository validation fails. A failed or blocked validation therefore lowers the verification pillar and remains visible in history rather than causing the commit to disappear from the trend.
 
+If score production itself fails after producing a machine-readable score error envelope, history retains an explicit tombstone for that commit instead of omitting it. A tombstone has `score: null`, `verification.status: error`, the active score-profile version, and compact diagnostics describing the score-production failure. The workflow publishes that tombstone first and then fails red so the history remains durable while Actions still surfaces the infrastructure failure. A later successful rerun for the same commit replaces the tombstone through the normal commit-SHA deduplication path.
+
 ## Pages surface
 
 `/score/` reads the raw `history.json` document from the `score-history` branch and renders:
@@ -32,6 +34,8 @@ The workflow deliberately runs scoring even when repository validation fails. A 
 - change from the previous scored commit within the same score profile;
 - a 60-commit score chart that does not connect incompatible score profiles;
 - the latest category breakdown;
-- a recent commit evidence table.
+- a recent commit evidence table with verification status, passed/failed/error/blocked counts, and score-production diagnostics when present.
+
+Unscored error tombstones remain visible in the recent-commit table but do not become chart points or borrow a delta from an older scored commit.
 
 The page is static and performs no repository execution. Local or CI `coding-tooling run` plus `coding-tooling score` remains authoritative for producing each score snapshot.
