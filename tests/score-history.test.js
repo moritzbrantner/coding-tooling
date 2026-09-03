@@ -108,9 +108,7 @@ describe("repository score history", () => {
         structuralScore: null,
         verificationScore: null,
         verification: expect.objectContaining({ status: "error", score: null }),
-        diagnostics: [
-          expect.objectContaining({ code: "repository-verification-score-failed" }),
-        ],
+        diagnostics: [expect.objectContaining({ code: "repository-verification-score-failed" })],
       }),
     ]);
   });
