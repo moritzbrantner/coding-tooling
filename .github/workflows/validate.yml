@@ -20,6 +20,11 @@ jobs:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
+      - name: Emit progress score formatter diff
+        run: |
+          ./node_modules/.bin/oxfmt src/repository-progress-score.ts tests/repository-progress-score.test.ts
+          git diff -- src/repository-progress-score.ts tests/repository-progress-score.test.ts
+          exit 1
       - name: Validate through the local Action
         uses: ./
         with:
