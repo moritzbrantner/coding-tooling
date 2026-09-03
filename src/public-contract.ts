@@ -77,9 +77,11 @@ export type PublicContractReport = {
     discovered: number;
     verified: number;
     unverified: number;
-    unsupported: number;
+    incompleteDiscovery: number;
     failedEvidence: number;
-    verifiedRatio: number;
+    unavailableEvidence: number;
+    errorEvidence: number;
+    verifiedRatio: number | null;
     strictReady: boolean;
   };
   surfaces: PublicContractSurfaceResult[];
@@ -111,6 +113,44 @@ const strongEvidence = new Set<PublicContractEvidenceKind>([
   "package",
   "compile",
 ]);
+const evidenceKinds: readonly PublicContractEvidenceKind[] = [
+  "behavioral",
+  "contract",
+  "render",
+  "interaction",
+  "accessibility",
+  "visual",
+  "package",
+  "compile",
+  "reachability",
+];
+const evidenceCapabilities: Record<PublicContractEvidenceKind, readonly Capability[]> = {
+  behavioral: ["test", "test:unit", "test:integration", "test:e2e", "test:e2e:smoke"],
+  contract: [
+    "test",
+    "test:unit",
+    "test:integration",
+    "test:e2e",
+    "test:e2e:smoke",
+    "package:check",
+    "template:smoke",
+  ],
+  render: ["test:e2e", "test:e2e:smoke", "test:visual", "storybook:check"],
+  interaction: ["test:e2e", "test:e2e:smoke"],
+  accessibility: ["test:accessibility", "web:audit"],
+  visual: ["test:visual", "test:e2e", "test:e2e:smoke"],
+  package: ["package:check", "template:smoke"],
+  compile: ["build", "typecheck", "package:check"],
+  reachability: [
+    "test",
+    "test:unit",
+    "test:integration",
+    "test:e2e",
+    "test:e2e:smoke",
+    "build",
+    "typecheck",
+  ],
+};
 
 function surfaceId(kind: PublicContractSurfaceKind, ...parts: string[]): string {
   return [kind, ...parts].map((part) => encodeURIComponent(part)).join(":");
@@ -354,22 +394,15 @@ function validateVerifications(
     ids.add(verification.id);
     if (!surfaceIds.has(verification.surface))
       throw new Error(`Unknown public contract surface: ${verification.surface}`);
+    if (!evidenceKinds.includes(verification.kind))
+      throw new Error(`Unknown public contract evidence kind: ${verification.kind}`);
     if (!capabilities.includes(verification.capability))
       throw new Error(`Unknown public contract capability: ${verification.capability}`);
-    if (
-      ![
-        "behavioral",
-        "contract",
-        "render",
-        "interaction",
-        "accessibility",
-        "visual",
-        "package",
-        "compile",
-        "reachability",
-      ].includes(verification.kind)
-    )
-      throw new Error(`Unknown public contract evidence kind: ${verification.kind}`);
+    if (!evidenceCapabilities[verification.kind].includes(verification.capability)) {
+      throw new Error(
+        `Public contract evidence kind '${verification.kind}' cannot use capability '${verification.capability}'`,
+      );
+    }
   }
 }
 
@@ -452,12 +485,15 @@ export function publicContractCommand(
       return { ...surface, status: verified ? "verified" : "unverified", evidence };
     });
     const verified = results.filter((surface) => surface.status === "verified").length;
-    const unsupported = results.filter((surface) => surface.discovery.status === "partial").length;
-    const failedEvidence = results.reduce(
-      (total, surface) =>
-        total + surface.evidence.filter((item) => item.outcome !== "passed").length,
-      0,
-    );
+    const unverified = results.length - verified;
+    const incompleteDiscovery = results.filter(
+      (surface) => surface.discovery.status === "partial",
+    ).length;
+    const evidence = results.flatMap((surface) => surface.evidence);
+    const failedEvidence = evidence.filter((item) => item.outcome === "failed").length;
+    const unavailableEvidence = evidence.filter((item) => item.outcome === "unavailable").length;
+    const errorEvidence = evidence.filter((item) => item.outcome === "error").length;
+    const evidenceIssues = failedEvidence + unavailableEvidence + errorEvidence;
     const unsupportedAnalyzers = [
       ...(results.some((surface) => surface.kind === "rust-crate") ? ["rust-item-api"] : []),
       ...(results.some((surface) => surface.kind === "dotnet-assembly") ? ["dotnet-item-api"] : []),
@@ -475,17 +511,30 @@ export function publicContractCommand(
       summary: {
         discovered: results.length,
         verified,
-        unverified: results.length - verified,
-        unsupported,
+        unverified,
+        incompleteDiscovery,
         failedEvidence,
-        verifiedRatio: results.length === 0 ? 1 : verified / results.length,
-        strictReady: results.length - verified === 0 && unsupported === 0 && failedEvidence === 0,
+        unavailableEvidence,
+        errorEvidence,
+        verifiedRatio: results.length === 0 ? null : verified / results.length,
+        strictReady:
+          results.length > 0 &&
+          unverified === 0 &&
+          incompleteDiscovery === 0 &&
+          evidenceIssues === 0,
       },
       surfaces: results,
       unsupportedAnalyzers,
     };
 
     const diagnostics: Diagnostic[] = [];
+    if (results.length === 0) {
+      diagnostics.push({
+        code: "public-contract-no-discovered-surfaces",
+        message:
+          "No public surfaces were discovered. Verification ratio is unavailable and strict readiness is false until absence can be established positively.",
+      });
+    }
     if (enforcement === "protect-new") {
       diagnostics.push({
         code: "public-contract-protect-new-not-yet-supported",
@@ -497,7 +546,7 @@ export function publicContractCommand(
     if (enforcement === "strict" && !report.summary.strictReady) {
       diagnostics.push({
         code: "public-contract-not-strict-ready",
-        message: `${report.summary.unverified} public surfaces are unverified and ${report.summary.unsupported} have incomplete discovery.`,
+        message: `${report.summary.unverified} public surfaces are unverified, ${report.summary.incompleteDiscovery} have incomplete discovery, and ${evidenceIssues} evidence checks did not pass.`,
       });
       return reportEnvelope("failed", started, report, diagnostics);
     }
@@ -512,9 +561,11 @@ export function publicContractCommand(
         discovered: 0,
         verified: 0,
         unverified: 0,
-        unsupported: 0,
+        incompleteDiscovery: 0,
         failedEvidence: 0,
-        verifiedRatio: 0,
+        unavailableEvidence: 0,
+        errorEvidence: 0,
+        verifiedRatio: null,
         strictReady: false,
       },
       surfaces: [],
