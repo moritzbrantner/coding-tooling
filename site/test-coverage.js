@@ -157,7 +157,9 @@ export function parsePublishedSnapshot(content, expectedRepository) {
   if (parsed?.schemaVersion !== 1 || parsed?.kind !== "coding-tooling-test-coverage-snapshot")
     throw new Error("Unsupported published coverage snapshot schema");
   if (parsed?.repository?.fullName !== expectedRepository)
-    throw new Error("Published coverage snapshot repository does not match the requested repository");
+    throw new Error(
+      "Published coverage snapshot repository does not match the requested repository",
+    );
   if (!/^[0-9a-f]{40}$/i.test(parsed?.repository?.revision ?? ""))
     throw new Error("Published coverage snapshot revision is not an exact Git commit SHA");
   if (!parsed.generatedAt || Number.isNaN(Date.parse(parsed.generatedAt)))
@@ -177,7 +179,8 @@ function normalizePublishedCoverage(value) {
     functions: publishedMetric(value.functions),
     branches: publishedMetric(value.branches),
   };
-  if (!Object.values(coverage).some(Boolean)) throw new Error("Published snapshot has no coverage totals");
+  if (!Object.values(coverage).some(Boolean))
+    throw new Error("Published snapshot has no coverage totals");
   return coverage;
 }
 

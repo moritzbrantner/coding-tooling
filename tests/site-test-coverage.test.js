@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { buildTestCoverageSnapshot } from "../scripts/build-test-coverage-snapshot.js";
-import {
-  parseCoverage,
-  parsePublishedSnapshot,
-  testCoverageJson,
-} from "../site/test-coverage.js";
+import { parseCoverage, parsePublishedSnapshot, testCoverageJson } from "../site/test-coverage.js";
 
 const revision = "1111111111111111111111111111111111111111";
 

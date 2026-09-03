@@ -11,8 +11,10 @@ export function buildTestCoverageSnapshot({
   sourcePath,
   sourceFormat,
 }) {
-  if (!repository || !repository.includes("/")) throw new Error("--repository must be owner/repository");
-  if (!/^[0-9a-f]{40}$/i.test(revision ?? "")) throw new Error("--revision must be an exact Git commit SHA");
+  if (!repository || !repository.includes("/"))
+    throw new Error("--repository must be owner/repository");
+  if (!/^[0-9a-f]{40}$/i.test(revision ?? ""))
+    throw new Error("--revision must be an exact Git commit SHA");
   if (!generatedAt || Number.isNaN(Date.parse(generatedAt)))
     throw new Error("--generated-at must be an ISO-8601 timestamp");
 
