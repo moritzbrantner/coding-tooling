@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+// @ts-expect-error The browser score model is intentionally plain JavaScript for direct Pages use.
 import {
   chartPoints,
   HISTORY_SCHEMA,
@@ -22,7 +23,9 @@ describe("score history dashboard model", () => {
   test("normalizes chronological history and exposes the latest commit", () => {
     const normalized = normalizeHistory(history);
 
-    expect(normalized.entries.map((entry) => entry.score)).toEqual([80, 90]);
+    expect(normalized.entries.map((entry: { score: number | null }) => entry.score)).toEqual([
+      80, 90,
+    ]);
     expect(latestEntry(normalized)?.score).toBe(90);
     expect(scoreDelta(normalized.entries)).toBe(10);
     expect(shortCommit(normalized.entries[0]!.commit)).toBe("aaaaaaaa");
