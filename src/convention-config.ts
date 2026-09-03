@@ -423,7 +423,11 @@ function packageScriptForCommand(
 }
 
 function tokenIsTool(token: string, tool: SupportedTool): boolean {
-  return basename(token) === tool || token === tool;
+  const name = basename(token);
+  if (name === tool || token === tool) return true;
+  if (!name.startsWith(`${tool}@`)) return false;
+  const version = name.slice(tool.length + 1);
+  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version);
 }
 
 function tokenSelectsConfig(token: string): boolean {
@@ -435,6 +439,20 @@ function tokenSelectsConfig(token: string): boolean {
   );
 }
 
+function packageScriptToolIndex(tokens: string[], tool: SupportedTool): number {
+  if (tokenIsTool(tokens[0] ?? "", tool)) return 0;
+  const runner = basename(tokens[0] ?? "");
+  if ((runner === "bunx" || runner === "npx") && tokenIsTool(tokens[1] ?? "", tool)) return 1;
+  if (
+    (runner === "pnpm" || runner === "yarn") &&
+    tokens[1] === "dlx" &&
+    tokenIsTool(tokens[2] ?? "", tool)
+  ) {
+    return 2;
+  }
+  return -1;
+}
+
 function safePackageScriptUsesTool(script: string, tool: SupportedTool): boolean {
   const mentionsTool = new RegExp(`(^|[^a-zA-Z0-9_-])${tool}([^a-zA-Z0-9_-]|$)`).test(script);
   if (!mentionsTool) return false;
@@ -444,11 +462,11 @@ function safePackageScriptUsesTool(script: string, tool: SupportedTool): boolean
     );
   }
   const tokens = script.trim().split(/\s+/);
-  const first = tokens[0] ?? "";
-  if (!tokenIsTool(first, tool)) {
+  const toolIndex = packageScriptToolIndex(tokens, tool);
+  if (toolIndex < 0) {
     throw new Error(`Cannot safely identify ${tool} as the package-script entrypoint: ${script}`);
   }
-  if (tokens.slice(1).some(tokenSelectsConfig)) {
+  if (tokens.slice(toolIndex + 1).some(tokenSelectsConfig)) {
     throw new Error(
       `Cannot compose convention config with a package script that already selects a config: ${script}`,
     );
