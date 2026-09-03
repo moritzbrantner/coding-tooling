@@ -29,6 +29,7 @@ type CoverageTarget =
   | "packages"
   | "typescript-source"
   | "typescript-analysis-projects"
+  | "dotnet-analysis-projects"
   | "javascript-source"
   | "script-source"
   | "rust-explicit-targets"
@@ -37,6 +38,7 @@ type CoverageTarget =
 
 const coverageTargets: Record<string, CoverageTarget> = {
   "benchmark-evidence": "packages",
+  "dotnet-type-assignability": "dotnet-analysis-projects",
   "javascript-source-test": "javascript-source",
   "package-aggregate-check": "packages",
   "package-cli-wiring": "packages",
@@ -64,6 +66,8 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
       );
     case "typescript-analysis-projects":
       return context.analysisProvider("typescript-compiler")?.projects.length ?? 0;
+    case "dotnet-analysis-projects":
+      return context.analysisProvider("dotnet-roslyn")?.projects.length ?? 0;
     case "javascript-source":
       return context.packages.reduce(
         (total, packageInfo) => total + packageInfo.javaScriptSourceFiles.length,
@@ -84,11 +88,11 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
   }
 }
 
-function semanticTypeScriptCoverage(context: DetectorContext): {
-  status: DetectorCoverageStatus;
-  subjects: number;
-} {
-  const provider = context.analysisProvider("typescript-compiler");
+function semanticProviderCoverage(
+  context: DetectorContext,
+  providerId: string,
+): { status: DetectorCoverageStatus; subjects: number } {
+  const provider = context.analysisProvider(providerId);
   if (!provider) return { status: "unavailable", subjects: 0 };
   const subjects = provider.projects.length;
   if (provider.status === "applied") return { status: "applied", subjects };
@@ -131,7 +135,14 @@ export function analyzeFindingsCoverage(
       return {
         id: descriptor.id,
         version: descriptor.version,
-        ...semanticTypeScriptCoverage(context),
+        ...semanticProviderCoverage(context, "typescript-compiler"),
+      };
+    }
+    if (target === "dotnet-analysis-projects") {
+      return {
+        id: descriptor.id,
+        version: descriptor.version,
+        ...semanticProviderCoverage(context, "dotnet-roslyn"),
       };
     }
     const subjects = detectorSubjects(root, context, target);
