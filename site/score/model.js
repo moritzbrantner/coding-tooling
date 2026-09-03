@@ -8,6 +8,8 @@ export function normalizeHistory(document) {
     .filter((entry) => entry && typeof entry.commit === "string")
     .map((entry) => ({
       ...entry,
+      scoreProfileVersion:
+        typeof entry.scoreProfileVersion === "string" ? entry.scoreProfileVersion : null,
       score: Number.isFinite(entry.score) ? entry.score : null,
       structuralScore: Number.isFinite(entry.structuralScore) ? entry.structuralScore : null,
       verificationScore: Number.isFinite(entry.verificationScore) ? entry.verificationScore : null,
@@ -24,14 +26,24 @@ export function shortCommit(commit) {
   return commit.slice(0, 8);
 }
 
+function scoredEntries(entries) {
+  return entries.filter((entry) => entry.score !== null);
+}
+
+export function scoreProfileChanged(entries) {
+  const scored = scoredEntries(entries);
+  if (scored.length < 2) return false;
+  return scored.at(-1).scoreProfileVersion !== scored.at(-2).scoreProfileVersion;
+}
+
 export function scoreDelta(entries) {
-  const scored = entries.filter((entry) => entry.score !== null);
-  if (scored.length < 2) return null;
+  const scored = scoredEntries(entries);
+  if (scored.length < 2 || scoreProfileChanged(scored)) return null;
   return scored.at(-1).score - scored.at(-2).score;
 }
 
 export function chartPoints(entries, width = 720, height = 240, padding = 24) {
-  const scored = entries.filter((entry) => entry.score !== null);
+  const scored = scoredEntries(entries);
   if (scored.length === 0) return [];
   const usableWidth = width - padding * 2;
   const usableHeight = height - padding * 2;
