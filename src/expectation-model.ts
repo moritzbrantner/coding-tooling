@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
+import type { AnalysisLocation } from "./analysis-model.ts";
 import type { ResultStatus } from "./model.ts";
 import { reconcileTextFile, type ReconcileFileResult } from "./reconciliation.ts";
 import { readJson } from "./shared.ts";
@@ -34,6 +35,15 @@ export type FindingEvidence = {
   kind: "file" | "manifest" | "config";
   path: string;
   detail: string;
+};
+
+export type FindingAnalysisEvidence = {
+  provider: string;
+  providerVersion?: string;
+  code: string;
+  message: string;
+  project?: string;
+  location?: AnalysisLocation;
 };
 
 export type FindingRelationship = {
@@ -69,6 +79,7 @@ export type Finding = {
   requirement: FindingRequirement;
   message: string;
   evidence: FindingEvidence[];
+  analysisEvidence?: FindingAnalysisEvidence[];
   relatedFiles: string[];
   verification: string[][];
   relationships: FindingRelationship[];

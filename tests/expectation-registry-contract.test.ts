@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { typeScriptAssignabilityFindings } from "../src/expectation-analysis-detector.ts";
 import type { RawFinding } from "../src/expectation-detector-types.ts";
 import { expectationDescriptors, expectationRegistry } from "../src/expectation-detectors.ts";
 import {
@@ -70,6 +71,7 @@ describe("expectation detector registry contract", () => {
       "source-unimplemented-stub",
       "typescript-project-config",
       "typescript-source-test",
+      "typescript-type-assignability",
     ]);
     expect(registry.map((entry) => [entry.id, entry.version])).toEqual([
       ["benchmark-evidence", 1],
@@ -84,6 +86,7 @@ describe("expectation detector registry contract", () => {
       ["source-unimplemented-stub", 1],
       ["typescript-project-config", 1],
       ["typescript-source-test", 2],
+      ["typescript-type-assignability", 1],
     ]);
     expect(registry.every((entry) => entry.policyKind === "advisory")).toBeTrue();
     expect(expectationDescriptors.map((entry) => entry.id)).toEqual(
@@ -129,8 +132,9 @@ describe("expectation detector registry contract", () => {
       sourceUnimplementedStubFindings(context),
       missingTypeScriptConfigFindings(context),
       missingTestFindings(context),
+      typeScriptAssignabilityFindings(context),
     ];
 
-    expect(batches.map((batch) => batch.length)).toEqual([0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1]);
+    expect(batches.map((batch) => batch.length)).toEqual([0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0]);
   });
 });

@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, sep } from "node:path";
 
+import { analyzeProvider } from "./analysis.ts";
+import type { AnalysisProviderResult } from "./analysis-model.ts";
 import { readJson, relativePosix, walkFiles } from "./shared.ts";
 
 export type PackageManifest = {
@@ -23,6 +25,7 @@ export type PackageInfo = {
 export type DetectorContext = {
   root: string;
   packages: PackageInfo[];
+  analysisProvider(id: string): AnalysisProviderResult | undefined;
 };
 
 const testFilePattern = /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/;
@@ -95,5 +98,13 @@ function packageInfos(root: string): PackageInfo[] {
 }
 
 export function createDetectorContext(root: string): DetectorContext {
-  return { root, packages: packageInfos(root) };
+  const cache = new Map<string, AnalysisProviderResult | undefined>();
+  return {
+    root,
+    packages: packageInfos(root),
+    analysisProvider(id: string) {
+      if (!cache.has(id)) cache.set(id, analyzeProvider(root, id));
+      return cache.get(id);
+    },
+  };
 }

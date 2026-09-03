@@ -13,7 +13,7 @@ export type AnalysisData = {
   diagnostics: AnalysisDiagnostic[];
 };
 
-const providers: AnalysisProvider[] = [typeScriptAnalysisProvider];
+export const analysisProviders: readonly AnalysisProvider[] = [typeScriptAnalysisProvider];
 
 function failedProvider(provider: AnalysisProvider, error: unknown): AnalysisProviderResult {
   return {
@@ -27,15 +27,19 @@ function failedProvider(provider: AnalysisProvider, error: unknown): AnalysisPro
   };
 }
 
+export function analyzeProvider(root: string, id: string): AnalysisProviderResult | undefined {
+  const provider = analysisProviders.find((candidate) => candidate.id === id);
+  if (!provider) return undefined;
+  try {
+    return provider.analyze(root);
+  } catch (error) {
+    return failedProvider(provider, error);
+  }
+}
+
 export function analyzeRepository(root: string): ResultEnvelope<AnalysisData> {
   const started = performance.now();
-  const results = providers.map((provider) => {
-    try {
-      return provider.analyze(root);
-    } catch (error) {
-      return failedProvider(provider, error);
-    }
-  });
+  const results = analysisProviders.map((provider) => analyzeProvider(root, provider.id)!);
   const diagnostics = results
     .flatMap((provider) => provider.diagnostics)
     .sort((left, right) => {

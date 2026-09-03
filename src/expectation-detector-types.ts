@@ -1,5 +1,6 @@
 import type {
   ExpectationRegistryEntry,
+  FindingAnalysisEvidence,
   FindingEvidence,
   FindingRequirement,
   FindingScaffold,
@@ -12,6 +13,7 @@ export type RawFinding = {
   requirement: FindingRequirement;
   message: string;
   evidence: FindingEvidence[];
+  analysisEvidence?: FindingAnalysisEvidence[];
   relatedFiles: string[];
   verification: string[][];
   scaffold?: FindingScaffold;
