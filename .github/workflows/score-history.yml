@@ -70,7 +70,11 @@ jobs:
             --score .artifacts/coding-tooling/history-score.json \
             --repository "$GITHUB_REPOSITORY" \
             --commit "$GITHUB_SHA" \
-            --timestamp "$commit_timestamp"
+            --timestamp "$commit_timestamp" \
+            --producer-commit "$GITHUB_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --validation-tier "self"
 
       - name: Publish history branch
         shell: bash
