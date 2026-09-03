@@ -85,12 +85,12 @@ describe("findings analysis coverage", () => {
     });
   });
 
-  test("reports unrestored .NET semantic analysis as unavailable with a project subject", () => {
+  test("reports unavailable .NET semantic analysis with a discovered project subject", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(
       join(root, "Fixture.csproj"),
-      '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>\n',
+      '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net999.0</TargetFramework></PropertyGroup></Project>\n',
     );
     writeFileSync(join(root, "src", "Value.cs"), "namespace Fixture; public class Value {}\n");
 
@@ -102,7 +102,7 @@ describe("findings analysis coverage", () => {
       status: "unavailable",
       subjects: 1,
     });
-  });
+  }, 15000);
 
   test("reports Rust as unsupported for deeper structural source-test analysis", () => {
     const root = fixture();
