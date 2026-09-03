@@ -1,6 +1,6 @@
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, isAbsolute, join, resolve, sep } from "node:path";
 
 import {
   analyzeExpectations,
@@ -246,10 +246,7 @@ function isWithin(root: string, path: string): boolean {
   return absolutePath === absoluteRoot || absolutePath.startsWith(`${absoluteRoot}${sep}`);
 }
 
-function prepareFixture(
-  sourceRoot: string,
-  calibration: CalibrationCase,
-): PreparedFixture {
+function prepareFixture(sourceRoot: string, calibration: CalibrationCase): PreparedFixture {
   if (!calibration.preparation) {
     return { root: sourceRoot, cleanup() {} };
   }
@@ -277,13 +274,7 @@ function prepareFixture(
 
   const result = runCommand(
     "dotnet",
-    [
-      "restore",
-      project,
-      "--ignore-failed-sources",
-      "--nologo",
-      "--property:NuGetAudit=false",
-    ],
+    ["restore", project, "--ignore-failed-sources", "--nologo", "--property:NuGetAudit=false"],
     temporaryRoot,
   );
   if (result.status !== 0) {
@@ -299,10 +290,7 @@ function prepareFixture(
   return { root: temporaryRoot, preparationStatus: "applied", cleanup };
 }
 
-function unavailableCase(
-  calibration: CalibrationCase,
-  reason: string,
-): CalibrationCaseResult {
+function unavailableCase(calibration: CalibrationCase, reason: string): CalibrationCaseResult {
   return {
     id: calibration.id,
     detector: calibration.detector,
@@ -386,12 +374,7 @@ export function calibrationCommand(root: string): CalibrationEnvelope {
     return {
       schemaVersion: 1,
       operation: "calibration",
-      status:
-        failedCases.length > 0
-          ? "failed"
-          : unavailableCases.length > 0
-            ? "unavailable"
-            : "passed",
+      status: failedCases.length > 0 ? "failed" : unavailableCases.length > 0 ? "unavailable" : "passed",
       durationMs: Date.now() - started,
       data: {
         root,
