@@ -1,16 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import type {
-  ExpectationRegistryEntry,
-  Finding,
-  FindingsCoverage,
-} from "../src/expectations.ts";
+import type { ExpectationRegistryEntry, Finding, FindingsCoverage } from "../src/expectations.ts";
 import { scoreExpectationEvidence } from "../src/repository-score.ts";
 
-function registry(
-  id: string,
-  severity: ExpectationRegistryEntry["defaultSeverity"] = "warning",
-) {
+function registry(id: string, severity: ExpectationRegistryEntry["defaultSeverity"] = "warning") {
   return {
     id,
     version: 1,
