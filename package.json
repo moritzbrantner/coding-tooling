@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "format": "oxfmt --check .",
-    "format:check": "oxfmt --check .",
+    "format:check": "oxfmt --check . || (oxfmt . && git diff -- src/expectation-coverage.ts tests/expectation-typescript-diagnostics.test.ts && exit 1)",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
