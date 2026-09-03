@@ -43,7 +43,7 @@ describe("language analysis providers", () => {
     expect(result.status).toBe("failed");
     expect(provider).toMatchObject({
       id: "typescript-compiler",
-      displayName: "TypeScript Compiler API",
+      displayName: "TypeScript native compiler",
       status: "applied",
       capabilities: ["syntax", "semantic", "diagnostics"],
       projects: ["tsconfig.json"],
