@@ -27,7 +27,7 @@
       "id": "test-coverage",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/test-coverage.json/?repo={owner}/{repository}",
-      "description": "Browser-executed observation of recognized test-coverage reports committed on a public repository default branch."
+      "description": "Browser-executed test-coverage observation that prefers standardized CI-published snapshots and falls back to recognized committed reports."
     }
   ],
   "authoritativeLocalOperations": [
@@ -40,7 +40,7 @@
   ],
   "limitations": [
     "Remote analysis supports public GitHub repositories only and uses anonymous GitHub API data.",
-    "GitHub Pages cannot execute repository commands; local coding-tooling remains authoritative for conformance, environment verification, findings, validation, coverage generation, and mutations.",
+    "GitHub Pages cannot execute repository commands; local coding-tooling or repository CI remains authoritative for coverage generation, validation, conformance, environment verification, findings, and mutations.",
     "The analysis-json and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
   ]
 }

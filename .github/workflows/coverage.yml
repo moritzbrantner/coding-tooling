@@ -1,0 +1,58 @@
+name: Publish Test Coverage
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: test-coverage-publication
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Generate LCOV coverage
+        run: bun test --coverage --coverage-reporter=lcov
+      - name: Build normalized coverage snapshot
+        run: >-
+          bun scripts/build-test-coverage-snapshot.js
+          --input coverage/lcov.info
+          --format lcov
+          --repository "$GITHUB_REPOSITORY"
+          --revision "$GITHUB_SHA"
+          --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          --output "$RUNNER_TEMP/test-coverage.json"
+      - name: Publish observation branch
+        env:
+          SNAPSHOT_PATH: ${{ runner.temp }}/test-coverage.json
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin coding-tooling-observations >/dev/null 2>&1; then
+            git fetch --depth=1 origin coding-tooling-observations
+            git switch -C coding-tooling-observations FETCH_HEAD
+          else
+            git switch --orphan coding-tooling-observations
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+
+          mkdir -p .coding-tooling
+          cp "$SNAPSHOT_PATH" .coding-tooling/test-coverage.json
+          git add .coding-tooling/test-coverage.json
+          git commit -m "Publish test coverage for ${GITHUB_SHA}"
+          git push origin HEAD:coding-tooling-observations
