@@ -6,11 +6,7 @@ export const SCORE_ADOPTION_REGISTRY_SCHEMA_V1 =
   "coding-tooling/score-adoption-registry/v1" as const;
 
 export type ScoreAdoptionTarget = "history";
-export type ScoreAdoptionDashboardGroup =
-  | "foundation"
-  | "lab"
-  | "language"
-  | "media";
+export type ScoreAdoptionDashboardGroup = "foundation" | "lab" | "language" | "media";
 
 export type ScoreAdoptionRepository = {
   repository: string;
@@ -46,11 +42,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function assertKeys(
-  value: Record<string, unknown>,
-  expected: readonly string[],
-  context: string,
-) {
+function assertKeys(value: Record<string, unknown>, expected: readonly string[], context: string) {
   const actual = Object.keys(value).sort();
   const wanted = [...expected].sort();
   if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) {
