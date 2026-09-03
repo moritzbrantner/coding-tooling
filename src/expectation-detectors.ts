@@ -1,4 +1,7 @@
-import { typeScriptAssignabilityFindings } from "./expectation-analysis-detector.ts";
+import {
+  dotNetAssignabilityFindings,
+  typeScriptAssignabilityFindings,
+} from "./expectation-analysis-detector.ts";
 import {
   missingBenchmarkEvidenceFindings,
   missingTestCapabilityFindings,
@@ -29,6 +32,15 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: missingBenchmarkEvidenceFindings,
+  },
+  {
+    id: "dotnet-type-assignability",
+    version: 1,
+    description:
+      "Roslyn implicit-conversion diagnostics are exposed as deterministic evidence",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    detect: dotNetAssignabilityFindings,
   },
   {
     id: "javascript-source-test",
