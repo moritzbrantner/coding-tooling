@@ -111,9 +111,7 @@ function validationScore(root: string, reportPath: string): RepositoryVerificati
     throw new Error(`${reportPath} was produced for a different repository root`);
   }
 
-  const checks = Array.isArray(parsed.data.checks)
-    ? (parsed.data.checks as ValidationCheck[])
-    : [];
+  const checks = Array.isArray(parsed.data.checks) ? (parsed.data.checks as ValidationCheck[]) : [];
   const results = Array.isArray(parsed.data.results)
     ? (parsed.data.results as ValidationCheck[])
     : [];
