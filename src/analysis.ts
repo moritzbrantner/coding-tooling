@@ -50,12 +50,16 @@ export function analyzeRepository(root: string): ResultEnvelope<AnalysisData> {
       );
     });
   const providerFailures = results.filter((provider) => provider.status === "failed");
+  const providerUnavailable = results.filter((provider) => provider.status === "unavailable");
+  const appliedProviders = results.filter((provider) => provider.status === "applied");
   const status =
     providerFailures.length > 0
       ? "error"
       : diagnostics.some((diagnostic) => diagnostic.severity === "error")
         ? "failed"
-        : "passed";
+        : providerUnavailable.length > 0 && appliedProviders.length === 0
+          ? "unavailable"
+          : "passed";
 
   return {
     schemaVersion: 1,
@@ -63,9 +67,15 @@ export function analyzeRepository(root: string): ResultEnvelope<AnalysisData> {
     status,
     durationMs: Math.round(performance.now() - started),
     data: { providers: results, diagnostics },
-    diagnostics: providerFailures.map((provider) => ({
-      code: "analysis-provider-failed",
-      message: `${provider.id}: ${provider.reason ?? "analysis provider failed"}`,
-    })),
+    diagnostics: [
+      ...providerFailures.map((provider) => ({
+        code: "analysis-provider-failed",
+        message: `${provider.id}: ${provider.reason ?? "analysis provider failed"}`,
+      })),
+      ...providerUnavailable.map((provider) => ({
+        code: "analysis-provider-unavailable",
+        message: `${provider.id}: ${provider.reason ?? "analysis provider unavailable"}`,
+      })),
+    ],
   };
 }
