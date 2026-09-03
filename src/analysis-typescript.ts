@@ -53,7 +53,9 @@ function normalizeDiagnostic(
     location.startLine = start.line + 1;
     location.startColumn = start.character + 1;
     if (diagnostic.length !== undefined) {
-      const end = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start + diagnostic.length);
+      const end = diagnostic.file.getLineAndCharacterOfPosition(
+        diagnostic.start + diagnostic.length,
+      );
       location.endLine = end.line + 1;
       location.endColumn = end.character + 1;
     }
@@ -99,7 +101,9 @@ function projectDiagnostics(root: string, configPath: string): AnalysisDiagnosti
     diagnostics.push(...ts.getPreEmitDiagnostics(program));
   }
 
-  const normalized = diagnostics.map((diagnostic) => normalizeDiagnostic(root, project, diagnostic));
+  const normalized = diagnostics.map((diagnostic) =>
+    normalizeDiagnostic(root, project, diagnostic),
+  );
   const unique = new Map(normalized.map((diagnostic) => [diagnosticKey(diagnostic), diagnostic]));
   return [...unique.values()].sort((left, right) => {
     const leftLocation = left.location;
