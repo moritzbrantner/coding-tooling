@@ -65,6 +65,7 @@ describe("repository score history", () => {
     expect(history.entries).toEqual([
       expect.objectContaining({
         commit: metadata.commit,
+        timestamp: "2026-09-03T18:00:00.000Z",
         scoreProfileVersion: SCORE_PROFILE,
         score: 88,
         structuralScore: 100,
@@ -90,7 +91,47 @@ describe("repository score history", () => {
     expect(rerun.entries[0]?.score).toBe(100);
   });
 
-  test("sorts commits by timestamp and keeps only the configured retention window", () => {
+  test("canonicalizes offsets and sorts by chronological instant", () => {
+    const first = appendScoreHistory(null, scoreEnvelope(80), {
+      ...metadata,
+      commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      timestamp: "2026-09-03T23:30:00+02:00",
+    });
+    const second = appendScoreHistory(first, scoreEnvelope(90), {
+      ...metadata,
+      commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      timestamp: "2026-09-03T22:00:00Z",
+    });
+
+    expect(second.entries.map((entry) => entry.commit[0])).toEqual(["a", "b"]);
+    expect(second.entries.map((entry) => entry.timestamp)).toEqual([
+      "2026-09-03T21:30:00.000Z",
+      "2026-09-03T22:00:00.000Z",
+    ]);
+  });
+
+  test("uses commit identity as a deterministic tie-breaker for equal instants", () => {
+    const first = appendScoreHistory(null, scoreEnvelope(90), {
+      ...metadata,
+      commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      timestamp: "2026-09-03T23:00:00+02:00",
+    });
+    const second = appendScoreHistory(first, scoreEnvelope(90), {
+      ...metadata,
+      commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      timestamp: "2026-09-03T21:00:00Z",
+    });
+
+    expect(second.entries.map((entry) => entry.commit[0])).toEqual(["a", "b"]);
+  });
+
+  test("rejects invalid history timestamps", () => {
+    expect(() =>
+      appendScoreHistory(null, scoreEnvelope(), { ...metadata, timestamp: "not-a-timestamp" }),
+    ).toThrow("invalid score history timestamp");
+  });
+
+  test("sorts commits by instant and keeps only the configured retention window", () => {
     let history = appendScoreHistory(null, scoreEnvelope(), metadata);
     for (let index = 0; index < SCORE_HISTORY_RETENTION + 2; index += 1) {
       const suffix = String(index).padStart(40, "0");
