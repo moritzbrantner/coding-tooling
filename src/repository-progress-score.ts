@@ -54,6 +54,7 @@ export type RepositoryProgressScoreDocument = {
 export type RepositoryProgressScoreEnvelope = {
   schemaVersion: 1;
   operation: "score";
+  profileVersion: typeof REPOSITORY_SCORE_PROFILE_VERSION;
   status: ResultStatus;
   durationMs: number;
   data: {
@@ -225,6 +226,7 @@ export function repositoryProgressScoreCommand(
     return {
       schemaVersion: 1,
       operation: "score",
+      profileVersion: REPOSITORY_SCORE_PROFILE_VERSION,
       status: structuralEnvelope.status,
       durationMs: Date.now() - started,
       data: { root },
@@ -240,6 +242,7 @@ export function repositoryProgressScoreCommand(
     return {
       schemaVersion: 1,
       operation: "score",
+      profileVersion: REPOSITORY_SCORE_PROFILE_VERSION,
       status: score.score === null ? "unavailable" : "passed",
       durationMs: Date.now() - started,
       data: { root, score },
@@ -249,6 +252,7 @@ export function repositoryProgressScoreCommand(
     return {
       schemaVersion: 1,
       operation: "score",
+      profileVersion: REPOSITORY_SCORE_PROFILE_VERSION,
       status: "error",
       durationMs: Date.now() - started,
       data: { root },
