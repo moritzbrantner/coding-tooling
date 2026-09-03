@@ -36,4 +36,5 @@ jobs:
         uses: ./
         with:
           operation: score
+          validation-report: .artifacts/coding-tooling/report.json
           report-path: .artifacts/coding-tooling/score.json
