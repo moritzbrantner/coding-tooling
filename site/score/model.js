@@ -71,7 +71,13 @@ export function verificationEvidence(entry) {
   const blocked = count(verification.blockedChecks);
   const missing = count(verification.missingRequiredCapabilities);
   const parts = [status];
-  if (count(verification.plannedChecks) > 0 || passed > 0 || failed > 0 || errors > 0 || blocked > 0) {
+  if (
+    count(verification.plannedChecks) > 0 ||
+    passed > 0 ||
+    failed > 0 ||
+    errors > 0 ||
+    blocked > 0
+  ) {
     parts.push(`${passed} passed`);
   }
   if (failed > 0) parts.push(`${failed} failed`);
