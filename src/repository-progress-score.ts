@@ -8,7 +8,6 @@ import {
   type RepositoryCategoryScore,
   type RepositoryScoreCompleteness,
   type RepositoryScoreDocument as StructuralScoreDocument,
-  type RepositoryScoreEnvelope,
   type RepositoryScoreRating,
 } from "./repository-score.ts";
 
@@ -46,6 +45,18 @@ export type RepositoryProgressScoreDocument = {
   coverage: StructuralScoreDocument["coverage"];
   findings: StructuralScoreDocument["findings"];
   notes: string[];
+};
+
+export type RepositoryProgressScoreEnvelope = {
+  schemaVersion: 1;
+  operation: "score";
+  status: ResultStatus;
+  durationMs: number;
+  data: {
+    root: string;
+    score?: RepositoryProgressScoreDocument;
+  };
+  diagnostics: Array<{ code?: string; message: string; path?: string }>;
 };
 
 type ValidationCheck = {
@@ -202,15 +213,18 @@ export function combineRepositoryScore(
 export function repositoryProgressScoreCommand(
   root: string,
   options: { validationReportPath?: string } = {},
-): RepositoryScoreEnvelope & { data: { root: string; score?: RepositoryProgressScoreDocument } } {
+): RepositoryProgressScoreEnvelope {
   const started = Date.now();
   const structuralEnvelope = structuralRepositoryScoreCommand(root);
   const structural = structuralEnvelope.data.score;
   if (!structural) {
     return {
-      ...structuralEnvelope,
+      schemaVersion: 1,
+      operation: "score",
+      status: structuralEnvelope.status,
       durationMs: Date.now() - started,
       data: { root },
+      diagnostics: structuralEnvelope.diagnostics,
     };
   }
 
