@@ -94,7 +94,8 @@ async function load() {
     const history = normalizeHistory(await response.json());
     const entry = latestEntry(history);
     if (!entry) {
-      status.textContent = "The history branch exists, but no score snapshot has been published yet.";
+      status.textContent =
+        "The history branch exists, but no score snapshot has been published yet.";
       return;
     }
 
