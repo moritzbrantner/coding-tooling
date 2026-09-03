@@ -32,6 +32,7 @@ jobs:
           operation: findings
           report-path: .artifacts/coding-tooling/findings.json
       - name: Inspect repository score
+        if: always()
         uses: ./
         with:
           operation: score
