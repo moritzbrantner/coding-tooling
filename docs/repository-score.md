@@ -85,7 +85,7 @@ This deliberately avoids rewarding configuration changes that merely hide debt:
 
 ## Verification score
 
-The optional validation report must be a schema-v1 `coding-tooling run` report for the same repository root. The score does not rerun or reinterpret the commands; it consumes the explicit execution evidence already produced by the validation operation.
+The optional validation report must be a schema-v1 `coding-tooling run` report for the same repository root. The score does not rerun or reinterpret the commands; it consumes the explicit execution evidence already produced by the validation operation. The CLI cannot infer whether an otherwise valid report is temporally fresh, so consumers should generate it immediately before scoring and retain the report with the score.
 
 The verification score treats every planned check as an obligation. Checks not reached because an earlier check failed therefore remain unsatisfied rather than disappearing from the denominator. Explicitly missing required capabilities are additional unsatisfied obligations.
 
