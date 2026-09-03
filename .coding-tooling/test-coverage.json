@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "kind": "coding-tooling-test-coverage-snapshot",
+  "repository": {
+    "fullName": "moritzbrantner/coding-tooling",
+    "revision": "4fedecff0bf2456e060a181b60af25761335bd8c"
+  },
+  "generatedAt": "2026-09-03T13:31:16.000Z",
+  "producer": {
+    "id": "coding-tooling",
+    "protocolVersion": 1
+  },
+  "source": {
+    "path": "coverage/lcov.info",
+    "format": "lcov"
+  },
+  "coverage": {
+    "lines": {
+      "covered": 8417,
+      "total": 9999,
+      "percent": 84.18
+    },
+    "statements": null,
+    "functions": {
+      "covered": 805,
+      "total": 871,
+      "percent": 92.42
+    },
+    "branches": null
+  }
+}
