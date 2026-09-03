@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import type { ResultStatus } from "./model.ts";
+import { reconcileTextFile, type ReconcileFileResult } from "./reconciliation.ts";
 import { readJson } from "./shared.ts";
 
 export type FindingSeverity = "info" | "warning" | "error";
@@ -286,8 +287,14 @@ export function loadExpectationConfig(
   return { schemaVersion: 1, baseline, suppressions, verifications, invariants, enforcement };
 }
 
-export function writeExpectationConfig(root: string, config: ExpectationConfig): void {
-  writeFileSync(join(root, expectationConfigName), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+export function writeExpectationConfig(
+  root: string,
+  config: ExpectationConfig,
+): ReconcileFileResult {
+  return reconcileTextFile(
+    join(root, expectationConfigName),
+    `${JSON.stringify(config, null, 2)}\n`,
+  );
 }
 
 export function semanticFindingId(

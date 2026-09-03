@@ -16,6 +16,8 @@ function fixture(): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-test-reachability-"));
   roots.push(root);
   mkdirSync(join(root, "src", "test"), { recursive: true });
+  mkdirSync(join(root, "src", "testing"), { recursive: true });
+  mkdirSync(join(root, "src", "components", "stories"), { recursive: true });
   writeFileSync(
     join(root, "package.json"),
     `${JSON.stringify({ name: "fixture", scripts: { test: "vitest run" } }, null, 2)}\n`,
@@ -27,6 +29,11 @@ function fixture(): string {
   writeFileSync(join(root, "src", "orphan.ts"), 'export const orphan = "missing";\n');
   writeFileSync(join(root, "src", "widget.stories.tsx"), "export const Story = {};\n");
   writeFileSync(join(root, "src", "test", "fixture.ts"), "export const fixture = true;\n");
+  writeFileSync(join(root, "src", "testing", "browser.ts"), "export const browser = true;\n");
+  writeFileSync(
+    join(root, "src", "components", "stories", "story-support.tsx"),
+    "export const StorySupport = {};\n",
+  );
   writeFileSync(
     join(root, "src", "public.test.ts"),
     'import { helper } from "./public";\nvoid helper;\n',
@@ -42,11 +49,15 @@ describe("TypeScript test reachability", () => {
     expect(findings[0]?.requirement.description).toBe("deterministic structural test reachability");
   });
 
-  test("does not classify stories or test fixtures as production source", () => {
+  test("does not classify conventional story or testing support as production source", () => {
     const context = createDetectorContext(fixture());
     const sourcePaths = context.packages[0]!.sourceFiles.map((path) => path.replaceAll("\\", "/"));
 
     expect(sourcePaths.some((path) => path.endsWith("/src/widget.stories.tsx"))).toBeFalse();
     expect(sourcePaths.some((path) => path.endsWith("/src/test/fixture.ts"))).toBeFalse();
+    expect(sourcePaths.some((path) => path.endsWith("/src/testing/browser.ts"))).toBeFalse();
+    expect(
+      sourcePaths.some((path) => path.endsWith("/src/components/stories/story-support.tsx")),
+    ).toBeFalse();
   });
 });
