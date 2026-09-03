@@ -22,10 +22,9 @@ describe("composite action contract", () => {
 
   test("keeps environment capture dependency installation disabled", () => {
     const source = actionSource();
+    const fingerprintInstallCondition = "inputs.operation == 'environment-fingerprint'";
 
     expect(source).toContain("if: inputs.operation == 'run'");
-    expect(source).not.toContain(
-      "if: inputs.operation == 'run' || inputs.operation == 'environment-fingerprint'",
-    );
+    expect(source).not.toContain(fingerprintInstallCondition);
   });
 });
