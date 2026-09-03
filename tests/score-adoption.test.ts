@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { REPOSITORY_SCORE_PROFILE_VERSION } from "../src/repository-progress-score.ts";
 import {
   loadScoreAdoptionRegistry,
   parseScoreAdoptionRegistry,
   SCORE_ADOPTION_REGISTRY_SCHEMA_V1,
 } from "../src/score-adoption.ts";
-import { REPOSITORY_SCORE_PROFILE_VERSION } from "../src/repository-progress-score.ts";
 
 const reusableWorkflow = {
   repository: "moritzbrantner/reusable-workflows",
@@ -46,7 +46,10 @@ describe("score adoption registry", () => {
       parseScoreAdoptionRegistry({
         schemaVersion: SCORE_ADOPTION_REGISTRY_SCHEMA_V1,
         reusableWorkflow,
-        repositories: [entry("moritzbrantner/rust-kernels"), entry("moritzbrantner/audio-analysis")],
+        repositories: [
+          entry("moritzbrantner/rust-kernels"),
+          entry("moritzbrantner/audio-analysis"),
+        ],
       }),
     ).toThrow("sorted");
 
@@ -54,7 +57,10 @@ describe("score adoption registry", () => {
       parseScoreAdoptionRegistry({
         schemaVersion: SCORE_ADOPTION_REGISTRY_SCHEMA_V1,
         reusableWorkflow,
-        repositories: [entry("moritzbrantner/rust-kernels"), entry("moritzbrantner/rust-kernels")],
+        repositories: [
+          entry("moritzbrantner/rust-kernels"),
+          entry("moritzbrantner/rust-kernels"),
+        ],
       }),
     ).toThrow("unique");
   });
