@@ -4,11 +4,13 @@
 
 ## Storage boundary
 
-The `Publish Score History` workflow runs for `main` and writes `history.json` to the dedicated `score-history` branch. The branch is created from the first scored `main` commit when it does not already exist. Subsequent workflow runs update only the history document.
+The `Publish Score History` workflow runs for `main` and persists `history.json` on the dedicated `score-history` branch. The persistence branch is data-only: `history.json` is the only tracked file, and the workflow verifies that invariant after every publication.
 
-This keeps generated history outside the authored source branch while making it durable, reviewable, and directly readable by GitHub Pages and coding agents.
+`score-history` has an independent root rather than inheriting the authored repository tree or `main` history. When the workflow encounters a legacy persistence branch that still contains repository files, it preserves the updated history document, rewrites the branch once as an orphan root containing only `history.json`, and then resumes ordinary non-force history commits on later runs.
 
-Each commit appears at most once. Re-running the workflow for the same commit replaces that entry instead of appending a duplicate. The document retains the latest 1,000 commit snapshots by chronological instant. Commit timestamps are normalized to UTC when history is written, and equal instants are ordered deterministically by commit SHA.
+This keeps generated history structurally isolated from authored source while making it durable, reviewable, and directly readable by GitHub Pages and coding agents. The workflow is triggered only by `main` pushes or explicit dispatch, so persistence commits do not recursively invoke repository validation or history publication.
+
+Each main commit appears at most once. Re-running the workflow for the same commit replaces that entry instead of appending a duplicate. The document retains the latest 1,000 commit snapshots by chronological instant. Commit timestamps are normalized to UTC when history is written, and equal instants are ordered deterministically by commit SHA.
 
 ## Snapshot semantics
 
