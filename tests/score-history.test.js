@@ -7,42 +7,76 @@ import {
 } from "../scripts/append-score-history.mjs";
 
 const SCORE_PROFILE = "coding-tooling/repository-score-profile/v1";
+const fingerprint = `sha256:${"1".repeat(64)}`;
 
-function scoreEnvelope(score = 88) {
+function scoreEnvelope(
+  score = 88,
+  options = {
+    profileVersion: SCORE_PROFILE,
+    fingerprint,
+    auditScore: 100,
+    verificationScore: 75,
+  },
+) {
+  const failedSubjects = options.auditScore === 100 ? 0 : 1;
+  const activeFindings = failedSubjects;
   return {
     schemaVersion: 1,
     operation: "score",
+    profileVersion: options.profileVersion,
     status: "passed",
     durationMs: 10,
     data: {
       root: "/repo",
       score: {
         schemaVersion: "coding-tooling/repository-score/v1",
-        profileVersion: SCORE_PROFILE,
+        profileVersion: options.profileVersion,
+        definition: {
+          schemaVersion: "coding-tooling/repository-score-definition/v1",
+          profileVersion: options.profileVersion,
+          fingerprint: options.fingerprint,
+        },
         score,
         rating: score >= 90 ? "good" : "needs-improvement",
         completeness: "complete",
-        structuralScore: 100,
-        verificationScore: 75,
+        structuralScore: options.auditScore,
+        verificationScore: options.verificationScore,
         categories: [
-          { id: "testing", score: 100, auditCount: 2 },
-          { id: "verification", score: 75, auditCount: 1 },
+          { id: "testing", score: options.auditScore, auditCount: 1 },
+          { id: "verification", score: options.verificationScore, auditCount: 1 },
         ],
-        audits: [],
+        audits: [
+          {
+            id: "typescript-source-test",
+            version: 2,
+            description: "TypeScript source has test reachability",
+            category: "testing",
+            severity: "warning",
+            coverageStatus: "applied",
+            coverageSubjects: 2,
+            scoreModel: "subject-v1",
+            subjects: 2,
+            failedSubjects,
+            activeFindings,
+            suppressedFindings: 0,
+            verifiedFindings: 0,
+            score: options.auditScore,
+          },
+        ],
         verification: {
           source: "coding-tooling/run/v1",
           reportPath: ".artifacts/coding-tooling/run.json",
-          status: "failed",
-          score: 75,
+          status: options.verificationScore === 100 ? "passed" : "failed",
+          score: options.verificationScore,
           plannedChecks: 4,
-          passedChecks: 3,
-          failedChecks: 1,
+          passedChecks: options.verificationScore === 100 ? 4 : 3,
+          failedChecks: options.verificationScore === 100 ? 0 : 1,
           errorChecks: 0,
           blockedChecks: 0,
           missingRequiredCapabilities: 0,
         },
         coverage: {},
-        findings: { active: 1, suppressed: 0, verified: 2 },
+        findings: { active: activeFindings, suppressed: 0, verified: 0 },
         notes: [],
       },
     },
@@ -85,24 +119,47 @@ const provenance = {
   validationTier: metadata.validationTier,
 };
 
+const nextMetadata = {
+  ...metadata,
+  commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  timestamp: "2026-09-03T19:00:00Z",
+};
+
 describe("repository score history", () => {
-  test("creates a compact versioned snapshot from a score report", () => {
+  test("persists profile, definition, provenance, and audit-level evidence", () => {
     const history = appendScoreHistory(null, scoreEnvelope(), metadata);
 
     expect(history.schemaVersion).toBe(SCORE_HISTORY_SCHEMA_V1);
     expect(history.retention).toBe(SCORE_HISTORY_RETENTION);
+    expect(history.definitions[fingerprint]).toEqual(
+      expect.objectContaining({
+        schemaVersion: "coding-tooling/repository-score-definition/v1",
+        profileVersion: SCORE_PROFILE,
+        fingerprint,
+      }),
+    );
     expect(history.entries).toEqual([
       expect.objectContaining({
         commit: metadata.commit,
         timestamp: "2026-09-03T18:00:00.000Z",
         scoreProfileVersion: SCORE_PROFILE,
+        definitionFingerprint: fingerprint,
         provenance,
         score: 88,
         structuralScore: 100,
         verificationScore: 75,
         categories: { testing: 100, verification: 75 },
+        audits: [
+          expect.objectContaining({
+            id: "typescript-source-test",
+            score: 100,
+            subjects: 2,
+            failedSubjects: 0,
+          }),
+        ],
         verification: expect.objectContaining({ status: "failed", passedChecks: 3 }),
-        findings: { active: 1, suppressed: 0, verified: 2 },
+        findings: { active: 0, suppressed: 0, verified: 0 },
+        change: expect.objectContaining({ status: "first-snapshot", comparable: false }),
       }),
     ]);
   });
@@ -119,33 +176,97 @@ describe("repository score history", () => {
     ).toThrow("positive integer");
   });
 
-  test("retains a score-production error as an unscored commit tombstone", () => {
-    const history = appendScoreHistory(null, errorEnvelope(), metadata);
+  test("attributes comparable score movement to verification and individual audits", () => {
+    const first = appendScoreHistory(null, scoreEnvelope(), metadata);
+    const history = appendScoreHistory(
+      first,
+      scoreEnvelope(75, {
+        profileVersion: SCORE_PROFILE,
+        fingerprint,
+        auditScore: 50,
+        verificationScore: 100,
+      }),
+      nextMetadata,
+    );
+    const change = history.entries.at(-1).change;
 
-    expect(history.entries).toEqual([
+    expect(change).toEqual(
       expect.objectContaining({
-        commit: metadata.commit,
+        status: "comparable",
+        comparable: true,
+        priorCommit: metadata.commit,
+        scoreDelta: -13,
+        structuralScoreDelta: -50,
+      }),
+    );
+    expect(change.verification).toEqual(expect.objectContaining({ scoreDelta: 25 }));
+    expect(change.categoryDeltas).toContainEqual({
+      id: "testing",
+      before: 100,
+      after: 50,
+      delta: -50,
+    });
+    expect(change.auditDeltas).toContainEqual(
+      expect.objectContaining({
+        id: "typescript-source-test",
+        scoreDelta: -50,
+        failedSubjectsDelta: 1,
+        activeFindingsDelta: 1,
+      }),
+    );
+  });
+
+  test("retains a score-production error as an unscored comparison boundary", () => {
+    const first = appendScoreHistory(null, scoreEnvelope(), metadata);
+    const history = appendScoreHistory(first, errorEnvelope(), nextMetadata);
+    const tombstone = history.entries.at(-1);
+
+    expect(tombstone).toEqual(
+      expect.objectContaining({
+        commit: nextMetadata.commit,
         scoreProfileVersion: SCORE_PROFILE,
+        definitionFingerprint: null,
         provenance,
         score: null,
         rating: "unavailable",
         completeness: "unavailable",
         structuralScore: null,
         verificationScore: null,
+        audits: [],
         verification: expect.objectContaining({ status: "error", score: null }),
         diagnostics: [expect.objectContaining({ code: "repository-verification-score-failed" })],
+        change: expect.objectContaining({ status: "definition-unknown", comparable: false }),
       }),
-    ]);
+    );
   });
 
-  test("replaces an error tombstone when the same commit later scores successfully", () => {
+  test("a score after an error tombstone remains non-comparable across missing evidence", () => {
+    let history = appendScoreHistory(null, scoreEnvelope(), metadata);
+    history = appendScoreHistory(history, errorEnvelope(), nextMetadata);
+    history = appendScoreHistory(history, scoreEnvelope(90), {
+      ...metadata,
+      commit: "dddddddddddddddddddddddddddddddddddddddd",
+      timestamp: "2026-09-03T20:00:00Z",
+    });
+
+    expect(history.entries.at(-1).change).toEqual(
+      expect.objectContaining({ status: "definition-unknown", comparable: false }),
+    );
+  });
+
+  test("replaces an error tombstone and its provenance when the same commit later scores", () => {
     const failed = appendScoreHistory(null, errorEnvelope(), metadata);
-    const recovered = appendScoreHistory(failed, scoreEnvelope(100), metadata);
+    const recovered = appendScoreHistory(failed, scoreEnvelope(100), {
+      ...metadata,
+      workflowRunAttempt: metadata.workflowRunAttempt + 1,
+    });
 
     expect(recovered.entries).toHaveLength(1);
-    expect(recovered.entries[0]?.score).toBe(100);
-    expect(recovered.entries[0]?.verification.status).toBe("failed");
-    expect(recovered.entries[0]?.diagnostics).toBeUndefined();
+    expect(recovered.entries[0].score).toBe(100);
+    expect(recovered.entries[0].definitionFingerprint).toBe(fingerprint);
+    expect(recovered.entries[0].provenance.workflowRunAttempt).toBe(3);
+    expect(recovered.entries[0].verification.status).toBe("failed");
+    expect(recovered.entries[0].diagnostics).toBeUndefined();
   });
 
   test("rejects an unscored non-error envelope", () => {
@@ -153,25 +274,70 @@ describe("repository score history", () => {
     expect(() => appendScoreHistory(null, envelope, metadata)).toThrow("not an error tombstone");
   });
 
-  test("rejects score snapshots without a scoring profile", () => {
-    const envelope = scoreEnvelope();
-    delete envelope.data.score.profileVersion;
-    expect(() => appendScoreHistory(null, envelope, metadata)).toThrow("scoring profile");
+  test("refuses numeric attribution across scoring-profile changes", () => {
+    const first = appendScoreHistory(null, scoreEnvelope(), metadata);
+    const nextProfile = "coding-tooling/repository-score-profile/v2";
+    const nextFingerprint = `sha256:${"2".repeat(64)}`;
+    const history = appendScoreHistory(
+      first,
+      scoreEnvelope(80, {
+        profileVersion: nextProfile,
+        fingerprint: nextFingerprint,
+        auditScore: 80,
+        verificationScore: 80,
+      }),
+      nextMetadata,
+    );
+
+    expect(history.entries.at(-1).change).toEqual(
+      expect.objectContaining({
+        status: "profile-changed",
+        comparable: false,
+        scoreDelta: -8,
+        auditDeltas: [],
+      }),
+    );
   });
 
-  test("replaces a rerun for the same commit instead of duplicating it", () => {
-    const first = appendScoreHistory(null, scoreEnvelope(88), metadata);
-    const rerun = appendScoreHistory(first, scoreEnvelope(100), {
+  test("refuses numeric attribution across exact definition changes within one profile", () => {
+    const first = appendScoreHistory(null, scoreEnvelope(), metadata);
+    const nextFingerprint = `sha256:${"2".repeat(64)}`;
+    const history = appendScoreHistory(
+      first,
+      scoreEnvelope(80, {
+        profileVersion: SCORE_PROFILE,
+        fingerprint: nextFingerprint,
+        auditScore: 80,
+        verificationScore: 80,
+      }),
+      nextMetadata,
+    );
+
+    expect(history.entries.at(-1).change).toEqual(
+      expect.objectContaining({
+        status: "definition-changed",
+        comparable: false,
+        scoreDelta: -8,
+        auditDeltas: [],
+      }),
+    );
+  });
+
+  test("replaces a rerun and recomputes downstream attribution", () => {
+    let history = appendScoreHistory(null, scoreEnvelope(88), metadata);
+    history = appendScoreHistory(history, scoreEnvelope(90), nextMetadata);
+    history = appendScoreHistory(history, scoreEnvelope(100), {
       ...metadata,
       workflowRunAttempt: metadata.workflowRunAttempt + 1,
     });
 
-    expect(rerun.entries).toHaveLength(1);
-    expect(rerun.entries[0]?.score).toBe(100);
-    expect(rerun.entries[0]?.provenance.workflowRunAttempt).toBe(3);
+    expect(history.entries).toHaveLength(2);
+    expect(history.entries[0].score).toBe(100);
+    expect(history.entries[0].provenance.workflowRunAttempt).toBe(3);
+    expect(history.entries[1].change.scoreDelta).toBe(-10);
   });
 
-  test("canonicalizes offsets and sorts by chronological instant", () => {
+  test("canonicalizes offsets and attributes in chronological order", () => {
     const first = appendScoreHistory(null, scoreEnvelope(80), {
       ...metadata,
       commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -188,6 +354,7 @@ describe("repository score history", () => {
       "2026-09-03T21:30:00.000Z",
       "2026-09-03T22:00:00.000Z",
     ]);
+    expect(second.entries[1].change.priorCommit).toBe(second.entries[0].commit);
   });
 
   test("uses commit identity as a deterministic tie-breaker for equal instants", () => {
@@ -217,14 +384,38 @@ describe("repository score history", () => {
       const suffix = String(index).padStart(40, "0");
       history = appendScoreHistory(history, scoreEnvelope(90), {
         ...metadata,
-        repository: metadata.repository,
         commit: suffix,
         timestamp: new Date(Date.UTC(2027, 0, 1, 0, 0, index)).toISOString(),
       });
     }
 
     expect(history.entries).toHaveLength(SCORE_HISTORY_RETENTION);
-    expect(history.entries.at(-1)?.timestamp).toBe("2027-01-01T00:16:41.000Z");
+    expect(history.entries.at(-1).timestamp).toBe("2027-01-01T00:16:41.000Z");
+  });
+
+  test("rejects score reports without a scoring profile", () => {
+    const envelope = scoreEnvelope();
+    delete envelope.data.score.profileVersion;
+    delete envelope.profileVersion;
+    expect(() => appendScoreHistory(null, envelope, metadata)).toThrow("scoring profile");
+  });
+
+  test("rejects mismatched score document and envelope profiles", () => {
+    const envelope = scoreEnvelope();
+    envelope.profileVersion = "coding-tooling/repository-score-profile/v2";
+    expect(() => appendScoreHistory(null, envelope, metadata)).toThrow("score envelope profile");
+  });
+
+  test("rejects score reports without a definition fingerprint", () => {
+    const envelope = scoreEnvelope();
+    delete envelope.data.score.definition;
+    expect(() => appendScoreHistory(null, envelope, metadata)).toThrow("definition fingerprint");
+  });
+
+  test("rejects a definition that claims another scoring profile", () => {
+    const envelope = scoreEnvelope();
+    envelope.data.score.definition.profileVersion = "coding-tooling/repository-score-profile/v2";
+    expect(() => appendScoreHistory(null, envelope, metadata)).toThrow("does not match");
   });
 
   test("rejects history from another repository", () => {

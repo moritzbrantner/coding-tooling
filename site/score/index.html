@@ -24,7 +24,7 @@
             <p id="latest-rating" class="lede">Loading the latest score…</p>
           </div>
           <div class="delta-card">
-            <span>Change from prior commit</span>
+            <span id="score-delta-label">Change from comparable prior commit</span>
             <strong id="score-delta">—</strong>
           </div>
         </div>
@@ -46,12 +46,24 @@
           <strong id="verification-score">—</strong>
           <p>Fresh format, lint, typecheck, test, and configured validation evidence.</p>
         </article>
+        <article>
+          <span>Score identity</span>
+          <strong id="definition-fingerprint" class="fingerprint">—</strong>
+          <p>
+            Profile <code id="score-profile">—</code><br />
+            Exact fingerprint of the score-affecting definition.
+          </p>
+        </article>
       </section>
 
       <section>
         <div class="section-heading">
           <p class="eyebrow">Trend</p>
           <h2>Last 60 scored commits</h2>
+          <p class="muted">
+            Lines break when the scoring profile or exact definition changes, is unknown, or an
+            unscored error tombstone occurs.
+          </p>
         </div>
         <div class="chart-shell">
           <svg
@@ -65,10 +77,45 @@
 
       <section>
         <div class="section-heading">
+          <p class="eyebrow">Attribution</p>
+          <h2>What changed</h2>
+          <p class="muted">
+            Deterministic drivers from the latest comparable commit: verification and audit-level
+            evidence changes.
+          </p>
+        </div>
+        <div id="change-drivers" class="change-list"></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
           <p class="eyebrow">Latest breakdown</p>
           <h2>Categories</h2>
         </div>
         <div id="categories" class="category-list"></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Audit evidence</p>
+          <h2>Latest structural audits</h2>
+        </div>
+        <div class="table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th>Audit</th>
+                <th>Category</th>
+                <th>Score</th>
+                <th>Subjects</th>
+                <th>Failed</th>
+                <th>Active findings</th>
+                <th>Coverage</th>
+              </tr>
+            </thead>
+            <tbody id="audit-body"></tbody>
+          </table>
+        </div>
       </section>
 
       <section>
@@ -83,8 +130,9 @@
                 <th>Commit</th>
                 <th>Timestamp</th>
                 <th>Overall</th>
-                <th>Structural</th>
-                <th>Verification</th>
+                <th>Change</th>
+                <th>Profile</th>
+                <th>Definition</th>
                 <th>Verification evidence</th>
                 <th>Rating</th>
               </tr>
@@ -96,9 +144,10 @@
 
       <aside class="boundary">
         <strong>Interpretation:</strong> this is a versioned engineering-evidence trend, not a claim
-        of semantic correctness or product value. A score can change when the scoring profile gains
-        new measurable evidence. Failed verification and score-production errors remain visible as
-        commit history rather than disappearing. History is retained by commit on the dedicated
+        of semantic correctness or product value. Numeric deltas are shown only when adjacent
+        snapshots have both the same human-managed scoring profile and the same mechanically derived
+        score-definition fingerprint. Failed verification and score-production errors remain visible
+        rather than disappearing. History is retained by commit on the dedicated
         <code>score-history</code> branch.
       </aside>
     </main>

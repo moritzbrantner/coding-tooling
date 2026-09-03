@@ -79,6 +79,31 @@ describe("repository progress score", () => {
     expect(score.structuralScore).toBe(100);
     expect(score.verificationScore).toBe(75);
     expect(score.categories).toContainEqual({ id: "verification", score: 75, auditCount: 1 });
+    expect(score.definition.schemaVersion).toBe("coding-tooling/repository-score-definition/v1");
+    expect(score.definition.profileVersion).toBe(REPOSITORY_SCORE_PROFILE_VERSION);
+    expect(score.definition.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  test("fingerprints the effective scoring definition independently of audit ordering", () => {
+    const left = combineRepositoryScore(
+      structural([audit("z-detector"), audit("a-detector")]),
+      verification(100),
+    );
+    const right = combineRepositoryScore(
+      structural([audit("a-detector"), audit("z-detector")]),
+      verification(100),
+    );
+    const changed = combineRepositoryScore(
+      structural([audit("a-detector", { version: 2 }), audit("z-detector")]),
+      verification(100),
+    );
+
+    expect(left.definition.fingerprint).toBe(right.definition.fingerprint);
+    expect(changed.definition.fingerprint).not.toBe(left.definition.fingerprint);
+    expect(left.definition.structural.audits.map((item) => item.id)).toEqual([
+      "a-detector",
+      "z-detector",
+    ]);
   });
 
   test("keeps a structural-only estimate explicitly incomplete", () => {
