@@ -31,4 +31,31 @@ describe("score history workflow", () => {
     expect(verificationStep).toBeGreaterThan(-1);
     expect(workflow.slice(verificationStep, scoreStep)).toContain("continue-on-error: true");
   });
+
+  test("runs only for main pushes or explicit dispatch", () => {
+    expect(workflow).toContain("branches: [main]");
+    expect(workflow).not.toContain("branches: [score-history]");
+  });
+
+  test("migrates inherited persistence branches to a data-only orphan root", () => {
+    const publishStep = workflow.indexOf("- name: Publish history branch");
+    const verifyStep = workflow.indexOf("- name: Verify data-only history branch");
+    const publishBody = workflow.slice(publishStep, verifyStep);
+
+    expect(publishBody).toContain("grep -vx 'history.json'");
+    expect(publishBody).toContain("checkout --orphan score-history-clean");
+    expect(publishBody).toContain("git -C .score-history rm -rf .");
+    expect(publishBody).toContain("git -C .score-history push --force origin HEAD:score-history");
+    expect(publishBody).toContain("git -C .score-history push origin HEAD:score-history");
+  });
+
+  test("verifies that history.json is the only tracked persistence file", () => {
+    const verifyStep = workflow.indexOf("- name: Verify data-only history branch");
+    const surfaceFailureStep = workflow.indexOf("- name: Surface score production failure");
+    const verifyBody = workflow.slice(verifyStep, surfaceFailureStep);
+
+    expect(verifyStep).toBeGreaterThan(-1);
+    expect(verifyBody).toContain('tracked="$(git -C .score-history ls-files)"');
+    expect(verifyBody).toContain('[[ "$tracked" != "history.json" ]]');
+  });
 });
