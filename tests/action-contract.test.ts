@@ -16,7 +16,9 @@ describe("composite action contract", () => {
     expect(source).toContain("environment-fingerprint");
     expect(source).toContain('"$INPUT_OPERATION" == "environment-fingerprint"');
     expect(source).toContain("environment fingerprint");
-    expect(source).toContain('--profile "$INPUT_ENVIRONMENT_PROFILE" --json > "$INPUT_REPORT_PATH"');
+    expect(source).toContain(
+      '--profile "$INPUT_ENVIRONMENT_PROFILE" --json > "$INPUT_REPORT_PATH"',
+    );
     expect(source).toContain('echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"');
   });
 
