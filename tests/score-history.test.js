@@ -72,6 +72,17 @@ const metadata = {
   repository: "moritzbrantner/coding-tooling",
   commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   timestamp: "2026-09-03T18:00:00Z",
+  producerCommit: "cccccccccccccccccccccccccccccccccccccccc",
+  workflowRunId: "33799999999",
+  workflowRunAttempt: 2,
+  validationTier: "self",
+};
+
+const provenance = {
+  producerCommit: metadata.producerCommit,
+  workflowRunId: metadata.workflowRunId,
+  workflowRunAttempt: metadata.workflowRunAttempt,
+  validationTier: metadata.validationTier,
 };
 
 describe("repository score history", () => {
@@ -85,6 +96,7 @@ describe("repository score history", () => {
         commit: metadata.commit,
         timestamp: "2026-09-03T18:00:00.000Z",
         scoreProfileVersion: SCORE_PROFILE,
+        provenance,
         score: 88,
         structuralScore: 100,
         verificationScore: 75,
@@ -95,6 +107,18 @@ describe("repository score history", () => {
     ]);
   });
 
+  test("requires provenance for every new snapshot", () => {
+    expect(() =>
+      appendScoreHistory(null, scoreEnvelope(), { ...metadata, producerCommit: undefined }),
+    ).toThrow("provenance");
+  });
+
+  test("rejects an invalid workflow run attempt", () => {
+    expect(() =>
+      appendScoreHistory(null, scoreEnvelope(), { ...metadata, workflowRunAttempt: "zero" }),
+    ).toThrow("positive integer");
+  });
+
   test("retains a score-production error as an unscored commit tombstone", () => {
     const history = appendScoreHistory(null, errorEnvelope(), metadata);
 
@@ -102,6 +126,7 @@ describe("repository score history", () => {
       expect.objectContaining({
         commit: metadata.commit,
         scoreProfileVersion: SCORE_PROFILE,
+        provenance,
         score: null,
         rating: "unavailable",
         completeness: "unavailable",
@@ -136,10 +161,14 @@ describe("repository score history", () => {
 
   test("replaces a rerun for the same commit instead of duplicating it", () => {
     const first = appendScoreHistory(null, scoreEnvelope(88), metadata);
-    const rerun = appendScoreHistory(first, scoreEnvelope(100), metadata);
+    const rerun = appendScoreHistory(first, scoreEnvelope(100), {
+      ...metadata,
+      workflowRunAttempt: metadata.workflowRunAttempt + 1,
+    });
 
     expect(rerun.entries).toHaveLength(1);
     expect(rerun.entries[0]?.score).toBe(100);
+    expect(rerun.entries[0]?.provenance.workflowRunAttempt).toBe(3);
   });
 
   test("canonicalizes offsets and sorts by chronological instant", () => {
@@ -187,6 +216,7 @@ describe("repository score history", () => {
     for (let index = 0; index < SCORE_HISTORY_RETENTION + 2; index += 1) {
       const suffix = String(index).padStart(40, "0");
       history = appendScoreHistory(history, scoreEnvelope(90), {
+        ...metadata,
         repository: metadata.repository,
         commit: suffix,
         timestamp: new Date(Date.UTC(2027, 0, 1, 0, 0, index)).toISOString(),
