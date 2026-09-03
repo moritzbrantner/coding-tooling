@@ -14,6 +14,10 @@ function numberOrNull(value) {
   return Number.isFinite(value) ? value : null;
 }
 
+function numberDelta(before, after) {
+  return Number.isFinite(before) && Number.isFinite(after) ? after - before : null;
+}
+
 function canonicalTimestamp(value) {
   if (typeof value !== "string") throw new Error("score history timestamp must be an ISO date");
   const instant = Date.parse(value);
@@ -48,14 +52,6 @@ function verificationSummary(verification) {
   };
 }
 
-function compactDiagnostics(diagnostics) {
-  return (Array.isArray(diagnostics) ? diagnostics : []).slice(0, 10).map((diagnostic) => ({
-    ...(typeof diagnostic?.code === "string" ? { code: diagnostic.code } : {}),
-    message: String(diagnostic?.message ?? "unknown score production error").slice(0, 500),
-    ...(typeof diagnostic?.path === "string" ? { path: diagnostic.path } : {}),
-  }));
-}
-
 function errorVerification() {
   return {
     status: "error",
@@ -67,6 +63,14 @@ function errorVerification() {
     blockedChecks: 0,
     missingRequiredCapabilities: 0,
   };
+}
+
+function compactDiagnostics(diagnostics) {
+  return (Array.isArray(diagnostics) ? diagnostics : []).slice(0, 10).map((diagnostic) => ({
+    ...(typeof diagnostic?.code === "string" ? { code: diagnostic.code } : {}),
+    message: String(diagnostic?.message ?? "unknown score production error").slice(0, 500),
+    ...(typeof diagnostic?.path === "string" ? { path: diagnostic.path } : {}),
+  }));
 }
 
 function snapshotProvenance(metadata) {
@@ -92,6 +96,150 @@ function snapshotProvenance(metadata) {
   };
 }
 
+function auditSummary(audits) {
+  return (Array.isArray(audits) ? audits : [])
+    .filter((audit) => audit && typeof audit.id === "string")
+    .map((audit) => ({
+      id: audit.id,
+      version: audit.version ?? 0,
+      description: audit.description ?? audit.id,
+      category: audit.category ?? "other",
+      severity: audit.severity ?? "warning",
+      coverageStatus: audit.coverageStatus ?? "unavailable",
+      coverageSubjects: audit.coverageSubjects ?? 0,
+      scoreModel: audit.scoreModel ?? "unavailable",
+      subjects: numberOrNull(audit.subjects),
+      failedSubjects: numberOrNull(audit.failedSubjects),
+      activeFindings: audit.activeFindings ?? 0,
+      suppressedFindings: audit.suppressedFindings ?? 0,
+      verifiedFindings: audit.verifiedFindings ?? 0,
+      score: numberOrNull(audit.score),
+    }))
+    .toSorted((left, right) => left.id.localeCompare(right.id));
+}
+
+function definitionFromScore(score) {
+  const definition = score?.definition;
+  if (
+    !definition ||
+    definition.schemaVersion !== "coding-tooling/repository-score-definition/v1" ||
+    typeof definition.fingerprint !== "string" ||
+    !definition.fingerprint.startsWith("sha256:")
+  ) {
+    throw new Error(
+      "score report does not contain a valid repository score definition fingerprint",
+    );
+  }
+  return definition;
+}
+
+function mapDeltas(before, after) {
+  const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
+  return [...keys]
+    .toSorted()
+    .map((id) => ({
+      id,
+      before: numberOrNull(before?.[id]),
+      after: numberOrNull(after?.[id]),
+      delta: numberDelta(before?.[id], after?.[id]),
+    }))
+    .filter((change) => change.before !== change.after);
+}
+
+function auditDeltas(beforeAudits, afterAudits) {
+  const before = new Map(
+    (Array.isArray(beforeAudits) ? beforeAudits : []).map((audit) => [audit.id, audit]),
+  );
+  const after = new Map(
+    (Array.isArray(afterAudits) ? afterAudits : []).map((audit) => [audit.id, audit]),
+  );
+  const ids = new Set([...before.keys(), ...after.keys()]);
+  return [...ids]
+    .toSorted()
+    .map((id) => {
+      const prior = before.get(id);
+      const current = after.get(id);
+      return {
+        id,
+        category: current?.category ?? prior?.category ?? "other",
+        before: numberOrNull(prior?.score),
+        after: numberOrNull(current?.score),
+        scoreDelta: numberDelta(prior?.score, current?.score),
+        subjectsDelta: numberDelta(prior?.subjects, current?.subjects),
+        failedSubjectsDelta: numberDelta(prior?.failedSubjects, current?.failedSubjects),
+        activeFindingsDelta: numberDelta(prior?.activeFindings, current?.activeFindings),
+        suppressedFindingsDelta: numberDelta(
+          prior?.suppressedFindings,
+          current?.suppressedFindings,
+        ),
+        verifiedFindingsDelta: numberDelta(prior?.verifiedFindings, current?.verifiedFindings),
+      };
+    })
+    .filter((change) =>
+      [
+        change.before !== change.after,
+        change.subjectsDelta !== 0 && change.subjectsDelta !== null,
+        change.failedSubjectsDelta !== 0 && change.failedSubjectsDelta !== null,
+        change.activeFindingsDelta !== 0 && change.activeFindingsDelta !== null,
+        change.suppressedFindingsDelta !== 0 && change.suppressedFindingsDelta !== null,
+        change.verifiedFindingsDelta !== 0 && change.verifiedFindingsDelta !== null,
+      ].some(Boolean),
+    );
+}
+
+function verificationDelta(before, after) {
+  if (!before && !after) return null;
+  return {
+    scoreDelta: numberDelta(before?.score, after?.score),
+    passedChecksDelta: numberDelta(before?.passedChecks, after?.passedChecks),
+    failedChecksDelta: numberDelta(before?.failedChecks, after?.failedChecks),
+    errorChecksDelta: numberDelta(before?.errorChecks, after?.errorChecks),
+    blockedChecksDelta: numberDelta(before?.blockedChecks, after?.blockedChecks),
+    missingRequiredCapabilitiesDelta: numberDelta(
+      before?.missingRequiredCapabilities,
+      after?.missingRequiredCapabilities,
+    ),
+  };
+}
+
+export function attributeScoreChange(previous, current) {
+  const base = {
+    priorCommit: previous?.commit ?? null,
+    scoreDelta: numberDelta(previous?.score, current?.score),
+    structuralScoreDelta: numberDelta(previous?.structuralScore, current?.structuralScore),
+    verification: verificationDelta(previous?.verification, current?.verification),
+    categoryDeltas: [],
+    auditDeltas: [],
+  };
+  if (!previous) return { ...base, status: "first-snapshot", comparable: false };
+  if (!previous.scoreProfileVersion || !current.scoreProfileVersion) {
+    return { ...base, status: "profile-unknown", comparable: false };
+  }
+  if (previous.scoreProfileVersion !== current.scoreProfileVersion) {
+    return { ...base, status: "profile-changed", comparable: false };
+  }
+  if (!previous.definitionFingerprint || !current.definitionFingerprint) {
+    return { ...base, status: "definition-unknown", comparable: false };
+  }
+  if (previous.definitionFingerprint !== current.definitionFingerprint) {
+    return { ...base, status: "definition-changed", comparable: false };
+  }
+  return {
+    ...base,
+    status: "comparable",
+    comparable: true,
+    categoryDeltas: mapDeltas(previous.categories, current.categories),
+    auditDeltas: auditDeltas(previous.audits, current.audits),
+  };
+}
+
+function withAttribution(entries) {
+  return entries.map((entry, index) => ({
+    ...entry,
+    change: attributeScoreChange(index === 0 ? null : entries[index - 1], entry),
+  }));
+}
+
 export function appendScoreHistory(existing, scoreEnvelope, metadata) {
   if (scoreEnvelope?.schemaVersion !== 1 || scoreEnvelope?.operation !== "score") {
     throw new Error("score report is not a coding-tooling score envelope");
@@ -108,8 +256,20 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
   if (typeof scoreProfileVersion !== "string" || scoreProfileVersion.length === 0) {
     throw new Error("score report does not identify its scoring profile");
   }
+  if (
+    score?.profileVersion &&
+    scoreEnvelope.profileVersion &&
+    score.profileVersion !== scoreEnvelope.profileVersion
+  ) {
+    throw new Error("score document profile does not match the score envelope profile");
+  }
   if (!score && scoreEnvelope.status !== "error") {
     throw new Error("score report contains no score and is not an error tombstone");
+  }
+
+  const definition = score ? definitionFromScore(score) : null;
+  if (definition && definition.profileVersion !== scoreProfileVersion) {
+    throw new Error("score definition profile does not match the score profile");
   }
 
   const history = existing ?? {
@@ -117,6 +277,7 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
     repository: metadata.repository,
     scoreSchemaVersion: SCORE_SCHEMA_V1,
     retention: SCORE_HISTORY_RETENTION,
+    definitions: {},
     entries: [],
   };
   if (history.schemaVersion !== SCORE_HISTORY_SCHEMA_V1) {
@@ -133,6 +294,7 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
         commit: metadata.commit,
         timestamp: canonicalTimestamp(metadata.timestamp),
         scoreProfileVersion,
+        definitionFingerprint: definition.fingerprint,
         provenance,
         score: numberOrNull(score.score),
         rating: score.rating,
@@ -140,6 +302,7 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
         structuralScore: numberOrNull(score.structuralScore),
         verificationScore: numberOrNull(score.verificationScore),
         categories: categoryMap(score.categories),
+        audits: auditSummary(score.audits),
         verification: verificationSummary(score.verification),
         findings: {
           active: score.findings?.active ?? 0,
@@ -152,6 +315,7 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
         commit: metadata.commit,
         timestamp: canonicalTimestamp(metadata.timestamp),
         scoreProfileVersion,
+        definitionFingerprint: null,
         provenance,
         score: null,
         rating: "unavailable",
@@ -159,6 +323,7 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
         structuralScore: null,
         verificationScore: null,
         categories: {},
+        audits: [],
         verification: errorVerification(),
         findings: { active: 0, suppressed: 0, verified: 0 },
         diagnostics,
@@ -171,11 +336,20 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
     .toSorted(compareHistoryEntries)
     .slice(-SCORE_HISTORY_RETENTION);
 
+  const definitions =
+    history.definitions && typeof history.definitions === "object" ? history.definitions : {};
+
   return {
     ...history,
     scoreSchemaVersion: SCORE_SCHEMA_V1,
     retention: SCORE_HISTORY_RETENTION,
-    entries,
+    definitions: definition
+      ? {
+          ...definitions,
+          [definition.fingerprint]: definition,
+        }
+      : definitions,
+    entries: withAttribution(entries),
   };
 }
 

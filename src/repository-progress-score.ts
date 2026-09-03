@@ -10,6 +10,10 @@ import {
   type RepositoryScoreDocument as StructuralScoreDocument,
   type RepositoryScoreRating,
 } from "./repository-score.ts";
+import {
+  repositoryScoreDefinition,
+  type RepositoryScoreDefinition,
+} from "./repository-score-definition.ts";
 
 export const REPOSITORY_SCORE_PROFILE_VERSION =
   "coding-tooling/repository-score-profile/v1" as const;
@@ -38,6 +42,7 @@ export type RepositoryVerificationScore = {
 export type RepositoryProgressScoreDocument = {
   schemaVersion: "coding-tooling/repository-score/v1";
   profileVersion: typeof REPOSITORY_SCORE_PROFILE_VERSION;
+  definition: RepositoryScoreDefinition;
   score: number | null;
   rating: RepositoryScoreRating;
   completeness: RepositoryScoreCompleteness;
@@ -195,6 +200,7 @@ export function combineRepositoryScore(
   return {
     schemaVersion: "coding-tooling/repository-score/v1",
     profileVersion: REPOSITORY_SCORE_PROFILE_VERSION,
+    definition: repositoryScoreDefinition(structural.audits, REPOSITORY_SCORE_PROFILE_VERSION),
     score: overall,
     rating: rating(overall),
     completeness,
@@ -207,9 +213,11 @@ export function combineRepositoryScore(
     findings: structural.findings,
     notes: [
       "The overall score combines structural expectation evidence with fresh repository verification when a run report is supplied.",
+      "The coarse score profile is human-managed; the definition fingerprint is mechanically derived from the exact score-affecting semantics.",
+      "The definition fingerprint changes when score-affecting detector versions, categories, severities, score models, profile identity, or aggregation semantics change.",
       "Structural and verification scores receive equal weight in v1 so a red verification pipeline cannot be hidden by structurally complete metadata.",
       "Without a validation report the numeric score remains a structural estimate and completeness is incomplete.",
-      `Historical score comparisons are valid only within ${REPOSITORY_SCORE_PROFILE_VERSION}.`,
+      `Historical score comparisons require both ${REPOSITORY_SCORE_PROFILE_VERSION} and an identical definition fingerprint.`,
       ...structural.notes,
     ],
   };
