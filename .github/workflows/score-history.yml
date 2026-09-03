@@ -38,7 +38,9 @@ jobs:
           report-path: .artifacts/coding-tooling/history-run.json
 
       - name: Produce repository score snapshot
+        id: score
         if: always()
+        continue-on-error: true
         uses: ./
         with:
           operation: score
@@ -81,3 +83,10 @@ jobs:
           fi
           git -C .score-history commit -m "score-history: ${GITHUB_SHA:0:12}"
           git -C .score-history push origin HEAD:score-history
+
+      - name: Surface score production failure
+        if: steps.score.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::error::Repository score production failed; its error tombstone was published to score-history."
+          exit 1
