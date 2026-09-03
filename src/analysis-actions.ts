@@ -1,11 +1,5 @@
 import { createHash } from "node:crypto";
-import {
-  existsSync,
-  lstatSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, lstatSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { relative, resolve, sep } from "node:path";
 
 import { analyzeProvider } from "./analysis.ts";
@@ -84,7 +78,10 @@ function assertNoSymlinkComponents(root: string, path: string, logicalPath: stri
   }
 }
 
-function prepareReplacement(root: string, replacement: AnalysisFileReplacement): PreparedReplacement {
+function prepareReplacement(
+  root: string,
+  replacement: AnalysisFileReplacement,
+): PreparedReplacement {
   if (!/^[a-f0-9]{64}$/.test(replacement.beforeSha256)) {
     throw new AnalysisActionConflict(replacement.path, "Analysis action beforeSha256 is invalid");
   }
@@ -127,7 +124,10 @@ function prepareReplacement(root: string, replacement: AnalysisFileReplacement):
   return { replacement, absolutePath, previousContent, outcome: "change" };
 }
 
-function conflictResult(action: AnalysisAction, error: AnalysisActionConflict): AnalysisActionApplyResult {
+function conflictResult(
+  action: AnalysisAction,
+  error: AnalysisActionConflict,
+): AnalysisActionApplyResult {
   return {
     result: "conflict",
     actionId: action.id,
@@ -174,7 +174,10 @@ export function applyAnalysisAction(
     return failedResult(action, `Invalid analysis action ID: ${action.id}`);
   }
   if (action.kind !== "replace-files" || action.replacements.length === 0) {
-    return failedResult(action, "Analysis action must contain at least one guarded file replacement");
+    return failedResult(
+      action,
+      "Analysis action must contain at least one guarded file replacement",
+    );
   }
   const paths = action.replacements.map((replacement) => replacement.path);
   if (new Set(paths).size !== paths.length) {
@@ -193,7 +196,8 @@ export function applyAnalysisAction(
   const noOp = prepared
     .filter((replacement) => replacement.outcome === "no-op")
     .map((replacement) => replacement.replacement.path);
-  const writeFile = options.writeFile ?? ((path: string, content: string) => writeFileSync(path, content));
+  const writeFile =
+    options.writeFile ?? ((path: string, content: string) => writeFileSync(path, content));
   const touched: PreparedReplacement[] = [];
 
   try {
@@ -212,11 +216,7 @@ export function applyAnalysisAction(
         // Continue restoring remaining files; the action remains failed.
       }
     }
-    return failedResult(
-      action,
-      error instanceof Error ? error.message : String(error),
-      rolledBack,
-    );
+    return failedResult(action, error instanceof Error ? error.message : String(error), rolledBack);
   }
 
   if (!postconditionSatisfied(root, action)) {
