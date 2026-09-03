@@ -3,11 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-  analysisActionId,
-  applyAnalysisAction,
-  sha256Text,
-} from "../src/analysis-actions.ts";
+import { analysisActionId, applyAnalysisAction, sha256Text } from "../src/analysis-actions.ts";
 import type { AnalysisAction } from "../src/analysis-model.ts";
 
 const roots: string[] = [];
@@ -91,9 +87,7 @@ describe("deterministic analysis actions", () => {
 
     expect(result.result).toBe("conflict");
     expect(result.diagnostics[0]?.code).toBe("analysis-action-conflict");
-    expect(readFileSync(join(root, "src", "value.ts"), "utf8")).toBe(
-      "export const value = 3;\n",
-    );
+    expect(readFileSync(join(root, "src", "value.ts"), "utf8")).toBe("export const value = 3;\n");
   });
 
   test("rolls back earlier writes when a later replacement fails", () => {
