@@ -1,5 +1,6 @@
 import { performance } from "node:perf_hooks";
 
+import { dotNetRoslynAnalysisProvider } from "./analysis-dotnet.ts";
 import type {
   AnalysisAction,
   AnalysisDiagnostic,
@@ -15,7 +16,10 @@ export type AnalysisData = {
   actions: AnalysisAction[];
 };
 
-export const analysisProviders: readonly AnalysisProvider[] = [typeScriptAnalysisProvider];
+export const analysisProviders: readonly AnalysisProvider[] = [
+  dotNetRoslynAnalysisProvider,
+  typeScriptAnalysisProvider,
+];
 
 function failedProvider(provider: AnalysisProvider, error: unknown): AnalysisProviderResult {
   return {
