@@ -22,6 +22,12 @@
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}",
       "description": "Browser-executed schema-v1 remote-preflight JSON for coding agents."
+    },
+    {
+      "id": "test-coverage",
+      "transport": "browser-json-view",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/test-coverage.json/?repo={owner}/{repository}",
+      "description": "Browser-executed observation of recognized test-coverage reports committed on a public repository default branch."
     }
   ],
   "authoritativeLocalOperations": [
@@ -34,7 +40,7 @@
   ],
   "limitations": [
     "Remote analysis supports public GitHub repositories only and uses anonymous GitHub API data.",
-    "GitHub Pages cannot execute repository commands; local coding-tooling remains authoritative for conformance, environment verification, findings, validation, and mutations.",
-    "The analysis-json view is browser-executed rather than a server-side application/json HTTP API."
+    "GitHub Pages cannot execute repository commands; local coding-tooling remains authoritative for conformance, environment verification, findings, validation, coverage generation, and mutations.",
+    "The analysis-json and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
   ]
 }
