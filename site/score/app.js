@@ -63,7 +63,10 @@ function renderChart(entries) {
     .join("");
   const lines = profileSeries(points)
     .filter((series) => series.length > 1)
-    .map((series) => `<polyline class="series" points="${series.map((point) => `${point.x},${point.y}`).join(" ")}"/>`)
+    .map(
+      (series) =>
+        `<polyline class="series" points="${series.map((point) => `${point.x},${point.y}`).join(" ")}"/>`,
+    )
     .join("");
   const dots = points
     .map(
