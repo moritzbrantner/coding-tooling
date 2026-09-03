@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "dotnet-incompatible-conversion",
+  "detector": "dotnet-type-assignability",
+  "fixture": "calibration/fixtures/dotnet-assignability",
+  "preparation": {
+    "kind": "dotnet-restore",
+    "project": "Fixture.csproj"
+  },
+  "coverage": "applied",
+  "labels": [
+    {
+      "subject": "src/Value.cs",
+      "requirement": "dotnet-type-assignability",
+      "expected": "finding"
+    }
+  ]
+}
