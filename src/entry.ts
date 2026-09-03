@@ -17,6 +17,7 @@ import {
 } from "./expectations.ts";
 import type { ResultStatus } from "./model.ts";
 import { publicContractCommand } from "./public-contract.ts";
+import { repositoryScoreCommand } from "./repository-score.ts";
 import { repositoryRoot } from "./shared.ts";
 
 function resultExitCode(status: ResultStatus): number {
@@ -39,6 +40,7 @@ function option(argv: string[], name: string): string | undefined {
 function expectationUsage(): never {
   console.error(`Usage:
   coding-tooling analyze [--json]
+  coding-tooling score [--json]
   coding-tooling findings [--new|--baseline] [--all] [--json]
   coding-tooling finding <finding-id> [--json]
   coding-tooling baseline [--json]
@@ -76,6 +78,13 @@ export function entryMain(argv = process.argv.slice(2)): number {
   if (command === "analyze") {
     if (argv.slice(1).some((value) => value !== "--json")) return expectationUsage();
     const result = analyzeRepository(repositoryRoot());
+    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
+    return resultExitCode(result.status);
+  }
+
+  if (command === "score") {
+    if (argv.slice(1).some((value) => value !== "--json")) return expectationUsage();
+    const result = repositoryScoreCommand(repositoryRoot());
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }
