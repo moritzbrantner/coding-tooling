@@ -31,3 +31,17 @@ https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/reposi
 It renders only the JSON envelope and is intended for browser-capable agents and tools that can execute the page JavaScript.
 
 This is deliberately not described as a conventional HTTP JSON API. GitHub Pages cannot execute server-side code, so a plain `curl` request receives the static HTML shell rather than a dynamically generated `application/json` response. A true HTTP `analysis.json?repo=...` endpoint would require a separate serverless/runtime deployment and should be introduced only if that additional operational dependency is justified.
+
+## `test-coverage.json` observation
+
+The Pages site also exposes an observation-only coverage view:
+
+```text
+https://moritzbrantner.github.io/coding-tooling/test-coverage.json/?repo=owner/repository
+```
+
+Schema version 1 looks for recognized coverage reports committed on the repository default branch. It currently reads Istanbul `coverage-summary.json` and LCOV `lcov.info` from their common root or `coverage/` locations and normalizes available line, statement, function, and branch totals.
+
+The browser never runs the repository test suite and never treats missing coverage evidence as `0%`. If no recognized report exists, the result is `unavailable`; if a discovered report cannot be read or parsed, or GitHub truncates the repository tree, the result is `incomplete`.
+
+This keeps the first Pages coverage contract conservative. CI-generated but ephemeral GitHub Actions artifacts are intentionally outside schema version 1 because the static browser path does not yet have a deterministic, zero-token artifact-content transport. A later producer protocol can publish a stable machine-readable coverage snapshot without weakening this observation boundary.
