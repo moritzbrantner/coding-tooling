@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Historical coding-tooling repository progress scores by commit."
+    />
+    <title>coding-tooling · score history</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <a href="../">coding-tooling</a>
+      <span>repository score / history v1</span>
+    </header>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Repository progress</p>
+        <div class="hero-row">
+          <div>
+            <h1><span id="latest-score">—</span><small>/100</small></h1>
+            <p id="latest-rating" class="lede">Loading the latest score…</p>
+          </div>
+          <div class="delta-card">
+            <span>Change from prior commit</span>
+            <strong id="score-delta">—</strong>
+          </div>
+        </div>
+        <p id="status" class="status" role="status">Loading score history…</p>
+        <p class="muted">
+          Latest commit:
+          <a id="latest-commit" href="https://github.com/moritzbrantner/coding-tooling">—</a>
+        </p>
+      </section>
+
+      <section class="metrics" aria-label="Latest score components">
+        <article>
+          <span>Structural</span>
+          <strong id="structural-score">—</strong>
+          <p>Deterministic repository expectations and findings.</p>
+        </article>
+        <article>
+          <span>Verification</span>
+          <strong id="verification-score">—</strong>
+          <p>Fresh format, lint, typecheck, test, and configured validation evidence.</p>
+        </article>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Trend</p>
+          <h2>Last 60 scored commits</h2>
+        </div>
+        <div class="chart-shell">
+          <svg
+            id="score-chart"
+            viewBox="0 0 720 240"
+            role="img"
+            aria-label="Repository score history from 0 to 100"
+          ></svg>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Latest breakdown</p>
+          <h2>Categories</h2>
+        </div>
+        <div id="categories" class="category-list"></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Evidence trail</p>
+          <h2>Recent commits</h2>
+        </div>
+        <div class="table-shell">
+          <table>
+            <thead>
+              <tr>
+                <th>Commit</th>
+                <th>Timestamp</th>
+                <th>Overall</th>
+                <th>Structural</th>
+                <th>Verification</th>
+                <th>Rating</th>
+              </tr>
+            </thead>
+            <tbody id="history-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <aside class="boundary">
+        <strong>Interpretation:</strong> this is a versioned engineering-evidence trend, not a claim
+        of semantic correctness or product value. A score can change when the scoring profile gains
+        new measurable evidence. History is retained by commit on the dedicated
+        <code>score-history</code> branch.
+      </aside>
+    </main>
+    <footer>
+      <span>Trend the evidence; keep the underlying checks visible.</span>
+      <a href="https://github.com/moritzbrantner/coding-tooling">GitHub</a>
+    </footer>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

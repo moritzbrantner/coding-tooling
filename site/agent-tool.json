@@ -28,6 +28,18 @@
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/test-coverage.json/?repo={owner}/{repository}",
       "description": "Browser-executed test-coverage observation that prefers standardized CI-published snapshots and falls back to recognized committed reports."
+    },
+    {
+      "id": "repository-score-history",
+      "transport": "html",
+      "href": "https://moritzbrantner.github.io/coding-tooling/score/",
+      "description": "Human-readable per-commit repository progress score history with structural and verification trends."
+    },
+    {
+      "id": "repository-score-history-json",
+      "transport": "static-json",
+      "href": "https://raw.githubusercontent.com/moritzbrantner/coding-tooling/score-history/history.json",
+      "description": "Versioned coding-tooling/score-history/v1 snapshots retained on the dedicated score-history branch."
     }
   ],
   "authoritativeLocalOperations": [
@@ -43,6 +55,7 @@
     "Remote analysis supports public GitHub repositories only and uses anonymous GitHub API data.",
     "GitHub Pages cannot execute repository commands; local coding-tooling or repository CI remains authoritative for coverage generation, validation, conformance, environment verification, findings, scoring, and mutations.",
     "A complete repository progress score requires a fresh local or CI coding-tooling run report; structural-only scoring remains explicitly incomplete.",
+    "Score history is a per-commit trend for the versioned scoring profile; scoring-profile expansion can change what 100 means.",
     "The analysis-json and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
   ]
 }

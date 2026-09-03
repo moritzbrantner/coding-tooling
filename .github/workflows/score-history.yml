@@ -1,0 +1,83 @@
+name: Publish Score History
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: coding-tooling-score-history
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Capture repository verification
+        continue-on-error: true
+        uses: ./
+        with:
+          tier: self
+          install-mode: none
+          strict: true
+          report-path: .artifacts/coding-tooling/history-run.json
+
+      - name: Produce repository score snapshot
+        if: always()
+        uses: ./
+        with:
+          operation: score
+          validation-report: .artifacts/coding-tooling/history-run.json
+          report-path: .artifacts/coding-tooling/history-score.json
+
+      - name: Ensure history branch exists
+        shell: bash
+        run: |
+          if ! git ls-remote --exit-code --heads origin score-history >/dev/null 2>&1; then
+            git push origin "$GITHUB_SHA:refs/heads/score-history"
+          fi
+
+      - name: Check out history branch
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: score-history
+          path: .score-history
+          fetch-depth: 1
+
+      - name: Append score snapshot
+        shell: bash
+        run: |
+          commit_timestamp="$(git show -s --format=%cI "$GITHUB_SHA")"
+          bun scripts/append-score-history.mjs \
+            --history .score-history/history.json \
+            --score .artifacts/coding-tooling/history-score.json \
+            --repository "$GITHUB_REPOSITORY" \
+            --commit "$GITHUB_SHA" \
+            --timestamp "$commit_timestamp"
+
+      - name: Publish history branch
+        shell: bash
+        run: |
+          git -C .score-history config user.name "github-actions[bot]"
+          git -C .score-history config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C .score-history add history.json
+          if git -C .score-history diff --cached --quiet; then
+            exit 0
+          fi
+          git -C .score-history commit -m "score-history: ${GITHUB_SHA:0:12}"
+          git -C .score-history push origin HEAD:score-history
