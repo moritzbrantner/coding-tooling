@@ -374,7 +374,8 @@ export function calibrationCommand(root: string): CalibrationEnvelope {
     return {
       schemaVersion: 1,
       operation: "calibration",
-      status: failedCases.length > 0 ? "failed" : unavailableCases.length > 0 ? "unavailable" : "passed",
+      status:
+        failedCases.length > 0 ? "failed" : unavailableCases.length > 0 ? "unavailable" : "passed",
       durationMs: Date.now() - started,
       data: {
         root,
