@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "format": "oxfmt --check .",
-    "format:check": "oxfmt . && git diff -- src/score-adoption.ts tests/score-adoption.test.ts && exit 1",
+    "format:check": "oxfmt --check .",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
     "typecheck": "tsc --noEmit",
