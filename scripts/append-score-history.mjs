@@ -13,6 +13,18 @@ function numberOrNull(value) {
   return Number.isFinite(value) ? value : null;
 }
 
+function canonicalTimestamp(value) {
+  if (typeof value !== "string") throw new Error("score history timestamp must be an ISO date");
+  const instant = Date.parse(value);
+  if (!Number.isFinite(instant)) throw new Error(`invalid score history timestamp: ${value}`);
+  return new Date(instant).toISOString();
+}
+
+function compareHistoryEntries(left, right) {
+  const byInstant = Date.parse(left.timestamp) - Date.parse(right.timestamp);
+  return byInstant !== 0 ? byInstant : String(left.commit).localeCompare(String(right.commit));
+}
+
 function categoryMap(categories) {
   return Object.fromEntries(
     (Array.isArray(categories) ? categories : [])
@@ -66,7 +78,7 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
 
   const entry = {
     commit: metadata.commit,
-    timestamp: metadata.timestamp,
+    timestamp: canonicalTimestamp(metadata.timestamp),
     scoreProfileVersion: score.profileVersion,
     score: numberOrNull(score.score),
     rating: score.rating,
@@ -82,10 +94,11 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
     },
   };
 
-  const entries = [...(Array.isArray(history.entries) ? history.entries : [])]
+  const entries = (Array.isArray(history.entries) ? history.entries : [])
     .filter((candidate) => candidate?.commit !== entry.commit)
+    .map((candidate) => ({ ...candidate, timestamp: canonicalTimestamp(candidate?.timestamp) }))
     .concat(entry)
-    .sort((left, right) => String(left.timestamp).localeCompare(String(right.timestamp)))
+    .toSorted(compareHistoryEntries)
     .slice(-SCORE_HISTORY_RETENTION);
 
   return {
