@@ -35,13 +35,14 @@
     "coding-tooling bootstrap plan --json",
     "coding-tooling conformance --json",
     "coding-tooling findings --json",
-    "coding-tooling score --json",
-    "coding-tooling plan --tier fast --json",
-    "coding-tooling run --tier fast --strict --json"
+    "coding-tooling run --tier fast --strict --report .artifacts/coding-tooling/run.json --json",
+    "coding-tooling score --validation-report .artifacts/coding-tooling/run.json --json",
+    "coding-tooling plan --tier fast --json"
   ],
   "limitations": [
     "Remote analysis supports public GitHub repositories only and uses anonymous GitHub API data.",
     "GitHub Pages cannot execute repository commands; local coding-tooling or repository CI remains authoritative for coverage generation, validation, conformance, environment verification, findings, scoring, and mutations.",
+    "A complete repository progress score requires a fresh local or CI coding-tooling run report; structural-only scoring remains explicitly incomplete.",
     "The analysis-json and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
   ]
 }
