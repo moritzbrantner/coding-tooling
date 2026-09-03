@@ -20,14 +20,6 @@ jobs:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
-      - name: Emit formatted score sources
-        run: |
-          ./node_modules/.bin/oxfmt src/repository-score.ts tests/repository-score.test.ts
-          echo '=== src/repository-score.ts ==='
-          cat src/repository-score.ts
-          echo '=== tests/repository-score.test.ts ==='
-          cat tests/repository-score.test.ts
-          exit 1
       - name: Validate through the local Action
         uses: ./
         with:
