@@ -1,5 +1,17 @@
 export const HISTORY_SCHEMA = "coding-tooling/score-history/v1";
 
+function canonicalTimestamp(value) {
+  if (typeof value !== "string") throw new Error("Score history timestamp must be an ISO date");
+  const instant = Date.parse(value);
+  if (!Number.isFinite(instant)) throw new Error(`Invalid score history timestamp: ${value}`);
+  return new Date(instant).toISOString();
+}
+
+function compareHistoryEntries(left, right) {
+  const byInstant = Date.parse(left.timestamp) - Date.parse(right.timestamp);
+  return byInstant !== 0 ? byInstant : left.commit.localeCompare(right.commit);
+}
+
 export function normalizeHistory(document) {
   if (!document || document.schemaVersion !== HISTORY_SCHEMA) {
     throw new Error(`Expected ${HISTORY_SCHEMA}`);
@@ -8,13 +20,14 @@ export function normalizeHistory(document) {
     .filter((entry) => entry && typeof entry.commit === "string")
     .map((entry) => ({
       ...entry,
+      timestamp: canonicalTimestamp(entry.timestamp),
       scoreProfileVersion:
         typeof entry.scoreProfileVersion === "string" ? entry.scoreProfileVersion : null,
       score: Number.isFinite(entry.score) ? entry.score : null,
       structuralScore: Number.isFinite(entry.structuralScore) ? entry.structuralScore : null,
       verificationScore: Number.isFinite(entry.verificationScore) ? entry.verificationScore : null,
     }))
-    .sort((left, right) => String(left.timestamp).localeCompare(String(right.timestamp)));
+    .toSorted(compareHistoryEntries);
   return { ...document, entries };
 }
 
