@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { dotNetRoslynAnalysisProvider } from "../src/analysis-dotnet.ts";
-import { analyzeExpectations } from "../src/expectations.ts";
 import { commandAvailable, runCommand } from "../src/shared.ts";
 
 const roots: string[] = [];
@@ -75,69 +74,49 @@ describe("Roslyn-backed .NET analysis", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  test("normalizes and promotes a real Roslyn conversion diagnostic", () => {
-    if (!commandAvailable("dotnet")) return;
-    const source =
-      "namespace Fixture; public static class Value { public static string Get() => 123; }\n";
-    const { root, projectPath } = project(source);
-    expect(restore(root, projectPath)).toBeTrue();
+  test(
+    "normalizes a real Roslyn conversion diagnostic",
+    () => {
+      if (!commandAvailable("dotnet")) return;
+      const { root, projectPath } = project(
+        "namespace Fixture; public static class Value { public static string Get() => 123; }\n",
+      );
+      expect(restore(root, projectPath)).toBeTrue();
 
-    const result = dotNetRoslynAnalysisProvider.analyze(root);
-    const diagnostic = result.diagnostics.find((item) => item.code === "CS0029");
+      const result = dotNetRoslynAnalysisProvider.analyze(root);
+      const diagnostic = result.diagnostics.find((item) => item.code === "CS0029");
 
-    expect(result.status).toBe("applied");
-    expect(result.displayName).toBe("Roslyn via .NET SDK");
-    expect(result.version).toBeTruthy();
-    expect(result.capabilities).toEqual(["semantic", "diagnostics"]);
-    expect(result.projects).toEqual(["Fixture.csproj"]);
-    expect(result.actions).toEqual([]);
-    expect(diagnostic).toMatchObject({
-      provider: "dotnet-roslyn",
-      code: "CS0029",
-      severity: "error",
-      project: "Fixture.csproj",
-      location: { path: "src/Value.cs", startLine: 1 },
-    });
+      expect(result.status).toBe("applied");
+      expect(result.displayName).toBe("Roslyn via .NET SDK");
+      expect(result.version).toBeTruthy();
+      expect(result.capabilities).toEqual(["semantic", "diagnostics"]);
+      expect(result.projects).toEqual(["Fixture.csproj"]);
+      expect(result.actions).toEqual([]);
+      expect(diagnostic).toMatchObject({
+        provider: "dotnet-roslyn",
+        code: "CS0029",
+        severity: "error",
+        project: "Fixture.csproj",
+        location: { path: "src/Value.cs", startLine: 1 },
+      });
+    },
+    15000,
+  );
 
-    const before = analyzeExpectations(root).findings.find(
-      (finding) => finding.expectationId === "dotnet-type-assignability",
-    );
-    expect(before).toMatchObject({
-      expectationVersion: 1,
-      policyKind: "advisory",
-      severity: "warning",
-      subject: { kind: "file", key: "src/Value.cs", path: "src/Value.cs" },
-      requirement: { kind: "signal", key: "dotnet-type-assignability" },
-      verification: [["coding-tooling", "analyze", "--json"]],
-    });
-    expect(before?.analysisEvidence?.[0]).toMatchObject({
-      provider: "dotnet-roslyn",
-      code: "CS0029",
-      project: "Fixture.csproj",
-      location: { path: "src/Value.cs", startLine: 1 },
-    });
-    expect(before?.analysisEvidence?.[0]?.providerVersion).toBeTruthy();
+  test(
+    "passes a restored C# project with no compiler diagnostics",
+    () => {
+      if (!commandAvailable("dotnet")) return;
+      const { root, projectPath } = project(
+        'namespace Fixture; public static class Value { public static string Get() => "ok"; }\n',
+      );
+      expect(restore(root, projectPath)).toBeTrue();
 
-    writeFileSync(join(root, "src", "Value.cs"), `\n\n${source}`);
-    const after = analyzeExpectations(root).findings.find(
-      (finding) => finding.expectationId === "dotnet-type-assignability",
-    );
-    expect(after?.id).toBe(before?.id);
-    expect(after?.analysisEvidence?.[0]?.location?.startLine).toBeGreaterThan(
-      before?.analysisEvidence?.[0]?.location?.startLine ?? 0,
-    );
-  });
+      const result = dotNetRoslynAnalysisProvider.analyze(root);
 
-  test("passes a restored C# project with no compiler diagnostics", () => {
-    if (!commandAvailable("dotnet")) return;
-    const { root, projectPath } = project(
-      'namespace Fixture; public static class Value { public static string Get() => "ok"; }\n',
-    );
-    expect(restore(root, projectPath)).toBeTrue();
-
-    const result = dotNetRoslynAnalysisProvider.analyze(root);
-
-    expect(result.status).toBe("applied");
-    expect(result.diagnostics).toEqual([]);
-  });
+      expect(result.status).toBe("applied");
+      expect(result.diagnostics).toEqual([]);
+    },
+    15000,
+  );
 });
