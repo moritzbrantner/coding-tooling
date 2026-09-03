@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
 
 import type {
@@ -45,7 +44,7 @@ function appendContinuation(diagnostic: AnalysisDiagnostic, line: string): void 
   const continuation = line.trim();
   if (!continuation || /^Build (?:FAILED|succeeded)\.?$/i.test(continuation)) return;
   if (/^\d+ Warning\(s\)$/.test(continuation) || /^\d+ Error\(s\)$/.test(continuation)) return;
-  if (/^Time Elapsed /.test(continuation)) return;
+  if (continuation.startsWith("Time Elapsed ")) return;
   diagnostic.message = `${diagnostic.message}\n${continuation}`;
 }
 
