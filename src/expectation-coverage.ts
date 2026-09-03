@@ -28,6 +28,7 @@ type CoverageTarget =
   | "repository-config"
   | "packages"
   | "typescript-source"
+  | "typescript-analysis-projects"
   | "javascript-source"
   | "script-source"
   | "rust-explicit-targets"
@@ -47,6 +48,7 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "source-unimplemented-stub": "production-source",
   "typescript-project-config": "typescript-source",
   "typescript-source-test": "typescript-source",
+  "typescript-type-assignability": "typescript-analysis-projects",
 };
 
 function detectorSubjects(root: string, context: DetectorContext, target: CoverageTarget): number {
@@ -60,6 +62,8 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
         (total, packageInfo) => total + packageInfo.sourceFiles.length,
         0,
       );
+    case "typescript-analysis-projects":
+      return context.analysisProvider("typescript-compiler")?.projects.length ?? 0;
     case "javascript-source":
       return context.packages.reduce(
         (total, packageInfo) => total + packageInfo.javaScriptSourceFiles.length,
@@ -78,6 +82,18 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
     case "production-source":
       return productionSourceFiles(root).length;
   }
+}
+
+function semanticTypeScriptCoverage(context: DetectorContext): {
+  status: DetectorCoverageStatus;
+  subjects: number;
+} {
+  const provider = context.analysisProvider("typescript-compiler");
+  if (!provider) return { status: "unavailable", subjects: 0 };
+  const subjects = provider.projects.length;
+  if (provider.status === "applied") return { status: "applied", subjects };
+  if (provider.status === "not-applicable") return { status: "not-applicable", subjects: 0 };
+  return { status: "unavailable", subjects };
 }
 
 function unsupportedTechnologies(root: string): string[] {
@@ -110,6 +126,9 @@ export function analyzeFindingsCoverage(
         status: "unavailable" as const,
         subjects: 0,
       };
+    }
+    if (target === "typescript-analysis-projects") {
+      return { id: descriptor.id, version: descriptor.version, ...semanticTypeScriptCoverage(context) };
     }
     const subjects = detectorSubjects(root, context, target);
     return {
