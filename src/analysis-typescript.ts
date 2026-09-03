@@ -1,6 +1,6 @@
-import { basename, dirname, resolve, sep } from "node:path";
-
-import * as ts from "typescript";
+import { existsSync } from "node:fs";
+import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type {
   AnalysisDiagnostic,
@@ -8,60 +8,109 @@ import type {
   AnalysisProvider,
   AnalysisProviderResult,
 } from "./analysis-model.ts";
-import { relativePosix, walkFiles } from "./shared.ts";
+import { relativePosix, runCommand, walkFiles } from "./shared.ts";
 
 const providerId = "typescript-compiler";
+const providerRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const locatedDiagnosticPattern = /^(.*)\((\d+),(\d+)\):\s+(error|warning|info)\s+TS(\d+):\s*(.*)$/;
+const globalDiagnosticPattern = /^(error|warning|info)\s+TS(\d+):\s*(.*)$/;
 
-function severity(category: ts.DiagnosticCategory): AnalysisDiagnosticSeverity {
-  if (category === ts.DiagnosticCategory.Error) return "error";
-  if (category === ts.DiagnosticCategory.Warning) return "warning";
+function severity(value: string): AnalysisDiagnosticSeverity {
+  if (value === "error") return "error";
+  if (value === "warning") return "warning";
   return "info";
 }
 
-function diagnosticPath(root: string, fileName: string): string {
+function insideRoot(root: string, path: string): boolean {
   const absoluteRoot = resolve(root);
-  const absoluteFile = resolve(fileName);
-  if (absoluteFile === absoluteRoot || absoluteFile.startsWith(`${absoluteRoot}${sep}`)) {
-    return relativePosix(absoluteRoot, absoluteFile);
-  }
-  return fileName.split(sep).join("/");
+  const absolutePath = resolve(path);
+  return absolutePath === absoluteRoot || absolutePath.startsWith(`${absoluteRoot}${sep}`);
 }
 
-function normalizeDiagnostic(
+function diagnosticPath(root: string, configPath: string, path: string): string {
+  const normalized = path.trim();
+  if (isAbsolute(normalized)) {
+    return insideRoot(root, normalized) ? relativePosix(root, normalized) : normalized.split(sep).join("/");
+  }
+
+  const fromProvider = resolve(providerRoot, normalized);
+  const fromProject = resolve(dirname(configPath), normalized);
+  const absolute = existsSync(fromProvider) ? fromProvider : existsSync(fromProject) ? fromProject : fromProvider;
+  return insideRoot(root, absolute) ? relativePosix(root, absolute) : normalized.split(sep).join("/");
+}
+
+function compilerCommand(args: string[]) {
+  return runCommand(
+    "bun",
+    ["x", "--no-install", "--package", "typescript", "tsc", ...args],
+    providerRoot,
+  );
+}
+
+function compilerVersion(): { version?: string; reason?: string } {
+  const result = compilerCommand(["--version"]);
+  if (result.status !== 0) {
+    const detail = [result.error, result.stderr.trim(), result.stdout.trim()].find(Boolean);
+    return { reason: detail ?? "Pinned TypeScript compiler is unavailable" };
+  }
+  const value = result.stdout.trim() || result.stderr.trim();
+  return { version: value.replace(/^Version\s+/i, "").trim() || undefined };
+}
+
+function appendContinuation(diagnostic: AnalysisDiagnostic, line: string): void {
+  const continuation = line.trim();
+  if (!continuation || /^Found \d+ errors?\.?$/i.test(continuation)) return;
+  diagnostic.message = `${diagnostic.message}\n${continuation}`;
+}
+
+function parseCompilerDiagnostics(
   root: string,
-  project: string,
-  diagnostic: ts.Diagnostic,
-): AnalysisDiagnostic {
-  const result: AnalysisDiagnostic = {
-    provider: providerId,
-    code: `TS${diagnostic.code}`,
-    severity: severity(diagnostic.category),
-    message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-    project,
-  };
+  configPath: string,
+  output: string,
+): AnalysisDiagnostic[] {
+  const project = relativePosix(root, configPath);
+  const diagnostics: AnalysisDiagnostic[] = [];
+  let current: AnalysisDiagnostic | undefined;
 
-  if (!diagnostic.file) {
-    result.location = { path: project };
-    return result;
-  }
-
-  const location = {
-    path: diagnosticPath(root, diagnostic.file.fileName),
-  } as NonNullable<AnalysisDiagnostic["location"]>;
-  if (diagnostic.start !== undefined) {
-    const start = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start);
-    location.startLine = start.line + 1;
-    location.startColumn = start.character + 1;
-    if (diagnostic.length !== undefined) {
-      const end = diagnostic.file.getLineAndCharacterOfPosition(
-        diagnostic.start + diagnostic.length,
-      );
-      location.endLine = end.line + 1;
-      location.endColumn = end.character + 1;
+  for (const line of output.split(/\r?\n/)) {
+    const located = line.match(locatedDiagnosticPattern);
+    if (located) {
+      const [, path, lineNumber, columnNumber, category, code, message] = located;
+      current = {
+        provider: providerId,
+        code: `TS${code}`,
+        severity: severity(category),
+        message,
+        project,
+        location: {
+          path: diagnosticPath(root, configPath, path),
+          startLine: Number(lineNumber),
+          startColumn: Number(columnNumber),
+        },
+      };
+      diagnostics.push(current);
+      continue;
     }
+
+    const global = line.match(globalDiagnosticPattern);
+    if (global) {
+      const [, category, code, message] = global;
+      current = {
+        provider: providerId,
+        code: `TS${code}`,
+        severity: severity(category),
+        message,
+        project,
+        location: { path: project },
+      };
+      diagnostics.push(current);
+      continue;
+    }
+
+    if (current) appendContinuation(current, line);
   }
-  result.location = location;
-  return result;
+
+  return diagnostics;
 }
 
 function diagnosticKey(diagnostic: AnalysisDiagnostic): string {
@@ -79,32 +128,15 @@ function diagnosticKey(diagnostic: AnalysisDiagnostic): string {
 }
 
 function projectDiagnostics(root: string, configPath: string): AnalysisDiagnostic[] {
-  const project = relativePosix(root, configPath);
-  const read = ts.readConfigFile(configPath, ts.sys.readFile);
-  if (read.error) return [normalizeDiagnostic(root, project, read.error)];
-
-  const parsed = ts.parseJsonConfigFileContent(
-    read.config,
-    ts.sys,
-    dirname(configPath),
-    { noEmit: true },
-    configPath,
-  );
-  const diagnostics: ts.Diagnostic[] = [...parsed.errors];
-
-  if (parsed.fileNames.length > 0) {
-    const program = ts.createProgram({
-      rootNames: parsed.fileNames,
-      options: { ...parsed.options, noEmit: true },
-      projectReferences: parsed.projectReferences,
-    });
-    diagnostics.push(...ts.getPreEmitDiagnostics(program));
+  const result = compilerCommand(["--project", configPath, "--noEmit", "--pretty", "false"]);
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  const diagnostics = parseCompilerDiagnostics(root, configPath, output);
+  if (result.status !== 0 && diagnostics.length === 0) {
+    const detail = [result.error, result.stderr.trim(), result.stdout.trim()].find(Boolean);
+    throw new Error(detail ?? `TypeScript compiler failed for ${relativePosix(root, configPath)}`);
   }
 
-  const normalized = diagnostics.map((diagnostic) =>
-    normalizeDiagnostic(root, project, diagnostic),
-  );
-  const unique = new Map(normalized.map((diagnostic) => [diagnosticKey(diagnostic), diagnostic]));
+  const unique = new Map(diagnostics.map((diagnostic) => [diagnosticKey(diagnostic), diagnostic]));
   return [...unique.values()].sort((left, right) => {
     const leftLocation = left.location;
     const rightLocation = right.location;
@@ -127,8 +159,7 @@ export const typeScriptAnalysisProvider: AnalysisProvider = {
     if (configs.length === 0) {
       return {
         id: providerId,
-        displayName: "TypeScript Compiler API",
-        version: ts.version,
+        displayName: "TypeScript native compiler",
         status: "not-applicable",
         capabilities: ["syntax", "semantic", "diagnostics"],
         projects: [],
@@ -137,12 +168,25 @@ export const typeScriptAnalysisProvider: AnalysisProvider = {
       };
     }
 
+    const compiler = compilerVersion();
+    if (!compiler.version) {
+      return {
+        id: providerId,
+        displayName: "TypeScript native compiler",
+        status: "unavailable",
+        capabilities: ["syntax", "semantic", "diagnostics"],
+        projects: configs.map((path) => relativePosix(root, path)),
+        diagnostics: [],
+        reason: compiler.reason,
+      };
+    }
+
     const projects = configs.map((path) => relativePosix(root, path));
     const diagnostics = configs.flatMap((path) => projectDiagnostics(root, path));
     return {
       id: providerId,
-      displayName: "TypeScript Compiler API",
-      version: ts.version,
+      displayName: "TypeScript native compiler",
+      version: compiler.version,
       status: "applied",
       capabilities: ["syntax", "semantic", "diagnostics"],
       projects,
