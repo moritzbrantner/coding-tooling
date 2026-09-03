@@ -77,12 +77,35 @@ jobs:
         run: |
           git -C .score-history config user.name "github-actions[bot]"
           git -C .score-history config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git -C .score-history add history.json
-          if git -C .score-history diff --cached --quiet; then
-            exit 0
+
+          unexpected="$(git -C .score-history ls-files | grep -vx 'history.json' || true)"
+          if [[ -n "$unexpected" ]]; then
+            cp .score-history/history.json "$RUNNER_TEMP/score-history.json"
+            git -C .score-history reset --hard
+            git -C .score-history clean -fdx
+            git -C .score-history checkout --orphan score-history-clean
+            git -C .score-history rm -rf .
+            cp "$RUNNER_TEMP/score-history.json" .score-history/history.json
+            git -C .score-history add history.json
+            git -C .score-history commit -m "score-history: isolate persistence branch"
+            git -C .score-history push --force origin HEAD:score-history
+          else
+            git -C .score-history add history.json
+            if ! git -C .score-history diff --cached --quiet; then
+              git -C .score-history commit -m "score-history: ${GITHUB_SHA:0:12}"
+              git -C .score-history push origin HEAD:score-history
+            fi
           fi
-          git -C .score-history commit -m "score-history: ${GITHUB_SHA:0:12}"
-          git -C .score-history push origin HEAD:score-history
+
+      - name: Verify data-only history branch
+        shell: bash
+        run: |
+          tracked="$(git -C .score-history ls-files)"
+          if [[ "$tracked" != "history.json" ]]; then
+            echo "::error::score-history must track only history.json; found:"
+            printf '%s\n' "$tracked"
+            exit 1
+          fi
 
       - name: Surface score production failure
         if: steps.score.outcome == 'failure'
