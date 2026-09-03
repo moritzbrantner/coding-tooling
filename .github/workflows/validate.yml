@@ -31,3 +31,8 @@ jobs:
         with:
           operation: findings
           report-path: .artifacts/coding-tooling/findings.json
+      - name: Inspect repository score
+        uses: ./
+        with:
+          operation: score
+          report-path: .artifacts/coding-tooling/score.json
