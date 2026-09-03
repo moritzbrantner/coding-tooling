@@ -30,6 +30,7 @@ const typeScriptSourceFilePattern = /\.(?:[cm]?ts|tsx)$/;
 const javaScriptSourceFilePattern = /\.(?:[cm]?js|jsx)$/;
 const storyFilePattern = /\.(?:stories|story)\.(?:[cm]?[jt]sx?)$/;
 const fixtureFilePattern = /\.(?:fixture|fixtures)\.(?:[cm]?[jt]sx?)$/;
+const supportDirectoryPattern = /^src\/(?:test|tests|testing|__tests__)\/|\/stories\//;
 
 export function normalizePath(path: string): string {
   return path.split(sep).join("/");
@@ -39,7 +40,7 @@ function isProductionSource(local: string, sourcePattern: RegExp): boolean {
   if (!local.startsWith("src/") || !sourcePattern.test(local)) return false;
   if (testFilePattern.test(local)) return false;
   if (storyFilePattern.test(local) || fixtureFilePattern.test(local)) return false;
-  return !/^src\/(?:test|tests|__tests__)\//.test(local);
+  return !supportDirectoryPattern.test(local);
 }
 
 function isProductionTypeScriptSource(local: string): boolean {
