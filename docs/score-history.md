@@ -8,13 +8,14 @@ The `Publish Score History` workflow runs for `main` and writes `history.json` t
 
 This keeps generated history outside the authored source branch while making it durable, reviewable, and directly readable by GitHub Pages and coding agents.
 
-Each commit appears at most once. Re-running the workflow for the same commit replaces that entry instead of appending a duplicate. The document retains the latest 1,000 commit snapshots.
+Each commit appears at most once. Re-running the workflow for the same commit replaces that entry instead of appending a duplicate. The document retains the latest 1,000 commit snapshots by chronological instant. Commit timestamps are normalized to UTC when history is written, and equal instants are ordered deterministically by commit SHA.
 
 ## Snapshot semantics
 
 Each entry records:
 
-- commit SHA and commit timestamp;
+- commit SHA and canonical UTC commit timestamp;
+- score-profile version for comparable historical trends;
 - overall score, rating, and completeness;
 - structural and verification component scores;
 - latest category scores;
@@ -28,8 +29,8 @@ The workflow deliberately runs scoring even when repository validation fails. A 
 `/score/` reads the raw `history.json` document from the `score-history` branch and renders:
 
 - the latest overall, structural, and verification scores;
-- change from the previous scored commit;
-- a 60-commit score chart;
+- change from the previous scored commit within the same score profile;
+- a 60-commit score chart that does not connect incompatible score profiles;
 - the latest category breakdown;
 - a recent commit evidence table.
 
