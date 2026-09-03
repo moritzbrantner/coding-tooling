@@ -3,6 +3,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { analyzeRepository } from "./analysis.ts";
 import { calibrationCommand, type CalibrationEnvelope } from "./calibration.ts";
 import { main } from "./cli.ts";
 import { writeReport } from "./core.ts";
@@ -37,6 +38,7 @@ function option(argv: string[], name: string): string | undefined {
 
 function expectationUsage(): never {
   console.error(`Usage:
+  coding-tooling analyze [--json]
   coding-tooling findings [--new|--baseline] [--all] [--json]
   coding-tooling finding <finding-id> [--json]
   coding-tooling baseline [--json]
@@ -67,6 +69,13 @@ export function entryMain(argv = process.argv.slice(2)): number {
     });
     const report = option(argv, "report");
     if (report) writeReport(result, resolve(root, report));
+    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
+    return resultExitCode(result.status);
+  }
+
+  if (command === "analyze") {
+    if (argv.slice(1).some((value) => value !== "--json")) return expectationUsage();
+    const result = analyzeRepository(repositoryRoot());
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }

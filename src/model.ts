@@ -25,6 +25,7 @@ export type ResultOperation =
   | "inspect"
   | "check"
   | "affected"
+  | "analyze"
   | "doctor"
   | "conformance"
   | "environment"
