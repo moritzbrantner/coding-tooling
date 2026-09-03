@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "typescript-incompatible-assignment",
+  "detector": "typescript-type-assignability",
+  "fixture": "calibration/fixtures/typescript-assignability",
+  "coverage": "applied",
+  "labels": [
+    {
+      "subject": "src/value.ts",
+      "requirement": "typescript-type-assignability",
+      "expected": "finding"
+    }
+  ]
+}
