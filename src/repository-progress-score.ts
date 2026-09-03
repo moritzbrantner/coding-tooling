@@ -11,6 +11,8 @@ import {
   type RepositoryScoreRating,
 } from "./repository-score.ts";
 
+export const REPOSITORY_SCORE_PROFILE_VERSION = "coding-tooling/repository-score-profile/v1" as const;
+
 export type RepositoryProgressScoreCategory = RepositoryCategoryScore["id"] | "verification";
 
 export type RepositoryProgressCategoryScore = {
@@ -34,6 +36,7 @@ export type RepositoryVerificationScore = {
 
 export type RepositoryProgressScoreDocument = {
   schemaVersion: "coding-tooling/repository-score/v1";
+  profileVersion: typeof REPOSITORY_SCORE_PROFILE_VERSION;
   score: number | null;
   rating: RepositoryScoreRating;
   completeness: RepositoryScoreCompleteness;
@@ -189,6 +192,7 @@ export function combineRepositoryScore(
 
   return {
     schemaVersion: "coding-tooling/repository-score/v1",
+    profileVersion: REPOSITORY_SCORE_PROFILE_VERSION,
     score: overall,
     rating: rating(overall),
     completeness,
@@ -203,6 +207,7 @@ export function combineRepositoryScore(
       "The overall score combines structural expectation evidence with fresh repository verification when a run report is supplied.",
       "Structural and verification scores receive equal weight in v1 so a red verification pipeline cannot be hidden by structurally complete metadata.",
       "Without a validation report the numeric score remains a structural estimate and completeness is incomplete.",
+      `Historical score comparisons are valid only within ${REPOSITORY_SCORE_PROFILE_VERSION}.`,
       ...structural.notes,
     ],
   };
