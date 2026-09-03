@@ -6,7 +6,7 @@
 
 The analysis pipeline has three deliberately separate concepts:
 
-1. **Provider facts and diagnostics** come from a language-native engine such as the TypeScript Compiler API, Roslyn, rustc/Clippy, rust-analyzer, or a syntax-only parser such as Tree-sitter.
+1. **Provider facts and diagnostics** come from a language-native engine such as the TypeScript compiler, Roslyn, rustc/Clippy, rust-analyzer, or a syntax-only parser such as Tree-sitter.
 2. **Expectations/findings** are `coding-tooling` repository checks. A provider diagnostic becomes a `CT-*` finding only through an explicit, versioned adapter with known semantics.
 3. **Actions** are deterministic remediations. A provider code action is exposed or applied only when its edit contract can be validated, previewed, applied idempotently, and re-analyzed.
 
@@ -28,10 +28,12 @@ A provider also reports `applied`, `not-applicable`, `unavailable`, or `failed`.
 The initial implementation adds:
 
 - a language-provider contract with capability, status, version, project, and diagnostic provenance;
-- a TypeScript provider using the repository's pinned TypeScript Compiler API directly;
-- normalized TypeScript diagnostics with `TS*` codes, severity, project, file, and source span;
+- a TypeScript provider using `coding-tooling`'s pinned TypeScript 7 native `tsc` executable;
+- normalized TypeScript diagnostics with `TS*` codes, severity, project, file, and source location;
 - `coding-tooling analyze [--json]` / `bun run analyze`;
 - tests proving semantic compiler errors, clean projects, and not-applicable projects.
+
+TypeScript 7.0 deliberately does not expose the previous stable Compiler API. The provider therefore uses the pinned native compiler executable rather than silently analyzing TypeScript 7 projects with the TypeScript 6 compatibility API or depending on TypeScript 7's transitional unstable API. The normalized provider contract allows the implementation to adopt the new TypeScript API once that surface is stable without changing the agent-facing result shape.
 
 The command fails when the compiler reports an error diagnostic, but it does not change `findings` or normal validation tiers yet.
 
@@ -39,7 +41,7 @@ The command fails when the compiler reports an error diagnostic, but it does not
 
 ### 1. Diagnostic-to-finding adapters
 
-Add a small explicit registry mapping selected provider diagnostics to versioned expectations. Do not convert every compiler diagnostic blindly. Preserve provider ID/version/code and source span as finding evidence, and calibrate each mapping against real repositories before enforcement.
+Add a small explicit registry mapping selected provider diagnostics to versioned expectations. Do not convert every compiler diagnostic blindly. Preserve provider ID/version/code and source location as finding evidence, and calibrate each mapping against real repositories before enforcement.
 
 ### 2. Deterministic code-action contract
 
