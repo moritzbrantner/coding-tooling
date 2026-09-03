@@ -73,9 +73,7 @@ describe("TypeScript diagnostic-to-finding adapter", () => {
   });
 
   test("aggregates repeated TS2322 diagnostics by file and keeps the finding ID stable", () => {
-    const root = fixture(
-      "export const first: string = 1;\nexport const second: string = 2;\n",
-    );
+    const root = fixture("export const first: string = 1;\nexport const second: string = 2;\n");
 
     const before = assignabilityFindings(root);
     expect(before).toHaveLength(1);
