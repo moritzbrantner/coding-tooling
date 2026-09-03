@@ -1,0 +1,167 @@
+{
+  "schemaVersion": "coding-tooling/score-history/v1",
+  "repository": "moritzbrantner/coding-tooling",
+  "scoreSchemaVersion": "coding-tooling/repository-score/v1",
+  "retention": 1000,
+  "entries": [
+    {
+      "commit": "468035eaf2404ed1fe488f65d435d1a4e932fe95",
+      "timestamp": "2026-09-03T19:15:20.000Z",
+      "score": 100,
+      "rating": "good",
+      "completeness": "complete",
+      "structuralScore": 100,
+      "verificationScore": 100,
+      "categories": {
+        "automation": 100,
+        "correctness": 100,
+        "maintainability": 100,
+        "testing": 100,
+        "verification": 100
+      },
+      "verification": {
+        "status": "passed",
+        "score": 100,
+        "plannedChecks": 4,
+        "passedChecks": 4,
+        "failedChecks": 0,
+        "errorChecks": 0,
+        "blockedChecks": 0,
+        "missingRequiredCapabilities": 0
+      },
+      "findings": {
+        "active": 0,
+        "suppressed": 0,
+        "verified": 0
+      }
+    },
+    {
+      "commit": "281266e7f02b7f9cbc86652a684aeedf50509bf3",
+      "timestamp": "2026-09-03T19:46:50.000Z",
+      "scoreProfileVersion": "coding-tooling/repository-score-profile/v1",
+      "score": 100,
+      "rating": "good",
+      "completeness": "complete",
+      "structuralScore": 100,
+      "verificationScore": 100,
+      "categories": {
+        "automation": 100,
+        "correctness": 100,
+        "maintainability": 100,
+        "testing": 100,
+        "verification": 100
+      },
+      "verification": {
+        "status": "passed",
+        "score": 100,
+        "plannedChecks": 4,
+        "passedChecks": 4,
+        "failedChecks": 0,
+        "errorChecks": 0,
+        "blockedChecks": 0,
+        "missingRequiredCapabilities": 0
+      },
+      "findings": {
+        "active": 0,
+        "suppressed": 0,
+        "verified": 0
+      }
+    },
+    {
+      "commit": "4c773892818e0ec8b8d9d53fad542eb756d0adab",
+      "timestamp": "2026-09-03T19:54:28.000Z",
+      "scoreProfileVersion": "coding-tooling/repository-score-profile/v1",
+      "score": 88,
+      "rating": "needs-improvement",
+      "completeness": "complete",
+      "structuralScore": 100,
+      "verificationScore": 75,
+      "categories": {
+        "automation": 100,
+        "correctness": 100,
+        "maintainability": 100,
+        "testing": 100,
+        "verification": 75
+      },
+      "verification": {
+        "status": "failed",
+        "score": 75,
+        "plannedChecks": 4,
+        "passedChecks": 3,
+        "failedChecks": 1,
+        "errorChecks": 0,
+        "blockedChecks": 0,
+        "missingRequiredCapabilities": 0
+      },
+      "findings": {
+        "active": 0,
+        "suppressed": 0,
+        "verified": 0
+      }
+    },
+    {
+      "commit": "0fc54a80778cff84b0ba6ba9594718a888d9ff87",
+      "timestamp": "2026-09-03T20:05:26.000Z",
+      "scoreProfileVersion": "coding-tooling/repository-score-profile/v1",
+      "score": 100,
+      "rating": "good",
+      "completeness": "complete",
+      "structuralScore": 100,
+      "verificationScore": 100,
+      "categories": {
+        "automation": 100,
+        "correctness": 100,
+        "maintainability": 100,
+        "testing": 100,
+        "verification": 100
+      },
+      "verification": {
+        "status": "passed",
+        "score": 100,
+        "plannedChecks": 4,
+        "passedChecks": 4,
+        "failedChecks": 0,
+        "errorChecks": 0,
+        "blockedChecks": 0,
+        "missingRequiredCapabilities": 0
+      },
+      "findings": {
+        "active": 0,
+        "suppressed": 0,
+        "verified": 0
+      }
+    },
+    {
+      "commit": "dd49ab5702bf74f9c576ad50ef995452a5557ed9",
+      "timestamp": "2026-09-03T20:09:17.000Z",
+      "scoreProfileVersion": "coding-tooling/repository-score-profile/v1",
+      "score": 88,
+      "rating": "needs-improvement",
+      "completeness": "complete",
+      "structuralScore": 100,
+      "verificationScore": 75,
+      "categories": {
+        "automation": 100,
+        "correctness": 100,
+        "maintainability": 100,
+        "testing": 100,
+        "verification": 75
+      },
+      "verification": {
+        "status": "failed",
+        "score": 75,
+        "plannedChecks": 4,
+        "passedChecks": 3,
+        "failedChecks": 1,
+        "errorChecks": 0,
+        "blockedChecks": 0,
+        "missingRequiredCapabilities": 0
+      },
+      "findings": {
+        "active": 0,
+        "suppressed": 0,
+        "verified": 0
+      }
+    }
+  ]
+}
