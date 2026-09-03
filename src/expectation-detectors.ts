@@ -36,8 +36,7 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
   {
     id: "dotnet-type-assignability",
     version: 1,
-    description:
-      "Roslyn implicit-conversion diagnostics are exposed as deterministic evidence",
+    description: "Roslyn implicit-conversion diagnostics are exposed as deterministic evidence",
     defaultSeverity: "warning",
     policyKind: "advisory",
     detect: dotNetAssignabilityFindings,
