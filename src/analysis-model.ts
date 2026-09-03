@@ -21,6 +21,30 @@ export type AnalysisDiagnostic = {
   location?: AnalysisLocation;
 };
 
+export type AnalysisFileReplacement = {
+  path: string;
+  beforeSha256: string;
+  afterSha256: string;
+  content: string;
+};
+
+export type AnalysisActionPostcondition = {
+  kind: "diagnostic-absent";
+  provider: string;
+  code: string;
+  path?: string;
+};
+
+export type AnalysisAction = {
+  id: string;
+  provider: string;
+  providerVersion?: string;
+  title: string;
+  kind: "replace-files";
+  replacements: AnalysisFileReplacement[];
+  postcondition?: AnalysisActionPostcondition;
+};
+
 export type AnalysisProviderResult = {
   id: string;
   displayName: string;
@@ -29,6 +53,7 @@ export type AnalysisProviderResult = {
   capabilities: AnalysisCapability[];
   projects: string[];
   diagnostics: AnalysisDiagnostic[];
+  actions: AnalysisAction[];
   reason?: string;
 };
 

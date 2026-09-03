@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
 
 import type {
+  AnalysisAction,
   AnalysisDiagnostic,
   AnalysisProvider,
   AnalysisProviderResult,
@@ -11,6 +12,7 @@ import type { ResultEnvelope } from "./model.ts";
 export type AnalysisData = {
   providers: AnalysisProviderResult[];
   diagnostics: AnalysisDiagnostic[];
+  actions: AnalysisAction[];
 };
 
 export const analysisProviders: readonly AnalysisProvider[] = [typeScriptAnalysisProvider];
@@ -23,6 +25,7 @@ function failedProvider(provider: AnalysisProvider, error: unknown): AnalysisPro
     capabilities: [],
     projects: [],
     diagnostics: [],
+    actions: [],
     reason: error instanceof Error ? error.message : String(error),
   };
 }
@@ -53,6 +56,9 @@ export function analyzeRepository(root: string): ResultEnvelope<AnalysisData> {
         left.message.localeCompare(right.message)
       );
     });
+  const actions = results
+    .flatMap((provider) => provider.actions)
+    .sort((left, right) => left.id.localeCompare(right.id));
   const providerFailures = results.filter((provider) => provider.status === "failed");
   const providerUnavailable = results.filter((provider) => provider.status === "unavailable");
   const appliedProviders = results.filter((provider) => provider.status === "applied");
@@ -70,7 +76,7 @@ export function analyzeRepository(root: string): ResultEnvelope<AnalysisData> {
     operation: "analyze",
     status,
     durationMs: Math.round(performance.now() - started),
-    data: { providers: results, diagnostics },
+    data: { providers: results, diagnostics, actions },
     diagnostics: [
       ...providerFailures.map((provider) => ({
         code: "analysis-provider-failed",

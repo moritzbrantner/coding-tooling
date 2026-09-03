@@ -29,6 +29,8 @@ The current TypeScript provider uses the repository's pinned TypeScript 7 native
 
 The normalized provider contract is independent of that transport choice, so the implementation can move to the new stable TypeScript API when it is available without changing consumers.
 
+The TypeScript provider currently advertises no `code-actions` capability. A type error can be deterministic evidence without there being one mechanically correct repair.
+
 ## First diagnostic-to-finding adapter
 
 `typescript-type-assignability@1` is the first explicit provider-to-expectation mapping. It promotes only TypeScript `TS2322` assignment-compatibility diagnostics.
@@ -44,15 +46,38 @@ The adapter is deliberately narrow:
 
 Coverage for the adapter is based on whether the TypeScript provider actually analyzed projects, not merely on the presence of `.ts` files.
 
+## Deterministic action contract
+
+Provider actions are separate from diagnostics and findings. An `AnalysisAction` has a stable `CTA-*` semantic identity and one or more whole-file replacements. Each replacement carries:
+
+- repository-relative path;
+- SHA-256 of the exact source state the provider analyzed;
+- SHA-256 of the proposed result;
+- complete replacement content.
+
+Application is guarded and transactional:
+
+- if the file still has the `beforeSha256`, the replacement may be applied;
+- if it already has the `afterSha256`, the replacement is an idempotent no-op;
+- any other content is a conflict rather than an overwrite;
+- escaping paths and symbolic-link traversal are rejected;
+- all replacements are preflighted before any write;
+- a later write failure rolls back earlier writes;
+- an optional `diagnostic-absent` postcondition re-runs the originating provider and rolls the action back if the declared diagnostic remains.
+
+This contract intentionally uses whole-file guarded replacements rather than naked line/offset edits. Provider-native edits can still be converted into a desired document, but the mutation boundary is anchored to exact before/after content rather than stale source coordinates.
+
+`coding-tooling analyze` now exposes an `actions` collection in its machine-readable result. Providers should leave it empty unless they can produce a deterministic repair; the existence of a diagnostic does not imply that an action exists.
+
 ## Next independently implementable slices
 
-### 1. Deterministic code-action contract
+### 1. Roslyn-backed .NET provider
 
-Add normalized action metadata separately from diagnostics. Start only with provider-native edits that can be previewed without mutation, applied idempotently, and verified by re-running the originating diagnostic. Never synthesize missing business logic merely because a declaration is incomplete.
+Add a narrow .NET provider that delegates project-aware compilation and analyzer execution to the installed SDK/MSBuild/Roslyn pipeline and emits the same normalized envelope. Start with diagnostics. A direct Roslyn workspace bridge is justified later for richer symbol queries and provider-native code fixes.
 
-### 2. Roslyn provider
+### 2. First provider-native action
 
-Add a narrow .NET bridge that loads the repository solution/project with Roslyn and emits the same normalized envelope. Start with compiler diagnostics and analyzer diagnostics; add Roslyn code fixes only after the action contract exists.
+Once a provider can expose a mechanically unambiguous native fix, translate it into the guarded action contract and dogfood preview/apply/re-analyze behavior. Do not synthesize missing business logic merely because a declaration is incomplete.
 
 ### 3. Rust provider
 
