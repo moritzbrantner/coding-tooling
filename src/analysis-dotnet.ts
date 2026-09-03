@@ -49,7 +49,11 @@ function appendContinuation(diagnostic: AnalysisDiagnostic, line: string): void 
   diagnostic.message = `${diagnostic.message}\n${continuation}`;
 }
 
-function parseBuildDiagnostics(root: string, projectPath: string, output: string): AnalysisDiagnostic[] {
+function parseBuildDiagnostics(
+  root: string,
+  projectPath: string,
+  output: string,
+): AnalysisDiagnostic[] {
   const defaultProject = relativePosix(root, projectPath);
   const diagnostics: AnalysisDiagnostic[] = [];
   let current: AnalysisDiagnostic | undefined;
@@ -119,7 +123,7 @@ function diagnosticKey(diagnostic: AnalysisDiagnostic): string {
 function sdkVersion(): string | undefined {
   const result = runCommand("dotnet", ["--version"]);
   if (result.status !== 0) return undefined;
-  return (result.stdout.trim() || result.stderr.trim()) || undefined;
+  return result.stdout.trim() || result.stderr.trim() || undefined;
 }
 
 function projectDiagnostics(
@@ -214,7 +218,9 @@ export const dotNetRoslynAnalysisProvider: AnalysisProvider = {
       if (result.failed) failed.push(result.failed);
     }
 
-    const unique = new Map(diagnostics.map((diagnostic) => [diagnosticKey(diagnostic), diagnostic]));
+    const unique = new Map(
+      diagnostics.map((diagnostic) => [diagnosticKey(diagnostic), diagnostic]),
+    );
     const normalizedDiagnostics = [...unique.values()].sort((left, right) => {
       const leftLocation = left.location;
       const rightLocation = right.location;
