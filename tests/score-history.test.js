@@ -6,6 +6,8 @@ import {
   SCORE_HISTORY_SCHEMA_V1,
 } from "../scripts/append-score-history.mjs";
 
+const SCORE_PROFILE = "coding-tooling/repository-score-profile/v1";
+
 function scoreEnvelope(score = 88) {
   return {
     schemaVersion: 1,
@@ -16,6 +18,7 @@ function scoreEnvelope(score = 88) {
       root: "/repo",
       score: {
         schemaVersion: "coding-tooling/repository-score/v1",
+        profileVersion: SCORE_PROFILE,
         score,
         rating: score >= 90 ? "good" : "needs-improvement",
         completeness: "complete",
@@ -62,6 +65,7 @@ describe("repository score history", () => {
     expect(history.entries).toEqual([
       expect.objectContaining({
         commit: metadata.commit,
+        scoreProfileVersion: SCORE_PROFILE,
         score: 88,
         structuralScore: 100,
         verificationScore: 75,
@@ -70,6 +74,12 @@ describe("repository score history", () => {
         findings: { active: 1, suppressed: 0, verified: 2 },
       }),
     ]);
+  });
+
+  test("rejects score snapshots without a scoring profile", () => {
+    const envelope = scoreEnvelope();
+    delete envelope.data.score.profileVersion;
+    expect(() => appendScoreHistory(null, envelope, metadata)).toThrow("scoring profile");
   });
 
   test("replaces a rerun for the same commit instead of duplicating it", () => {

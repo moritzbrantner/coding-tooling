@@ -43,6 +43,9 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
   if (!score || score.schemaVersion !== "coding-tooling/repository-score/v1") {
     throw new Error("score report does not contain coding-tooling/repository-score/v1");
   }
+  if (typeof score.profileVersion !== "string" || score.profileVersion.length === 0) {
+    throw new Error("score report does not identify its scoring profile");
+  }
   if (!metadata?.repository || !metadata?.commit || !metadata?.timestamp) {
     throw new Error("repository, commit, and timestamp metadata are required");
   }
@@ -64,6 +67,7 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
   const entry = {
     commit: metadata.commit,
     timestamp: metadata.timestamp,
+    scoreProfileVersion: score.profileVersion,
     score: numberOrNull(score.score),
     rating: score.rating,
     completeness: score.completeness,

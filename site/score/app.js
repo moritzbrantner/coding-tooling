@@ -1,4 +1,11 @@
-import { chartPoints, latestEntry, normalizeHistory, scoreDelta, shortCommit } from "./model.js";
+import {
+  chartPoints,
+  latestEntry,
+  normalizeHistory,
+  scoreDelta,
+  scoreProfileChanged,
+  shortCommit,
+} from "./model.js";
 
 const HISTORY_URL =
   "https://raw.githubusercontent.com/moritzbrantner/coding-tooling/score-history/history.json";
@@ -27,6 +34,19 @@ function signed(value) {
   return `${value > 0 ? "+" : ""}${value}`;
 }
 
+function profileSeries(points) {
+  const series = [];
+  for (const point of points) {
+    const current = series.at(-1);
+    if (!current || current.at(-1)?.scoreProfileVersion !== point.scoreProfileVersion) {
+      series.push([point]);
+    } else {
+      current.push(point);
+    }
+  }
+  return series;
+}
+
 function renderChart(entries) {
   const recent = entries.slice(-60);
   const points = chartPoints(recent);
@@ -41,14 +61,20 @@ function renderChart(entries) {
       return `<g class="guide"><line x1="24" y1="${y}" x2="696" y2="${y}"/><text x="2" y="${y + 4}">${score}</text></g>`;
     })
     .join("");
-  const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
+  const lines = profileSeries(points)
+    .filter((series) => series.length > 1)
+    .map(
+      (series) =>
+        `<polyline class="series" points="${series.map((point) => `${point.x},${point.y}`).join(" ")}"/>`,
+    )
+    .join("");
   const dots = points
     .map(
       (point) =>
-        `<circle cx="${point.x}" cy="${point.y}" r="4"><title>${shortCommit(point.commit)} · ${point.score}/100</title></circle>`,
+        `<circle cx="${point.x}" cy="${point.y}" r="4"><title>${shortCommit(point.commit)} · ${point.score}/100 · ${point.scoreProfileVersion ?? "legacy profile"}</title></circle>`,
     )
     .join("");
-  chart.innerHTML = `${guideLines}<polyline class="series" points="${polyline}"/>${dots}`;
+  chart.innerHTML = `${guideLines}${lines}${dots}`;
 }
 
 function renderCategories(entry) {
@@ -109,7 +135,10 @@ async function load() {
     renderChart(history.entries);
     renderCategories(entry);
     renderTable(history.entries);
-    status.textContent = `${history.entries.length} commit snapshot${history.entries.length === 1 ? "" : "s"} retained.`;
+    const retained = `${history.entries.length} commit snapshot${history.entries.length === 1 ? "" : "s"} retained.`;
+    status.textContent = scoreProfileChanged(history.entries)
+      ? `${retained} The latest commit starts a new scoring profile; its delta is intentionally withheld.`
+      : retained;
   } catch (error) {
     status.textContent = `Score history is not available yet: ${error instanceof Error ? error.message : String(error)}`;
   }

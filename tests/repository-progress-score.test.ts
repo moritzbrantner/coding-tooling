@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   combineRepositoryScore,
+  REPOSITORY_SCORE_PROFILE_VERSION,
   type RepositoryVerificationScore,
 } from "../src/repository-progress-score.ts";
 import type { RepositoryAuditScore, RepositoryScoreDocument } from "../src/repository-score.ts";
@@ -68,6 +69,7 @@ describe("repository progress score", () => {
   test("combines structural evidence with fresh verification equally", () => {
     const score = combineRepositoryScore(structural(), verification());
 
+    expect(score.profileVersion).toBe(REPOSITORY_SCORE_PROFILE_VERSION);
     expect(score.score).toBe(88);
     expect(score.rating).toBe("needs-improvement");
     expect(score.completeness).toBe("complete");
