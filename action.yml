@@ -1,9 +1,9 @@
 name: Run coding tooling
-description: Run version-pinned repository validation, environment fingerprinting/verification, conformance, findings, public-contract verification, or agent capability validation.
+description: Run version-pinned repository validation, environment fingerprinting/verification, conformance, findings, scoring, public-contract verification, or agent capability validation.
 
 inputs:
   operation:
-    description: "Operation to run: run, environment-fingerprint, environment-verify, conformance, findings, public-contract, or agent-capabilities-validate."
+    description: "Operation to run: run, environment-fingerprint, environment-verify, conformance, findings, score, public-contract, or agent-capabilities-validate."
     required: false
     default: run
   tier:
@@ -26,6 +26,10 @@ inputs:
     description: Repository-relative JSON report path for report-producing operations.
     required: false
     default: .artifacts/coding-tooling/report.json
+  validation-report:
+    description: Optional repository-relative coding-tooling run report to include as fresh verification evidence in a score.
+    required: false
+    default: ""
   strict:
     description: Fail when a selected coding-tooling capability is unavailable.
     required: false
@@ -52,7 +56,7 @@ runs:
       with:
         bun-version: ${{ inputs.bun-version }}
     - name: Install consumer dependencies
-      if: inputs.operation == 'run' || inputs.operation == 'public-contract'
+      if: inputs.operation == 'run' || inputs.operation == 'public-contract' || inputs.operation == 'score'
       shell: bash
       env:
         INPUT_INSTALL_MODE: ${{ inputs.install-mode }}
@@ -82,6 +86,7 @@ runs:
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_ENVIRONMENT_PROFILE: ${{ inputs.environment-profile }}
         INPUT_REPORT_PATH: ${{ inputs.report-path }}
+        INPUT_VALIDATION_REPORT: ${{ inputs.validation-report }}
         INPUT_STRICT: ${{ inputs.strict }}
       run: |
         if [[ "$INPUT_OPERATION" == "agent-capabilities-validate" ]]; then
@@ -101,7 +106,7 @@ runs:
           exit "$status"
         fi
 
-        if [[ "$INPUT_OPERATION" == "environment-fingerprint" || "$INPUT_OPERATION" == "environment-verify" || "$INPUT_OPERATION" == "conformance" || "$INPUT_OPERATION" == "findings" ]]; then
+        if [[ "$INPUT_OPERATION" == "environment-fingerprint" || "$INPUT_OPERATION" == "environment-verify" || "$INPUT_OPERATION" == "conformance" || "$INPUT_OPERATION" == "findings" || "$INPUT_OPERATION" == "score" ]]; then
           mkdir -p "$(dirname "$INPUT_REPORT_PATH")"
           set +e
           if [[ "$INPUT_OPERATION" == "environment-fingerprint" ]]; then
@@ -113,8 +118,14 @@ runs:
           elif [[ "$INPUT_OPERATION" == "conformance" ]]; then
             bun "${{ github.action_path }}/src/cli.ts" conformance \
               --config "$INPUT_CONFIG" --json > "$INPUT_REPORT_PATH"
-          else
+          elif [[ "$INPUT_OPERATION" == "findings" ]]; then
             bun "${{ github.action_path }}/src/entry.ts" findings --json > "$INPUT_REPORT_PATH"
+          else
+            score_args=(score --json)
+            if [[ -n "$INPUT_VALIDATION_REPORT" ]]; then
+              score_args+=(--validation-report "$INPUT_VALIDATION_REPORT")
+            fi
+            bun "${{ github.action_path }}/src/entry.ts" "${score_args[@]}" > "$INPUT_REPORT_PATH"
           fi
           status=$?
           set -e
@@ -124,7 +135,7 @@ runs:
         fi
 
         if [[ "$INPUT_OPERATION" != "run" ]]; then
-          echo "::error::operation must be 'run', 'environment-fingerprint', 'environment-verify', 'conformance', 'findings', 'public-contract', or 'agent-capabilities-validate'"
+          echo "::error::operation must be 'run', 'environment-fingerprint', 'environment-verify', 'conformance', 'findings', 'score', 'public-contract', or 'agent-capabilities-validate'"
           exit 2
         fi
 

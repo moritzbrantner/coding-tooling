@@ -31,3 +31,10 @@ jobs:
         with:
           operation: findings
           report-path: .artifacts/coding-tooling/findings.json
+      - name: Inspect repository score
+        if: always()
+        uses: ./
+        with:
+          operation: score
+          validation-report: .artifacts/coding-tooling/report.json
+          report-path: .artifacts/coding-tooling/score.json
