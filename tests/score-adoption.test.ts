@@ -57,10 +57,7 @@ describe("score adoption registry", () => {
       parseScoreAdoptionRegistry({
         schemaVersion: SCORE_ADOPTION_REGISTRY_SCHEMA_V1,
         reusableWorkflow,
-        repositories: [
-          entry("moritzbrantner/rust-kernels"),
-          entry("moritzbrantner/rust-kernels"),
-        ],
+        repositories: [entry("moritzbrantner/rust-kernels"), entry("moritzbrantner/rust-kernels")],
       }),
     ).toThrow("unique");
   });
