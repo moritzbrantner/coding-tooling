@@ -1,10 +1,12 @@
 import {
   chartPoints,
+  diagnosticText,
   latestEntry,
   normalizeHistory,
   scoreDelta,
   scoreProfileChanged,
   shortCommit,
+  verificationEvidence,
 } from "./model.js";
 
 const HISTORY_URL =
@@ -32,6 +34,15 @@ function ratingText(value) {
 function signed(value) {
   if (value === null || value === 0) return value === 0 ? "±0" : "—";
   return `${value > 0 ? "+" : ""}${value}`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function profileSeries(points) {
@@ -71,14 +82,14 @@ function renderChart(entries) {
   const dots = points
     .map(
       (point) =>
-        `<circle cx="${point.x}" cy="${point.y}" r="4"><title>${shortCommit(point.commit)} · ${point.score}/100 · ${point.scoreProfileVersion ?? "legacy profile"}</title></circle>`,
+        `<circle cx="${point.x}" cy="${point.y}" r="4"><title>${escapeHtml(`${shortCommit(point.commit)} · ${point.score}/100 · ${verificationEvidence(point)} · ${point.scoreProfileVersion ?? "legacy profile"}`)}</title></circle>`,
     )
     .join("");
   chart.innerHTML = `${guideLines}${lines}${dots}`;
 }
 
 function renderCategories(entry) {
-  const values = Object.entries(entry.categories ?? {}).sort(([left], [right]) =>
+  const values = Object.entries(entry.categories ?? {}).toSorted(([left], [right]) =>
     left.localeCompare(right),
   );
   categories.innerHTML = values.length
@@ -86,7 +97,7 @@ function renderCategories(entry) {
         .map(
           ([name, score]) => `
             <div class="category-row">
-              <span>${name.replaceAll("-", " ")}</span>
+              <span>${escapeHtml(name.replaceAll("-", " "))}</span>
               <strong>${scoreText(score)}</strong>
               <div class="meter"><span style="width:${score ?? 0}%"></span></div>
             </div>`,
@@ -98,18 +109,21 @@ function renderCategories(entry) {
 function renderTable(entries) {
   historyBody.innerHTML = entries
     .slice(-20)
-    .reverse()
-    .map(
-      (entry) => `
+    .toReversed()
+    .map((entry) => {
+      const evidence = verificationEvidence(entry);
+      const diagnostics = diagnosticText(entry);
+      return `
         <tr>
           <td><a href="https://github.com/moritzbrantner/coding-tooling/commit/${entry.commit}">${shortCommit(entry.commit)}</a></td>
           <td>${new Date(entry.timestamp).toLocaleString()}</td>
           <td><strong>${scoreText(entry.score)}</strong></td>
           <td>${scoreText(entry.structuralScore)}</td>
           <td>${scoreText(entry.verificationScore)}</td>
+          <td>${escapeHtml(evidence)}${diagnostics ? `<br><small>${escapeHtml(diagnostics)}</small>` : ""}</td>
           <td>${ratingText(entry.rating)}</td>
-        </tr>`,
-    )
+        </tr>`;
+    })
     .join("");
 }
 
@@ -126,7 +140,7 @@ async function load() {
     }
 
     latest.textContent = scoreText(entry.score);
-    latestRating.textContent = `${ratingText(entry.rating)} · ${entry.completeness}`;
+    latestRating.textContent = `${ratingText(entry.rating)} · ${entry.completeness} · verification ${verificationEvidence(entry)}`;
     delta.textContent = signed(scoreDelta(history.entries));
     structural.textContent = scoreText(entry.structuralScore);
     verification.textContent = scoreText(entry.verificationScore);
@@ -136,9 +150,14 @@ async function load() {
     renderCategories(entry);
     renderTable(history.entries);
     const retained = `${history.entries.length} commit snapshot${history.entries.length === 1 ? "" : "s"} retained.`;
-    status.textContent = scoreProfileChanged(history.entries)
-      ? `${retained} The latest commit starts a new scoring profile; its delta is intentionally withheld.`
-      : retained;
+    if (entry.score === null) {
+      const detail = diagnosticText(entry) || verificationEvidence(entry);
+      status.textContent = `${retained} The latest commit could not be scored: ${detail}`;
+    } else if (scoreProfileChanged(history.entries)) {
+      status.textContent = `${retained} The latest commit starts a new scoring profile; its delta is intentionally withheld.`;
+    } else {
+      status.textContent = retained;
+    }
   } catch (error) {
     status.textContent = `Score history is not available yet: ${error instanceof Error ? error.message : String(error)}`;
   }

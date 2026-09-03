@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 
 export const SCORE_HISTORY_SCHEMA_V1 = "coding-tooling/score-history/v1";
 export const SCORE_HISTORY_RETENTION = 1000;
+export const SCORE_SCHEMA_V1 = "coding-tooling/repository-score/v1";
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
@@ -47,25 +48,51 @@ function verificationSummary(verification) {
   };
 }
 
+function compactDiagnostics(diagnostics) {
+  return (Array.isArray(diagnostics) ? diagnostics : []).slice(0, 10).map((diagnostic) => ({
+    ...(typeof diagnostic?.code === "string" ? { code: diagnostic.code } : {}),
+    message: String(diagnostic?.message ?? "unknown score production error").slice(0, 500),
+    ...(typeof diagnostic?.path === "string" ? { path: diagnostic.path } : {}),
+  }));
+}
+
+function errorVerification() {
+  return {
+    status: "error",
+    score: null,
+    plannedChecks: 0,
+    passedChecks: 0,
+    failedChecks: 0,
+    errorChecks: 0,
+    blockedChecks: 0,
+    missingRequiredCapabilities: 0,
+  };
+}
+
 export function appendScoreHistory(existing, scoreEnvelope, metadata) {
   if (scoreEnvelope?.schemaVersion !== 1 || scoreEnvelope?.operation !== "score") {
     throw new Error("score report is not a coding-tooling score envelope");
-  }
-  const score = scoreEnvelope?.data?.score;
-  if (!score || score.schemaVersion !== "coding-tooling/repository-score/v1") {
-    throw new Error("score report does not contain coding-tooling/repository-score/v1");
-  }
-  if (typeof score.profileVersion !== "string" || score.profileVersion.length === 0) {
-    throw new Error("score report does not identify its scoring profile");
   }
   if (!metadata?.repository || !metadata?.commit || !metadata?.timestamp) {
     throw new Error("repository, commit, and timestamp metadata are required");
   }
 
+  const score = scoreEnvelope?.data?.score;
+  if (score && score.schemaVersion !== SCORE_SCHEMA_V1) {
+    throw new Error(`score report does not contain ${SCORE_SCHEMA_V1}`);
+  }
+  const scoreProfileVersion = score?.profileVersion ?? scoreEnvelope.profileVersion;
+  if (typeof scoreProfileVersion !== "string" || scoreProfileVersion.length === 0) {
+    throw new Error("score report does not identify its scoring profile");
+  }
+  if (!score && scoreEnvelope.status !== "error") {
+    throw new Error("score report contains no score and is not an error tombstone");
+  }
+
   const history = existing ?? {
     schemaVersion: SCORE_HISTORY_SCHEMA_V1,
     repository: metadata.repository,
-    scoreSchemaVersion: score.schemaVersion,
+    scoreSchemaVersion: SCORE_SCHEMA_V1,
     retention: SCORE_HISTORY_RETENTION,
     entries: [],
   };
@@ -76,23 +103,40 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
     throw new Error(`score history belongs to ${history.repository}, not ${metadata.repository}`);
   }
 
-  const entry = {
-    commit: metadata.commit,
-    timestamp: canonicalTimestamp(metadata.timestamp),
-    scoreProfileVersion: score.profileVersion,
-    score: numberOrNull(score.score),
-    rating: score.rating,
-    completeness: score.completeness,
-    structuralScore: numberOrNull(score.structuralScore),
-    verificationScore: numberOrNull(score.verificationScore),
-    categories: categoryMap(score.categories),
-    verification: verificationSummary(score.verification),
-    findings: {
-      active: score.findings?.active ?? 0,
-      suppressed: score.findings?.suppressed ?? 0,
-      verified: score.findings?.verified ?? 0,
-    },
-  };
+  const diagnostics = compactDiagnostics(scoreEnvelope.diagnostics);
+  const entry = score
+    ? {
+        commit: metadata.commit,
+        timestamp: canonicalTimestamp(metadata.timestamp),
+        scoreProfileVersion,
+        score: numberOrNull(score.score),
+        rating: score.rating,
+        completeness: score.completeness,
+        structuralScore: numberOrNull(score.structuralScore),
+        verificationScore: numberOrNull(score.verificationScore),
+        categories: categoryMap(score.categories),
+        verification: verificationSummary(score.verification),
+        findings: {
+          active: score.findings?.active ?? 0,
+          suppressed: score.findings?.suppressed ?? 0,
+          verified: score.findings?.verified ?? 0,
+        },
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      }
+    : {
+        commit: metadata.commit,
+        timestamp: canonicalTimestamp(metadata.timestamp),
+        scoreProfileVersion,
+        score: null,
+        rating: "unavailable",
+        completeness: "unavailable",
+        structuralScore: null,
+        verificationScore: null,
+        categories: {},
+        verification: errorVerification(),
+        findings: { active: 0, suppressed: 0, verified: 0 },
+        diagnostics,
+      };
 
   const entries = (Array.isArray(history.entries) ? history.entries : [])
     .filter((candidate) => candidate?.commit !== entry.commit)
@@ -103,7 +147,7 @@ export function appendScoreHistory(existing, scoreEnvelope, metadata) {
 
   return {
     ...history,
-    scoreSchemaVersion: score.schemaVersion,
+    scoreSchemaVersion: SCORE_SCHEMA_V1,
     retention: SCORE_HISTORY_RETENTION,
     entries,
   };

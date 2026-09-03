@@ -50,6 +50,24 @@ function scoreEnvelope(score = 88) {
   };
 }
 
+function errorEnvelope() {
+  return {
+    schemaVersion: 1,
+    operation: "score",
+    profileVersion: SCORE_PROFILE,
+    status: "error",
+    durationMs: 5,
+    data: { root: "/repo" },
+    diagnostics: [
+      {
+        code: "repository-verification-score-failed",
+        message: "history-run.json could not be read",
+        path: ".artifacts/coding-tooling/history-run.json",
+      },
+    ],
+  };
+}
+
 const metadata = {
   repository: "moritzbrantner/coding-tooling",
   commit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -75,6 +93,39 @@ describe("repository score history", () => {
         findings: { active: 1, suppressed: 0, verified: 2 },
       }),
     ]);
+  });
+
+  test("retains a score-production error as an unscored commit tombstone", () => {
+    const history = appendScoreHistory(null, errorEnvelope(), metadata);
+
+    expect(history.entries).toEqual([
+      expect.objectContaining({
+        commit: metadata.commit,
+        scoreProfileVersion: SCORE_PROFILE,
+        score: null,
+        rating: "unavailable",
+        completeness: "unavailable",
+        structuralScore: null,
+        verificationScore: null,
+        verification: expect.objectContaining({ status: "error", score: null }),
+        diagnostics: [expect.objectContaining({ code: "repository-verification-score-failed" })],
+      }),
+    ]);
+  });
+
+  test("replaces an error tombstone when the same commit later scores successfully", () => {
+    const failed = appendScoreHistory(null, errorEnvelope(), metadata);
+    const recovered = appendScoreHistory(failed, scoreEnvelope(100), metadata);
+
+    expect(recovered.entries).toHaveLength(1);
+    expect(recovered.entries[0]?.score).toBe(100);
+    expect(recovered.entries[0]?.verification.status).toBe("failed");
+    expect(recovered.entries[0]?.diagnostics).toBeUndefined();
+  });
+
+  test("rejects an unscored non-error envelope", () => {
+    const envelope = { ...errorEnvelope(), status: "unavailable" };
+    expect(() => appendScoreHistory(null, envelope, metadata)).toThrow("not an error tombstone");
   });
 
   test("rejects score snapshots without a scoring profile", () => {

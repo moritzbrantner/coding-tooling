@@ -12,6 +12,10 @@ function compareHistoryEntries(left, right) {
   return byInstant !== 0 ? byInstant : left.commit.localeCompare(right.commit);
 }
 
+function count(value) {
+  return Number.isFinite(value) ? value : 0;
+}
+
 export function normalizeHistory(document) {
   if (!document || document.schemaVersion !== HISTORY_SCHEMA) {
     throw new Error(`Expected ${HISTORY_SCHEMA}`);
@@ -44,15 +48,53 @@ function scoredEntries(entries) {
 }
 
 export function scoreProfileChanged(entries) {
+  if (entries.at(-1)?.score === null) return false;
   const scored = scoredEntries(entries);
   if (scored.length < 2) return false;
   return scored.at(-1).scoreProfileVersion !== scored.at(-2).scoreProfileVersion;
 }
 
 export function scoreDelta(entries) {
+  if (entries.at(-1)?.score === null) return null;
   const scored = scoredEntries(entries);
-  if (scored.length < 2 || scoreProfileChanged(scored)) return null;
+  if (scored.length < 2 || scoreProfileChanged(entries)) return null;
   return scored.at(-1).score - scored.at(-2).score;
+}
+
+export function verificationEvidence(entry) {
+  const verification = entry?.verification;
+  if (!verification || typeof verification !== "object") return "unavailable";
+  const status = String(verification.status ?? "unavailable");
+  const passed = count(verification.passedChecks);
+  const failed = count(verification.failedChecks);
+  const errors = count(verification.errorChecks);
+  const blocked = count(verification.blockedChecks);
+  const missing = count(verification.missingRequiredCapabilities);
+  const parts = [status];
+  if (
+    count(verification.plannedChecks) > 0 ||
+    passed > 0 ||
+    failed > 0 ||
+    errors > 0 ||
+    blocked > 0
+  ) {
+    parts.push(`${passed} passed`);
+  }
+  if (failed > 0) parts.push(`${failed} failed`);
+  if (errors > 0) parts.push(`${errors} error${errors === 1 ? "" : "s"}`);
+  if (blocked > 0) parts.push(`${blocked} blocked`);
+  if (missing > 0) parts.push(`${missing} required missing`);
+  return parts.join(" · ");
+}
+
+export function diagnosticText(entry) {
+  const diagnostics = Array.isArray(entry?.diagnostics) ? entry.diagnostics : [];
+  return diagnostics
+    .map((diagnostic) => {
+      const code = typeof diagnostic?.code === "string" ? `${diagnostic.code}: ` : "";
+      return `${code}${String(diagnostic?.message ?? "unknown error")}`;
+    })
+    .join(" · ");
 }
 
 export function chartPoints(entries, width = 720, height = 240, padding = 24) {

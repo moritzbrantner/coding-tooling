@@ -1,8 +1,11 @@
+import { resolve } from "node:path";
+
 import { describe, expect, test } from "bun:test";
 
 import {
   combineRepositoryScore,
   REPOSITORY_SCORE_PROFILE_VERSION,
+  repositoryProgressScoreCommand,
   type RepositoryVerificationScore,
 } from "../src/repository-progress-score.ts";
 import type { RepositoryAuditScore, RepositoryScoreDocument } from "../src/repository-score.ts";
@@ -86,6 +89,20 @@ describe("repository progress score", () => {
     expect(score.completeness).toBe("incomplete");
     expect(score.verificationScore).toBeNull();
     expect(score.verification).toBeNull();
+  });
+
+  test("keeps score profile identity when verification evidence cannot be read", () => {
+    const root = resolve(import.meta.dir, "..");
+    const result = repositoryProgressScoreCommand(root, {
+      validationReportPath: ".artifacts/coding-tooling/definitely-missing-history-run.json",
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.profileVersion).toBe(REPOSITORY_SCORE_PROFILE_VERSION);
+    expect(result.data.score).toBeUndefined();
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "repository-verification-score-failed" }),
+    );
   });
 
   test("does not treat a not-applicable detector without a score model as incomplete", () => {

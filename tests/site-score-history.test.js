@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import {
   chartPoints,
+  diagnosticText,
   HISTORY_SCHEMA,
   latestEntry,
   normalizeHistory,
   scoreDelta,
   scoreProfileChanged,
   shortCommit,
+  verificationEvidence,
 } from "../site/score/model.js";
 
 const SCORE_PROFILE = "coding-tooling/repository-score-profile/v1";
@@ -21,12 +23,30 @@ const history = {
       timestamp: "2026-09-03T12:00:00Z",
       scoreProfileVersion: SCORE_PROFILE,
       score: 90,
+      verification: {
+        status: "failed",
+        plannedChecks: 4,
+        passedChecks: 3,
+        failedChecks: 1,
+        errorChecks: 0,
+        blockedChecks: 0,
+        missingRequiredCapabilities: 0,
+      },
     },
     {
       commit: "aaaaaaaa11111111",
       timestamp: "2026-09-02T12:00:00Z",
       scoreProfileVersion: SCORE_PROFILE,
       score: 80,
+      verification: {
+        status: "passed",
+        plannedChecks: 4,
+        passedChecks: 4,
+        failedChecks: 0,
+        errorChecks: 0,
+        blockedChecks: 0,
+        missingRequiredCapabilities: 0,
+      },
     },
   ],
 };
@@ -41,6 +61,42 @@ describe("score history dashboard model", () => {
     expect(scoreDelta(normalized.entries)).toBe(10);
     expect(scoreProfileChanged(normalized.entries)).toBe(false);
     expect(shortCommit(normalized.entries[0].commit)).toBe("aaaaaaaa");
+  });
+
+  test("describes failed verification with check counts", () => {
+    const normalized = normalizeHistory(history);
+    expect(verificationEvidence(latestEntry(normalized))).toBe("failed · 3 passed · 1 failed");
+  });
+
+  test("keeps an unscored error tombstone latest without reusing an older delta", () => {
+    const normalized = normalizeHistory({
+      ...history,
+      entries: [
+        ...history.entries,
+        {
+          commit: "cccccccc33333333",
+          timestamp: "2026-09-04T12:00:00Z",
+          scoreProfileVersion: SCORE_PROFILE,
+          score: null,
+          structuralScore: null,
+          verificationScore: null,
+          verification: { status: "error" },
+          diagnostics: [
+            {
+              code: "repository-verification-score-failed",
+              message: "history-run.json could not be read",
+            },
+          ],
+        },
+      ],
+    });
+
+    const latest = latestEntry(normalized);
+    expect(latest?.commit).toBe("cccccccc33333333");
+    expect(latest?.score).toBeNull();
+    expect(scoreDelta(normalized.entries)).toBeNull();
+    expect(verificationEvidence(latest)).toBe("error");
+    expect(diagnosticText(latest)).toContain("repository-verification-score-failed");
   });
 
   test("orders mixed offsets by their actual instant", () => {
