@@ -46,7 +46,9 @@ describe("score history dashboard model", () => {
     const normalized = normalizeHistory({
       ...history,
       entries: history.entries.map((entry, index) =>
-        index === 0 ? { ...entry, scoreProfileVersion: "coding-tooling/repository-score-profile/v2" } : entry,
+        index === 0
+          ? { ...entry, scoreProfileVersion: "coding-tooling/repository-score-profile/v2" }
+          : entry,
       ),
     });
 
