@@ -1,9 +1,9 @@
 name: Run coding tooling
-description: Run version-pinned repository validation, environment verification, conformance, findings, public-contract verification, or agent capability validation.
+description: Run version-pinned repository validation, environment fingerprinting/verification, conformance, findings, public-contract verification, or agent capability validation.
 
 inputs:
   operation:
-    description: "Operation to run: run, environment-verify, conformance, findings, public-contract, or agent-capabilities-validate."
+    description: "Operation to run: run, environment-fingerprint, environment-verify, conformance, findings, public-contract, or agent-capabilities-validate."
     required: false
     default: run
   tier:
@@ -19,7 +19,7 @@ inputs:
     required: false
     default: .coding-tooling.json
   environment-profile:
-    description: Environment fingerprint profile used by environment-verify.
+    description: Environment fingerprint profile used by environment-fingerprint and environment-verify.
     required: false
     default: default
   report-path:
@@ -101,10 +101,13 @@ runs:
           exit "$status"
         fi
 
-        if [[ "$INPUT_OPERATION" == "environment-verify" || "$INPUT_OPERATION" == "conformance" || "$INPUT_OPERATION" == "findings" ]]; then
+        if [[ "$INPUT_OPERATION" == "environment-fingerprint" || "$INPUT_OPERATION" == "environment-verify" || "$INPUT_OPERATION" == "conformance" || "$INPUT_OPERATION" == "findings" ]]; then
           mkdir -p "$(dirname "$INPUT_REPORT_PATH")"
           set +e
-          if [[ "$INPUT_OPERATION" == "environment-verify" ]]; then
+          if [[ "$INPUT_OPERATION" == "environment-fingerprint" ]]; then
+            bun "${{ github.action_path }}/src/cli.ts" environment fingerprint \
+              --profile "$INPUT_ENVIRONMENT_PROFILE" --json > "$INPUT_REPORT_PATH"
+          elif [[ "$INPUT_OPERATION" == "environment-verify" ]]; then
             bun "${{ github.action_path }}/src/cli.ts" environment verify \
               --profile "$INPUT_ENVIRONMENT_PROFILE" --json > "$INPUT_REPORT_PATH"
           elif [[ "$INPUT_OPERATION" == "conformance" ]]; then
@@ -121,7 +124,7 @@ runs:
         fi
 
         if [[ "$INPUT_OPERATION" != "run" ]]; then
-          echo "::error::operation must be 'run', 'environment-verify', 'conformance', 'findings', 'public-contract', or 'agent-capabilities-validate'"
+          echo "::error::operation must be 'run', 'environment-fingerprint', 'environment-verify', 'conformance', 'findings', 'public-contract', or 'agent-capabilities-validate'"
           exit 2
         fi
 
