@@ -36,10 +36,65 @@ describe("score history dashboard model", () => {
     const normalized = normalizeHistory(history);
 
     expect(normalized.entries.map((entry) => entry.score)).toEqual([80, 90]);
+    expect(normalized.entries[0].timestamp).toBe("2026-09-02T12:00:00.000Z");
     expect(latestEntry(normalized)?.score).toBe(90);
     expect(scoreDelta(normalized.entries)).toBe(10);
     expect(scoreProfileChanged(normalized.entries)).toBe(false);
     expect(shortCommit(normalized.entries[0].commit)).toBe("aaaaaaaa");
+  });
+
+  test("orders mixed offsets by their actual instant", () => {
+    const normalized = normalizeHistory({
+      ...history,
+      entries: [
+        {
+          commit: "aaaaaaaa11111111",
+          timestamp: "2026-09-03T23:30:00+02:00",
+          scoreProfileVersion: SCORE_PROFILE,
+          score: 80,
+        },
+        {
+          commit: "bbbbbbbb22222222",
+          timestamp: "2026-09-03T22:00:00Z",
+          scoreProfileVersion: SCORE_PROFILE,
+          score: 90,
+        },
+      ],
+    });
+
+    expect(normalized.entries.map((entry) => entry.commit[0])).toEqual(["a", "b"]);
+    expect(latestEntry(normalized)?.commit).toBe("bbbbbbbb22222222");
+  });
+
+  test("uses commit identity to order equal instants deterministically", () => {
+    const normalized = normalizeHistory({
+      ...history,
+      entries: [
+        {
+          commit: "bbbbbbbb22222222",
+          timestamp: "2026-09-03T23:00:00+02:00",
+          scoreProfileVersion: SCORE_PROFILE,
+          score: 90,
+        },
+        {
+          commit: "aaaaaaaa11111111",
+          timestamp: "2026-09-03T21:00:00Z",
+          scoreProfileVersion: SCORE_PROFILE,
+          score: 80,
+        },
+      ],
+    });
+
+    expect(normalized.entries.map((entry) => entry.commit[0])).toEqual(["a", "b"]);
+  });
+
+  test("rejects invalid timestamps rather than selecting a false latest commit", () => {
+    expect(() =>
+      normalizeHistory({
+        ...history,
+        entries: [{ commit: "aaaaaaaa11111111", timestamp: "bad", score: 80 }],
+      }),
+    ).toThrow("Invalid score history timestamp");
   });
 
   test("withholds a delta when the scoring profile changes", () => {
