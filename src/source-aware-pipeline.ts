@@ -225,7 +225,12 @@ export function runSourceAwarePipeline(
     };
   }
 
-  const pipeline = pipelineRunner({ root, tier, strict: false });
+  const pipeline = pipelineRunner({
+    root,
+    tier,
+    strict: false,
+    dependencyResolution: "source-development",
+  });
   const cleanupDiagnostics = restoreSourceState(root, cargoConfig, cargoLocks);
   return {
     pipeline: withRestoreDiagnostics(pipeline, cleanupDiagnostics),
