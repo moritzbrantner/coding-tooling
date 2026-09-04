@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
+import { foundationAudit, type FoundationComponentStatus } from "./foundation-audit.ts";
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 
 export const repositoryKinds = [
@@ -40,6 +41,18 @@ export type RepositoryMetadata = {
 type MetadataRead = {
   metadata?: RepositoryMetadata;
   diagnostics: Diagnostic[];
+};
+
+type FoundationAuditComponent = {
+  status: FoundationComponentStatus;
+};
+
+const fleetFoundationNames: Record<string, string> = {
+  environment: "environmentV1",
+  tooling: "tooling",
+  commands: "commands",
+  conventions: "conventions",
+  renovate: "renovate",
 };
 
 function stringField(source: string, name: string): string | undefined {
@@ -203,36 +216,57 @@ function repositoryDirectories(fleetRoot: string): string[] {
   }
 }
 
+function foundationStatuses(
+  audit: ReturnType<typeof foundationAudit>,
+): Record<string, FoundationComponentStatus> {
+  const components = audit.data.components as Record<string, FoundationAuditComponent> | undefined;
+  return Object.fromEntries(
+    Object.entries(components ?? {}).map(([name, value]) => [name, value.status]),
+  ) as Record<string, FoundationComponentStatus>;
+}
+
+function foundationKeysWithStatus(
+  statuses: Record<string, FoundationComponentStatus>,
+  target: FoundationComponentStatus,
+): string[] {
+  return Object.entries(statuses)
+    .filter(([, status]) => status === target)
+    .map(([name]) => fleetFoundationNames[name] ?? name)
+    .sort();
+}
+
 export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const root = resolve(fleetRoot);
   const repositories = repositoryDirectories(root).map((repositoryRoot) => {
     const metadata = readRepositoryMetadata(repositoryRoot);
     const workflows = workflowNames(repositoryRoot);
+    const canonicalFoundation = foundationAudit(repositoryRoot);
+    const canonicalStatuses = foundationStatuses(canonicalFoundation);
     const foundation = {
       metadata: Boolean(metadata.metadata),
-      environmentV1: existsSync(join(repositoryRoot, ".repository-environment.toml")),
-      tooling: existsSync(join(repositoryRoot, ".coding-tooling.json")),
-      conventions:
-        existsSync(join(repositoryRoot, "conventions.json")) &&
-        existsSync(join(repositoryRoot, "conventions.lock.json")),
-      renovate: existsSync(join(repositoryRoot, "renovate.json")),
+      environmentV1: canonicalStatuses.environment === "adopted",
+      tooling: canonicalStatuses.tooling === "adopted",
+      commands: canonicalStatuses.commands === "adopted",
+      conventions: canonicalStatuses.conventions === "adopted",
+      renovate: canonicalStatuses.renovate === "adopted",
       agents: existsSync(join(repositoryRoot, "AGENTS.md")),
       workflows: workflows.length > 0,
       pages: hasPagesWorkflow(repositoryRoot, workflows),
       runtimeProfiler: existsSync(join(repositoryRoot, "profiles", "runtime-profiler")),
     };
-    const optionalFoundationKeys = new Set(["workflows", "pages", "runtimeProfiler"]);
-    const missing = Object.entries(foundation)
-      .filter(([key, present]) => !present && !optionalFoundationKeys.has(key))
-      .map(([key]) => key);
+    const missing = [
+      ...(foundation.metadata ? [] : ["metadata"]),
+      ...(foundation.agents ? [] : ["agents"]),
+      ...foundationKeysWithStatus(canonicalStatuses, "missing"),
+    ].sort();
+    const invalid = foundationKeysWithStatus(canonicalStatuses, "invalid");
+    const unsupported = foundationKeysWithStatus(canonicalStatuses, "unsupported");
+    if (canonicalFoundation.status === "error") unsupported.push("foundationAudit");
+
     const remediation = new Set<string>();
     if (
-      !foundation.environmentV1 ||
-      !foundation.tooling ||
-      !foundation.conventions ||
-      !foundation.renovate ||
-      !foundation.agents
+      [...missing, ...invalid, ...unsupported].some((key) => key !== "metadata")
     ) {
       remediation.add(
         `bunx @moritzbrantner/platform-upgrader apply boring-foundation-v1 ${repositoryRoot}`,
@@ -247,7 +281,15 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       metadata: metadata.metadata ?? null,
       metadataDiagnostics: metadata.diagnostics,
       foundation,
+      foundationAudit: {
+        status: canonicalFoundation.status,
+        components: canonicalFoundation.data.components ?? {},
+        summary: canonicalFoundation.data.summary ?? {},
+        diagnostics: canonicalFoundation.diagnostics,
+      },
       missing,
+      invalid,
+      unsupported: [...new Set(unsupported)].sort(),
       remediation: [...remediation],
     };
   });
@@ -260,8 +302,14 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       code: "fleet-repositories-unavailable",
       message: `No direct child Git repositories found under ${root}`,
     });
-  } else if (repositories.some((repository) => repository.missing.length > 0)) {
+  } else if (
+    repositories.some(
+      (repository) => repository.missing.length > 0 || repository.invalid.length > 0,
+    )
+  ) {
     status = "failed";
+  } else if (repositories.some((repository) => repository.unsupported.length > 0)) {
+    status = "unavailable";
   }
 
   return {
@@ -273,7 +321,10 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       root,
       repositoryCount: repositories.length,
       conformingRepositoryCount: repositories.filter(
-        (repository) => repository.missing.length === 0,
+        (repository) =>
+          repository.missing.length === 0 &&
+          repository.invalid.length === 0 &&
+          repository.unsupported.length === 0,
       ).length,
       repositories,
     },
