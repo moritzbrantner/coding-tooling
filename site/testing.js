@@ -1,7 +1,7 @@
 import { loadSnapshot } from "./github-analysis.js";
 import { analyzeSnapshot, parseRepositoryReference } from "./preflight.js";
 
-const ignoredSegments = new Set([
+const ignoredTreeSegments = new Set([
   ".git",
   ".next",
   ".turbo",
@@ -10,14 +10,18 @@ const ignoredSegments = new Set([
   "dist",
   "fixtures",
   "generated",
-  ".storybook",
-  "__tests__",
   "node_modules",
   "target",
+  "vendor",
+]);
+
+const nonProductionSegments = new Set([
+  ...ignoredTreeSegments,
+  ".storybook",
+  "__tests__",
   "test",
   "tests",
   "stories",
-  "vendor",
 ]);
 
 export async function testingJson(value, options = {}) {
@@ -32,7 +36,12 @@ export async function testingJson(value, options = {}) {
 export function testingPlan(snapshot, now = new Date()) {
   const analysis = analyzeSnapshot(snapshot, now);
   const paths = snapshot.tree
-    .filter((entry) => entry.type === "blob" && entry.path && !isIgnoredPath(entry.path))
+    .filter(
+      (entry) =>
+        entry.type === "blob" &&
+        entry.path &&
+        !hasIgnoredSegment(entry.path, ignoredTreeSegments),
+    )
     .map((entry) => entry.path)
     .toSorted();
   const sourcePaths = paths.filter(isTypeScriptProductionSource);
@@ -174,7 +183,9 @@ export function testingPlan(snapshot, now = new Date()) {
       left.id.localeCompare(right.id),
   );
   const incomplete =
-    snapshot.treeTruncated || snapshot.manifestFetchTruncated || snapshot.unreadablePaths.length > 0;
+    snapshot.treeTruncated ||
+    snapshot.manifestFetchTruncated ||
+    snapshot.unreadablePaths.length > 0;
 
   return {
     schemaVersion: 1,
@@ -190,7 +201,11 @@ export function testingPlan(snapshot, now = new Date()) {
     },
     repository: snapshot.repository,
     summary: {
-      status: incomplete ? "incomplete" : sortedActions.length > 0 ? "changes-recommended" : "ready",
+      status: incomplete
+        ? "incomplete"
+        : sortedActions.length > 0
+          ? "changes-recommended"
+          : "ready",
       componentCount: components.length,
       typeScriptSourceCount: sourcePaths.length,
       actionCount: sortedActions.length,
@@ -251,7 +266,7 @@ function isTypeScriptProductionSource(path) {
   if (/\.(?:test|spec|stories?)\.(?:ts|tsx|mts|cts)$/.test(name)) return false;
   if (/^(?:vite|vitest|next|eslint|storybook|playwright)\.config\./.test(name)) return false;
   if (/\.config\.(?:ts|mts|cts)$/.test(name)) return false;
-  return !isIgnoredPath(path);
+  return !hasIgnoredSegment(path, nonProductionSegments);
 }
 
 function isReactComponentCandidate(path, componentPath) {
@@ -323,8 +338,8 @@ function stripSourceRoot(path) {
   return path.startsWith("src/") ? path.slice(4) : path;
 }
 
-function isIgnoredPath(path) {
-  return path.split("/").some((segment) => ignoredSegments.has(segment));
+function hasIgnoredSegment(path, segments) {
+  return path.split("/").some((segment) => segments.has(segment));
 }
 
 function priorityRank(priority) {
