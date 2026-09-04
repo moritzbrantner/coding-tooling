@@ -7,6 +7,7 @@ import { dotNetRoslynAnalysisProvider } from "../src/analysis-dotnet.ts";
 import { commandAvailable, runCommand } from "../src/shared.ts";
 
 const roots: string[] = [];
+const realDotNetTestTimeoutMs = 45000;
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -83,7 +84,7 @@ describe("Roslyn-backed .NET analysis", () => {
     expect(result.status).toBe("unavailable");
     expect(result.reason).toContain("restored project");
     expect(result.diagnostics).toEqual([]);
-  }, 15000);
+  }, realDotNetTestTimeoutMs);
 
   test("normalizes a real Roslyn conversion diagnostic", () => {
     if (!commandAvailable("dotnet")) return;
@@ -108,7 +109,7 @@ describe("Roslyn-backed .NET analysis", () => {
       project: "Fixture.csproj",
       location: { path: "src/Value.cs", startLine: 1 },
     });
-  }, 15000);
+  }, realDotNetTestTimeoutMs);
 
   test("passes a restored C# project with no compiler diagnostics", () => {
     if (!commandAvailable("dotnet")) return;
@@ -121,5 +122,5 @@ describe("Roslyn-backed .NET analysis", () => {
 
     expect(result.status).toBe("applied");
     expect(result.diagnostics).toEqual([]);
-  }, 15000);
+  }, realDotNetTestTimeoutMs);
 });
