@@ -38,7 +38,7 @@ const severityRank: Record<FindingSeverity, number> = {
 };
 
 function candidateId(findingIds: string[]): string {
-  const digest = createHash("sha256").update(findingIds.toSorted().join("\0")).digest("hex");
+  const digest = createHash("sha256").update([...findingIds].sort().join("\0")).digest("hex");
   return `CT-RM-${digest.slice(0, 12).toUpperCase()}`;
 }
 
@@ -60,7 +60,7 @@ function uniqueCommands(commands: string[][]): string[][] {
 }
 
 function candidateFor(findings: Finding[]): RemediationCandidate {
-  const ordered = findings.toSorted((left, right) => left.id.localeCompare(right.id));
+  const ordered = [...findings].sort((left, right) => left.id.localeCompare(right.id));
   const ids = ordered.map((finding) => finding.id);
   const id = candidateId(ids);
   const allScaffoldable = ordered.every((finding) => finding.scaffold !== undefined);
