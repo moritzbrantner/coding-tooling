@@ -30,6 +30,7 @@ export type ResultOperation =
   | "conformance"
   | "environment"
   | "repository-metadata"
+  | "repository-evidence"
   | "fleet"
   | "foundation"
   | "bootstrap"
