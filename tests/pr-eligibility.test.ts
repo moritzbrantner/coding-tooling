@@ -100,6 +100,7 @@ type RunnerOptions = {
   checks?: Array<Record<string, unknown>>;
   state?: string;
   draft?: boolean;
+  viewNumber?: number;
 };
 
 function runner(options: RunnerOptions = {}) {
@@ -123,11 +124,15 @@ function runner(options: RunnerOptions = {}) {
       );
     }
     if (args[0] === "pr" && args[1] === "view") {
+      const repoIndex = args.indexOf("--repo");
+      if (repoIndex < 0 || args[repoIndex + 1] !== "moritzbrantner/fixture") {
+        return result(1, "", "pull request evidence must target the declared repository");
+      }
       const files = options.files ?? [{ path: "src/example.ts" }];
       return result(
         0,
         JSON.stringify({
-          number: 7,
+          number: options.viewNumber ?? 7,
           state: options.state ?? "OPEN",
           isDraft: options.draft ?? false,
           mergeable: options.mergeable ?? "MERGEABLE",
@@ -174,7 +179,8 @@ function runner(options: RunnerOptions = {}) {
 }
 
 describe("integration policy path detection", () => {
-  test("detects generic validation policy and coding-tooling integration changes", () => {
+  test("detects repository identity, validation policy, and coding-tooling integration changes", () => {
+    expect(changesIntegrationPolicy("moritzbrantner/fixture", [".repository.toml"])).toBe(true);
     expect(changesIntegrationPolicy("moritzbrantner/fixture", [".coding-tooling.json"])).toBe(
       true,
     );
@@ -189,7 +195,7 @@ describe("integration policy path detection", () => {
 });
 
 describe("authenticated pull request eligibility collection", () => {
-  test("collects a fully green exact-head candidate", () => {
+  test("collects a fully green exact-head candidate from the declared repository", () => {
     const output = pullRequestMergeEligibility(fixture(), 7, {
       expectedHeadSha: "head",
       expectedBaseSha: "base",
@@ -198,6 +204,19 @@ describe("authenticated pull request eligibility collection", () => {
 
     expect(output.status).toBe("passed");
     expect(output.data.eligibility).toEqual({ eligible: true, blockers: [] });
+  });
+
+  test("rejects pull request evidence whose returned identity does not match the request", () => {
+    const output = pullRequestMergeEligibility(fixture(), 7, {
+      expectedHeadSha: "head",
+      expectedBaseSha: "base",
+      run: runner({ viewNumber: 8 }),
+    });
+
+    expect(output.status).toBe("unavailable");
+    expect(output.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      "pr-identity-mismatch",
+    );
   });
 
   test("fails closed when the evaluated head or base moved", () => {
