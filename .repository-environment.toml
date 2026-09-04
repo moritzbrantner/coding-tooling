@@ -1,0 +1,18 @@
+schema_version = 1
+
+[policy]
+track = "latest-stable"
+
+[system]
+apt = []
+
+[setup]
+commands = ["bun install --frozen-lockfile"]
+
+[maintenance]
+commands = ["bun install --frozen-lockfile"]
+
+[cache]
+paths = ["~/.bun/install/cache"]
+
+[compatibility_holds]

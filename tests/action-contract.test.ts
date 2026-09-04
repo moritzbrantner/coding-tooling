@@ -29,4 +29,21 @@ describe("composite action contract", () => {
     expect(source).toContain("if: inputs.operation == 'run'");
     expect(source).not.toContain(fingerprintInstallCondition);
   });
+
+  test("exposes read-only foundation audit capture", () => {
+    const source = actionSource();
+
+    expect(source).toContain("foundation auditing");
+    expect(source).toContain('"$INPUT_OPERATION" == "foundation"');
+    expect(source).toContain('foundation audit --root . --json > "$INPUT_REPORT_PATH"');
+    expect(source).toContain('echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"');
+  });
+
+  test("keeps foundation audit dependency installation disabled", () => {
+    const source = actionSource();
+    const foundationInstallCondition = "inputs.operation == 'foundation'";
+
+    expect(source).toContain("if: inputs.operation == 'run'");
+    expect(source).not.toContain(foundationInstallCondition);
+  });
 });
