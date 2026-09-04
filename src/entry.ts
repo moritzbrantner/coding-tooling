@@ -16,6 +16,7 @@ import {
   type FindingState,
 } from "./expectations.ts";
 import { foundationAudit } from "./foundation-audit.ts";
+import { fleetMergeReadiness } from "./merge-readiness.ts";
 import type { ResultStatus } from "./model.ts";
 import { publicContractCommand } from "./public-contract.ts";
 import { fleetAudit, repositoryMetadataCommand } from "./repository-metadata.ts";
@@ -50,7 +51,7 @@ function expectationUsage(): never {
   coding-tooling calibration [--json]
   coding-tooling foundation audit [--root <path>] [--json]
   coding-tooling repository metadata [--root <path>] [--json]
-  coding-tooling fleet audit [--root <path>] [--json]
+  coding-tooling fleet <audit|readiness> [--root <path>] [--json]
   coding-tooling contract <discover|verify> [--config <path>] [--report <path>] [--json]`);
   process.exit(2);
 }
@@ -139,7 +140,8 @@ export function entryMain(argv = process.argv.slice(2)): number {
   }
 
   if (command === "fleet") {
-    if (argv[1] !== "audit") return expectationUsage();
+    const action = argv[1];
+    if (action !== "audit" && action !== "readiness") return expectationUsage();
     const knownFlags = new Set(["--json", "--root"]);
     for (let index = 2; index < argv.length; index += 1) {
       const value = argv[index]!;
@@ -150,7 +152,7 @@ export function entryMain(argv = process.argv.slice(2)): number {
       }
     }
     const targetRoot = resolve(option(argv, "root") ?? resolve(repositoryRoot(), ".."));
-    const result = fleetAudit(targetRoot);
+    const result = action === "audit" ? fleetAudit(targetRoot) : fleetMergeReadiness(targetRoot);
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }
