@@ -302,9 +302,7 @@ function checkEvidence(value: unknown): PullRequestCheckEvidence[] | undefined {
   ];
 }
 
-function reviewDecision(
-  value: unknown,
-): PullRequestMergeEvidence["reviewDecision"] | undefined {
+function reviewDecision(value: unknown): PullRequestMergeEvidence["reviewDecision"] | undefined {
   if (value === null) return null;
   if (value === "APPROVED" || value === "CHANGES_REQUESTED" || value === "REVIEW_REQUIRED") {
     return value;
@@ -374,7 +372,11 @@ export function pullRequestMergeEligibility(
   const current = pullRequestInfo(runner, root, prNumber);
   if (!current.info) {
     return envelope("unavailable", started, data, [
-      commandBlocker("pr-evidence-unavailable", "could not read pull request metadata", current.command),
+      commandBlocker(
+        "pr-evidence-unavailable",
+        "could not read pull request metadata",
+        current.command,
+      ),
     ]);
   }
 
@@ -384,7 +386,8 @@ export function pullRequestMergeEligibility(
   const body = typeof pr.body === "string" ? pr.body : "";
   const files = changedFiles(pr.files);
   const fileCount = changedFileCount(pr.changedFiles);
-  const fileEvidenceComplete = files !== undefined && fileCount !== undefined && files.length === fileCount;
+  const fileEvidenceComplete =
+    files !== undefined && fileCount !== undefined && files.length === fileCount;
   const declaredDependencies = declaredPullRequestDependencies(body).filter(
     (dependency) => dependency !== prNumber,
   );

@@ -99,7 +99,8 @@ function fakeRunner(options: FakeOptions = {}) {
           isDraft: options.draft ?? false,
           mergeable: options.mergeable ?? "MERGEABLE",
           mergeStateStatus: options.mergeStateStatus ?? "CLEAN",
-          reviewDecision: options.reviewDecision === undefined ? "APPROVED" : options.reviewDecision,
+          reviewDecision:
+            options.reviewDecision === undefined ? "APPROVED" : options.reviewDecision,
           headRefOid: options.headSha ?? headSha,
           baseRefName: "main",
           statusCheckRollup: checks,
