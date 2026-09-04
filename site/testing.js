@@ -38,9 +38,7 @@ export function testingPlan(snapshot, now = new Date()) {
   const paths = snapshot.tree
     .filter(
       (entry) =>
-        entry.type === "blob" &&
-        entry.path &&
-        !hasIgnoredSegment(entry.path, ignoredTreeSegments),
+        entry.type === "blob" && entry.path && !hasIgnoredSegment(entry.path, ignoredTreeSegments),
     )
     .map((entry) => entry.path)
     .toSorted();
@@ -261,7 +259,7 @@ function packageJsonPath(componentPath) {
 }
 
 function isTypeScriptProductionSource(path) {
-  if (!/\.(?:ts|tsx|mts|cts)$/.test(path) || /\.d\.ts$/.test(path)) return false;
+  if (!/\.(?:ts|tsx|mts|cts)$/.test(path) || path.endsWith(".d.ts")) return false;
   const name = basename(path);
   if (/\.(?:test|spec|stories?)\.(?:ts|tsx|mts|cts)$/.test(name)) return false;
   if (/^(?:vite|vitest|next|eslint|storybook|playwright)\.config\./.test(name)) return false;
