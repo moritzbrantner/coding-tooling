@@ -42,7 +42,6 @@ jobs:
 
           entry = Path('src/entry.ts')
           source = entry.read_text()
-
           import_anchor = 'import type { ResultStatus } from "./model.ts";\n'
           import_replacement = (
               import_anchor
@@ -67,42 +66,46 @@ jobs:
           source = source.replace(usage_anchor, usage_replacement, 1)
 
           block_anchor = '  if (command === "pr" && argv[1] === "eligibility") {\n'
-          auto_merge_block = '''  if (command === "pr" && argv[1] === "auto-merge") {
-            const prNumber = Number(argv[2]);
-            if (!Number.isInteger(prNumber) || prNumber <= 0) return expectationUsage();
-            const knownFlags = new Set([
-              "--json",
-              "--expected-head",
-              "--expected-base",
-              "--merge-method",
-              "--dry-run",
-            ]);
-            for (let index = 3; index < argv.length; index += 1) {
-              const value = argv[index]!;
-              if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
-              if (
-                value === "--expected-head" ||
-                value === "--expected-base" ||
-                value === "--merge-method"
-              ) {
-                if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
-                index += 1;
-              }
-            }
-            const mergeMethod = option(argv, "merge-method");
-            if (mergeMethod && !["squash", "merge", "rebase"].includes(mergeMethod))
-              return expectationUsage();
-            const result = activatePullRequestAutoMerge(repositoryRoot(), prNumber, {
-              expectedHeadSha: option(argv, "expected-head"),
-              expectedBaseSha: option(argv, "expected-base"),
-              mergeMethod: mergeMethod as MergeMethod | undefined,
-              dryRun: argv.includes("--dry-run"),
-            });
-            console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
-            return resultExitCode(result.status);
-          }
-
-'''
+          lines = [
+              '  if (command === "pr" && argv[1] === "auto-merge") {',
+              '    const prNumber = Number(argv[2]);',
+              '    if (!Number.isInteger(prNumber) || prNumber <= 0) return expectationUsage();',
+              '    const knownFlags = new Set([',
+              '      "--json",',
+              '      "--expected-head",',
+              '      "--expected-base",',
+              '      "--merge-method",',
+              '      "--dry-run",',
+              '    ]);',
+              '    for (let index = 3; index < argv.length; index += 1) {',
+              '      const value = argv[index]!;',
+              '      if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();',
+              '      if (',
+              '        value === "--expected-head" ||',
+              '        value === "--expected-base" ||',
+              '        value === "--merge-method"',
+              '      ) {',
+              '        if (!argv[index + 1] || argv[index + 1]!.startsWith("--"))',
+              '          return expectationUsage();',
+              '        index += 1;',
+              '      }',
+              '    }',
+              '    const mergeMethod = option(argv, "merge-method");',
+              '    if (mergeMethod && !["squash", "merge", "rebase"].includes(mergeMethod))',
+              '      return expectationUsage();',
+              '    const result = activatePullRequestAutoMerge(repositoryRoot(), prNumber, {',
+              '      expectedHeadSha: option(argv, "expected-head"),',
+              '      expectedBaseSha: option(argv, "expected-base"),',
+              '      mergeMethod: mergeMethod as MergeMethod | undefined,',
+              '      dryRun: argv.includes("--dry-run"),',
+              '    });',
+              '    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));',
+              '    return resultExitCode(result.status);',
+              '  }',
+              '',
+              '',
+          ]
+          auto_merge_block = '\n'.join(lines)
           if source.count(block_anchor) != 1:
               raise SystemExit('unexpected entry PR eligibility anchor')
           source = source.replace(block_anchor, auto_merge_block + block_anchor, 1)
