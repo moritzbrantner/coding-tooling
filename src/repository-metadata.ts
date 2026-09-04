@@ -286,7 +286,9 @@ export function fleetAudit(
     const repositoryId = metadata.metadata?.id ?? basename(repositoryRoot);
     const injectedMergeEvidence = options.mergeEvidence?.[repositoryId];
     const foundationReady =
-      missing.length === 0 && authoritativeMissing.length === 0 && authoritativeBlockers.length === 0;
+      missing.length === 0 &&
+      authoritativeMissing.length === 0 &&
+      authoritativeBlockers.length === 0;
     const mergeEvidence: RepositoryMergeEvidence = {
       foundationReady,
       localGateReasons: [
