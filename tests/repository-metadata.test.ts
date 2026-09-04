@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import { fleetAudit, readRepositoryMetadata } from "../src/repository-metadata.ts";
@@ -19,7 +19,7 @@ function metadata(path: string, body = ""): void {
   writeFileSync(
     join(path, ".repository.toml"),
     `schema_version = 1
-id = "moritzbrantner/${path.split("/").at(-1)}"
+id = "moritzbrantner/${basename(path)}"
 kind = "library"
 status = "active"
 depends_on = ["moritzbrantner/coding-tooling"]
