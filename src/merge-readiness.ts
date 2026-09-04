@@ -62,9 +62,27 @@ type RemoteProtection = {
   diagnostics: Diagnostic[];
 };
 
-export type FleetMergeReadinessOptions = {
+export type RepositoryMergeReadiness = {
+  name: string;
+  root: string;
+  repository: string | null;
+  readiness: MergeReadiness;
+  blockers: Diagnostic[];
+  evidence: {
+    foundationStatus: ResultStatus;
+    mergeAuthority: "hosted" | "local" | null;
+    mergeReason: string | null;
+    requiredChecks: string[];
+    localOnlySourceGraph: boolean;
+    remote: RemoteProtection | null;
+  };
+};
+
+export type RepositoryMergeReadinessOptions = {
   run?: Runner;
 };
+
+export type FleetMergeReadinessOptions = RepositoryMergeReadinessOptions;
 
 function repositoryDirectories(fleetRoot: string): string[] {
   try {
@@ -268,42 +286,50 @@ function classify(
   return { readiness: "trusted-auto-merge", blockers };
 }
 
+export function repositoryMergeReadiness(
+  repositoryRoot: string,
+  options: RepositoryMergeReadinessOptions = {},
+): RepositoryMergeReadiness {
+  const root = resolve(repositoryRoot);
+  const runner = options.run ?? runCommand;
+  const metadata = readRepositoryMetadata(root);
+  const foundation = foundationAudit(root);
+  const policy = mergePolicy(root);
+  const localOnly = localOnlySourceGraph(root);
+  const repositoryId = metadata.metadata?.id;
+  const needsRemoteProtection =
+    repositoryId && foundation.status === "passed" && policy.authority === "hosted" && !localOnly;
+  const protection = needsRemoteProtection
+    ? remoteProtection(runner, root, repositoryId)
+    : undefined;
+  const classification = classify(foundation.status, policy, localOnly, protection);
+
+  return {
+    name: basename(root),
+    root,
+    repository: repositoryId ?? null,
+    readiness: classification.readiness,
+    blockers: classification.blockers,
+    evidence: {
+      foundationStatus: foundation.status,
+      mergeAuthority: policy.authority ?? null,
+      mergeReason: policy.reason ?? null,
+      requiredChecks: policy.requiredChecks,
+      localOnlySourceGraph: localOnly,
+      remote: protection ?? null,
+    },
+  };
+}
+
 export function fleetMergeReadiness(
   fleetRoot: string,
   options: FleetMergeReadinessOptions = {},
 ): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const root = resolve(fleetRoot);
-  const runner = options.run ?? runCommand;
-  const repositories = repositoryDirectories(root).map((repositoryRoot) => {
-    const metadata = readRepositoryMetadata(repositoryRoot);
-    const foundation = foundationAudit(repositoryRoot);
-    const policy = mergePolicy(repositoryRoot);
-    const localOnly = localOnlySourceGraph(repositoryRoot);
-    const repositoryId = metadata.metadata?.id;
-    const needsRemoteProtection =
-      repositoryId && foundation.status === "passed" && policy.authority === "hosted" && !localOnly;
-    const protection = needsRemoteProtection
-      ? remoteProtection(runner, repositoryRoot, repositoryId)
-      : undefined;
-    const classification = classify(foundation.status, policy, localOnly, protection);
-
-    return {
-      name: basename(repositoryRoot),
-      root: repositoryRoot,
-      repository: repositoryId ?? null,
-      readiness: classification.readiness,
-      blockers: classification.blockers,
-      evidence: {
-        foundationStatus: foundation.status,
-        mergeAuthority: policy.authority ?? null,
-        mergeReason: policy.reason ?? null,
-        requiredChecks: policy.requiredChecks,
-        localOnlySourceGraph: localOnly,
-        remote: protection ?? null,
-      },
-    };
-  });
+  const repositories = repositoryDirectories(root).map((repositoryRoot) =>
+    repositoryMergeReadiness(repositoryRoot, options),
+  );
 
   if (repositories.length === 0) {
     return {
