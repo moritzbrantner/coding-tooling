@@ -73,6 +73,55 @@ describe("expected environment fingerprint", () => {
     expect(after.layers.config.digest).toBe(before.layers.config.digest);
   });
 
+  test("uses .bun-version as exact Bun toolchain identity without a packageManager", () => {
+    const root = repository();
+    writeFileSync(join(root, "package.json"), '{"name":"fixture"}\n');
+    writeFileSync(join(root, ".bun-version"), "1.4.0\n");
+
+    const data = passedData(root);
+
+    expect(data.layers.toolchain.inputs).toEqual(
+      expect.objectContaining({
+        bun: {
+          version: "1.4.0",
+          declarations: { packageManager: null, versionFile: "1.4.0" },
+        },
+      }),
+    );
+  });
+
+  test("accepts matching dual Bun declarations", () => {
+    const root = repository();
+    writeFileSync(join(root, ".bun-version"), "1.4.0\n");
+
+    const data = passedData(root);
+
+    expect(data.layers.toolchain.inputs).toEqual(
+      expect.objectContaining({
+        bun: {
+          version: "1.4.0",
+          declarations: { packageManager: "1.4.0", versionFile: "1.4.0" },
+        },
+      }),
+    );
+  });
+
+  test("rejects conflicting Bun declarations", () => {
+    const root = repository();
+    writeFileSync(join(root, ".bun-version"), "1.3.14\n");
+
+    const result = expectedEnvironmentFingerprint(root);
+
+    expect(result.status).toBe("failed");
+    expect(result.data.fingerprint).toBeNull();
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "environment-fingerprint-toolchain-conflict",
+        path: ".bun-version",
+      }),
+    );
+  });
+
   test("includes an exact Node pin in toolchain identity", () => {
     const root = repository();
     const before = passedData(root);
@@ -197,7 +246,7 @@ reason = "a human explanation that is not environment identity"
     expect(moved.fingerprint).toBe(source.fingerprint);
   });
 
-  test("refuses floating toolchain declarations", () => {
+  test("refuses floating packageManager toolchain declarations", () => {
     const root = repository();
     writeFileSync(
       join(root, "package.json"),
@@ -212,6 +261,23 @@ reason = "a human explanation that is not environment identity"
       expect.objectContaining({
         code: "environment-fingerprint-toolchain-floating",
         path: "package.json",
+      }),
+    );
+  });
+
+  test("refuses floating .bun-version declarations", () => {
+    const root = repository();
+    writeFileSync(join(root, "package.json"), '{"name":"fixture"}\n');
+    writeFileSync(join(root, ".bun-version"), "latest\n");
+
+    const result = expectedEnvironmentFingerprint(root);
+
+    expect(result.status).toBe("failed");
+    expect(result.data.fingerprint).toBeNull();
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "environment-fingerprint-toolchain-floating",
+        path: ".bun-version",
       }),
     );
   });

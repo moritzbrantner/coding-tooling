@@ -131,6 +131,61 @@ describe("foundation audit", () => {
     );
   });
 
+  test("accepts .bun-version as the repository Bun declaration", () => {
+    const root = repository();
+    writeJson(join(root, "package.json"), {
+      name: "fixture",
+      scripts: { lint: "node -e process.exit(0)" },
+    });
+    writeFileSync(join(root, ".bun-version"), "1.4.0\n");
+    installEnvironment(root);
+
+    const result = foundationAudit(root);
+    const environment = (result.data.components as Record<string, Record<string, unknown>>)
+      .environment;
+
+    expect(environment.status).toBe("adopted");
+    expect(environment.toolchains).toEqual([
+      { tool: "bun", path: ".bun-version", version: "1.4.0" },
+    ]);
+  });
+
+  test("rejects conflicting Bun declarations", () => {
+    const root = repository();
+    writeFileSync(join(root, ".bun-version"), "1.3.14\n");
+    installEnvironment(root);
+
+    const result = foundationAudit(root);
+
+    expect(statuses(result).environment).toBe("invalid");
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "foundation-environment-bun-pin-conflict",
+        path: ".bun-version",
+      }),
+    );
+  });
+
+  test("rejects floating .bun-version declarations", () => {
+    const root = repository();
+    writeJson(join(root, "package.json"), {
+      name: "fixture",
+      scripts: { lint: "node -e process.exit(0)" },
+    });
+    writeFileSync(join(root, ".bun-version"), "latest\n");
+    installEnvironment(root);
+
+    const result = foundationAudit(root);
+
+    expect(statuses(result).environment).toBe("invalid");
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "foundation-environment-toolchain-pin-floating",
+        path: ".bun-version",
+      }),
+    );
+  });
+
   test("fails deterministic structural drift without depending on installed runtimes", () => {
     const root = repository();
     installEnvironment(root, "floating");

@@ -140,16 +140,30 @@ function environmentAudit(root: string): FoundationComponent {
 
   const declarations: Array<{ tool: string; path: string; version: string }> = [];
   const packageManifest = readJson<PackageManifest>(join(root, "package.json"));
-  if (
+  const packageBunVersion =
     typeof packageManifest?.packageManager === "string" &&
     packageManifest.packageManager.startsWith("bun@")
+      ? packageManifest.packageManager.slice("bun@".length)
+      : null;
+  const bunVersionPath = join(root, ".bun-version");
+  const versionFileBunVersion = existsSync(bunVersionPath) ? text(bunVersionPath).trim() : null;
+  if (
+    packageBunVersion !== null &&
+    versionFileBunVersion !== null &&
+    packageBunVersion !== versionFileBunVersion
   ) {
-    declarations.push({
-      tool: "bun",
-      path: "package.json",
-      version: packageManifest.packageManager.slice("bun@".length),
+    diagnostics.push({
+      code: "foundation-environment-bun-pin-conflict",
+      message: `Bun pins conflict: package.json declares ${packageBunVersion} but .bun-version declares ${versionFileBunVersion}`,
+      path: ".bun-version",
     });
   }
+  if (packageBunVersion !== null) {
+    declarations.push({ tool: "bun", path: "package.json", version: packageBunVersion });
+  } else if (versionFileBunVersion !== null) {
+    declarations.push({ tool: "bun", path: ".bun-version", version: versionFileBunVersion });
+  }
+
   const nodePath = join(root, ".node-version");
   if (existsSync(nodePath)) {
     declarations.push({ tool: "node", path: ".node-version", version: text(nodePath).trim() });
