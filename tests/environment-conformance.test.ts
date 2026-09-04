@@ -80,7 +80,7 @@ describe("repository environment conformance", () => {
     }
   });
 
-  test("reports exact observed Bun pins as passed", () => {
+  test("reports exact observed Bun packageManager pins as passed", () => {
     const version = Bun.version;
     const root = repository(`bun@${version}`);
     adoptEnvironment(root);
@@ -94,6 +94,7 @@ describe("repository environment conformance", () => {
         toolchains: [
           expect.objectContaining({
             tool: "bun",
+            path: "package.json",
             declaredVersion: version,
             observedVersion: version,
             status: "passed",
@@ -103,7 +104,58 @@ describe("repository environment conformance", () => {
     );
   });
 
-  test("blocks floating Bun pins", () => {
+  test("reports exact observed .bun-version pins as passed", () => {
+    const version = Bun.version;
+    const root = repository();
+    writeFileSync(join(root, ".bun-version"), `${version}\n`);
+    adoptEnvironment(root);
+
+    const result = repositoryEnvironmentConformance(root);
+
+    expect(result.findings).toEqual([]);
+    expect(result.data.toolchains).toEqual([
+      expect.objectContaining({
+        tool: "bun",
+        path: ".bun-version",
+        declaredVersion: version,
+        observedVersion: version,
+        status: "passed",
+      }),
+    ]);
+  });
+
+  test("accepts matching dual Bun declarations", () => {
+    const version = Bun.version;
+    const root = repository(`bun@${version}`);
+    writeFileSync(join(root, ".bun-version"), `${version}\n`);
+    adoptEnvironment(root);
+
+    const result = repositoryEnvironmentConformance(root);
+
+    expect(result.findings).toEqual([]);
+    expect(result.data.toolchains).toEqual([
+      expect.objectContaining({ tool: "bun", path: "package.json", declaredVersion: version }),
+    ]);
+  });
+
+  test("blocks conflicting Bun declarations", () => {
+    const root = repository(`bun@${Bun.version}`);
+    writeFileSync(join(root, ".bun-version"), "0.0.1\n");
+    adoptEnvironment(root);
+
+    const result = repositoryEnvironmentConformance(root);
+
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({
+        code: "environment-bun-pin-conflict",
+        status: "failed",
+        severity: "error",
+        path: ".bun-version",
+      }),
+    );
+  });
+
+  test("blocks floating Bun packageManager pins", () => {
     const root = repository("bun@latest");
     const result = repositoryEnvironmentConformance(root);
 
@@ -113,6 +165,22 @@ describe("repository environment conformance", () => {
         status: "failed",
         severity: "error",
         path: "package.json",
+      }),
+    );
+  });
+
+  test("blocks floating .bun-version pins", () => {
+    const root = repository();
+    writeFileSync(join(root, ".bun-version"), "latest\n");
+
+    const result = repositoryEnvironmentConformance(root);
+
+    expect(result.findings).toContainEqual(
+      expect.objectContaining({
+        code: "environment-toolchain-pin-floating",
+        status: "failed",
+        severity: "error",
+        path: ".bun-version",
       }),
     );
   });

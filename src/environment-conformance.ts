@@ -1,6 +1,6 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
 
 export type EnvironmentFinding = {
   code: string;
@@ -48,21 +48,36 @@ function commandVersion(
   return parse(result.stdout.trim());
 }
 
-function bunToolchain(root: string): EnvironmentToolchain | null {
-  const path = join(root, "package.json");
-  if (!existsSync(path)) return null;
-  const packageJson = JSON.parse(text(path)) as { packageManager?: unknown };
-  if (
-    typeof packageJson.packageManager !== "string" ||
-    !packageJson.packageManager.startsWith("bun@")
-  ) {
-    return null;
+function bunDeclarations(root: string): {
+  packageManagerVersion: string | null;
+  versionFileVersion: string | null;
+} {
+  const packagePath = join(root, "package.json");
+  let packageManagerVersion: string | null = null;
+  if (existsSync(packagePath)) {
+    const packageJson = JSON.parse(text(packagePath)) as { packageManager?: unknown };
+    if (
+      typeof packageJson.packageManager === "string" &&
+      packageJson.packageManager.startsWith("bun@")
+    ) {
+      packageManagerVersion = packageJson.packageManager.slice("bun@".length);
+    }
   }
-  const declaredVersion = packageJson.packageManager.slice("bun@".length);
+  const versionPath = join(root, ".bun-version");
+  return {
+    packageManagerVersion,
+    versionFileVersion: existsSync(versionPath) ? text(versionPath).trim() : null,
+  };
+}
+
+function bunToolchain(root: string): EnvironmentToolchain | null {
+  const { packageManagerVersion, versionFileVersion } = bunDeclarations(root);
+  const declaredVersion = packageManagerVersion ?? versionFileVersion;
+  if (declaredVersion === null) return null;
   const observedVersion = commandVersion("bun", ["--version"], root, (value) => value || null);
   return {
     tool: "bun",
-    path: "package.json",
+    path: packageManagerVersion !== null ? "package.json" : ".bun-version",
     declaredVersion,
     observedVersion,
     status:
@@ -306,6 +321,21 @@ export function repositoryEnvironmentConformance(root: string): {
         path: "scripts/codex-environment.sh",
       });
     }
+  }
+
+  const { packageManagerVersion, versionFileVersion } = bunDeclarations(root);
+  if (
+    packageManagerVersion !== null &&
+    versionFileVersion !== null &&
+    packageManagerVersion !== versionFileVersion
+  ) {
+    findings.push({
+      code: "environment-bun-pin-conflict",
+      status: "failed",
+      severity: "error",
+      message: `Bun pins conflict: package.json declares ${packageManagerVersion} but .bun-version declares ${versionFileVersion}`,
+      path: ".bun-version",
+    });
   }
 
   const toolchains = [bunToolchain(root), nodeToolchain(root), rustToolchain(root)]

@@ -96,15 +96,15 @@ function stringArrayField(source: string, name: string): string[] {
 function toolchainInputs(root: string, diagnostics: Diagnostic[]): unknown {
   const toolchains: Record<string, unknown> = {};
   const packagePath = join(root, "package.json");
+  let packageBunVersion: string | null = null;
   if (existsSync(packagePath)) {
     const packageJson = JSON.parse(text(packagePath)) as { packageManager?: unknown };
     if (
       typeof packageJson.packageManager === "string" &&
       packageJson.packageManager.startsWith("bun@")
     ) {
-      const version = packageJson.packageManager.slice("bun@".length);
-      toolchains.bun = { version };
-      if (!exactVersion(version)) {
+      packageBunVersion = packageJson.packageManager.slice("bun@".length);
+      if (!exactVersion(packageBunVersion)) {
         diagnostics.push({
           code: "environment-fingerprint-toolchain-floating",
           message: "Bun must use an exact x.y.z repository pin before it can be fingerprinted",
@@ -112,6 +112,36 @@ function toolchainInputs(root: string, diagnostics: Diagnostic[]): unknown {
         });
       }
     }
+  }
+
+  const bunVersionPath = join(root, ".bun-version");
+  const versionFileBunVersion = existsSync(bunVersionPath) ? text(bunVersionPath).trim() : null;
+  if (versionFileBunVersion !== null && !exactVersion(versionFileBunVersion)) {
+    diagnostics.push({
+      code: "environment-fingerprint-toolchain-floating",
+      message: "Bun must use an exact x.y.z repository pin before it can be fingerprinted",
+      path: ".bun-version",
+    });
+  }
+  if (
+    packageBunVersion !== null &&
+    versionFileBunVersion !== null &&
+    packageBunVersion !== versionFileBunVersion
+  ) {
+    diagnostics.push({
+      code: "environment-fingerprint-toolchain-conflict",
+      message: `Bun pins conflict: package.json declares ${packageBunVersion} but .bun-version declares ${versionFileBunVersion}`,
+      path: ".bun-version",
+    });
+  }
+  if (packageBunVersion !== null || versionFileBunVersion !== null) {
+    toolchains.bun = {
+      version: packageBunVersion ?? versionFileBunVersion,
+      declarations: {
+        packageManager: packageBunVersion,
+        versionFile: versionFileBunVersion,
+      },
+    };
   }
 
   const nodePath = join(root, ".node-version");
