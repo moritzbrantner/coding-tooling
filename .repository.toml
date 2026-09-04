@@ -1,0 +1,9 @@
+schema_version = 1
+id = "moritzbrantner/coding-tooling"
+kind = "infrastructure"
+status = "active"
+summary = "Deterministic repository discovery, validation, scaffolding, conformance, and integration tooling for coding agents."
+depends_on = ["moritzbrantner/coding-agent-conventions", "moritzbrantner/agent-contracts"]
+consumed_by = []
+supersedes = []
+replaced_by = []
