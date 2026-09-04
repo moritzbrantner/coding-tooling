@@ -207,7 +207,7 @@ export const dotNetRoslynAnalysisProvider: AnalysisProvider = {
         projects: projects.map((path) => relativePosix(root, path)),
         diagnostics: [],
         actions: [],
-        reason: ".NET SDK is unavailable",
+        reason: "dotnet SDK is unavailable",
       };
     }
 
@@ -221,7 +221,7 @@ export const dotNetRoslynAnalysisProvider: AnalysisProvider = {
         projects: projects.map((path) => relativePosix(root, path)),
         diagnostics: [],
         actions: [],
-        reason: ".NET SDK version could not be determined",
+        reason: "dotnet SDK version could not be determined",
       };
     }
 
