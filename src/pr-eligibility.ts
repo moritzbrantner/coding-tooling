@@ -360,7 +360,7 @@ export function pullRequestMergeEligibility(
   if (readiness.readiness !== "trusted-auto-merge") {
     return envelope("unavailable", started, data, [
       `repository-readiness:${readiness.readiness}`,
-      ...readiness.blockers.map((blocker) => blocker.code),
+      ...readiness.blockers.map((blocker) => blocker.code ?? "repository-readiness-blocker"),
     ]);
   }
 

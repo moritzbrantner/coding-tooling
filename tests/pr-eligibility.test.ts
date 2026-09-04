@@ -162,7 +162,9 @@ function evaluate(
 }
 
 function codes(output: ReturnType<typeof evaluate>): string[] {
-  return output.diagnostics.map((diagnostic) => diagnostic.code);
+  return output.diagnostics
+    .map((diagnostic) => diagnostic.code)
+    .filter((code): code is string => Boolean(code));
 }
 
 test("recognizes policy-sensitive identity, gate, and integration surfaces", () => {
