@@ -21,14 +21,21 @@ function runner(command: string, args: string[] = []): CommandResult {
   return { command: [command, ...args], status: 1, stdout: "", stderr: "unexpected command" };
 }
 
-function foundation(status: "passed" | "failed" = "passed"): ResultEnvelope<Record<string, unknown>> {
+function foundation(
+  status: "passed" | "failed" = "passed",
+): ResultEnvelope<Record<string, unknown>> {
   return {
     schemaVersion: 1,
     operation: "foundation",
     status,
     durationMs: 1,
     data: {
-      summary: { adopted: status === "passed" ? 5 : 4, missing: status === "passed" ? 0 : 1, invalid: 0, unsupported: 0 },
+      summary: {
+        adopted: status === "passed" ? 5 : 4,
+        missing: status === "passed" ? 0 : 1,
+        invalid: 0,
+        unsupported: 0,
+      },
       components: { environment: { status: status === "passed" ? "adopted" : "missing" } },
     },
     diagnostics: status === "passed" ? [] : [{ code: "missing", message: "missing" }],

@@ -13,10 +13,7 @@ export const REPOSITORY_EVIDENCE_VERSION = "coding-tooling/repository-evidence/v
 type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
 type FoundationCollector = (root: string) => ResultEnvelope<Record<string, unknown>>;
 type MetadataReader = typeof readRepositoryMetadata;
-type ReadinessCollector = (
-  root: string,
-  options?: { run?: Runner },
-) => RepositoryMergeReadiness;
+type ReadinessCollector = (root: string, options?: { run?: Runner }) => RepositoryMergeReadiness;
 
 export type RepositoryEvidenceOptions = {
   validationReportPath?: string;
@@ -82,14 +79,22 @@ function currentRevision(root: string, runner: Runner): string | null {
   return /^[0-9a-f]{40}$/i.test(revision) ? revision : null;
 }
 
-function readReport(root: string, reportPath: string, operation: string): {
+function readReport(
+  root: string,
+  reportPath: string,
+  operation: string,
+): {
   envelope: ReportEnvelope;
   reference: ReportReference;
 } {
   const absolute = resolve(root, reportPath);
   const content = readFileSync(absolute);
   const envelope = JSON.parse(content.toString("utf8")) as ReportEnvelope;
-  if (envelope.schemaVersion !== 1 || envelope.operation !== operation || !resultStatus(envelope.status)) {
+  if (
+    envelope.schemaVersion !== 1 ||
+    envelope.operation !== operation ||
+    !resultStatus(envelope.status)
+  ) {
     throw new Error(`${reportPath} is not a coding-tooling ${operation} report envelope`);
   }
   return {
@@ -111,7 +116,8 @@ function validationEvidence(root: string, reportPath?: string): Record<string, u
   const checks = Array.isArray(data.checks) ? (data.checks as ValidationCheck[]) : [];
   const results = Array.isArray(data.results) ? (data.results as ValidationCheck[]) : [];
   const missing = Array.isArray(data.missing) ? (data.missing as ValidationMissing[]) : [];
-  const byStatus = (status: ResultStatus) => results.filter((entry) => entry.status === status).length;
+  const byStatus = (status: ResultStatus) =>
+    results.filter((entry) => entry.status === status).length;
   return {
     state: "supplied",
     producer: "coding-tooling/run/v1",
@@ -135,8 +141,7 @@ function publicContractEvidence(
   reportPath: string | undefined,
   revision: string | null,
 ): Record<string, unknown> {
-  if (!reportPath)
-    return { state: "not-supplied", producer: "coding-tooling/public-contract/v1" };
+  if (!reportPath) return { state: "not-supplied", producer: "coding-tooling/public-contract/v1" };
   const { envelope, reference } = readReport(root, reportPath, "contract");
   const data = (envelope.data ?? {}) as PublicContractData;
   const reportRevision = typeof data.revision === "string" ? data.revision : null;
@@ -178,7 +183,8 @@ function publicContractEvidence(
     report: reference,
     status: envelope.status,
     revision: reportRevision,
-    revisionMatchesCurrent: revision === null || reportRevision === null ? null : reportRevision === revision,
+    revisionMatchesCurrent:
+      revision === null || reportRevision === null ? null : reportRevision === revision,
     enforcement: typeof data.enforcement === "string" ? data.enforcement : null,
     summary: {
       discovered: summary.discovered,
