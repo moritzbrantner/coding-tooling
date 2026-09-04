@@ -3,11 +3,7 @@ import { expect, test } from "bun:test";
 import type { Finding } from "../src/expectation-model.ts";
 import { planRemediationCandidates } from "../src/remediation-plan.ts";
 
-function finding(
-  id: string,
-  subjectKey: string,
-  overrides: Partial<Finding> = {},
-): Finding {
+function finding(id: string, subjectKey: string, overrides: Partial<Finding> = {}): Finding {
   return {
     id,
     expectationId: "source-test-reachability",
@@ -116,7 +112,10 @@ test("candidate identity and ordering are stable across finding input order", ()
   });
   const second = finding("CT-555555555555", "src/stable.ts", {
     severity: "warning",
-    verification: [["bun", "run", "test"], ["bun", "run", "typecheck"]],
+    verification: [
+      ["bun", "run", "test"],
+      ["bun", "run", "typecheck"],
+    ],
   });
 
   const left = planRemediationCandidates([first, second]);

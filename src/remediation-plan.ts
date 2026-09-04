@@ -38,7 +38,9 @@ const severityRank: Record<FindingSeverity, number> = {
 };
 
 function candidateId(findingIds: string[]): string {
-  const digest = createHash("sha256").update([...findingIds].sort().join("\0")).digest("hex");
+  const digest = createHash("sha256")
+    .update([...findingIds].sort().join("\0"))
+    .digest("hex");
   return `CT-RM-${digest.slice(0, 12).toUpperCase()}`;
 }
 
