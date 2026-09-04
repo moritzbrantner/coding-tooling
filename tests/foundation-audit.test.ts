@@ -116,13 +116,12 @@ describe("foundation audit", () => {
       conventions: "adopted",
       renovate: "adopted",
     });
-    const commands = (
-      (result.data.components as Record<string, { commands?: unknown }>).commands.commands as Array<{
-        capability: string;
-        command: string[];
-        source: string;
-      }>
-    );
+    const commands = (result.data.components as Record<string, { commands?: unknown }>).commands
+      .commands as Array<{
+      capability: string;
+      command: string[];
+      source: string;
+    }>;
     expect(commands).toContainEqual(
       expect.objectContaining({
         capability: "lint",
