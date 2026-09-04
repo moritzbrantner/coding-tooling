@@ -11,7 +11,7 @@ import type {
   ToolingConfig,
 } from "./model.ts";
 import { RENOVATE_PRESET, renovateFoundationRecommendation } from "./renovate.ts";
-import { readJson, repositoryRoot } from "./shared.ts";
+import { readJson, repositoryRoot, walkFiles } from "./shared.ts";
 
 export type FoundationComponentStatus = "missing" | "adopted" | "invalid" | "unsupported";
 
@@ -32,6 +32,8 @@ type CommandRecord = {
 type PackageManifest = {
   packageManager?: unknown;
   renovate?: unknown;
+  dependencies?: unknown;
+  devDependencies?: unknown;
 };
 
 const renovateUnsupportedExtensions = [".jsonc", ".json5", ".renovaterc"] as const;
@@ -52,6 +54,72 @@ function component(
   return { status, diagnostics, ...data };
 }
 
+type ConventionToolRequirement = {
+  package: "oxfmt" | "oxlint" | "oxlint-tsgolint";
+  reasons: string[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function addConventionToolRequirement(
+  requirements: Map<ConventionToolRequirement["package"], Set<string>>,
+  packageName: ConventionToolRequirement["package"],
+  reason: string,
+): void {
+  const reasons = requirements.get(packageName) ?? new Set<string>();
+  reasons.add(reason);
+  requirements.set(packageName, reasons);
+}
+
+function conventionToolRequirements(root: string): ConventionToolRequirement[] {
+  const installRoot = join(root, ".conventions");
+  if (!existsSync(installRoot)) return [];
+  const requirements = new Map<ConventionToolRequirement["package"], Set<string>>();
+  for (const file of walkFiles(installRoot, 20)
+    .filter((path) => path.endsWith(".json"))
+    .sort()) {
+    const value = readJson<unknown>(file);
+    if (!isRecord(value)) continue;
+
+    const configurations = value.configurations;
+    if (Array.isArray(configurations)) {
+      for (const entry of configurations) {
+        if (!isRecord(entry)) continue;
+        const rule = typeof entry.rule === "string" ? entry.rule : "installed configuration";
+        if (entry.tool === "oxlint") addConventionToolRequirement(requirements, "oxlint", rule);
+        if (entry.tool === "oxfmt") addConventionToolRequirement(requirements, "oxfmt", rule);
+      }
+    }
+
+    const enforcement = value.enforcement;
+    if (!isRecord(enforcement) || enforcement.kind !== "oxlint") continue;
+    const rule = typeof value.ruleId === "string" ? value.ruleId : "installed Oxlint rule";
+    addConventionToolRequirement(requirements, "oxlint", rule);
+    const config = enforcement.config;
+    const options = isRecord(config) ? config.options : undefined;
+    if (isRecord(options) && options.typeAware === true) {
+      addConventionToolRequirement(requirements, "oxlint-tsgolint", rule);
+    }
+  }
+  return [...requirements.entries()]
+    .map(([packageName, reasons]) => ({ package: packageName, reasons: [...reasons].sort() }))
+    .sort((left, right) => left.package.localeCompare(right.package));
+}
+
+function declaredPackageVersions(root: string): Record<string, string> {
+  const manifest = readJson<PackageManifest>(join(root, "package.json"));
+  if (!manifest) return {};
+  const result: Record<string, string> = {};
+  for (const dependencyGroup of [manifest.dependencies, manifest.devDependencies]) {
+    if (!isRecord(dependencyGroup)) continue;
+    for (const [name, version] of Object.entries(dependencyGroup)) {
+      if (typeof version === "string") result[name] = version;
+    }
+  }
+  return result;
+}
 function environmentAudit(root: string): FoundationComponent {
   const configPath = join(root, ".repository-environment.toml");
   const scriptPath = join(root, "scripts", "codex-environment.sh");
@@ -203,7 +271,47 @@ function conventionsAudit(root: string): FoundationComponent {
   }
 
   const check = conventionRegistryCommand("check", [], { root });
-  return component(check.status === "passed" ? "adopted" : "invalid", check.diagnostics, {
+  if (check.status !== "passed") {
+    return component("invalid", check.diagnostics, {
+      manifestPresent,
+      lockPresent,
+      snapshotPresent,
+      requestedModules: check.data.requestedModules ?? [],
+      resolvedModules: check.data.resolvedModules ?? [],
+      sourceRevision: check.data.sourceRevision,
+      drift: check.data.drift ?? [],
+    });
+  }
+
+  const requiredTools = conventionToolRequirements(root);
+  const declaredVersions = declaredPackageVersions(root);
+  const missingTools = requiredTools
+    .filter((requirement) => declaredVersions[requirement.package] === undefined)
+    .map((requirement) => requirement.package);
+  const floatingTools = requiredTools
+    .filter((requirement) => {
+      const version = declaredVersions[requirement.package];
+      return version !== undefined && !exactVersion(version);
+    })
+    .map((requirement) => ({
+      package: requirement.package,
+      version: declaredVersions[requirement.package]!,
+    }));
+  const diagnostics: Diagnostic[] = [
+    ...missingTools.map((packageName) => ({
+      code: "foundation-convention-tool-missing",
+      message: `${packageName} is required by installed convention enforcement but is not declared as a repository dependency`,
+      path: "package.json",
+    })),
+    ...floatingTools.map((entry) => ({
+      code: "foundation-convention-tool-pin-floating",
+      message: `${entry.package} must use an exact x.y.z repository dependency pin, got ${entry.version}`,
+      path: "package.json",
+    })),
+  ];
+  const status: FoundationComponentStatus =
+    floatingTools.length > 0 ? "invalid" : missingTools.length > 0 ? "missing" : "adopted";
+  return component(status, diagnostics, {
     manifestPresent,
     lockPresent,
     snapshotPresent,
@@ -211,6 +319,9 @@ function conventionsAudit(root: string): FoundationComponent {
     resolvedModules: check.data.resolvedModules ?? [],
     sourceRevision: check.data.sourceRevision,
     drift: check.data.drift ?? [],
+    requiredTools,
+    missingTools,
+    floatingTools,
   });
 }
 

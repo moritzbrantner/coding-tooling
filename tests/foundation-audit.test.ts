@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -68,6 +68,38 @@ function installConventions(root: string): void {
   });
 }
 
+function installTypeAwareConvention(root: string): void {
+  const relative = "modules/typescript/technologies/typescript/TS-005.json";
+  const absolute = join(root, ".conventions", relative);
+  mkdirSync(join(absolute, ".."), { recursive: true });
+  const content = `${JSON.stringify(
+    {
+      schemaVersion: 1,
+      ruleId: "TS-005",
+      enforcement: {
+        kind: "oxlint",
+        technologies: ["typescript"],
+        config: { options: { typeAware: true }, rules: {} },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+  writeFileSync(absolute, content);
+  const lockPath = join(root, "conventions.lock.json");
+  const lock = JSON.parse(readFileSync(lockPath, "utf8")) as {
+    files: Record<string, string>;
+  };
+  lock.files[relative] = hash(content);
+  writeJson(lockPath, lock);
+}
+
+function declareTooling(root: string, versions: Record<string, string>): void {
+  const path = join(root, "package.json");
+  const manifest = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  manifest.devDependencies = versions;
+  writeJson(path, manifest);
+}
 function installRenovate(root: string): void {
   writeJson(join(root, "renovate.json"), {
     $schema: "https://docs.renovatebot.com/renovate-schema.json",
@@ -131,6 +163,58 @@ describe("foundation audit", () => {
     );
   });
 
+  test("reports convention executables missing from repository dependency state", () => {
+    const root = repository();
+    installEnvironment(root);
+    installTooling(root);
+    installConventions(root);
+    installTypeAwareConvention(root);
+    installRenovate(root);
+
+    const result = foundationAudit(root);
+
+    expect(result.status).toBe("failed");
+    expect(statuses(result).conventions).toBe("missing");
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      "foundation-convention-tool-missing",
+    );
+    const conventions = (result.data.components as Record<string, Record<string, unknown>>)
+      .conventions;
+    expect(conventions.missingTools).toEqual(["oxlint", "oxlint-tsgolint"]);
+  });
+
+  test("accepts exact pinned tooling required by installed conventions", () => {
+    const root = repository();
+    installEnvironment(root);
+    installTooling(root);
+    installConventions(root);
+    installTypeAwareConvention(root);
+    installRenovate(root);
+    declareTooling(root, { oxlint: "1.81.0", "oxlint-tsgolint": "7.0.2001" });
+
+    const result = foundationAudit(root);
+
+    expect(result.status).toBe("passed");
+    expect(statuses(result).conventions).toBe("adopted");
+  });
+
+  test("rejects floating convention tooling pins", () => {
+    const root = repository();
+    installEnvironment(root);
+    installTooling(root);
+    installConventions(root);
+    installTypeAwareConvention(root);
+    installRenovate(root);
+    declareTooling(root, { oxlint: "^1.81.0", "oxlint-tsgolint": "7.0.2001" });
+
+    const result = foundationAudit(root);
+
+    expect(result.status).toBe("failed");
+    expect(statuses(result).conventions).toBe("invalid");
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      "foundation-convention-tool-pin-floating",
+    );
+  });
   test("fails deterministic structural drift without depending on installed runtimes", () => {
     const root = repository();
     installEnvironment(root, "floating");
