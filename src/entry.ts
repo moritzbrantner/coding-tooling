@@ -102,10 +102,8 @@ export function entryMain(argv = process.argv.slice(2)): number {
     return resultExitCode(result.status);
   }
 
-  if (command === "repository" || command === "fleet") {
-    const action = argv[1];
-    const expectedAction = command === "repository" ? "metadata" : "audit";
-    if (action !== expectedAction) return expectationUsage();
+  if (command === "repository") {
+    if (argv[1] !== "metadata") return expectationUsage();
     const knownFlags = new Set(["--json", "--root"]);
     for (let index = 2; index < argv.length; index += 1) {
       const value = argv[index]!;
@@ -115,13 +113,25 @@ export function entryMain(argv = process.argv.slice(2)): number {
         index += 1;
       }
     }
-    const defaultRoot =
-      command === "repository" ? repositoryRoot() : resolve(repositoryRoot(), "..");
-    const targetRoot = resolve(option(argv, "root") ?? defaultRoot);
-    const result =
-      command === "repository"
-        ? repositoryMetadataCommand(targetRoot)
-        : fleetAudit(targetRoot);
+    const targetRoot = resolve(option(argv, "root") ?? repositoryRoot());
+    const result = repositoryMetadataCommand(targetRoot);
+    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
+    return resultExitCode(result.status);
+  }
+
+  if (command === "fleet") {
+    if (argv[1] !== "audit") return expectationUsage();
+    const knownFlags = new Set(["--json", "--root"]);
+    for (let index = 2; index < argv.length; index += 1) {
+      const value = argv[index]!;
+      if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
+      if (value === "--root") {
+        if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
+        index += 1;
+      }
+    }
+    const targetRoot = resolve(option(argv, "root") ?? resolve(repositoryRoot(), ".."));
+    const result = fleetAudit(targetRoot);
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }

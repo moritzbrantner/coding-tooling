@@ -97,9 +97,7 @@ describe("fleet audit", () => {
     expect(legacy?.missing).toContain("metadata");
     expect(legacy?.missing).toContain("environmentV1");
     expect(legacy?.missing).not.toContain("workflows");
-    expect(
-      legacy?.remediation.some((entry) => entry.includes("boring-foundation-v1")),
-    ).toBe(true);
+    expect(legacy?.remediation.some((entry) => entry.includes("boring-foundation-v1"))).toBe(true);
     expect(legacy?.remediation.some((entry) => entry.includes("scaffold-v2"))).toBe(false);
   });
 });
