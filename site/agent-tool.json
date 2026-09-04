@@ -3,7 +3,7 @@
   "id": "coding-tooling",
   "kind": "browser-repository-preflight",
   "baseUrl": "https://moritzbrantner.github.io/coding-tooling/",
-  "description": "Deterministic zero-install structural preflight for public GitHub repositories, with machine-readable output and local coding-tooling handoff.",
+  "description": "Deterministic zero-install structural preflight and testing-scaffold planning for public GitHub repositories, with machine-readable output and local coding-tooling handoff.",
   "operations": [
     {
       "id": "tool-registry",
@@ -22,6 +22,12 @@
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}",
       "description": "Browser-executed schema-v1 remote-preflight JSON for coding agents."
+    },
+    {
+      "id": "testing-scaffold-plan",
+      "transport": "browser-json-view",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/testing.json/?repo={owner}/{repository}",
+      "description": "Browser-executed deterministic testing-scaffold plan with setup actions, TypeScript test targets, React Storybook candidates, PR ordering, and explicit confidence boundaries."
     },
     {
       "id": "test-coverage",
@@ -52,10 +58,11 @@
     "coding-tooling plan --tier fast --json"
   ],
   "limitations": [
-    "Remote analysis supports public GitHub repositories only and uses anonymous GitHub API data.",
+    "Remote analysis and testing plans support public GitHub repositories only and use anonymous GitHub API data.",
+    "The testing plan can identify structural targets and setup work, but behavioral assertions require reading the source before writing a test; TSX-to-Storybook classification remains a conservative heuristic.",
     "GitHub Pages cannot execute repository commands; local coding-tooling or repository CI remains authoritative for coverage generation, validation, conformance, environment verification, findings, scoring, and mutations.",
     "A complete repository progress score requires a fresh local or CI coding-tooling run report; structural-only scoring remains explicitly incomplete.",
     "Score history is a per-commit trend for the versioned scoring profile; scoring-profile expansion can change what 100 means.",
-    "The analysis-json and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
+    "The analysis-json, testing-scaffold-plan, and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
   ]
 }
