@@ -1,0 +1,23 @@
+name: Format Probe
+
+on:
+  push:
+    branches:
+      - fleet/trusted-auto-merge-readiness
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Show canonical formatter diff
+        run: |
+          bun run format:write
+          git diff --no-ext-diff -- src/merge-readiness.ts tests/merge-readiness.test.ts
