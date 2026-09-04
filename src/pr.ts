@@ -1,4 +1,5 @@
 import { runPlan } from "./core.ts";
+import { runSourceAwarePipeline } from "./source-aware-pipeline.ts";
 import { type Diagnostic, type ResultEnvelope, type ResultStatus } from "./model.ts";
 import { type CommandResult, runCommand } from "./shared.ts";
 
@@ -336,8 +337,15 @@ export function integratePullRequest(
     ]);
   }
 
-  const pipeline = pipelineRunner({ root, tier, strict: false });
+  const pipelineExecution = runSourceAwarePipeline(root, tier, {
+    runPipeline: pipelineRunner,
+  });
+  const pipeline = pipelineExecution.pipeline;
   data.pipeline = pipeline;
+  data.sourceDevelopment = pipelineExecution.sourceDevelopment;
+  if (pipelineExecution.sourceActivation)
+    data.sourceActivation = pipelineExecution.sourceActivation;
+  if (pipelineExecution.environment) data.environment = pipelineExecution.environment;
   if (pipeline.status !== "passed") {
     const restoreDiagnostics = restoreCheckout(
       runner,
@@ -351,6 +359,7 @@ export function integratePullRequest(
         code: "local-pipeline-not-green",
         message: `Local ${tier} pipeline returned ${pipeline.status}; pull request was not merged`,
       },
+      ...pipeline.diagnostics,
       ...restoreDiagnostics,
     ]);
   }
