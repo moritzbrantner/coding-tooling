@@ -167,7 +167,9 @@ test("recognizes policy-sensitive merge and validation surfaces", () => {
 
 test("extracts explicit stacked pull-request dependencies deterministically", () => {
   expect(
-    declaredPullRequestDependencies(`Depends on #12\n- Stacked on: #9 and #12\nAfter #7\nMention #99`),
+    declaredPullRequestDependencies(
+      `Depends on #12\n- Stacked on: #9 and #12\nAfter #7\nMention #99`,
+    ),
   ).toEqual([7, 9, 12]);
 });
 
@@ -228,9 +230,7 @@ test("pending and failed checks block unattended merge", () => {
     ],
   });
 
-  expect(pending.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
-    "pr-checks-pending",
-  );
+  expect(pending.diagnostics.map((diagnostic) => diagnostic.code)).toContain("pr-checks-pending");
   expect(failed.diagnostics.map((diagnostic) => diagnostic.code)).toContain("pr-checks-failed");
 });
 

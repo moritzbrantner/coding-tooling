@@ -141,7 +141,9 @@ export function declaredPullRequestDependencies(body: string): number[] {
   const dependencies = new Set<number>();
   for (const rawLine of body.split(/\r?\n/)) {
     const line = rawLine.replace(/^\s*[-*]\s*/, "").trim();
-    const declaration = line.match(/^(?:depends(?:[- ]on)?|stacked(?:[- ]on)?|after)\s*:?\s*(.+)$/i);
+    const declaration = line.match(
+      /^(?:depends(?:[- ]on)?|stacked(?:[- ]on)?|after)\s*:?\s*(.+)$/i,
+    );
     if (!declaration) continue;
     for (const match of declaration[1]!.matchAll(/#(\d+)/g)) {
       const number = Number(match[1]);
@@ -227,8 +229,7 @@ function reviewThreadEvidence(
   const threads = response?.data?.repository?.pullRequest?.reviewThreads;
   if (!threads || !Array.isArray(threads.nodes)) return { command };
   const unresolved = threads.nodes.filter(
-    (entry) =>
-      entry && typeof entry === "object" && (entry as ReviewThread).isResolved !== true,
+    (entry) => entry && typeof entry === "object" && (entry as ReviewThread).isResolved !== true,
   ).length;
   return {
     command,
@@ -343,7 +344,8 @@ export function pullRequestMergeEligibility(
     return envelope("unavailable", started, data, [
       {
         code: "repository-id-unavailable",
-        message: "Repository metadata does not provide the GitHub owner/name needed for PR evidence",
+        message:
+          "Repository metadata does not provide the GitHub owner/name needed for PR evidence",
       },
     ]);
   }

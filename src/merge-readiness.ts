@@ -299,7 +299,9 @@ export function repositoryMergeReadiness(
   const repositoryId = metadata.metadata?.id;
   const needsRemoteProtection =
     repositoryId && foundation.status === "passed" && policy.authority === "hosted" && !localOnly;
-  const protection = needsRemoteProtection ? remoteProtection(runner, root, repositoryId) : undefined;
+  const protection = needsRemoteProtection
+    ? remoteProtection(runner, root, repositoryId)
+    : undefined;
   const classification = classify(foundation.status, policy, localOnly, protection);
 
   return {
