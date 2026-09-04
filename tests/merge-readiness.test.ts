@@ -96,10 +96,7 @@ function runner(options: RunnerOptions = {}) {
       return result(1, "", "remote evidence unavailable");
     }
     if (args[0] === "repo") {
-      return result(
-        0,
-        JSON.stringify({ defaultBranchRef: { name: "main" } }),
-      );
+      return result(0, JSON.stringify({ defaultBranchRef: { name: "main" } }));
     }
     if (args[0] === "api") {
       const checks = options.checks ?? [];
@@ -126,9 +123,7 @@ type ReadinessRepository = {
   evidence: Record<string, unknown>;
 };
 
-function onlyRepository(
-  output: ReturnType<typeof fleetMergeReadiness>,
-): ReadinessRepository {
+function onlyRepository(output: ReturnType<typeof fleetMergeReadiness>): ReadinessRepository {
   return (output.data.repositories as ReadinessRepository[])[0]!;
 }
 

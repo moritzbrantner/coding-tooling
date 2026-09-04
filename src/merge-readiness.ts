@@ -12,12 +12,7 @@ export type MergeReadiness =
   | "protection-required"
   | "trusted-auto-merge";
 
-type Runner = (
-  command: string,
-  args?: string[],
-  cwd?: string,
-  inherit?: boolean,
-) => CommandResult;
+type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
 
 type MergeConfig = {
   authority?: unknown;
@@ -97,13 +92,9 @@ function mergePolicy(root: string): MergePolicy {
   const diagnostics: Diagnostic[] = [];
   const requiredChecks = strings(merge?.requiredChecks);
   const authority =
-    merge?.authority === "hosted" || merge?.authority === "local"
-      ? merge.authority
-      : undefined;
+    merge?.authority === "hosted" || merge?.authority === "local" ? merge.authority : undefined;
   const reason =
-    typeof merge?.reason === "string" && merge.reason.trim()
-      ? merge.reason.trim()
-      : undefined;
+    typeof merge?.reason === "string" && merge.reason.trim() ? merge.reason.trim() : undefined;
 
   if (!authority) {
     diagnostics.push({
@@ -133,9 +124,7 @@ function mergePolicy(root: string): MergePolicy {
 }
 
 function localOnlySourceGraph(root: string): boolean {
-  const config = readJson<SourceDependencyConfig>(
-    join(root, ".coding-tooling.source-deps.json"),
-  );
+  const config = readJson<SourceDependencyConfig>(join(root, ".coding-tooling.source-deps.json"));
   return config?.schemaVersion === 2 && config.cargo?.localOnly === true;
 }
 
@@ -148,11 +137,7 @@ function parseJson<T>(result: CommandResult): T | undefined {
   }
 }
 
-function remoteProtection(
-  runner: Runner,
-  root: string,
-  repository: string,
-): RemoteProtection {
+function remoteProtection(runner: Runner, root: string, repository: string): RemoteProtection {
   const repositoryResult = runner(
     "gh",
     ["repo", "view", repository, "--json", "defaultBranchRef"],
@@ -177,11 +162,7 @@ function remoteProtection(
     };
   }
 
-  const branchResult = runner(
-    "gh",
-    ["api", `repos/${repository}/branches/${branch}`],
-    root,
-  );
+  const branchResult = runner("gh", ["api", `repos/${repository}/branches/${branch}`], root);
   const branchInfo = parseJson<BranchInfo>(branchResult);
   if (!branchInfo) {
     return {
@@ -301,19 +282,11 @@ export function fleetMergeReadiness(
     const localOnly = localOnlySourceGraph(repositoryRoot);
     const repositoryId = metadata.metadata?.id;
     const needsRemoteProtection =
-      repositoryId &&
-      foundation.status === "passed" &&
-      policy.authority === "hosted" &&
-      !localOnly;
+      repositoryId && foundation.status === "passed" && policy.authority === "hosted" && !localOnly;
     const protection = needsRemoteProtection
       ? remoteProtection(runner, repositoryRoot, repositoryId)
       : undefined;
-    const classification = classify(
-      foundation.status,
-      policy,
-      localOnly,
-      protection,
-    );
+    const classification = classify(foundation.status, policy, localOnly, protection);
 
     return {
       name: basename(repositoryRoot),
@@ -350,8 +323,7 @@ export function fleetMergeReadiness(
 
   const status: ResultStatus = repositories.some(
     (repository) =>
-      repository.readiness === "not-ready" ||
-      repository.readiness === "protection-required",
+      repository.readiness === "not-ready" || repository.readiness === "protection-required",
   )
     ? "failed"
     : "passed";
@@ -365,18 +337,13 @@ export function fleetMergeReadiness(
       root,
       repositories,
       summary: {
-        notReady: repositories.filter(
-          (entry) => entry.readiness === "not-ready",
-        ).length,
-        localGated: repositories.filter(
-          (entry) => entry.readiness === "local-gated",
-        ).length,
+        notReady: repositories.filter((entry) => entry.readiness === "not-ready").length,
+        localGated: repositories.filter((entry) => entry.readiness === "local-gated").length,
         protectionRequired: repositories.filter(
           (entry) => entry.readiness === "protection-required",
         ).length,
-        trustedAutoMerge: repositories.filter(
-          (entry) => entry.readiness === "trusted-auto-merge",
-        ).length,
+        trustedAutoMerge: repositories.filter((entry) => entry.readiness === "trusted-auto-merge")
+          .length,
       },
     },
     diagnostics: [],
