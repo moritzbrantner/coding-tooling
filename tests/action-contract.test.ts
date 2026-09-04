@@ -14,12 +14,12 @@ describe("composite action contract", () => {
     const source = actionSource();
 
     expect(source).toContain("environment-fingerprint");
-    expect(source).toContain('\"$INPUT_OPERATION\" == \"environment-fingerprint\"');
+    expect(source).toContain('"$INPUT_OPERATION" == "environment-fingerprint"');
     expect(source).toContain("environment fingerprint");
     expect(source).toContain(
-      '--profile \"$INPUT_ENVIRONMENT_PROFILE\" --json > \"$INPUT_REPORT_PATH\"',
+      '--profile "$INPUT_ENVIRONMENT_PROFILE" --json > "$INPUT_REPORT_PATH"',
     );
-    expect(source).toContain('echo \"report-path=$INPUT_REPORT_PATH\" >> \"$GITHUB_OUTPUT\"');
+    expect(source).toContain('echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"');
   });
 
   test("keeps environment capture dependency installation disabled", () => {
@@ -34,11 +34,9 @@ describe("composite action contract", () => {
     const source = actionSource();
 
     expect(source).toContain("foundation auditing");
-    expect(source).toContain('\"$INPUT_OPERATION\" == \"foundation\"');
-    expect(source).toContain(
-      'foundation audit --root . --json > \"$INPUT_REPORT_PATH\"',
-    );
-    expect(source).toContain('echo \"report-path=$INPUT_REPORT_PATH\" >> \"$GITHUB_OUTPUT\"');
+    expect(source).toContain('"$INPUT_OPERATION" == "foundation"');
+    expect(source).toContain('foundation audit --root . --json > "$INPUT_REPORT_PATH"');
+    expect(source).toContain('echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"');
   });
 
   test("keeps foundation audit dependency installation disabled", () => {
