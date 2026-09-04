@@ -26,13 +26,14 @@ Repository graduation does not make every pull request eligible for unattended i
 - the current base SHA still matches the evaluated base;
 - GitHub reports the pull request as mergeable;
 - at least one attached check exists;
+- every configured required check is attached to the evaluated pull request;
 - no attached check is pending or failed;
 - no requested-changes or review-required state blocks the merge;
 - no unresolved blocking review thread remains;
 - declared stack/dependency order is satisfied;
 - the pull request does not modify merge policy, validation wiring, required-check configuration, or the unattended integration mechanism itself.
 
-A policy-changing pull request therefore cannot grant itself unattended eligibility.
+Missing mergeability, check-status, review, review-thread, stack, or integration-policy evidence is blocking rather than being interpreted as a safe default. A policy-changing pull request therefore cannot grant itself unattended eligibility.
 
 ## Local-only and hardware-bound repositories
 
