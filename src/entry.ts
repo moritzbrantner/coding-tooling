@@ -18,6 +18,7 @@ import {
 import { foundationAudit } from "./foundation-audit.ts";
 import { fleetMergeReadiness } from "./merge-readiness.ts";
 import type { ResultStatus } from "./model.ts";
+import { pullRequestMergeEligibility } from "./pr-eligibility.ts";
 import { publicContractCommand } from "./public-contract.ts";
 import { fleetAudit, repositoryMetadataCommand } from "./repository-metadata.ts";
 import { repositoryProgressScoreCommand } from "./repository-progress-score.ts";
@@ -52,6 +53,7 @@ function expectationUsage(): never {
   coding-tooling foundation audit [--root <path>] [--json]
   coding-tooling repository metadata [--root <path>] [--json]
   coding-tooling fleet <audit|readiness> [--root <path>] [--json]
+  coding-tooling pr eligibility <number> [--expected-head <sha>] [--expected-base <sha>] [--json]
   coding-tooling contract <discover|verify> [--config <path>] [--report <path>] [--json]`);
   process.exit(2);
 }
@@ -153,6 +155,26 @@ export function entryMain(argv = process.argv.slice(2)): number {
     }
     const targetRoot = resolve(option(argv, "root") ?? resolve(repositoryRoot(), ".."));
     const result = action === "audit" ? fleetAudit(targetRoot) : fleetMergeReadiness(targetRoot);
+    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
+    return resultExitCode(result.status);
+  }
+
+  if (command === "pr" && argv[1] === "eligibility") {
+    const prNumber = Number(argv[2]);
+    if (!Number.isInteger(prNumber) || prNumber <= 0) return expectationUsage();
+    const knownFlags = new Set(["--json", "--expected-head", "--expected-base"]);
+    for (let index = 3; index < argv.length; index += 1) {
+      const value = argv[index]!;
+      if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
+      if (value === "--expected-head" || value === "--expected-base") {
+        if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
+        index += 1;
+      }
+    }
+    const result = pullRequestMergeEligibility(repositoryRoot(), prNumber, {
+      expectedHeadSha: option(argv, "expected-head"),
+      expectedBaseSha: option(argv, "expected-base"),
+    });
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }
