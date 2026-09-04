@@ -15,6 +15,7 @@ import {
   type ExpectationEnvelope,
   type FindingState,
 } from "./expectations.ts";
+import { foundationAudit } from "./foundation-audit.ts";
 import type { ResultStatus } from "./model.ts";
 import { publicContractCommand } from "./public-contract.ts";
 import { fleetAudit, repositoryMetadataCommand } from "./repository-metadata.ts";
@@ -47,6 +48,7 @@ function expectationUsage(): never {
   coding-tooling baseline [--json]
   coding-tooling scaffold <finding-id> [--json]
   coding-tooling calibration [--json]
+  coding-tooling foundation audit [--root <path>] [--json]
   coding-tooling repository metadata [--root <path>] [--json]
   coding-tooling fleet audit [--root <path>] [--json]
   coding-tooling contract <discover|verify> [--config <path>] [--report <path>] [--json]`);
@@ -98,6 +100,23 @@ export function entryMain(argv = process.argv.slice(2)): number {
     const result = repositoryProgressScoreCommand(repositoryRoot(), {
       validationReportPath: option(argv, "validation-report"),
     });
+    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
+    return resultExitCode(result.status);
+  }
+
+  if (command === "foundation") {
+    if (argv[1] !== "audit") return expectationUsage();
+    const knownFlags = new Set(["--json", "--root"]);
+    for (let index = 2; index < argv.length; index += 1) {
+      const value = argv[index]!;
+      if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
+      if (value === "--root") {
+        if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
+        index += 1;
+      }
+    }
+    const targetRoot = resolve(option(argv, "root") ?? repositoryRoot());
+    const result = foundationAudit(targetRoot);
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }
