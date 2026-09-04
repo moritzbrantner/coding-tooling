@@ -6,7 +6,7 @@ on:
       - fleet/trusted-auto-merge-readiness
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   probe:
@@ -17,7 +17,14 @@ jobs:
         with:
           bun-version: 1.4.0
       - run: bun install --frozen-lockfile
-      - name: Show canonical formatter diff
+      - name: Apply canonical formatter output
         run: |
           bun run format:write
-          git diff --no-ext-diff -- src/merge-readiness.ts tests/merge-readiness.test.ts
+          git add src/merge-readiness.ts tests/merge-readiness.test.ts
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "Apply canonical formatting"
+          git push origin HEAD:fleet/trusted-auto-merge-readiness
