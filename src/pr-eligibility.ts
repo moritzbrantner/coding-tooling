@@ -71,9 +71,7 @@ function commandDiagnostic(code: string, fallback: string, result: CommandResult
   };
 }
 
-function reviewDecision(
-  value: unknown,
-): PullRequestMergeEvidence["reviewDecision"] {
+function reviewDecision(value: unknown): PullRequestMergeEvidence["reviewDecision"] {
   if (value === null || value === "") return null;
   if (value === "APPROVED" || value === "CHANGES_REQUESTED" || value === "REVIEW_REQUIRED") {
     return value;
@@ -97,12 +95,10 @@ function checks(value: unknown): PullRequestCheckEvidence[] | undefined {
   ];
 }
 
-export function changesIntegrationPolicy(
-  repository: string | null,
-  paths: string[],
-): boolean {
+export function changesIntegrationPolicy(repository: string | null, paths: string[]): boolean {
   const genericPolicyPaths = paths.some(
     (path) =>
+      path === ".repository.toml" ||
       path === ".coding-tooling.json" ||
       path === ".coding-tooling.source-deps.json" ||
       path === "action.yml" ||
@@ -235,6 +231,7 @@ function reviewThreads(
 function readPullRequest(
   runner: Runner,
   root: string,
+  repository: string,
   prNumber: number,
 ): { view?: PullRequestView; command: CommandResult } {
   const command = runner(
@@ -243,6 +240,8 @@ function readPullRequest(
       "pr",
       "view",
       String(prNumber),
+      "--repo",
+      repository,
       "--json",
       "number,state,isDraft,mergeable,headRefOid,baseRefOid,baseRefName,reviewDecision,statusCheckRollup,files,changedFiles,url",
     ],
@@ -272,9 +271,7 @@ function evidenceFromView(
     reviewDecision: reviewDecision(view.reviewDecision),
     unresolvedBlockingThreads,
     stackBlocked:
-      typeof defaultBranch === "string" && baseRefName
-        ? baseRefName !== defaultBranch
-        : undefined,
+      typeof defaultBranch === "string" && baseRefName ? baseRefName !== defaultBranch : undefined,
     changesIntegrationPolicy: policyPaths
       ? changesIntegrationPolicy(repository.repository, policyPaths)
       : undefined,
@@ -320,7 +317,7 @@ export function pullRequestMergeEligibility(
     };
   }
 
-  const current = readPullRequest(runner, root, prNumber);
+  const current = readPullRequest(runner, root, repository.repository, prNumber);
   if (!current.view) {
     return {
       schemaVersion: 1,
@@ -330,6 +327,21 @@ export function pullRequestMergeEligibility(
       data: { root, prNumber, repository },
       diagnostics: [
         commandDiagnostic("pr-read-failed", "Could not read pull request metadata", current.command),
+      ],
+    };
+  }
+  if (current.view.number !== prNumber) {
+    return {
+      schemaVersion: 1,
+      operation: "pr-eligibility",
+      status: "unavailable",
+      durationMs: Date.now() - started,
+      data: { root, prNumber, repository },
+      diagnostics: [
+        {
+          code: "pr-identity-mismatch",
+          message: `Requested pull request #${prNumber}, but GitHub evidence identified #${String(current.view.number)}`,
+        },
       ],
     };
   }
