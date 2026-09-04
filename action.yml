@@ -1,9 +1,9 @@
 name: Run coding tooling
-description: Run version-pinned repository validation, environment fingerprinting/verification, conformance, findings, scoring, foundation auditing, public-contract verification, or agent capability validation.
+description: Run version-pinned repository validation, environment fingerprinting/verification, conformance, findings, scoring, foundation auditing/planning, public-contract verification, or agent capability validation.
 
 inputs:
   operation:
-    description: "Operation to run: run, environment-fingerprint, environment-verify, conformance, findings, score, foundation, public-contract, or agent-capabilities-validate."
+    description: "Operation to run: run, environment-fingerprint, environment-verify, conformance, findings, score, foundation, bootstrap-plan, public-contract, or agent-capabilities-validate."
     required: false
     default: run
   tier:
@@ -106,7 +106,7 @@ runs:
           exit "$status"
         fi
 
-        if [[ "$INPUT_OPERATION" == "environment-fingerprint" || "$INPUT_OPERATION" == "environment-verify" || "$INPUT_OPERATION" == "conformance" || "$INPUT_OPERATION" == "findings" || "$INPUT_OPERATION" == "score" || "$INPUT_OPERATION" == "foundation" ]]; then
+        if [[ "$INPUT_OPERATION" == "environment-fingerprint" || "$INPUT_OPERATION" == "environment-verify" || "$INPUT_OPERATION" == "conformance" || "$INPUT_OPERATION" == "findings" || "$INPUT_OPERATION" == "score" || "$INPUT_OPERATION" == "foundation" || "$INPUT_OPERATION" == "bootstrap-plan" ]]; then
           mkdir -p "$(dirname "$INPUT_REPORT_PATH")"
           set +e
           if [[ "$INPUT_OPERATION" == "environment-fingerprint" ]]; then
@@ -122,6 +122,8 @@ runs:
             bun "${{ github.action_path }}/src/entry.ts" findings --json > "$INPUT_REPORT_PATH"
           elif [[ "$INPUT_OPERATION" == "foundation" ]]; then
             bun "${{ github.action_path }}/src/entry.ts" foundation audit --root . --json > "$INPUT_REPORT_PATH"
+          elif [[ "$INPUT_OPERATION" == "bootstrap-plan" ]]; then
+            bun "${{ github.action_path }}/src/cli.ts" bootstrap plan --root . --json > "$INPUT_REPORT_PATH"
           else
             score_args=(score --json)
             if [[ -n "$INPUT_VALIDATION_REPORT" ]]; then
@@ -137,7 +139,7 @@ runs:
         fi
 
         if [[ "$INPUT_OPERATION" != "run" ]]; then
-          echo "::error::operation must be 'run', 'environment-fingerprint', 'environment-verify', 'conformance', 'findings', 'score', 'foundation', 'public-contract', or 'agent-capabilities-validate'"
+          echo "::error::operation must be 'run', 'environment-fingerprint', 'environment-verify', 'conformance', 'findings', 'score', 'foundation', 'bootstrap-plan', 'public-contract', or 'agent-capabilities-validate'"
           exit 2
         fi
 
