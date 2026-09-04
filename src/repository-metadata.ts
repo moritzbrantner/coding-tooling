@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
+import { foundationAudit } from "./foundation-audit.ts";
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 
 export const repositoryKinds = [
@@ -209,6 +210,7 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
   const repositories = repositoryDirectories(root).map((repositoryRoot) => {
     const metadata = readRepositoryMetadata(repositoryRoot);
     const workflows = workflowNames(repositoryRoot);
+    const mechanicalFoundation = foundationAudit(repositoryRoot);
     const foundation = {
       metadata: Boolean(metadata.metadata),
       environmentV1: existsSync(join(repositoryRoot, ".repository-environment.toml")),
@@ -226,17 +228,25 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
     const missing = Object.entries(foundation)
       .filter(([key, present]) => !present && !optionalFoundationKeys.has(key))
       .map(([key]) => key);
+    const mechanicalComponents = mechanicalFoundation.data.components as
+      | Record<string, { status?: unknown }>
+      | undefined;
+    const authoritativeMissing = Object.entries(mechanicalComponents ?? {})
+      .filter(([, value]) => value?.status === "missing")
+      .map(([key]) => key)
+      .sort();
+    const authoritativeBlockers = Object.entries(mechanicalComponents ?? {})
+      .filter(([, value]) => value?.status === "invalid" || value?.status === "unsupported")
+      .map(([key, value]) => ({ component: key, status: value.status }))
+      .sort((left, right) => left.component.localeCompare(right.component));
     const remediation = new Set<string>();
-    if (
-      !foundation.environmentV1 ||
-      !foundation.tooling ||
-      !foundation.conventions ||
-      !foundation.renovate ||
-      !foundation.agents
-    ) {
+    if (authoritativeMissing.length > 0) {
       remediation.add(
         `bunx @moritzbrantner/platform-upgrader apply boring-foundation-v1 ${repositoryRoot}`,
       );
+    }
+    if (authoritativeBlockers.length > 0) {
+      remediation.add(`coding-tooling foundation audit --root ${repositoryRoot} --json`);
     }
     if (!foundation.metadata)
       remediation.add(`classify ${basename(repositoryRoot)} and add .repository.toml`);
@@ -247,6 +257,14 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       metadata: metadata.metadata ?? null,
       metadataDiagnostics: metadata.diagnostics,
       foundation,
+      foundationAudit: {
+        status: mechanicalFoundation.status,
+        summary: mechanicalFoundation.data.summary ?? null,
+        components: mechanicalComponents ?? {},
+        missing: authoritativeMissing,
+        blockers: authoritativeBlockers,
+        diagnostics: mechanicalFoundation.diagnostics,
+      },
       missing,
       remediation: [...remediation],
     };
@@ -260,7 +278,14 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       code: "fleet-repositories-unavailable",
       message: `No direct child Git repositories found under ${root}`,
     });
-  } else if (repositories.some((repository) => repository.missing.length > 0)) {
+  } else if (
+    repositories.some(
+      (repository) =>
+        repository.missing.length > 0 ||
+        repository.foundationAudit.missing.length > 0 ||
+        repository.foundationAudit.blockers.length > 0,
+    )
+  ) {
     status = "failed";
   }
 
@@ -273,7 +298,10 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       root,
       repositoryCount: repositories.length,
       conformingRepositoryCount: repositories.filter(
-        (repository) => repository.missing.length === 0,
+        (repository) =>
+          repository.missing.length === 0 &&
+          repository.foundationAudit.missing.length === 0 &&
+          repository.foundationAudit.blockers.length === 0,
       ).length,
       repositories,
     },

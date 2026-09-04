@@ -69,7 +69,7 @@ depends_on = ["not-a-repository"]
 });
 
 describe("fleet audit", () => {
-  test("reports foundation gaps and deterministic remediation", () => {
+  test("reports authoritative foundation gaps and deterministic remediation", () => {
     const fleet = tempRoot("coding-tooling-fleet-");
     const complete = repository(fleet, "complete");
     metadata(complete);
@@ -87,6 +87,11 @@ describe("fleet audit", () => {
       name: string;
       missing: string[];
       remediation: string[];
+      foundationAudit: {
+        status: string;
+        missing: string[];
+        blockers: Array<{ component: string; status: string }>;
+      };
     }>;
     const completeResult = repositories.find((entry) => entry.name === "complete");
     const legacy = repositories.find((entry) => entry.name === "legacy");
@@ -97,7 +102,19 @@ describe("fleet audit", () => {
     expect(legacy?.missing).toContain("metadata");
     expect(legacy?.missing).toContain("environmentV1");
     expect(legacy?.missing).not.toContain("workflows");
+    expect(legacy?.foundationAudit.missing).toEqual([
+      "commands",
+      "conventions",
+      "environment",
+      "renovate",
+      "tooling",
+    ]);
+    expect(legacy?.foundationAudit.blockers).toEqual([]);
     expect(legacy?.remediation.some((entry) => entry.includes("boring-foundation-v1"))).toBe(true);
     expect(legacy?.remediation.some((entry) => entry.includes("scaffold-v2"))).toBe(false);
+    expect(completeResult?.foundationAudit.blockers.length).toBeGreaterThan(0);
+    expect(
+      completeResult?.remediation.some((entry) => entry.includes("foundation audit --root")),
+    ).toBe(true);
   });
 });
