@@ -53,9 +53,9 @@ describe("trusted merge repository readiness", () => {
     const result = classifyTrustedMergeReadiness({
       foundationReady: true,
       localGateReasons: ["source-development", "hardware"],
-      hostedValidation: "verified",
-      protectedDefaultBranch: "verified",
-      requiredChecks: ["Validate"],
+      hostedValidation: "unknown",
+      protectedDefaultBranch: "unknown",
+      requiredChecks: null,
     });
 
     expect(result.classification).toBe("local-gated");
@@ -107,10 +107,38 @@ describe("unattended merge candidate eligibility", () => {
       currentBaseSha: "base",
       mergeable: true,
       attachedChecks: 0,
+      passedChecks: [],
+      pendingChecks: [],
+      failedChecks: [],
+      reviewDecision: null,
+      unresolvedBlockingThreads: 0,
+      stackBlocked: false,
+      changesIntegrationPolicy: false,
     });
 
     expect(result.eligible).toBe(false);
     expect(result.blockers).toContain("attached-checks-empty");
+  });
+
+  test("rejects a green check set that omits a required check", () => {
+    const result = evaluateUnattendedMergeCandidate(trustedRepository(), {
+      expectedHeadSha: "head",
+      currentHeadSha: "head",
+      expectedBaseSha: "base",
+      currentBaseSha: "base",
+      mergeable: true,
+      attachedChecks: 1,
+      passedChecks: ["Pages"],
+      pendingChecks: [],
+      failedChecks: [],
+      reviewDecision: null,
+      unresolvedBlockingThreads: 0,
+      stackBlocked: false,
+      changesIntegrationPolicy: false,
+    });
+
+    expect(result.eligible).toBe(false);
+    expect(result.blockers).toContain("required-check-missing:Validate");
   });
 
   test("rejects stale heads, stale bases, review blockers, stacks, and policy changes", () => {
@@ -121,6 +149,7 @@ describe("unattended merge candidate eligibility", () => {
       currentBaseSha: "new-base",
       mergeable: false,
       attachedChecks: 3,
+      passedChecks: ["Validate"],
       pendingChecks: ["macOS"],
       failedChecks: ["Windows"],
       reviewDecision: "CHANGES_REQUESTED",
@@ -143,6 +172,28 @@ describe("unattended merge candidate eligibility", () => {
     ]);
   });
 
+  test("fails closed when PR evidence is incomplete", () => {
+    const result = evaluateUnattendedMergeCandidate(trustedRepository(), {
+      expectedHeadSha: "head",
+      currentHeadSha: "head",
+      expectedBaseSha: "base",
+      currentBaseSha: "base",
+    });
+
+    expect(result.eligible).toBe(false);
+    expect(result.blockers).toEqual(
+      expect.arrayContaining([
+        "attached-check-count-unverified",
+        "check-status-evidence-incomplete",
+        "mergeability-evidence-missing",
+        "policy-change-evidence-missing",
+        "review-evidence-missing",
+        "review-thread-evidence-missing",
+        "stack-evidence-missing",
+      ]),
+    );
+  });
+
   test("accepts an exact-head fully-green candidate", () => {
     const result = evaluateUnattendedMergeCandidate(trustedRepository(), {
       expectedHeadSha: "head",
@@ -151,6 +202,7 @@ describe("unattended merge candidate eligibility", () => {
       currentBaseSha: "base",
       mergeable: true,
       attachedChecks: 3,
+      passedChecks: ["Validate", "macOS", "Windows"],
       pendingChecks: [],
       failedChecks: [],
       reviewDecision: "APPROVED",
