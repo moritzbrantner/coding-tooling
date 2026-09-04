@@ -35,6 +35,12 @@ jobs:
         with:
           operation: findings
           report-path: .artifacts/coding-tooling/findings.json
+      - name: Inspect repository foundation
+        uses: ./
+        with:
+          operation: foundation
+          install-mode: none
+          report-path: .artifacts/coding-tooling/foundation.json
       - name: Inspect repository score
         if: always()
         uses: ./
