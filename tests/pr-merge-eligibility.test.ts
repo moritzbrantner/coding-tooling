@@ -17,6 +17,8 @@ function completeEvidence(
   overrides: Partial<PullRequestMergeEvidence> = {},
 ): PullRequestMergeEvidence {
   return {
+    open: true,
+    draft: false,
     expectedHeadSha: "head",
     currentHeadSha: "head",
     expectedBaseSha: "base",
@@ -57,14 +59,30 @@ describe("pull request unattended merge eligibility", () => {
       expect.arrayContaining([
         "base-evidence-missing",
         "check-evidence-missing",
+        "draft-evidence-missing",
         "head-evidence-missing",
         "mergeability-evidence-missing",
         "policy-change-evidence-missing",
+        "pr-state-evidence-missing",
         "review-evidence-missing",
         "review-thread-evidence-missing",
         "stack-evidence-missing",
       ]),
     );
+  });
+
+  test("rejects closed and draft pull requests", () => {
+    const closed = evaluatePullRequestMergeEligibility(
+      trustedGate(),
+      completeEvidence({ open: false }),
+    );
+    const draft = evaluatePullRequestMergeEligibility(
+      trustedGate(),
+      completeEvidence({ draft: true }),
+    );
+
+    expect(closed.blockers).toContain("pull-request-not-open");
+    expect(draft.blockers).toContain("pull-request-is-draft");
   });
 
   test("rejects zero attached checks and missing required checks", () => {
