@@ -51,6 +51,38 @@ For hosted-authoritative repositories, the audit uses authenticated GitHub CLI a
 
 The audit does not use administrator bypass and does not mutate branch protection.
 
-## Scope of this slice
+## Pull-request eligibility
 
-This command establishes repository-level graduation evidence only. It does **not** replace the pull-request decision engine. Exact-head refresh, base movement, review blockers, unresolved stack/dependency ordering, policy-changing pull requests, current-head check conclusions, and the final merge action remain responsibilities of the guarded PR integration path and subsequent unattended-merge runner work.
+Once a repository is `trusted-auto-merge`, the non-mutating pull-request evaluator can establish whether one exact pull-request state is eligible:
+
+```sh
+coding-tooling pr eligibility 123 --json
+```
+
+A passing result includes a receipt containing the repository, pull-request number, exact head SHA, target branch, exact base SHA, and declared required checks. The evaluator fails closed when any of these conditions is not satisfied:
+
+- the repository is not `trusted-auto-merge`;
+- the pull request is closed, draft, non-mergeable, or GitHub does not report a clean merge state;
+- zero checks are attached, any attached check is pending or failed, or a declared required check is missing;
+- requested changes or required review blocks the pull request;
+- unresolved review threads exist or complete review-thread evidence cannot be established;
+- the pull request changes merge/validation policy surfaces such as `.coding-tooling.json`, source-dependency policy, validation workflows/actions, dependency-bot policy, or the merge-readiness/PR-integration implementation itself;
+- a declared stacked dependency has not already merged;
+- the target branch differs from the branch whose protection was verified.
+
+Stack ordering is declared explicitly in the pull-request body with lines such as `Depends on #41`, `Stacked on: #41`, or `After #41`. These declarations are machine-read and must resolve to merged pull requests before unattended eligibility passes.
+
+## Exact-head integration
+
+An eligibility receipt is evidence, not a timeless approval. A runner that is about to mutate repository state must re-run eligibility immediately before integration and bind the decision to the earlier receipt:
+
+```sh
+coding-tooling pr eligibility 123 \
+  --expected-head <receipt-head-sha> \
+  --expected-base <receipt-base-sha> \
+  --json
+```
+
+If either SHA moved, the second evaluation fails closed. The merge operation must then use GitHub's exact-head precondition for the receipt head and must not use administrative bypass.
+
+`coding-tooling pr eligibility` intentionally does not merge anything. `coding-tooling pr integrate` remains the stronger path for local/source-development/hardware evidence and for policy-sensitive or stacked work that cannot qualify for unattended hosted integration.
