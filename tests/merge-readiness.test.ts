@@ -83,12 +83,23 @@ function result(status: number, stdout = "", stderr = ""): CommandResult {
   return { command: [], status, stdout, stderr };
 }
 
-function runner(options: { protected?: boolean; checks?: string[]; failRemote?: boolean } = {}) {
+type RunnerOptions = {
+  protected?: boolean;
+  checks?: string[];
+  failRemote?: boolean;
+};
+
+function runner(options: RunnerOptions = {}) {
   return (command: string, args: string[] = []): CommandResult => {
     if (command !== "gh") return result(127, "", "unexpected command");
-    if (options.failRemote) return result(1, "", "remote evidence unavailable");
+    if (options.failRemote) {
+      return result(1, "", "remote evidence unavailable");
+    }
     if (args[0] === "repo") {
-      return result(0, JSON.stringify({ defaultBranchRef: { name: "main" } }));
+      return result(
+        0,
+        JSON.stringify({ defaultBranchRef: { name: "main" } }),
+      );
     }
     if (args[0] === "api") {
       const checks = options.checks ?? [];
@@ -109,12 +120,16 @@ function runner(options: { protected?: boolean; checks?: string[]; failRemote?: 
   };
 }
 
-function onlyRepository(output: ReturnType<typeof fleetMergeReadiness>) {
-  return (output.data.repositories as Array<{
-    readiness: string;
-    blockers: Array<{ code?: string }>;
-    evidence: Record<string, unknown>;
-  }>)[0]!;
+type ReadinessRepository = {
+  readiness: string;
+  blockers: Array<{ code?: string }>;
+  evidence: Record<string, unknown>;
+};
+
+function onlyRepository(
+  output: ReturnType<typeof fleetMergeReadiness>,
+): ReadinessRepository {
+  return (output.data.repositories as ReadinessRepository[])[0]!;
 }
 
 describe("fleet merge readiness", () => {
@@ -140,7 +155,9 @@ describe("fleet merge readiness", () => {
       cargo: { localOnly: true, patches: [] },
     });
 
-    const output = fleetMergeReadiness(fleet, { run: runner({ protected: true, checks: ["Validate"] }) });
+    const output = fleetMergeReadiness(fleet, {
+      run: runner({ protected: true, checks: ["Validate"] }),
+    });
     const repository = onlyRepository(output);
 
     expect(repository.readiness).toBe("local-gated");
@@ -156,10 +173,14 @@ describe("fleet merge readiness", () => {
     });
 
     const unprotected = onlyRepository(
-      fleetMergeReadiness(fleet, { run: runner({ protected: false, checks: ["Validate"] }) }),
+      fleetMergeReadiness(fleet, {
+        run: runner({ protected: false, checks: ["Validate"] }),
+      }),
     );
     const zeroChecks = onlyRepository(
-      fleetMergeReadiness(fleet, { run: runner({ protected: true, checks: [] }) }),
+      fleetMergeReadiness(fleet, {
+        run: runner({ protected: true, checks: [] }),
+      }),
     );
 
     expect(unprotected.readiness).toBe("protection-required");
@@ -179,7 +200,9 @@ describe("fleet merge readiness", () => {
     });
 
     const incomplete = onlyRepository(
-      fleetMergeReadiness(fleet, { run: runner({ protected: true, checks: ["Validate"] }) }),
+      fleetMergeReadiness(fleet, {
+        run: runner({ protected: true, checks: ["Validate"] }),
+      }),
     );
     const trusted = onlyRepository(
       fleetMergeReadiness(fleet, {
@@ -202,7 +225,9 @@ describe("fleet merge readiness", () => {
     });
 
     const repository = onlyRepository(
-      fleetMergeReadiness(fleet, { run: runner({ failRemote: true }) }),
+      fleetMergeReadiness(fleet, {
+        run: runner({ failRemote: true }),
+      }),
     );
 
     expect(repository.readiness).toBe("protection-required");
