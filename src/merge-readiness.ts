@@ -12,7 +12,12 @@ export type MergeReadiness =
   | "protection-required"
   | "trusted-auto-merge";
 
-type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
+type Runner = (
+  command: string,
+  args?: string[],
+  cwd?: string,
+  inherit?: boolean,
+) => CommandResult;
 
 type MergeConfig = {
   authority?: unknown;
@@ -80,8 +85,10 @@ function repositoryDirectories(fleetRoot: string): string[] {
 
 function strings(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return [...new Set(value.filter((entry): entry is string => typeof entry === "string" && entry))]
-    .sort();
+  const values = value.filter(
+    (entry): entry is string => typeof entry === "string" && Boolean(entry),
+  );
+  return [...new Set(values)].sort();
 }
 
 function mergePolicy(root: string): MergePolicy {
@@ -90,8 +97,13 @@ function mergePolicy(root: string): MergePolicy {
   const diagnostics: Diagnostic[] = [];
   const requiredChecks = strings(merge?.requiredChecks);
   const authority =
-    merge?.authority === "hosted" || merge?.authority === "local" ? merge.authority : undefined;
-  const reason = typeof merge?.reason === "string" && merge.reason.trim() ? merge.reason.trim() : undefined;
+    merge?.authority === "hosted" || merge?.authority === "local"
+      ? merge.authority
+      : undefined;
+  const reason =
+    typeof merge?.reason === "string" && merge.reason.trim()
+      ? merge.reason.trim()
+      : undefined;
 
   if (!authority) {
     diagnostics.push({
@@ -104,7 +116,8 @@ function mergePolicy(root: string): MergePolicy {
   if (authority === "local" && !reason) {
     diagnostics.push({
       code: "local-merge-authority-reason-missing",
-      message: "Local merge authority must include merge.reason so the guarded boundary is explicit",
+      message:
+        "Local merge authority must include merge.reason so the guarded boundary is explicit",
       path: ".coding-tooling.json",
     });
   }
@@ -120,7 +133,9 @@ function mergePolicy(root: string): MergePolicy {
 }
 
 function localOnlySourceGraph(root: string): boolean {
-  const config = readJson<SourceDependencyConfig>(join(root, ".coding-tooling.source-deps.json"));
+  const config = readJson<SourceDependencyConfig>(
+    join(root, ".coding-tooling.source-deps.json"),
+  );
   return config?.schemaVersion === 2 && config.cargo?.localOnly === true;
 }
 
@@ -162,7 +177,11 @@ function remoteProtection(
     };
   }
 
-  const branchResult = runner("gh", ["api", `repos/${repository}/branches/${branch}`], root);
+  const branchResult = runner(
+    "gh",
+    ["api", `repos/${repository}/branches/${branch}`],
+    root,
+  );
   const branchInfo = parseJson<BranchInfo>(branchResult);
   if (!branchInfo) {
     return {
@@ -186,11 +205,11 @@ function remoteProtection(
   const contexts = strings(statusChecks?.contexts);
   const checks = Array.isArray(statusChecks?.checks)
     ? statusChecks.checks
-        .map((entry) =>
-          entry && typeof entry === "object" && typeof (entry as { context?: unknown }).context === "string"
-            ? (entry as { context: string }).context
-            : undefined,
-        )
+        .map((entry) => {
+          if (!entry || typeof entry !== "object") return undefined;
+          const context = (entry as { context?: unknown }).context;
+          return typeof context === "string" ? context : undefined;
+        })
         .filter((entry): entry is string => Boolean(entry))
     : [];
 
@@ -281,11 +300,20 @@ export function fleetMergeReadiness(
     const policy = mergePolicy(repositoryRoot);
     const localOnly = localOnlySourceGraph(repositoryRoot);
     const repositoryId = metadata.metadata?.id;
-    const protection =
-      repositoryId && foundation.status === "passed" && policy.authority === "hosted" && !localOnly
-        ? remoteProtection(runner, repositoryRoot, repositoryId)
-        : undefined;
-    const classification = classify(foundation.status, policy, localOnly, protection);
+    const needsRemoteProtection =
+      repositoryId &&
+      foundation.status === "passed" &&
+      policy.authority === "hosted" &&
+      !localOnly;
+    const protection = needsRemoteProtection
+      ? remoteProtection(runner, repositoryRoot, repositoryId)
+      : undefined;
+    const classification = classify(
+      foundation.status,
+      policy,
+      localOnly,
+      protection,
+    );
 
     return {
       name: basename(repositoryRoot),
@@ -322,7 +350,8 @@ export function fleetMergeReadiness(
 
   const status: ResultStatus = repositories.some(
     (repository) =>
-      repository.readiness === "not-ready" || repository.readiness === "protection-required",
+      repository.readiness === "not-ready" ||
+      repository.readiness === "protection-required",
   )
     ? "failed"
     : "passed";
@@ -336,10 +365,18 @@ export function fleetMergeReadiness(
       root,
       repositories,
       summary: {
-        notReady: repositories.filter((entry) => entry.readiness === "not-ready").length,
-        localGated: repositories.filter((entry) => entry.readiness === "local-gated").length,
-        protectionRequired: repositories.filter((entry) => entry.readiness === "protection-required").length,
-        trustedAutoMerge: repositories.filter((entry) => entry.readiness === "trusted-auto-merge").length,
+        notReady: repositories.filter(
+          (entry) => entry.readiness === "not-ready",
+        ).length,
+        localGated: repositories.filter(
+          (entry) => entry.readiness === "local-gated",
+        ).length,
+        protectionRequired: repositories.filter(
+          (entry) => entry.readiness === "protection-required",
+        ).length,
+        trustedAutoMerge: repositories.filter(
+          (entry) => entry.readiness === "trusted-auto-merge",
+        ).length,
       },
     },
     diagnostics: [],
