@@ -20,19 +20,28 @@ function sdkMajor(): number | undefined {
   return Number.isInteger(major) && major > 0 ? major : undefined;
 }
 
-function project(source: string): { root: string; projectPath: string } {
+function project(
+  source: string,
+  options: { requiresRestore?: boolean } = {},
+): { root: string; projectPath: string } {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-dotnet-analysis-"));
   roots.push(root);
   mkdirSync(join(root, "src"), { recursive: true });
   const major = sdkMajor() ?? 10;
   const projectPath = join(root, "Fixture.csproj");
+  const packageReference = options.requiresRestore
+    ? `
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+  </ItemGroup>`
+    : "";
   writeFileSync(
     projectPath,
     `<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net${major}.0</TargetFramework>
     <Nullable>enable</Nullable>
-  </PropertyGroup>
+  </PropertyGroup>${packageReference}
 </Project>
 `,
   );
@@ -65,14 +74,16 @@ describe("Roslyn-backed .NET analysis", () => {
 
   test("reports an unrestored project as unavailable when the SDK exists", () => {
     if (!commandAvailable("dotnet")) return;
-    const { root } = project("namespace Fixture; public static class Value {}\n");
+    const { root } = project("namespace Fixture; public static class Value {}\n", {
+      requiresRestore: true,
+    });
 
     const result = dotNetRoslynAnalysisProvider.analyze(root);
 
     expect(result.status).toBe("unavailable");
     expect(result.reason).toContain("restored project");
     expect(result.diagnostics).toEqual([]);
-  });
+  }, 15000);
 
   test("normalizes a real Roslyn conversion diagnostic", () => {
     if (!commandAvailable("dotnet")) return;
