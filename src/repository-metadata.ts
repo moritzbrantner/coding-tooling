@@ -3,6 +3,11 @@ import { basename, join, resolve } from "node:path";
 
 import { foundationAudit } from "./foundation-audit.ts";
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
+import {
+  classifyTrustedMergeReadiness,
+  type EvidenceState,
+  type RepositoryMergeEvidence,
+} from "./trusted-merge.ts";
 
 export const repositoryKinds = [
   "library",
@@ -41,6 +46,17 @@ export type RepositoryMetadata = {
 type MetadataRead = {
   metadata?: RepositoryMetadata;
   diagnostics: Diagnostic[];
+};
+
+export type FleetMergeEvidence = {
+  hostedValidation?: EvidenceState;
+  protectedDefaultBranch?: EvidenceState;
+  requiredChecks?: string[] | null;
+  localGateReasons?: string[];
+};
+
+export type FleetAuditOptions = {
+  mergeEvidence?: Record<string, FleetMergeEvidence>;
 };
 
 function stringField(source: string, name: string): string | undefined {
@@ -192,6 +208,19 @@ function hasPagesWorkflow(root: string, workflows: string[]): boolean {
   });
 }
 
+function sourceDevelopmentGateReasons(root: string): string[] {
+  const path = join(root, ".coding-tooling.source-deps.json");
+  if (!existsSync(path)) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as {
+      cargo?: { localOnly?: unknown };
+    };
+    return parsed.cargo?.localOnly === true ? ["source-development"] : [];
+  } catch {
+    return ["source-development-evidence-invalid"];
+  }
+}
+
 function repositoryDirectories(fleetRoot: string): string[] {
   try {
     return readdirSync(fleetRoot, { withFileTypes: true })
@@ -204,7 +233,10 @@ function repositoryDirectories(fleetRoot: string): string[] {
   }
 }
 
-export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unknown>> {
+export function fleetAudit(
+  fleetRoot: string,
+  options: FleetAuditOptions = {},
+): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const root = resolve(fleetRoot);
   const repositories = repositoryDirectories(root).map((repositoryRoot) => {
@@ -251,6 +283,22 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
     if (!foundation.metadata)
       remediation.add(`classify ${basename(repositoryRoot)} and add .repository.toml`);
 
+    const repositoryId = metadata.metadata?.id ?? basename(repositoryRoot);
+    const injectedMergeEvidence = options.mergeEvidence?.[repositoryId];
+    const foundationReady =
+      missing.length === 0 && authoritativeMissing.length === 0 && authoritativeBlockers.length === 0;
+    const mergeEvidence: RepositoryMergeEvidence = {
+      foundationReady,
+      localGateReasons: [
+        ...sourceDevelopmentGateReasons(repositoryRoot),
+        ...(injectedMergeEvidence?.localGateReasons ?? []),
+      ],
+      hostedValidation: injectedMergeEvidence?.hostedValidation ?? "unknown",
+      protectedDefaultBranch: injectedMergeEvidence?.protectedDefaultBranch ?? "unknown",
+      requiredChecks: injectedMergeEvidence?.requiredChecks ?? null,
+    };
+    const mergeReadiness = classifyTrustedMergeReadiness(mergeEvidence);
+
     return {
       name: basename(repositoryRoot),
       root: repositoryRoot,
@@ -264,6 +312,10 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
         missing: authoritativeMissing,
         blockers: authoritativeBlockers,
         diagnostics: mechanicalFoundation.diagnostics,
+      },
+      mergeReadiness: {
+        ...mergeReadiness,
+        evidence: mergeEvidence,
       },
       missing,
       remediation: [...remediation],
