@@ -77,8 +77,7 @@ export function classifyTrustedMergeReadiness(
   }
 
   if (evidence.protectedDefaultBranch === "missing") blockers.push("branch-protection-missing");
-  if (evidence.protectedDefaultBranch === "unknown")
-    blockers.push("branch-protection-unverified");
+  if (evidence.protectedDefaultBranch === "unknown") blockers.push("branch-protection-unverified");
   if (evidence.requiredChecks === null) blockers.push("required-checks-unverified");
   else if (requiredChecks.length === 0) blockers.push("required-checks-empty");
 
