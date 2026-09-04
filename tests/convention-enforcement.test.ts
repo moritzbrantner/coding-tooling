@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -160,6 +160,11 @@ describe("installed convention enforcement", () => {
     enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
     writeFileSync(join(root, "src", "User.ts"), "export {};\n");
     writeFileSync(join(root, "src", "user.ts"), "export {};\n");
+
+    const caseVariants = readdirSync(join(root, "src")).filter(
+      (name) => name.toLowerCase() === "user.ts",
+    );
+    if (caseVariants.length < 2) return;
 
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");

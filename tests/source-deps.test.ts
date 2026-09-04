@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -68,6 +68,10 @@ function localOnlyRepository(): { root: string; source: string; revision: string
   return { root, source, revision };
 }
 
+function escapeTomlString(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
 describe("source dependency mode", () => {
   test("renders deterministic exact-revision Cargo patches", () => {
     const root = repository();
@@ -100,7 +104,7 @@ describe("source dependency mode", () => {
     const { root, source } = localOnlyRepository();
     const rendered = renderSourceDependencies(root);
     expect(rendered.localOnly).toBe(true);
-    expect(rendered.content).toContain(`path = "${source}"`);
+    expect(rendered.content).toContain(`path = "${escapeTomlString(source)}"`);
     expect(rendered.content).not.toContain("git =");
 
     const activated = sourceDependencies(root, "activate");
@@ -122,7 +126,7 @@ describe("source dependency mode", () => {
 
   test("local-only mode never falls back to Git when the sibling checkout is missing", () => {
     const { root, source } = localOnlyRepository();
-    spawnSync("rm", ["-rf", source]);
+    rmSync(source, { recursive: true, force: true });
 
     const activated = sourceDependencies(root, "activate");
     expect(activated.status).toBe("error");

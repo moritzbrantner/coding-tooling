@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
 
 import type {
@@ -20,17 +21,34 @@ function severity(value: string): AnalysisDiagnosticSeverity {
   return value === "error" ? "error" : "warning";
 }
 
+function canonicalPath(path: string): string {
+  const absolute = resolve(path);
+  try {
+    return realpathSync.native(absolute);
+  } catch {
+    return absolute;
+  }
+}
+
+function comparablePath(path: string): string {
+  return process.platform === "win32" ? path.toLowerCase() : path;
+}
+
 function insideRoot(root: string, path: string): boolean {
-  const absoluteRoot = resolve(root);
-  const absolutePath = resolve(path);
-  return absolutePath === absoluteRoot || absolutePath.startsWith(`${absoluteRoot}${sep}`);
+  const absoluteRoot = canonicalPath(root);
+  const absolutePath = canonicalPath(path);
+  const rootKey = comparablePath(absoluteRoot);
+  const pathKey = comparablePath(absolutePath);
+  return pathKey === rootKey || pathKey.startsWith(`${rootKey}${sep}`);
 }
 
 function normalizedPath(root: string, projectPath: string, sourcePath: string): string {
   const value = sourcePath.trim();
   if (!value || value === "CSC" || value === "MSBUILD") return relativePosix(root, projectPath);
   const absolute = isAbsolute(value) ? resolve(value) : resolve(dirname(projectPath), value);
-  if (insideRoot(root, absolute)) return relativePosix(root, absolute);
+  if (insideRoot(root, absolute)) {
+    return relativePosix(canonicalPath(root), canonicalPath(absolute));
+  }
   return value.split(sep).join("/");
 }
 
