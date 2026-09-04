@@ -1,5 +1,13 @@
 from pathlib import Path
 
+model_path = Path("src/model.ts")
+model = model_path.read_text()
+model_anchor = '  | "repository-metadata"\n'
+model_replacement = model_anchor + '  | "repository-evidence"\n'
+if model.count(model_anchor) != 1:
+    raise SystemExit("unexpected result operation anchor")
+model_path.write_text(model.replace(model_anchor, model_replacement, 1))
+
 path = Path("src/entry.ts")
 source = path.read_text()
 
