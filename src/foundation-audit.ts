@@ -97,9 +97,7 @@ function environmentAudit(root: string): FoundationComponent {
       });
     }
 
-    const holdHeaders = [
-      ...source.matchAll(/^\s*\[compatibility_holds\.([a-z0-9_-]+)\]\s*$/gm),
-    ];
+    const holdHeaders = [...source.matchAll(/^\s*\[compatibility_holds\.([a-z0-9_-]+)\]\s*$/gm)];
     for (let index = 0; index < holdHeaders.length; index += 1) {
       const header = holdHeaders[index]!;
       const start = (header.index ?? 0) + header[0].length;
