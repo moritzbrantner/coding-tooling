@@ -57,6 +57,7 @@ export function readJson<T>(path: string): T | undefined {
 const ignoredDirectories = new Set([
   ".git",
   ".next",
+  ".tooling",
   "bin",
   "build",
   "dist",
