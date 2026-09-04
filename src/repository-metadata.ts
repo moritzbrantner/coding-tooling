@@ -265,9 +265,7 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
     if (canonicalFoundation.status === "error") unsupported.push("foundationAudit");
 
     const remediation = new Set<string>();
-    if (
-      [...missing, ...invalid, ...unsupported].some((key) => key !== "metadata")
-    ) {
+    if ([...missing, ...invalid, ...unsupported].some((key) => key !== "metadata")) {
       remediation.add(
         `bunx @moritzbrantner/platform-upgrader apply boring-foundation-v1 ${repositoryRoot}`,
       );
