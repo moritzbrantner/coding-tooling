@@ -126,7 +126,8 @@ export function evaluateUnattendedMergeCandidate(
   const attachedCheckNames = new Set([...passedChecks, ...pendingChecks, ...failedChecks]);
 
   for (const requiredCheck of repository.requiredChecks) {
-    if (!attachedCheckNames.has(requiredCheck)) blockers.push(`required-check-missing:${requiredCheck}`);
+    if (!attachedCheckNames.has(requiredCheck))
+      blockers.push(`required-check-missing:${requiredCheck}`);
   }
   for (const check of pendingChecks) blockers.push(`check-pending:${check}`);
   for (const check of failedChecks) blockers.push(`check-failed:${check}`);
