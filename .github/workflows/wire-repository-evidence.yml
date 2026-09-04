@@ -27,8 +27,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Wire CLI and operation model
-        run: python3 scripts/patch-repository-evidence-entry.py
+      - name: Add repository evidence operation
+        run: sed -i '/| "repository-metadata"/a\  | "repository-evidence"' src/model.ts
 
       - name: Format focused files
         run: bunx oxfmt@0.65.0 src/entry.ts src/model.ts src/repository-evidence.ts tests/repository-evidence.test.ts
@@ -42,17 +42,16 @@ jobs:
       - name: Check whitespace
         run: git diff --check
 
-      - name: Commit durable slice and remove one-shot scaffolding
+      - name: Commit operation model and remove one-shot workflow
         run: |
           set -euo pipefail
-          rm scripts/patch-repository-evidence-entry.py
           rm .github/workflows/wire-repository-evidence.yml
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/entry.ts src/model.ts src/repository-evidence.ts tests/repository-evidence.test.ts docs/repository-evidence.md scripts/patch-repository-evidence-entry.py .github/workflows/wire-repository-evidence.yml
+          git add src/model.ts .github/workflows/wire-repository-evidence.yml
           git diff --cached --exit-code && {
-            echo 'Expected repository evidence changes, but no durable diff remains.' >&2
+            echo 'Expected repository evidence model changes, but no durable diff remains.' >&2
             exit 1
           }
-          git commit -m 'feat: expose repository evidence envelope v1'
+          git commit -m 'feat: register repository evidence operation'
           git push origin HEAD:evidence/repository-envelope-v1
