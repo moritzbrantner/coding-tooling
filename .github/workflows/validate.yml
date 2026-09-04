@@ -24,12 +24,6 @@ jobs:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
-      - name: Print canonical formatter diff
-        run: |
-          cp src/trusted-merge.ts /tmp/trusted-merge.ts
-          bunx oxfmt@0.65.0 src/trusted-merge.ts
-          git diff -- src/trusted-merge.ts
-          cp /tmp/trusted-merge.ts src/trusted-merge.ts
       - name: Validate through the local Action
         uses: ./
         with:
