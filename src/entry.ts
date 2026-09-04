@@ -24,6 +24,7 @@ import { pullRequestMergeEligibility } from "./pr-eligibility.ts";
 import { publicContractCommand } from "./public-contract.ts";
 import { fleetAudit, repositoryMetadataCommand } from "./repository-metadata.ts";
 import { repositoryProgressScoreCommand } from "./repository-progress-score.ts";
+import { repositoryEvidenceCommand } from "./repository-evidence.ts";
 import { repositoryRoot } from "./shared.ts";
 
 function resultExitCode(status: ResultStatus): number {
@@ -54,6 +55,7 @@ function expectationUsage(): never {
   coding-tooling calibration [--json]
   coding-tooling foundation audit [--root <path>] [--json]
   coding-tooling repository metadata [--root <path>] [--json]
+  coding-tooling repository evidence [--root <path>] [--validation-report <path>] [--contract-report <path>] [--json]
   coding-tooling fleet <audit|readiness> [--root <path>] [--json]
   coding-tooling pr eligibility <number> [--expected-head <sha>] [--expected-base <sha>] [--json]
   coding-tooling pr auto-merge <number> --expected-head <sha> --expected-base <sha> [--merge-method <squash|merge|rebase>] [--dry-run] [--json]
@@ -128,18 +130,29 @@ export function entryMain(argv = process.argv.slice(2)): number {
   }
 
   if (command === "repository") {
-    if (argv[1] !== "metadata") return expectationUsage();
-    const knownFlags = new Set(["--json", "--root"]);
+    const action = argv[1];
+    if (action !== "metadata" && action !== "evidence") return expectationUsage();
+    const knownFlags = new Set(
+      action === "evidence"
+        ? ["--json", "--root", "--validation-report", "--contract-report"]
+        : ["--json", "--root"],
+    );
     for (let index = 2; index < argv.length; index += 1) {
       const value = argv[index]!;
       if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
-      if (value === "--root") {
+      if (value === "--root" || value === "--validation-report" || value === "--contract-report") {
         if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
         index += 1;
       }
     }
     const targetRoot = resolve(option(argv, "root") ?? repositoryRoot());
-    const result = repositoryMetadataCommand(targetRoot);
+    const result =
+      action === "metadata"
+        ? repositoryMetadataCommand(targetRoot)
+        : repositoryEvidenceCommand(targetRoot, {
+            validationReportPath: option(argv, "validation-report"),
+            publicContractReportPath: option(argv, "contract-report"),
+          });
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }
