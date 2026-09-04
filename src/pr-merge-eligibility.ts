@@ -13,6 +13,8 @@ export type RepositoryMergeGate = {
 };
 
 export type PullRequestMergeEvidence = {
+  open?: boolean;
+  draft?: boolean;
   expectedHeadSha?: string;
   currentHeadSha?: string;
   expectedBaseSha?: string;
@@ -45,6 +47,11 @@ export function evaluatePullRequestMergeEligibility(
     blockers.push(`repository-readiness:${repository.readiness}`);
   }
   if (requiredChecks.length === 0) blockers.push("required-checks-empty");
+
+  if (pullRequest.open === undefined) blockers.push("pr-state-evidence-missing");
+  else if (!pullRequest.open) blockers.push("pull-request-not-open");
+  if (pullRequest.draft === undefined) blockers.push("draft-evidence-missing");
+  else if (pullRequest.draft) blockers.push("pull-request-is-draft");
 
   if (!pullRequest.expectedHeadSha || !pullRequest.currentHeadSha) {
     blockers.push("head-evidence-missing");
