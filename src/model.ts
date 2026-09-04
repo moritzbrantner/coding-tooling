@@ -29,6 +29,8 @@ export type ResultOperation =
   | "doctor"
   | "conformance"
   | "environment"
+  | "repository-metadata"
+  | "fleet"
   | "bootstrap"
   | "plan"
   | "run"
