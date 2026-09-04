@@ -31,6 +31,7 @@ export type ResultOperation =
   | "environment"
   | "repository-metadata"
   | "fleet"
+  | "foundation"
   | "bootstrap"
   | "plan"
   | "run"
