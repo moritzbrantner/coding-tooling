@@ -47,7 +47,8 @@ test("keeps ordinary PR pipelines unchanged without local-only source mode", () 
   try {
     let calls = 0;
     const execution = runSourceAwarePipeline(root, "full", {
-      runPipeline: () => {
+      runPipeline: (options) => {
+        expect(options.dependencyResolution).toBeUndefined();
         calls += 1;
         return envelope("run");
       },
@@ -88,7 +89,8 @@ test("activates exact sources, verifies the source fingerprint, and restores dis
           verifiedFingerprint: "env-v1:fixture",
         });
       },
-      runPipeline: () => {
+      runPipeline: (options) => {
+        expect(options.dependencyResolution).toBe("source-development");
         pipelineCalls += 1;
         writeFileSync(cargoLock, "pipeline-mutated-lock\n");
         return envelope("run");

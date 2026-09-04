@@ -30,6 +30,8 @@ type PackageManifest = {
   devDependencies?: Record<string, string>;
 };
 
+export type DependencyResolution = "distribution" | "source-development";
+
 const scriptCandidates: Record<Capability, string[]> = {
   "format:check": ["format:check", "check:format"],
   lint: ["lint"],
@@ -192,20 +194,45 @@ function configuredComponents(root: string, config: ToolingConfig): Component[] 
   );
 }
 
+function applyDependencyResolution(
+  components: Component[],
+  resolution: DependencyResolution,
+): Component[] {
+  if (resolution === "distribution") return components;
+  return components.map((component) => {
+    if (component.kind !== "rust") return component;
+    const resolved: Partial<Record<Capability, string[]>> = {};
+    for (const capability of capabilities) {
+      const command = component.capabilities[capability];
+      if (!command) continue;
+      resolved[capability] =
+        command[0] === "cargo"
+          ? command.filter((argument) => argument !== "--locked")
+          : [...command];
+    }
+    return { ...component, capabilities: resolved };
+  });
+}
+
 export function planChecks(options: {
   root?: string;
   tier: string;
   component?: string;
   configPath?: string;
+  dependencyResolution?: DependencyResolution;
 }) {
   const root = options.root ?? repositoryRoot();
   const config = loadConfig(root, options.configPath);
+  const dependencyResolution = options.dependencyResolution ?? "distribution";
   const configured = config.tiers?.[options.tier] ?? defaultTiers[options.tier];
   if (!configured) throw new Error(`Unknown tier: ${options.tier}`);
   validateCapabilities(configured);
   const conventionRequired = conventionRequiredCapabilities(root, options.tier);
   const selected = [...new Set([...configured, ...conventionRequired])];
-  const components = configuredComponents(root, config).filter(
+  const components = applyDependencyResolution(
+    configuredComponents(root, config),
+    dependencyResolution,
+  ).filter(
     (component) =>
       !options.component ||
       component.name === options.component ||
@@ -241,6 +268,7 @@ export function planChecks(options: {
   return {
     profile: config.profile,
     tier: options.tier,
+    dependencyResolution,
     checks,
     missing,
     conventionRequiredCapabilities: conventionRequired,
@@ -274,6 +302,7 @@ export function runPlan(options: {
   component?: string;
   configPath?: string;
   strict?: boolean;
+  dependencyResolution?: DependencyResolution;
 }): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const root = options.root ?? repositoryRoot();
