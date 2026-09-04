@@ -134,6 +134,7 @@ export function policySensitivePath(path: string): boolean {
     path === "src/entry.ts" ||
     path === "src/merge-readiness.ts" ||
     path === "src/pr-eligibility.ts" ||
+    path === "src/pr-auto-merge.ts" ||
     path === "src/pr-merge-eligibility.ts" ||
     path === "src/pr.ts" ||
     path.startsWith(".github/actions/") ||

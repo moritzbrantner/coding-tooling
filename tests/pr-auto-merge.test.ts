@@ -161,16 +161,7 @@ test("activates auto-merge only against the fresh exact head", () => {
   expect(output.status).toBe("passed");
   expect(output.data.activationRequested).toBe(true);
   expect(runner.calls).toEqual([
-    [
-      "gh",
-      "pr",
-      "merge",
-      "42",
-      "--auto",
-      "--squash",
-      "--match-head-commit",
-      headSha,
-    ],
+    ["gh", "pr", "merge", "42", "--auto", "--squash", "--match-head-commit", headSha],
   ]);
   expect(runner.calls[0]).not.toContain("--admin");
 });

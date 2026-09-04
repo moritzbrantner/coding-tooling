@@ -120,7 +120,8 @@ export function activatePullRequestAutoMerge(
     return envelope("error", started, data, [
       {
         code: "expected-head-required",
-        message: "Guarded auto-merge requires the exact 40-character head SHA from an eligibility receipt",
+        message:
+          "Guarded auto-merge requires the exact 40-character head SHA from an eligibility receipt",
       },
     ]);
 
@@ -128,7 +129,8 @@ export function activatePullRequestAutoMerge(
     return envelope("error", started, data, [
       {
         code: "expected-base-required",
-        message: "Guarded auto-merge requires the exact 40-character base SHA from an eligibility receipt",
+        message:
+          "Guarded auto-merge requires the exact 40-character base SHA from an eligibility receipt",
       },
     ]);
 
@@ -149,7 +151,8 @@ export function activatePullRequestAutoMerge(
     return envelope("error", started, data, [
       {
         code: "eligibility-receipt-invalid",
-        message: "Fresh eligibility passed without a complete receipt for this pull request; no mutation was attempted",
+        message:
+          "Fresh eligibility passed without a complete receipt for this pull request; no mutation was attempted",
       },
     ]);
   }
@@ -157,7 +160,8 @@ export function activatePullRequestAutoMerge(
     return envelope("unavailable", started, data, [
       {
         code: "eligibility-receipt-mismatch",
-        message: "Fresh eligibility receipt does not match the caller's exact head/base receipt; no mutation was attempted",
+        message:
+          "Fresh eligibility receipt does not match the caller's exact head/base receipt; no mutation was attempted",
       },
     ]);
   }
