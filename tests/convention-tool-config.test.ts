@@ -209,7 +209,7 @@ describe("convention tooling configuration", () => {
     }
   });
 
-  test("inspects the package script selected by capabilityCommands overrides", () => {
+  test("leaves custom package lint capabilities unchanged when no adapter matches", () => {
     const source = conventionSource();
     const target = typescriptConsumer();
     try {
@@ -248,9 +248,9 @@ describe("convention tooling configuration", () => {
           conventionsRoot: source,
         }).status,
       ).toBe("passed");
-      expect(() => planChecks({ root: target, tier: "lintOnly" })).toThrow(
-        "No unique convention configuration adapter matches",
-      );
+      const plan = planChecks({ root: target, tier: "lintOnly" });
+      expect(plan.checks).toHaveLength(1);
+      expect(plan.checks[0]!.command).toEqual(["bun", "run", "custom-lint"]);
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
