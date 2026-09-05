@@ -11,7 +11,7 @@
     "format:check": "oxfmt --check .",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
     "test": "bun test",
     "findings": "bun src/entry.ts findings --json",
     "score": "bun src/entry.ts score --json",
@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@types/bun": "1.4.0",
+    "@typescript/typescript6": "6.0.2",
     "oxfmt": "0.65.0",
     "oxlint": "1.80.0",
     "typescript": "7.0.2"

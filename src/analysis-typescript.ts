@@ -12,6 +12,7 @@ import { relativePosix, runCommand, walkFiles } from "./shared.ts";
 
 const providerId = "typescript-compiler";
 const providerRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const compilerPath = resolve(providerRoot, "node_modules", "typescript", "bin", "tsc");
 const locatedDiagnosticPattern = /^(.*)\((\d+),(\d+)\):\s+(error|warning|info)\s+TS(\d+):\s*(.*)$/;
 const globalDiagnosticPattern = /^(error|warning|info)\s+TS(\d+):\s*(.*)$/;
 
@@ -48,11 +49,7 @@ function diagnosticPath(root: string, configPath: string, path: string): string 
 }
 
 function compilerCommand(args: string[]) {
-  return runCommand(
-    "bun",
-    ["x", "--no-install", "--package", "typescript", "tsc", ...args],
-    providerRoot,
-  );
+  return runCommand("bun", [compilerPath, ...args], providerRoot);
 }
 
 function compilerVersion(): { version?: string; reason?: string } {

@@ -48,7 +48,7 @@ describe("language analysis providers", () => {
       capabilities: ["syntax", "semantic", "diagnostics"],
       projects: ["tsconfig.json"],
     });
-    expect(provider?.version).toBeTruthy();
+    expect(provider?.version).toBe("7.0.2");
     expect(diagnostic).toMatchObject({
       provider: "typescript-compiler",
       code: "TS2322",
