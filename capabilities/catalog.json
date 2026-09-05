@@ -153,6 +153,33 @@
       "defaultArtifacts": [".generated/benchmarks"],
       "optIn": true,
       "baselineRequired": false
+    },
+    {
+      "name": "profile:runtime",
+      "kind": "profile",
+      "tier": "performance",
+      "scriptCandidates": ["profile:runtime"],
+      "defaultArtifacts": [".artifacts/runtime-profiler"],
+      "optIn": true,
+      "baselineRequired": false
+    },
+    {
+      "name": "profile:hotspots",
+      "kind": "profile",
+      "tier": "performance",
+      "scriptCandidates": ["profile:hotspots"],
+      "defaultArtifacts": [".artifacts/runtime-profiler"],
+      "optIn": true,
+      "baselineRequired": false
+    },
+    {
+      "name": "profile:memory",
+      "kind": "profile",
+      "tier": "performance",
+      "scriptCandidates": ["profile:memory"],
+      "defaultArtifacts": [".artifacts/runtime-profiler"],
+      "optIn": true,
+      "baselineRequired": false
     }
   ]
 }
