@@ -1,7 +1,9 @@
 import {
   canonicalPackageCapabilityOutcomes,
   createPackageEvidence,
+  packageCommandManager,
   packageSemantics,
+  packageToolchainOutcome,
 } from "./evidence-model.js";
 
 const CONTEXT_FILES = new Set([".coding-tooling.json", ".node-version", "rust-toolchain.toml"]);
@@ -41,7 +43,9 @@ export function selectedRemoteFiles(tree, limit = 24) {
       (entry) =>
         entry.type === "blob" &&
         !isIgnoredAnalysisPath(entry.path) &&
-        (basename(entry.path) === "package.json" || CONTEXT_FILES.has(entry.path)),
+        (basename(entry.path) === "package.json" ||
+          basename(entry.path) === ".node-version" ||
+          CONTEXT_FILES.has(entry.path)),
     )
     .toSorted(
       (left, right) =>
@@ -121,12 +125,15 @@ function discoverComponents(snapshot, paths) {
     const directory = dirname(entry.path);
     const path = directory || ".";
     const name = manifest.name ?? (path === "." ? snapshot.repository.name : basename(directory));
+    const nodeVersionPath = joinPath(directory, ".node-version");
     const evidence = createPackageEvidence({
       collector: "github",
       name,
       path,
       manifestPath: entry.path,
       packageManager: manifest.packageManager,
+      nodeVersion: snapshot.files[nodeVersionPath],
+      nodeVersionPath,
       scripts: manifest.scripts,
       dependencies: manifest.dependencies,
       devDependencies: manifest.devDependencies,
@@ -137,24 +144,24 @@ function discoverComponents(snapshot, paths) {
       ),
     });
     const semantics = packageSemantics(evidence);
-    const manager =
-      evidence.facts.lockfiles.value.includes("bun.lock") ||
-      evidence.facts.lockfiles.value.includes("bun.lockb") ||
-      paths.has("bun.lock")
-        ? "bun"
-        : "npm";
-    const capabilities = Object.fromEntries(
-      Object.entries(semantics.declaredCapabilities).map(([capability, script]) => [
-        capability,
-        manager === "bun" ? ["bun", "run", script] : ["npm", "run", script],
-      ]),
-    );
+    const manager = packageCommandManager(evidence);
+    const toolchain = packageToolchainOutcome(evidence);
+    const capabilities = manager
+      ? Object.fromEntries(
+          Object.entries(semantics.declaredCapabilities).map(([capability, script]) => [
+            capability,
+            manager === "bun" ? ["bun", "run", script] : ["npm", "run", script],
+          ]),
+        )
+      : {};
     components.push({
       name,
       path,
       kind: "package",
       technologies: semantics.technologies,
+      declaredCapabilities: semantics.declaredCapabilities,
       capabilities,
+      toolchain,
       evidence,
     });
   }
@@ -264,37 +271,49 @@ function findingsFor(snapshot, paths, components) {
       "coding-tooling bootstrap plan --json",
     );
 
-  if (components.some((component) => component.kind === "package")) {
-    const packageManager = parseJson(snapshot.files["package.json"])?.packageManager;
-    const bunVersion =
-      typeof packageManager === "string" && packageManager.startsWith("bun@")
-        ? packageManager.slice("bun@".length)
-        : null;
-    if (bunVersion !== null) {
-      if (!/^\d+\.\d+\.\d+$/.test(bunVersion))
+  for (const component of components.filter((item) => item.kind === "package")) {
+    const outcome = component.toolchain;
+    if (outcome.status === "satisfied") continue;
+    const suffix = component.path === "." ? "" : `-${stableId(component.path)}`;
+    const nestedPrefix = component.path === "." ? "" : `${component.name}: `;
+    if (outcome.status === "finding") {
+      if (outcome.runtime === "bun")
         add(
-          "REMOTE-ENV-005",
+          `REMOTE-ENV-005${suffix}`,
           "high",
-          "Bun toolchain pin is not exact",
-          "package.json packageManager does not contain an exact bun@x.y.z version.",
+          `${nestedPrefix}Bun toolchain pin is not exact`,
+          `${component.evidence.facts.packageManager.provenance.path} does not contain an exact bun@x.y.z version.`,
           "Use an exact Bun packageManager version for deterministic environment identity.",
         );
-    } else if (!paths.has(".node-version"))
+      else
+        add(
+          `REMOTE-ENV-003${suffix}`,
+          "high",
+          `${nestedPrefix}Node toolchain pin is not exact`,
+          `${component.evidence.facts.nodeVersion.provenance.path} does not contain an exact x.y.z version.`,
+          "Use an exact Node version for deterministic environment identity.",
+        );
+      continue;
+    }
+    if (outcome.status === "unsupported") {
       add(
-        "REMOTE-ENV-001",
+        `REMOTE-ENV-007${suffix}`,
         "medium",
-        "Node toolchain pin is missing",
-        "A package component exists without .node-version.",
-        "Use an exact x.y.z Node pin when Node participates in validation.",
+        `${nestedPrefix}Package toolchain is unsupported by remote preflight`,
+        `${component.evidence.facts.packageManager.provenance.path} declares ${component.evidence.facts.packageManager.value ?? "an unsupported package manager"}.`,
+        "Treat package toolchain status as unsupported until a deterministic adapter is available.",
       );
-    else if (!/^\d+\.\d+\.\d+$/.test(snapshot.files[".node-version"]?.trim() ?? ""))
-      add(
-        "REMOTE-ENV-003",
-        "high",
-        "Node toolchain pin is not exact",
-        ".node-version does not contain an exact x.y.z version.",
-        "Use an exact Node version for deterministic environment identity.",
-      );
+      continue;
+    }
+    add(
+      component.path === "." ? "REMOTE-ENV-001" : `REMOTE-ENV-006${suffix}`,
+      "medium",
+      `${nestedPrefix}${outcome.runtime === "bun" ? "Bun" : "Node"} toolchain pin is missing`,
+      `${component.name} has no component-local exact ${outcome.runtime === "bun" ? "Bun" : "Node"} version evidence.`,
+      component.path === "."
+        ? `Use an exact x.y.z ${outcome.runtime === "bun" ? "Bun packageManager" : "Node .node-version"} pin when this runtime participates in validation.`
+        : "Declare the nested component toolchain explicitly; remote preflight does not inherit unrelated root pins without a proven workspace relationship.",
+    );
   }
 
   if (components.some((component) => component.kind === "rust")) {
@@ -404,6 +423,7 @@ function priority(path) {
   if (path === ".coding-tooling.json") return 0;
   if (CONTEXT_FILES.has(path)) return 1;
   if (path === "package.json") return 2;
+  if (basename(path) === ".node-version") return 20 + path.split("/").length;
   return 10 + path.split("/").length;
 }
 
