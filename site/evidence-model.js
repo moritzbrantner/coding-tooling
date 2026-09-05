@@ -60,8 +60,9 @@ export function createPackageEvidence(input) {
   const scripts = strings(input.scripts);
   const dependencies = strings(input.dependencies);
   const devDependencies = strings(input.devDependencies);
-  const lockfiles = [...new Set((input.lockfiles ?? []).filter((item) => typeof item === "string"))]
-    .toSorted();
+  const lockfiles = [
+    ...new Set((input.lockfiles ?? []).filter((item) => typeof item === "string")),
+  ].toSorted();
   const packageManager = typeof input.packageManager === "string" ? input.packageManager : null;
 
   return {
@@ -100,7 +101,10 @@ export function createPackageEvidence(input) {
       tsconfig: {
         status: "available",
         value: Boolean(input.hasTsconfig),
-        provenance: provenance(collector, input.tsconfigPath ?? `${path === "." ? "" : `${path}/`}tsconfig.json`),
+        provenance: provenance(
+          collector,
+          input.tsconfigPath ?? `${path === "." ? "" : `${path}/`}tsconfig.json`,
+        ),
       },
       lockfiles: {
         status: "available",
@@ -157,7 +161,10 @@ export function canonicalPackageCapabilityOutcomes(
   if (evidence?.schemaVersion !== NORMALIZED_EVIDENCE_SCHEMA_VERSION) {
     throw new Error("Unsupported normalized package evidence schema");
   }
-  if (evidence.facts.manifest.status !== "available" || evidence.facts.scripts.status !== "available") {
+  if (
+    evidence.facts.manifest.status !== "available" ||
+    evidence.facts.scripts.status !== "available"
+  ) {
     return required.map((capability) => ({
       capability,
       status: "incomplete",
