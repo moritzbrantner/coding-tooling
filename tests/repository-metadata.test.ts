@@ -15,18 +15,23 @@ function repository(root: string, name: string): string {
   return path;
 }
 
-function metadata(path: string, body = ""): void {
+function metadata(
+  path: string,
+  options: { status?: string; replacedBy?: string[] } = {},
+): void {
+  const status = options.status ?? "active";
+  const replacedBy = options.replacedBy ?? [];
   writeFileSync(
     join(path, ".repository.toml"),
     `schema_version = 1
 id = "moritzbrantner/${basename(path)}"
 kind = "library"
-status = "active"
+status = "${status}"
 depends_on = ["moritzbrantner/coding-tooling"]
 consumed_by = []
 supersedes = []
-replaced_by = []
-${body}`,
+replaced_by = [${replacedBy.map((entry) => JSON.stringify(entry)).join(", ")}]
+`,
   );
 }
 
@@ -116,5 +121,61 @@ describe("fleet audit", () => {
     expect(
       completeResult?.remediation.some((entry) => entry.includes("foundation audit --root")),
     ).toBe(true);
+  });
+
+  test("does not revive repositories that are intentionally retiring or archived", () => {
+    const fleet = tempRoot("coding-tooling-fleet-retired-");
+    const retiring = repository(fleet, "retiring");
+    metadata(retiring, {
+      status: "retiring",
+      replacedBy: ["moritzbrantner/coding-agent-skills"],
+    });
+    const archived = repository(fleet, "archived");
+    metadata(archived, { status: "archived" });
+
+    const result = fleetAudit(fleet);
+    const repositories = result.data.repositories as Array<{
+      name: string;
+      missing: string[];
+      remediation: string[];
+      lifecycle: { foundationRequired: boolean; blockers: Array<{ code: string }> };
+      foundationAudit: { missing: string[]; blockers: unknown[]; observedMissing: string[] };
+    }>;
+    const retiringResult = repositories.find((entry) => entry.name === "retiring");
+    const archivedResult = repositories.find((entry) => entry.name === "archived");
+
+    expect(result.status).toBe("passed");
+    expect(retiringResult?.lifecycle.foundationRequired).toBe(false);
+    expect(archivedResult?.lifecycle.foundationRequired).toBe(false);
+    expect(retiringResult?.missing).toEqual([]);
+    expect(archivedResult?.missing).toEqual([]);
+    expect(retiringResult?.foundationAudit.missing).toEqual([]);
+    expect(archivedResult?.foundationAudit.blockers).toEqual([]);
+    expect(retiringResult?.foundationAudit.observedMissing).toContain("renovate");
+    expect(retiringResult?.remediation.some((entry) => entry.includes("boring-foundation-v1"))).toBe(
+      false,
+    );
+  });
+
+  test("requires a deterministic migration target while a repository is retiring", () => {
+    const fleet = tempRoot("coding-tooling-fleet-retiring-target-");
+    const retiring = repository(fleet, "retiring");
+    metadata(retiring, { status: "retiring" });
+
+    const result = fleetAudit(fleet);
+    const repositories = result.data.repositories as Array<{
+      name: string;
+      remediation: string[];
+      lifecycle: { blockers: Array<{ code: string }> };
+    }>;
+    const retiringResult = repositories.find((entry) => entry.name === "retiring");
+
+    expect(result.status).toBe("failed");
+    expect(retiringResult?.lifecycle.blockers).toContainEqual(
+      expect.objectContaining({ code: "repository-retiring-without-replacement" }),
+    );
+    expect(retiringResult?.remediation.some((entry) => entry.includes(".repository.toml"))).toBe(
+      true,
+    );
   });
 });
