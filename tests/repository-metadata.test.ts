@@ -15,10 +15,7 @@ function repository(root: string, name: string): string {
   return path;
 }
 
-function metadata(
-  path: string,
-  options: { status?: string; replacedBy?: string[] } = {},
-): void {
+function metadata(path: string, options: { status?: string; replacedBy?: string[] } = {}): void {
   const status = options.status ?? "active";
   const replacedBy = options.replacedBy ?? [];
   writeFileSync(
@@ -152,9 +149,9 @@ describe("fleet audit", () => {
     expect(retiringResult?.foundationAudit.missing).toEqual([]);
     expect(archivedResult?.foundationAudit.blockers).toEqual([]);
     expect(retiringResult?.foundationAudit.observedMissing).toContain("renovate");
-    expect(retiringResult?.remediation.some((entry) => entry.includes("boring-foundation-v1"))).toBe(
-      false,
-    );
+    expect(
+      retiringResult?.remediation.some((entry) => entry.includes("boring-foundation-v1")),
+    ).toBe(false);
   });
 
   test("requires a deterministic migration target while a repository is retiring", () => {
