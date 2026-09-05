@@ -573,6 +573,7 @@ export function applyConventionConfigurations(root: string, components: Componen
       const matchingTools = tools.filter((tool) =>
         commandUsesTool(root, component, original, tool),
       );
+      if (matchingTools.length === 0) continue;
       if (matchingTools.length !== 1) {
         throw new Error(
           `No unique convention configuration adapter matches ${component.name} ${capability}; configured tools: ${tools.join(", ")}`,
