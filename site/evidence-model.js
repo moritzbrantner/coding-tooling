@@ -30,6 +30,7 @@ const TECHNOLOGY_DEPENDENCIES = Object.freeze([
   ["vite", "vite"],
   ["vitest", "vitest"],
 ]);
+const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
 
 function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -64,6 +65,9 @@ export function createPackageEvidence(input) {
     ...new Set((input.lockfiles ?? []).filter((item) => typeof item === "string")),
   ].toSorted();
   const packageManager = typeof input.packageManager === "string" ? input.packageManager : null;
+  const nodeVersion = typeof input.nodeVersion === "string" ? input.nodeVersion.trim() : null;
+  const nodeVersionPath =
+    input.nodeVersionPath ?? `${path === "." ? "" : `${path}/`}.node-version`;
 
   return {
     schemaVersion: NORMALIZED_EVIDENCE_SCHEMA_VERSION,
@@ -97,6 +101,11 @@ export function createPackageEvidence(input) {
         status: packageManager === null ? "incomplete" : "available",
         value: packageManager,
         provenance: provenance(collector, manifestPath),
+      },
+      nodeVersion: {
+        status: nodeVersion === null ? "incomplete" : "available",
+        value: nodeVersion,
+        provenance: provenance(collector, nodeVersionPath),
       },
       tsconfig: {
         status: "available",
@@ -151,6 +160,95 @@ export function packageSemantics(evidence) {
   return {
     technologies,
     declaredCapabilities,
+  };
+}
+
+export function packageCommandManager(evidence) {
+  if (evidence?.schemaVersion !== NORMALIZED_EVIDENCE_SCHEMA_VERSION) {
+    throw new Error("Unsupported normalized package evidence schema");
+  }
+  const packageManager = evidence.facts.packageManager.value;
+  if (typeof packageManager === "string") {
+    if (packageManager.startsWith("bun@")) return "bun";
+    if (packageManager.startsWith("npm@")) return "npm";
+    if (packageManager.startsWith("pnpm@") || packageManager.startsWith("yarn@")) return null;
+  }
+  if (
+    evidence.facts.lockfiles.value.includes("bun.lock") ||
+    evidence.facts.lockfiles.value.includes("bun.lockb")
+  ) {
+    return "bun";
+  }
+  return "npm";
+}
+
+export function packageToolchainOutcome(evidence) {
+  if (evidence?.schemaVersion !== NORMALIZED_EVIDENCE_SCHEMA_VERSION) {
+    throw new Error("Unsupported normalized package evidence schema");
+  }
+  const packageManager = evidence.facts.packageManager.value;
+  if (typeof packageManager === "string") {
+    const match = packageManager.match(/^([^@]+)@(.+)$/);
+    if (!match) {
+      return {
+        status: "unsupported",
+        manager: null,
+        runtime: null,
+        reason: "package-manager-format-unsupported",
+        provenance: [evidence.facts.packageManager.provenance],
+      };
+    }
+    const manager = match[1];
+    const version = match[2];
+    if (manager === "bun") {
+      return {
+        status: EXACT_VERSION.test(version) ? "satisfied" : "finding",
+        manager: "bun",
+        runtime: "bun",
+        version,
+        reason: EXACT_VERSION.test(version) ? "exact-bun-version" : "bun-version-not-exact",
+        provenance: [evidence.facts.packageManager.provenance],
+      };
+    }
+    if (manager !== "npm") {
+      return {
+        status: "unsupported",
+        manager,
+        runtime: null,
+        version,
+        reason: "package-manager-unsupported",
+        provenance: [evidence.facts.packageManager.provenance],
+      };
+    }
+  }
+
+  const nodeVersion = evidence.facts.nodeVersion.value;
+  if (typeof nodeVersion === "string") {
+    return {
+      status: EXACT_VERSION.test(nodeVersion) ? "satisfied" : "finding",
+      manager: packageCommandManager(evidence),
+      runtime: "node",
+      version: nodeVersion,
+      reason: EXACT_VERSION.test(nodeVersion) ? "exact-node-version" : "node-version-not-exact",
+      provenance: [evidence.facts.nodeVersion.provenance],
+    };
+  }
+
+  return {
+    status: "incomplete",
+    manager: packageCommandManager(evidence),
+    runtime:
+      evidence.facts.lockfiles.value.includes("bun.lock") ||
+      evidence.facts.lockfiles.value.includes("bun.lockb")
+        ? "bun"
+        : "node",
+    version: null,
+    reason:
+      evidence.facts.lockfiles.value.includes("bun.lock") ||
+      evidence.facts.lockfiles.value.includes("bun.lockb")
+        ? "bun-version-missing"
+        : "node-version-missing",
+    provenance: [evidence.facts.packageManager.provenance, evidence.facts.nodeVersion.provenance],
   };
 }
 
