@@ -95,9 +95,7 @@ describe("remote component toolchain evidence", () => {
     );
     expect(root.capabilities.lint).toEqual(["bun", "run", "lint"]);
     expect(app.capabilities.lint).toEqual(["npm", "run", "lint"]);
-    expect(analysis.findings.filter((finding) => finding.id.startsWith("REMOTE-ENV-"))).toEqual(
-      [],
-    );
+    expect(analysis.findings.filter((finding) => finding.id.startsWith("REMOTE-ENV-"))).toEqual([]);
   });
 
   test("serializes missing nested toolchain evidence as incomplete instead of satisfied", () => {
