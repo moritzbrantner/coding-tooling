@@ -169,8 +169,9 @@ describe("foundation convention executable tooling", () => {
         declarations: [],
       },
     ]);
-    expect(result.diagnostics.filter((item) => item.code === "foundation-convention-tool-missing"))
-      .toHaveLength(2);
+    expect(
+      result.diagnostics.filter((item) => item.code === "foundation-convention-tool-missing"),
+    ).toHaveLength(2);
   });
 
   test("accepts exact pinned local tooling required by installed conventions", () => {
