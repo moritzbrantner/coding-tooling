@@ -26,13 +26,21 @@ describe("profiling capabilities", () => {
 
     const [component] = discoverComponents(root);
 
-    expect(component?.capabilities["profile:runtime"]).toEqual(["npm", "run", "profile:runtime"]);
+    expect(component?.capabilities["profile:runtime"]).toEqual([
+      "npm",
+      "run",
+      "profile:runtime",
+    ]);
     expect(component?.capabilities["profile:hotspots"]).toEqual([
       "npm",
       "run",
       "profile:hotspots",
     ]);
-    expect(component?.capabilities["profile:memory"]).toEqual(["npm", "run", "profile:memory"]);
+    expect(component?.capabilities["profile:memory"]).toEqual([
+      "npm",
+      "run",
+      "profile:memory",
+    ]);
   });
 
   test("puts declared profiler capabilities into optional performance tiers", () => {
@@ -65,7 +73,10 @@ describe("profiling capabilities", () => {
       build: "true",
       test: "true",
     });
-    writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "profiling-test"\nversion = "0.1.0"\n');
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      '[package]\nname = "profiling-test"\nversion = "0.1.0"\n',
+    );
 
     const recommendation = repositoryFoundationRecommendation(root);
 
