@@ -18,7 +18,10 @@ import {
   type Diagnostic,
   type ResultStatus,
 } from "./model.ts";
+import { csharpExplicitControlFlowFailures } from "./csharp-source-shape.ts";
+import { rustSourceOrderingOutcome } from "./rust-source-ordering.ts";
 import { commandAvailable, findNearestFile, readJson, runCommand, walkFiles } from "./shared.ts";
+import { csharpMemberOrderingFailures, reactPropsAdjacencyFailures } from "./source-ordering.ts";
 
 type OxlintEnforcement = {
   kind: "oxlint";
@@ -38,7 +41,11 @@ type BuiltinEnforcement = {
     | "bun-default"
     | "case-portability"
     | "ci-action-pins"
+    | "csharp-explicit-control-flow"
+    | "csharp-member-order"
     | "env-example"
+    | "react-props-adjacency"
+    | "rust-source-order"
     | "symlink-boundaries"
     | "text-hygiene"
     | "todo-format"
@@ -144,7 +151,11 @@ const builtinChecks = new Set([
   "bun-default",
   "case-portability",
   "ci-action-pins",
+  "csharp-explicit-control-flow",
+  "csharp-member-order",
   "env-example",
+  "react-props-adjacency",
+  "rust-source-order",
   "symlink-boundaries",
   "text-hygiene",
   "todo-format",
@@ -649,8 +660,35 @@ function runBuiltin(
       return casePortability(root, ruleId);
     case "ci-action-pins":
       return ciActionPins(root, ruleId);
+    case "csharp-explicit-control-flow":
+      return builtinResult(
+        ruleId,
+        "csharp-explicit-control-flow",
+        csharpExplicitControlFlowFailures(root, components),
+      );
+    case "csharp-member-order":
+      return builtinResult(
+        ruleId,
+        "csharp-member-order",
+        csharpMemberOrderingFailures(root, components),
+      );
     case "env-example":
       return envExample(root, ruleId);
+    case "react-props-adjacency":
+      return builtinResult(
+        ruleId,
+        "react-props-adjacency",
+        reactPropsAdjacencyFailures(root, components),
+      );
+    case "rust-source-order": {
+      const outcome = rustSourceOrderingOutcome(root, components);
+      return {
+        ruleId,
+        kind: "builtin:rust-source-order",
+        component: "repository",
+        ...outcome,
+      };
+    }
     case "symlink-boundaries":
       return symlinkBoundaries(root, ruleId);
     case "text-hygiene":
