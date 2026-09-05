@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname, join, resolve, sep } from "node:path";
+import { join, resolve } from "node:path";
 
 import { discoverComponents, planChecks } from "./core.ts";
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
@@ -33,10 +33,6 @@ type InstallResult = DependencyInstallStep & {
   error?: string;
 };
 
-function withinRoot(root: string, candidate: string): boolean {
-  return candidate === root || candidate.startsWith(`${root}${sep}`);
-}
-
 function installOwnerAt(root: string, directory: string): InstallOwner | undefined {
   const bunLock = existsSync(join(directory, "bun.lock"));
   const bunBinaryLock = existsSync(join(directory, "bun.lockb"));
@@ -61,22 +57,6 @@ function installOwnerAt(root: string, directory: string): InstallOwner | undefin
       lockfile: "package-lock.json",
       command: ["npm", "ci"],
     };
-  }
-  return undefined;
-}
-
-function nearestInstallOwner(root: string, componentPath: string): InstallOwner | undefined {
-  const boundary = resolve(root);
-  let current = resolve(root, componentPath === "." ? "" : componentPath);
-  while (withinRoot(boundary, current)) {
-    if (existsSync(join(current, "package.json"))) {
-      const owner = installOwnerAt(boundary, current);
-      if (owner) return owner;
-    }
-    if (current === boundary) break;
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
   }
   return undefined;
 }
@@ -110,15 +90,14 @@ export function dependencyInstallPlan(
       component: options.component,
       configPath: options.configPath,
     });
+    const plannedPaths = new Set(validationPlan.checks.map((check) => check.path));
     const selectedComponents = discoverComponents(root).filter(
       (component) =>
-        !options.component ||
-        component.name === options.component ||
-        component.path === options.component,
+        plannedPaths.has(component.path) &&
+        (!options.component ||
+          component.name === options.component ||
+          component.path === options.component),
     );
-    if (options.component && selectedComponents.length === 0) {
-      throw new Error(`Unknown component: ${options.component}`);
-    }
 
     const steps = new Map<string, DependencyInstallStep>();
     const diagnostics: Diagnostic[] = [];
@@ -126,7 +105,8 @@ export function dependencyInstallPlan(
     for (const component of selectedComponents.filter((item) => item.kind === "package")) {
       let owner: InstallOwner | undefined;
       try {
-        owner = nearestInstallOwner(root, component.path);
+        const directory = component.path === "." ? root : join(root, component.path);
+        owner = installOwnerAt(root, directory);
       } catch (error) {
         conflict = true;
         diagnostics.push({
@@ -139,7 +119,7 @@ export function dependencyInstallPlan(
       if (!owner) {
         diagnostics.push({
           code: "dependency-install-lockfile-missing",
-          message: `${component.name} has no supported Bun or npm lockfile at its component or package-owner ancestors`,
+          message: `${component.name} is selected for execution but has no supported lockfile in its component directory; commit a lockfile or use caller-provided installation with install-mode: none`,
           path: component.path,
         });
         continue;
