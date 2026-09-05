@@ -27,43 +27,40 @@ jobs:
 
           source_path = Path("src/convention-config.ts")
           source = source_path.read_text()
-          old = '''      if (matchingTools.length !== 1) {
-            throw new Error(
-              `No unique convention configuration adapter matches ${component.name} ${capability}; configured tools: ${tools.join(", ")}`,
-            );
-          }
-          const tool = matchingTools[0]!;
-          '''
-          new = '''      if (matchingTools.length === 0) continue;
-          if (matchingTools.length !== 1) {
-            throw new Error(
-              `No unique convention configuration adapter matches ${component.name} ${capability}; configured tools: ${tools.join(", ")}`,
-            );
-          }
-          const tool = matchingTools[0]!;
-          '''
-          if old not in source:
-              raise SystemExit("expected convention-config block not found")
-          source_path.write_text(source.replace(old, new, 1))
+          source_needle = "      if (matchingTools.length !== 1) {\n"
+          if source.count(source_needle) != 1:
+              raise SystemExit(f"expected one matchingTools guard, found {source.count(source_needle)}")
+          source_path.write_text(
+              source.replace(
+                  source_needle,
+                  "      if (matchingTools.length === 0) continue;\n" + source_needle,
+                  1,
+              )
+          )
 
           test_path = Path("tests/convention-tool-config.test.ts")
           test = test_path.read_text()
-          test = test.replace(
-              'test("inspects the package script selected by capabilityCommands overrides", () => {',
-              'test("leaves custom package lint capabilities unchanged when no adapter matches", () => {',
-              1,
+          old_title = 'test("inspects the package script selected by capabilityCommands overrides", () => {'
+          new_title = 'test("leaves custom package lint capabilities unchanged when no adapter matches", () => {'
+          if test.count(old_title) != 1:
+              raise SystemExit(f"expected one custom lint test title, found {test.count(old_title)}")
+          test = test.replace(old_title, new_title, 1)
+
+          start = '      expect(() => planChecks({ root: target, tier: "lintOnly" })).toThrow(\n'
+          end = '      );\n'
+          start_index = test.find(start, test.find(new_title))
+          if start_index < 0:
+              raise SystemExit("expected custom lint assertion start not found")
+          end_index = test.find(end, start_index)
+          if end_index < 0:
+              raise SystemExit("expected custom lint assertion end not found")
+          end_index += len(end)
+          replacement = (
+              '      const plan = planChecks({ root: target, tier: "lintOnly" });\n'
+              '      expect(plan.checks).toHaveLength(1);\n'
+              '      expect(plan.checks[0]!.command).toEqual(["bun", "run", "custom-lint"]);\n'
           )
-          old_expectation = '''      expect(() => planChecks({ root: target, tier: "lintOnly" })).toThrow(
-            "No unique convention configuration adapter matches",
-          );
-          '''
-          new_expectation = '''      const plan = planChecks({ root: target, tier: "lintOnly" });
-          expect(plan.checks).toHaveLength(1);
-          expect(plan.checks[0]!.command).toEqual(["bun", "run", "custom-lint"]);
-          '''
-          if old_expectation not in test:
-              raise SystemExit("expected convention test assertion not found")
-          test_path.write_text(test.replace(old_expectation, new_expectation, 1))
+          test_path.write_text(test[:start_index] + replacement + test[end_index:])
           PY
       - name: Install dependencies reproducibly
         run: bun install --frozen-lockfile
