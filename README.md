@@ -151,6 +151,9 @@ package:check
 dependencies:audit
 benchmark
 benchmark:smoke
+profile:runtime
+profile:hotspots
+profile:memory
 storybook:check
 web:audit
 template:smoke
@@ -160,10 +163,15 @@ template:smoke
 - `test:accessibility` runs deterministic automated accessibility checks. It does not replace manual accessibility review.
 - `test:visual` runs deterministic visual-regression or visual-contract checks.
 - `package:check` validates the package or release shape without publishing, such as metadata, a pack dry-run, or an API/package surface check.
+- `profile:runtime` invokes a repository-declared representative runtime scenario.
+- `profile:hotspots` invokes a repository-declared source-level CPU/hotspot scenario.
+- `profile:memory` invokes repository-declared memory/resource evidence; it does not collapse RSS, retained heap, allocations, or GC into one metric.
 
 For JavaScript/TypeScript components, declared package scripts are preferred over invented commands. When an installed convention has an applicable supported tool fragment, `coding-tooling` preserves that normal semantic capability but injects the deterministic effective config into the selected formatter/linter invocation. Rust and .NET use conservative built-in commands where semantics are mechanically clear.
 
 External deterministic tools may be wired through `capabilityCommands`. `coding-tooling` invokes the declared command but does not own the external tool's policy semantics; applicable convention fragments still have to match a supported deterministic adapter before they can be enforced.
+
+Profiler capabilities are intentionally stricter about discovery than ordinary ecosystem defaults: a language/framework or installed profiler executable does not make profiling available. The repository must declare the scenario through a package script or `capabilityCommands`. This keeps missing or unsupported collector evidence visible instead of inventing a generic profile command that measures no representative workload.
 
 The convention-backed gate capabilities deliberately use canonical repository scripts: `storybook:check`, `web:audit`, and `template:smoke`. A module that installs the corresponding convention can make that capability required for its full validation tier without embedding Storybook, Lighthouse, or template-specific orchestration inside coding-tooling.
 
@@ -195,7 +203,6 @@ coding-agent-skills          coding-agent-conventions
   reusable procedures          shared engineering policy
           │                      + tool-native fragments
           │                              │
-          │                              ▼
           │                       installed snapshots
           │                              │
           └──────────────┬───────────────┘
@@ -218,9 +225,3 @@ coding-agent-skills          coding-agent-conventions
 - `agent-loop-setup` owns machine bootstrap and the per-user component registry.
 
 The collaboration arrows are not hard package dependencies. `coding-tooling` remains useful without the other repositories; operations report unavailable inputs rather than making unrelated commands depend on the whole landscape.
-
-## Private GitHub Action
-
-The repository root is a composite GitHub Action for private repositories owned by the same GitHub account. Pin an immutable tag or commit and use the Action for the repository's declared validation tier.
-
-Convention installation is intentionally not a synchronization Action. Consumer repositories commit their selected convention snapshots and update them deliberately through the CLI.
