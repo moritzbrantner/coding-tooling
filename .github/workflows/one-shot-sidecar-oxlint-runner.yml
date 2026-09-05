@@ -144,7 +144,20 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
       - name: Lint
-        run: bun run lint
+        id: lint
+        continue-on-error: true
+        shell: bash
+        run: bun run lint > lint.log 2>&1
+      - name: Upload lint diagnostics
+        if: ${{ steps.lint.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sidecar-oxlint-lint-diagnostics
+          path: lint.log
+          if-no-files-found: error
+      - name: Propagate lint failure
+        if: ${{ steps.lint.outcome == 'failure' }}
+        run: exit 1
       - name: Format check
         run: bun run format:check
       - name: Commit durable slice
