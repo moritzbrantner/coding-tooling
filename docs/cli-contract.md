@@ -39,6 +39,9 @@ package:check
 dependencies:audit
 benchmark
 benchmark:smoke
+profile:runtime
+profile:hotspots
+profile:memory
 storybook:check
 web:audit
 template:smoke
@@ -50,6 +53,11 @@ A capability name describes semantics, not an ecosystem command. The implementat
 - `test:accessibility` is deterministic automated accessibility validation; manual review remains separate.
 - `test:visual` is deterministic visual-regression or visual-contract validation.
 - `package:check` validates package or release shape without publishing.
+- `profile:runtime` captures a repository-declared representative runtime scenario.
+- `profile:hotspots` captures source-level CPU/hotspot evidence for a repository-declared scenario.
+- `profile:memory` captures repository-declared memory/allocation/GC evidence. The capability name does not imply that RSS, retained heap, allocations, or GC pauses are interchangeable.
+
+Profiler capabilities are never inferred merely from a language, framework, or installed profiler executable. They become available only through an explicit repository package script or `capabilityCommands` mapping. `coding-tooling` executes that declaration; the profiler owns measurement semantics and the repository/evaluator owns thresholds. Unsupported collector environments must be surfaced by the declared command as unavailable/failure evidence rather than silently replaced by a weaker measurement.
 
 ## JSON envelope
 
