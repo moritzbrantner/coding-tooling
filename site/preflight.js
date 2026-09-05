@@ -1,13 +1,8 @@
-const SCRIPT_CAPABILITIES = {
-  "format:check": ["format:check", "check:format"],
-  lint: ["lint"],
-  typecheck: ["typecheck", "check-types"],
-  build: ["build"],
-  "test:unit": ["test:unit", "test"],
-  "test:integration": ["test:integration"],
-  "test:e2e": ["test:e2e"],
-  benchmark: ["benchmark", "bench"],
-};
+import {
+  canonicalPackageCapabilityOutcomes,
+  createPackageEvidence,
+  packageSemantics,
+} from "./evidence-model.js";
 
 const CONTEXT_FILES = new Set([".coding-tooling.json", ".node-version", "rust-toolchain.toml"]);
 const IGNORED_ANALYSIS_SEGMENTS = new Set([
@@ -125,43 +120,42 @@ function discoverComponents(snapshot, paths) {
     if (!manifest) continue;
     const directory = dirname(entry.path);
     const path = directory || ".";
-    const dependencies = { ...manifest.dependencies, ...manifest.devDependencies };
-    const technologies = ["javascript"];
-    if (paths.has(joinPath(directory, "tsconfig.json"))) technologies.push("typescript");
-    for (const [dependency, technology] of [
-      ["react", "react"],
-      ["next", "nextjs"],
-      ["vite", "vite"],
-      ["vitest", "vitest"],
-    ]) {
-      if (dependency in dependencies) technologies.push(technology);
-    }
-    if (
-      Object.keys(dependencies).some(
-        (dependency) => dependency === "storybook" || dependency.startsWith("@storybook/"),
-      )
-    )
-      technologies.push("storybook");
-
+    const name = manifest.name ?? (path === "." ? snapshot.repository.name : basename(directory));
+    const evidence = createPackageEvidence({
+      collector: "github",
+      name,
+      path,
+      manifestPath: entry.path,
+      packageManager: manifest.packageManager,
+      scripts: manifest.scripts,
+      dependencies: manifest.dependencies,
+      devDependencies: manifest.devDependencies,
+      hasTsconfig: paths.has(joinPath(directory, "tsconfig.json")),
+      tsconfigPath: joinPath(directory, "tsconfig.json"),
+      lockfiles: ["bun.lock", "bun.lockb", "package-lock.json"].filter((lockfile) =>
+        paths.has(joinPath(directory, lockfile)),
+      ),
+    });
+    const semantics = packageSemantics(evidence);
     const manager =
-      paths.has(joinPath(directory, "bun.lock")) ||
-      paths.has(joinPath(directory, "bun.lockb")) ||
+      evidence.facts.lockfiles.value.includes("bun.lock") ||
+      evidence.facts.lockfiles.value.includes("bun.lockb") ||
       paths.has("bun.lock")
         ? "bun"
         : "npm";
-    const capabilities = {};
-    for (const [capability, candidates] of Object.entries(SCRIPT_CAPABILITIES)) {
-      const script = candidates.find((candidate) => candidate in (manifest.scripts ?? {}));
-      if (script)
-        capabilities[capability] =
-          manager === "bun" ? ["bun", "run", script] : ["npm", "run", script];
-    }
+    const capabilities = Object.fromEntries(
+      Object.entries(semantics.declaredCapabilities).map(([capability, script]) => [
+        capability,
+        manager === "bun" ? ["bun", "run", script] : ["npm", "run", script],
+      ]),
+    );
     components.push({
-      name: manifest.name ?? (path === "." ? snapshot.repository.name : basename(directory)),
+      name,
       path,
       kind: "package",
-      technologies,
+      technologies: semantics.technologies,
       capabilities,
+      evidence,
     });
   }
 
@@ -340,9 +334,22 @@ function findingsFor(snapshot, paths, components) {
     );
 
   for (const component of components.filter((item) => item.kind === "package")) {
-    const missing = ["format:check", "lint", "typecheck", "test:unit"].filter(
-      (name) => !component.capabilities[name],
-    );
+    const outcomes = canonicalPackageCapabilityOutcomes(component.evidence);
+    const incomplete = outcomes.filter((outcome) => outcome.status === "incomplete");
+    if (incomplete.length) {
+      add(
+        `REMOTE-CAPABILITY-${stableId(component.path)}`,
+        "medium",
+        `${component.name} capability evidence is incomplete`,
+        `Could not establish canonical script evidence for: ${incomplete.map((outcome) => outcome.capability).join(", ")}.`,
+        "Run local deterministic analysis before treating these capabilities as satisfied.",
+        "coding-tooling inspect --json",
+      );
+      continue;
+    }
+    const missing = outcomes
+      .filter((outcome) => outcome.status === "finding")
+      .map((outcome) => outcome.capability);
     if (missing.length)
       add(
         `REMOTE-CAPABILITY-${stableId(component.path)}`,
