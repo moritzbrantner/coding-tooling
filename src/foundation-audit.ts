@@ -11,7 +11,7 @@ import type {
   ToolingConfig,
 } from "./model.ts";
 import { RENOVATE_PRESET, renovateFoundationRecommendation } from "./renovate.ts";
-import { readJson, repositoryRoot } from "./shared.ts";
+import { readJson, relativePosix, repositoryRoot, walkFiles } from "./shared.ts";
 
 export type FoundationComponentStatus = "missing" | "adopted" | "invalid" | "unsupported";
 
@@ -29,12 +29,34 @@ type CommandRecord = {
   source: "discovered" | "configured";
 };
 
+type DependencySection = "dependencies" | "devDependencies" | "optionalDependencies";
+type ConventionExecutableName = "oxlint" | "oxlint-tsgolint";
+type ConventionExecutableStatus = "missing" | "adopted" | "invalid";
+
+type ConventionExecutableDeclaration = {
+  path: string;
+  section: DependencySection;
+  version: string;
+};
+
+type ConventionExecutableRequirement = {
+  name: ConventionExecutableName;
+  rules: string[];
+  status: ConventionExecutableStatus;
+  declarations: ConventionExecutableDeclaration[];
+};
+
 type PackageManifest = {
   packageManager?: unknown;
   renovate?: unknown;
+  dependencies?: unknown;
+  devDependencies?: unknown;
+  optionalDependencies?: unknown;
 };
 
 const renovateUnsupportedExtensions = [".jsonc", ".json5", ".renovaterc"] as const;
+const dependencySections = ["dependencies", "devDependencies", "optionalDependencies"] as const;
+const exactPackageVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function exactVersion(value: string): boolean {
   return /^\d+\.\d+\.\d+$/.test(value);
@@ -42,6 +64,10 @@ function exactVersion(value: string): boolean {
 
 function text(path: string): string {
   return readFileSync(path, "utf8");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function component(
@@ -196,6 +222,175 @@ function environmentAudit(root: string): FoundationComponent {
   });
 }
 
+function addConventionExecutableRequirement(
+  requirements: Map<ConventionExecutableName, Set<string>>,
+  name: ConventionExecutableName,
+  rule: string,
+): void {
+  const rules = requirements.get(name) ?? new Set<string>();
+  rules.add(rule);
+  requirements.set(name, rules);
+}
+
+function conventionExecutableRequirements(
+  root: string,
+): Map<ConventionExecutableName, Set<string>> {
+  const requirements = new Map<ConventionExecutableName, Set<string>>();
+  const installRoot = join(root, ".conventions", "modules");
+  if (!existsSync(installRoot)) return requirements;
+
+  for (const path of walkFiles(installRoot, 20).filter((file) => file.endsWith(".json"))) {
+    const value = readJson<unknown>(path);
+    if (!isRecord(value) || !isRecord(value.enforcement) || value.enforcement.kind !== "oxlint") {
+      continue;
+    }
+    const rule =
+      typeof value.ruleId === "string"
+        ? value.ruleId
+        : relativePosix(join(root, ".conventions"), path);
+    addConventionExecutableRequirement(requirements, "oxlint", rule);
+
+    const config = value.enforcement.config;
+    if (isRecord(config) && isRecord(config.options) && config.options.typeAware === true) {
+      addConventionExecutableRequirement(requirements, "oxlint-tsgolint", rule);
+    }
+  }
+
+  return requirements;
+}
+
+function conventionPackageManifests(root: string): string[] {
+  const paths = new Set<string>();
+  const rootManifest = join(root, "package.json");
+  if (existsSync(rootManifest)) paths.add(rootManifest);
+  for (const discovered of discoverComponents(root)) {
+    if (discovered.kind !== "package") continue;
+    const path = join(root, discovered.path === "." ? "" : discovered.path, "package.json");
+    if (existsSync(path)) paths.add(path);
+  }
+  return [...paths].sort((left, right) => left.localeCompare(right));
+}
+
+function conventionExecutableDeclarations(
+  root: string,
+  required: Set<ConventionExecutableName>,
+): {
+  declarations: Map<ConventionExecutableName, ConventionExecutableDeclaration[]>;
+  diagnostics: Diagnostic[];
+} {
+  const declarations = new Map<ConventionExecutableName, ConventionExecutableDeclaration[]>();
+  const diagnostics: Diagnostic[] = [];
+
+  for (const path of conventionPackageManifests(root)) {
+    const relativePath = relativePosix(root, path);
+    let manifest: unknown;
+    try {
+      manifest = JSON.parse(text(path)) as unknown;
+    } catch {
+      diagnostics.push({
+        code: "foundation-convention-package-manifest-invalid",
+        message: `${relativePath} is not valid JSON`,
+        path: relativePath,
+      });
+      continue;
+    }
+    if (!isRecord(manifest)) {
+      diagnostics.push({
+        code: "foundation-convention-package-manifest-invalid",
+        message: `${relativePath} must contain a JSON object`,
+        path: relativePath,
+      });
+      continue;
+    }
+
+    for (const section of dependencySections) {
+      const sectionValue = manifest[section];
+      if (sectionValue === undefined) continue;
+      if (!isRecord(sectionValue)) {
+        diagnostics.push({
+          code: "foundation-convention-dependency-section-invalid",
+          message: `${relativePath} ${section} must be a JSON object`,
+          path: relativePath,
+        });
+        continue;
+      }
+      for (const name of required) {
+        if (!Object.prototype.hasOwnProperty.call(sectionValue, name)) continue;
+        const version = sectionValue[name];
+        if (typeof version !== "string") {
+          diagnostics.push({
+            code: "foundation-convention-tool-version-invalid",
+            message: `${name} must use an exact repository-owned package version`,
+            path: relativePath,
+          });
+          continue;
+        }
+        const values = declarations.get(name) ?? [];
+        values.push({ path: relativePath, section, version });
+        declarations.set(name, values);
+      }
+    }
+  }
+
+  return { declarations, diagnostics };
+}
+
+function conventionExecutableAudit(root: string): {
+  status: ConventionExecutableStatus;
+  diagnostics: Diagnostic[];
+  requiredExecutables: ConventionExecutableRequirement[];
+} {
+  const requiredByRule = conventionExecutableRequirements(root);
+  const required = new Set(requiredByRule.keys());
+  if (required.size === 0) {
+    return { status: "adopted", diagnostics: [], requiredExecutables: [] };
+  }
+
+  const inspection = conventionExecutableDeclarations(root, required);
+  const diagnostics = [...inspection.diagnostics];
+  const requiredExecutables = [...requiredByRule.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, rules]) => {
+      const declarations = [...(inspection.declarations.get(name) ?? [])].sort(
+        (left, right) =>
+          left.path.localeCompare(right.path) || left.section.localeCompare(right.section),
+      );
+      const invalidVersions = declarations.filter(
+        (declaration) => !exactPackageVersion.test(declaration.version),
+      );
+      for (const declaration of invalidVersions) {
+        diagnostics.push({
+          code: "foundation-convention-tool-version-invalid",
+          message: `${name} must use an exact repository-owned package version, got ${declaration.version}`,
+          path: declaration.path,
+        });
+      }
+      const status: ConventionExecutableStatus =
+        invalidVersions.length > 0 ? "invalid" : declarations.length > 0 ? "adopted" : "missing";
+      if (status === "missing") {
+        diagnostics.push({
+          code: "foundation-convention-tool-missing",
+          message: `${name} is required by installed convention rules ${[...rules].sort().join(", ")} but has no repository-owned dependency declaration`,
+        });
+      }
+      return {
+        name,
+        rules: [...rules].sort(),
+        status,
+        declarations,
+      };
+    });
+
+  const status: ConventionExecutableStatus =
+    inspection.diagnostics.length > 0 ||
+    requiredExecutables.some((entry) => entry.status === "invalid")
+      ? "invalid"
+      : requiredExecutables.some((entry) => entry.status === "missing")
+        ? "missing"
+        : "adopted";
+  return { status, diagnostics, requiredExecutables };
+}
+
 function conventionsAudit(root: string): FoundationComponent {
   const manifestPresent = existsSync(join(root, "conventions.json"));
   const lockPresent = existsSync(join(root, "conventions.lock.json"));
@@ -217,15 +412,22 @@ function conventionsAudit(root: string): FoundationComponent {
   }
 
   const check = conventionRegistryCommand("check", [], { root });
-  return component(check.status === "passed" ? "adopted" : "invalid", check.diagnostics, {
-    manifestPresent,
-    lockPresent,
-    snapshotPresent,
-    requestedModules: check.data.requestedModules ?? [],
-    resolvedModules: check.data.resolvedModules ?? [],
-    sourceRevision: check.data.sourceRevision,
-    drift: check.data.drift ?? [],
-  });
+  const executableTooling = check.status === "passed" ? conventionExecutableAudit(root) : undefined;
+  const diagnostics = [...check.diagnostics, ...(executableTooling?.diagnostics ?? [])];
+  return component(
+    check.status === "passed" && executableTooling?.status === "adopted" ? "adopted" : "invalid",
+    diagnostics,
+    {
+      manifestPresent,
+      lockPresent,
+      snapshotPresent,
+      requestedModules: check.data.requestedModules ?? [],
+      resolvedModules: check.data.resolvedModules ?? [],
+      sourceRevision: check.data.sourceRevision,
+      drift: check.data.drift ?? [],
+      executableTooling,
+    },
+  );
 }
 
 function toolingAudit(root: string): { component: FoundationComponent; config?: ToolingConfig } {
