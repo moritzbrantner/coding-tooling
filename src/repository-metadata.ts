@@ -247,11 +247,7 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
     const observedMissing = Object.entries(foundation)
       .filter(([key, present]) => !present && !optionalFoundationKeys.has(key))
       .map(([key]) => key);
-    const missing = enforceFoundation
-      ? observedMissing
-      : foundation.metadata
-        ? []
-        : ["metadata"];
+    const missing = enforceFoundation ? observedMissing : foundation.metadata ? [] : ["metadata"];
     const mechanicalComponents = mechanicalFoundation.data.components as
       | Record<string, { status?: unknown }>
       | undefined;
