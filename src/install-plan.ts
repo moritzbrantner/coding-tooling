@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import { discoverComponents, planChecks } from "./core.ts";
-import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
+import type { Diagnostic, ResultEnvelope, ResultOperation, ResultStatus } from "./model.ts";
 import { relativePosix, repositoryRoot, runCommand } from "./shared.ts";
 
 type InstallManager = "bun" | "npm";
@@ -62,7 +62,7 @@ function installOwnerAt(root: string, directory: string): InstallOwner | undefin
 }
 
 function envelope(
-  operation: string,
+  operation: ResultOperation,
   status: ResultStatus,
   started: number,
   data: Record<string, unknown>,
@@ -141,10 +141,11 @@ export function dependencyInstallPlan(
         ? "unavailable"
         : "passed";
     return envelope(
-      "install-plan",
+      "install",
       status,
       started,
       {
+        action: "plan",
         planVersion: 1,
         root,
         profile: validationPlan.profile,
@@ -160,7 +161,7 @@ export function dependencyInstallPlan(
       diagnostics,
     );
   } catch (error) {
-    return envelope("install-plan", "error", started, { planVersion: 1, root, tier: options.tier }, [
+    return envelope("install", "error", started, { action: "plan", planVersion: 1, root, tier: options.tier }, [
       {
         code: "dependency-install-plan-invalid",
         message: error instanceof Error ? error.message : String(error),
@@ -178,10 +179,10 @@ export function prepareDependencies(
   const steps = Array.isArray(plan.data.steps) ? (plan.data.steps as DependencyInstallStep[]) : [];
   if (plan.status !== "passed") {
     return envelope(
-      "install-prepare",
+      "install",
       plan.status,
       started,
-      { ...plan.data, planStatus: plan.status, results: [] },
+      { ...plan.data, action: "prepare", planStatus: plan.status, results: [] },
       plan.diagnostics,
     );
   }
@@ -212,10 +213,10 @@ export function prepareDependencies(
       ? "failed"
       : "passed";
   return envelope(
-    "install-prepare",
+    "install",
     status,
     started,
-    { ...plan.data, planStatus: plan.status, results },
+    { ...plan.data, action: "prepare", planStatus: plan.status, results },
     plan.diagnostics,
   );
 }
