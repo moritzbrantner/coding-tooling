@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "format": "oxfmt --check .",
-    "format:check": "oxfmt site/evidence-model.js src/normalized-evidence.ts tests/component-toolchain-preflight.test.js && git diff -- site/evidence-model.js src/normalized-evidence.ts tests/component-toolchain-preflight.test.js && false",
+    "format:check": "oxfmt --check .",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
