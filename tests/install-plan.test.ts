@@ -67,22 +67,28 @@ describe("dependency install plan", () => {
     ]);
   });
 
-  test("deduplicates packages owned by the same ancestor lockfile", () => {
+  test("does not claim a root lock owns an unrelated nested package", () => {
     const root = repository();
     writeFileSync(join(root, "bun.lock"), "root\n");
 
     const result = dependencyInstallPlan({ root, tier: "fast" });
 
-    expect(result.status).toBe("passed");
+    expect(result.status).toBe("unavailable");
     expect(steps(result)).toEqual([
       {
         path: ".",
         manager: "bun",
         lockfile: "bun.lock",
         command: ["bun", "install", "--frozen-lockfile"],
-        components: ["nested-package", "root-package"],
+        components: ["root-package"],
       },
     ]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "dependency-install-lockfile-missing",
+        path: "packages/nested",
+      }),
+    );
   });
 
   test("honors the same component selector as validation planning", () => {
@@ -108,7 +114,24 @@ describe("dependency install plan", () => {
     ]);
   });
 
-  test("reports selected packages without a supported owner lockfile as unavailable", () => {
+  test("ignores discovered packages that have no checks in the selected tier", () => {
+    const root = repository();
+    writeFileSync(join(root, "bun.lock"), "root\n");
+    writeFileSync(join(root, "packages", "nested", "bun.lock"), "nested\n");
+    writeJson(join(root, "packages", "docs", "package.json"), {
+      name: "docs-package",
+      scripts: { lint: "node -e process.exit(0)" },
+    });
+
+    const result = dependencyInstallPlan({ root, tier: "fast" });
+
+    expect(result.status).toBe("passed");
+    expect(
+      (result.data.selectedComponents as Array<{ name: string }>).map((component) => component.name),
+    ).toEqual(["root-package", "nested-package"]);
+  });
+
+  test("reports selected packages without a supported component lockfile as unavailable", () => {
     const root = repository();
 
     const result = dependencyInstallPlan({ root, tier: "fast" });
@@ -125,12 +148,13 @@ describe("dependency install plan", () => {
     const root = repository();
     writeFileSync(join(root, "bun.lock"), "root\n");
     writeFileSync(join(root, "package-lock.json"), "{}\n");
+    writeFileSync(join(root, "packages", "nested", "bun.lock"), "nested\n");
 
     const result = dependencyInstallPlan({ root, tier: "fast" });
 
     expect(result.status).toBe("failed");
     expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({ code: "dependency-install-lockfile-conflict" }),
+      expect.objectContaining({ code: "dependency-install-lockfile-conflict", path: "." }),
     );
   });
 });
