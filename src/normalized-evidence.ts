@@ -29,7 +29,9 @@ export function collectLocalPackageEvidence(root: string): PackageEvidenceV1[] {
         path: component.path,
         manifestPath: component.path === "." ? "package.json" : `${component.path}/package.json`,
         packageManager: manifest.packageManager,
-        nodeVersion: existsSync(nodeVersionPath) ? readFileSync(nodeVersionPath, "utf8").trim() : undefined,
+        nodeVersion: existsSync(nodeVersionPath)
+          ? readFileSync(nodeVersionPath, "utf8").trim()
+          : undefined,
         nodeVersionPath:
           component.path === "." ? ".node-version" : `${component.path}/.node-version`,
         scripts: manifest.scripts,
