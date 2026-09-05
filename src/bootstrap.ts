@@ -151,6 +151,9 @@ function recommendedConfig(
     "dependencies:audit",
     "benchmark",
     "benchmark:smoke",
+    "profile:runtime",
+    "profile:hotspots",
+    "profile:memory",
     "storybook:check",
     "web:audit",
     "template:smoke",
@@ -172,9 +175,13 @@ function recommendedConfig(
   if (e2e.length > 0) tiers.e2e = e2e;
 
   const performance = orderedCapabilities(
-    ["benchmark:smoke", "benchmark"].filter((capability) =>
-      optional.has(capability as Capability),
-    ) as Capability[],
+    [
+      "benchmark:smoke",
+      "benchmark",
+      "profile:runtime",
+      "profile:hotspots",
+      "profile:memory",
+    ].filter((capability) => optional.has(capability as Capability)) as Capability[],
   );
   if (performance.length > 0) tiers.performance = performance;
 
