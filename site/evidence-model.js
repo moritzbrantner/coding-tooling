@@ -66,8 +66,7 @@ export function createPackageEvidence(input) {
   ].toSorted();
   const packageManager = typeof input.packageManager === "string" ? input.packageManager : null;
   const nodeVersion = typeof input.nodeVersion === "string" ? input.nodeVersion.trim() : null;
-  const nodeVersionPath =
-    input.nodeVersionPath ?? `${path === "." ? "" : `${path}/`}.node-version`;
+  const nodeVersionPath = input.nodeVersionPath ?? `${path === "." ? "" : `${path}/`}.node-version`;
 
   return {
     schemaVersion: NORMALIZED_EVIDENCE_SCHEMA_VERSION,
