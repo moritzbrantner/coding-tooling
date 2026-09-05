@@ -420,7 +420,7 @@ function envFileKeys(path: string): Set<string> {
   if (!existsSync(path)) return new Set();
   const keys = new Set<string>();
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
-    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    const match = line.match(/^\s*(?:#\s*)?(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
     if (match) keys.add(match[1]);
   }
   return keys;

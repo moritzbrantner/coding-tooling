@@ -62,7 +62,7 @@ describe("installed convention enforcement", () => {
 
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("failed");
 
-    writeFileSync(join(root, ".env.example"), "API_URL=\n");
+    writeFileSync(join(root, ".env.example"), "# API_URL=\n");
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
   });
 
