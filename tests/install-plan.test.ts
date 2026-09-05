@@ -127,7 +127,9 @@ describe("dependency install plan", () => {
 
     expect(result.status).toBe("passed");
     expect(
-      (result.data.selectedComponents as Array<{ name: string }>).map((component) => component.name),
+      (result.data.selectedComponents as Array<{ name: string }>).map(
+        (component) => component.name,
+      ),
     ).toEqual(["root-package", "nested-package"]);
   });
 
