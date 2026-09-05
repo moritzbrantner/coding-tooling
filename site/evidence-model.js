@@ -31,6 +31,19 @@ const TECHNOLOGY_DEPENDENCIES = Object.freeze([
   ["vitest", "vitest"],
 ]);
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
+const STRUCTURAL_IGNORED_SEGMENTS = new Set([
+  ".git",
+  ".next",
+  ".turbo",
+  "build",
+  "coverage",
+  "dist",
+  "fixtures",
+  "generated",
+  "node_modules",
+  "target",
+  "vendor",
+]);
 
 function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -46,6 +59,25 @@ function strings(value) {
 
 function provenance(collector, path) {
   return { collector, path };
+}
+
+function structuralFiles(input) {
+  if (!Array.isArray(input)) return [];
+  return [...new Set(input.filter((item) => typeof item === "string"))].toSorted();
+}
+
+export function isStructuralTestPath(path) {
+  const lower = path.toLowerCase();
+  return (
+    /(^|\/)(tests?|__tests__)\//.test(lower) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(lower)
+  );
+}
+
+export function isStructuralProductionSource(path) {
+  const lower = path.toLowerCase();
+  if (path.split("/").some((segment) => STRUCTURAL_IGNORED_SEGMENTS.has(segment))) return false;
+  if (isStructuralTestPath(path)) return false;
+  return !/\.stories\.[cm]?[jt]sx?$/.test(lower) && /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(lower);
 }
 
 export function createPackageEvidence(input) {
@@ -67,6 +99,8 @@ export function createPackageEvidence(input) {
   const packageManager = typeof input.packageManager === "string" ? input.packageManager : null;
   const nodeVersion = typeof input.nodeVersion === "string" ? input.nodeVersion.trim() : null;
   const nodeVersionPath = input.nodeVersionPath ?? `${path === "." ? "" : `${path}/`}.node-version`;
+  const files = structuralFiles(input.structuralFiles);
+  const filesComplete = input.structuralFiles !== undefined && input.structuralFilesComplete !== false;
 
   return {
     schemaVersion: NORMALIZED_EVIDENCE_SCHEMA_VERSION,
@@ -120,6 +154,11 @@ export function createPackageEvidence(input) {
         provenance: lockfiles.map((item) =>
           provenance(collector, path === "." ? item : `${path}/${item}`),
         ),
+      },
+      structuralFiles: {
+        status: filesComplete ? "available" : "incomplete",
+        value: files,
+        provenance: files.map((file) => provenance(collector, file)),
       },
     },
   };
@@ -248,6 +287,49 @@ export function packageToolchainOutcome(evidence) {
         ? "bun-version-missing"
         : "node-version-missing",
     provenance: [evidence.facts.packageManager.provenance, evidence.facts.nodeVersion.provenance],
+  };
+}
+
+export function packageStructuralTestOutcome(evidence) {
+  if (evidence?.schemaVersion !== NORMALIZED_EVIDENCE_SCHEMA_VERSION) {
+    throw new Error("Unsupported normalized package evidence schema");
+  }
+  const inventory = evidence.facts.structuralFiles;
+  const sourceFiles = inventory.value.filter(isStructuralProductionSource);
+  const testFiles = inventory.value.filter(isStructuralTestPath);
+  if (inventory.status !== "available") {
+    return {
+      status: "incomplete",
+      reason: "structural-file-inventory-incomplete",
+      sourceFiles,
+      testFiles,
+      provenance: inventory.provenance,
+    };
+  }
+  if (sourceFiles.length === 0) {
+    return {
+      status: "satisfied",
+      reason: "no-production-source",
+      sourceFiles,
+      testFiles,
+      provenance: inventory.provenance,
+    };
+  }
+  if (testFiles.length === 0) {
+    return {
+      status: "finding",
+      reason: "structural-test-file-missing",
+      sourceFiles,
+      testFiles,
+      provenance: inventory.provenance,
+    };
+  }
+  return {
+    status: "satisfied",
+    reason: "structural-test-file-present",
+    sourceFiles,
+    testFiles,
+    provenance: inventory.provenance,
   };
 }
 
