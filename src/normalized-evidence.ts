@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
@@ -22,12 +22,16 @@ export function collectLocalPackageEvidence(root: string): PackageEvidenceV1[] {
       const directory = component.path === "." ? root : join(root, component.path);
       const manifestPath = join(directory, "package.json");
       const manifest = readJson<PackageManifest>(manifestPath) ?? {};
+      const nodeVersionPath = join(directory, ".node-version");
       return createPackageEvidence({
         collector: "filesystem",
         name: component.name,
         path: component.path,
         manifestPath: component.path === "." ? "package.json" : `${component.path}/package.json`,
         packageManager: manifest.packageManager,
+        nodeVersion: existsSync(nodeVersionPath) ? readFileSync(nodeVersionPath, "utf8").trim() : undefined,
+        nodeVersionPath:
+          component.path === "." ? ".node-version" : `${component.path}/.node-version`,
         scripts: manifest.scripts,
         dependencies: manifest.dependencies,
         devDependencies: manifest.devDependencies,
