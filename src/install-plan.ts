@@ -161,12 +161,18 @@ export function dependencyInstallPlan(
       diagnostics,
     );
   } catch (error) {
-    return envelope("install", "error", started, { action: "plan", planVersion: 1, root, tier: options.tier }, [
-      {
-        code: "dependency-install-plan-invalid",
-        message: error instanceof Error ? error.message : String(error),
-      },
-    ]);
+    return envelope(
+      "install",
+      "error",
+      started,
+      { action: "plan", planVersion: 1, root, tier: options.tier },
+      [
+        {
+          code: "dependency-install-plan-invalid",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    );
   }
 }
 
