@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "format": "oxfmt --check .",
-    "format:check": "oxfmt . && git diff -- src/foundation-audit.ts tests/foundation-convention-tooling.test.ts && false",
+    "format:check": "oxfmt --check .",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
