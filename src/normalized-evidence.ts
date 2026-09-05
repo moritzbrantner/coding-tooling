@@ -3,10 +3,7 @@ import { join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
 import { readJson } from "./shared.ts";
-import {
-  createPackageEvidence,
-  type PackageEvidenceV1,
-} from "../site/evidence-model.js";
+import { createPackageEvidence, type PackageEvidenceV1 } from "../site/evidence-model.js";
 
 type PackageManifest = {
   name?: string;
@@ -35,8 +32,7 @@ export function collectLocalPackageEvidence(root: string): PackageEvidenceV1[] {
         dependencies: manifest.dependencies,
         devDependencies: manifest.devDependencies,
         hasTsconfig: existsSync(join(directory, "tsconfig.json")),
-        tsconfigPath:
-          component.path === "." ? "tsconfig.json" : `${component.path}/tsconfig.json`,
+        tsconfigPath: component.path === "." ? "tsconfig.json" : `${component.path}/tsconfig.json`,
         lockfiles: packageLockfiles.filter((name) => existsSync(join(directory, name))),
       });
     });
