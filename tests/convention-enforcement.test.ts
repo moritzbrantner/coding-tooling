@@ -70,7 +70,7 @@ describe("installed convention enforcement", () => {
     const root = repository();
     writeFileSync(
       join(root, "src", "ambient.ts"),
-      "export const ci = process.env.CI;\nexport const home = process.env.HOME;\n",
+      "export const ci = process.env.CI;\nexport const home = process.env.HOME;\nexport const nodeEnv = process.env.NODE_ENV;\nexport const nextPhase = process.env.NEXT_PHASE;\n",
     );
     writeFileSync(
       join(root, "src", "ambient.rs"),

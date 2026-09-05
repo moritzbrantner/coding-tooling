@@ -166,6 +166,8 @@ const exactActionRevision = /^[0-9a-f]{40}$/i;
 const ambientEnvironmentKeys = new Set([
   "CI",
   "HOME",
+  "NEXT_PHASE",
+  "NODE_ENV",
   "PATH",
   "PWD",
   "TEMP",
