@@ -5,10 +5,7 @@ import { dirname, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import { collectLocalPackageEvidence } from "../src/normalized-evidence.ts";
-import {
-  canonicalPackageCapabilityOutcomes,
-  packageSemantics,
-} from "../site/evidence-model.js";
+import { canonicalPackageCapabilityOutcomes, packageSemantics } from "../site/evidence-model.js";
 import { analyzeSnapshot } from "../site/preflight.js";
 
 function writeJson(path, value) {
