@@ -61,7 +61,7 @@ jobs:
           }
 
           function declaredOxlintInvocation(root: string, componentRoot: string): string[] | undefined {
-            for (const directory of [...new Set([componentRoot, root])]) {
+            for (const directory of new Set([componentRoot, root])) {
               const manifest = readJson<{ scripts?: Record<string, string> }>(join(directory, "package.json"));
               const script = manifest?.scripts?.lint;
               if (!script) continue;
@@ -144,20 +144,7 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
       - name: Lint
-        id: lint
-        continue-on-error: true
-        shell: bash
-        run: bun run lint > lint.log 2>&1
-      - name: Upload lint diagnostics
-        if: ${{ steps.lint.outcome == 'failure' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: sidecar-oxlint-lint-diagnostics
-          path: lint.log
-          if-no-files-found: error
-      - name: Propagate lint failure
-        if: ${{ steps.lint.outcome == 'failure' }}
-        run: exit 1
+        run: bun run lint
       - name: Format check
         run: bun run format:check
       - name: Commit durable slice
