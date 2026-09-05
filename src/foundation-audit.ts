@@ -232,7 +232,9 @@ function addConventionExecutableRequirement(
   requirements.set(name, rules);
 }
 
-function conventionExecutableRequirements(root: string): Map<ConventionExecutableName, Set<string>> {
+function conventionExecutableRequirements(
+  root: string,
+): Map<ConventionExecutableName, Set<string>> {
   const requirements = new Map<ConventionExecutableName, Set<string>>();
   const installRoot = join(root, ".conventions", "modules");
   if (!existsSync(installRoot)) return requirements;
@@ -243,15 +245,13 @@ function conventionExecutableRequirements(root: string): Map<ConventionExecutabl
       continue;
     }
     const rule =
-      typeof value.ruleId === "string" ? value.ruleId : relativePosix(join(root, ".conventions"), path);
+      typeof value.ruleId === "string"
+        ? value.ruleId
+        : relativePosix(join(root, ".conventions"), path);
     addConventionExecutableRequirement(requirements, "oxlint", rule);
 
     const config = value.enforcement.config;
-    if (
-      isRecord(config) &&
-      isRecord(config.options) &&
-      config.options.typeAware === true
-    ) {
+    if (isRecord(config) && isRecord(config.options) && config.options.typeAware === true) {
       addConventionExecutableRequirement(requirements, "oxlint-tsgolint", rule);
     }
   }
@@ -382,7 +382,8 @@ function conventionExecutableAudit(root: string): {
     });
 
   const status: ConventionExecutableStatus =
-    inspection.diagnostics.length > 0 || requiredExecutables.some((entry) => entry.status === "invalid")
+    inspection.diagnostics.length > 0 ||
+    requiredExecutables.some((entry) => entry.status === "invalid")
       ? "invalid"
       : requiredExecutables.some((entry) => entry.status === "missing")
         ? "missing"
@@ -412,10 +413,7 @@ function conventionsAudit(root: string): FoundationComponent {
 
   const check = conventionRegistryCommand("check", [], { root });
   const executableTooling = check.status === "passed" ? conventionExecutableAudit(root) : undefined;
-  const diagnostics = [
-    ...check.diagnostics,
-    ...(executableTooling?.diagnostics ?? []),
-  ];
+  const diagnostics = [...check.diagnostics, ...(executableTooling?.diagnostics ?? [])];
   return component(
     check.status === "passed" && executableTooling?.status === "adopted" ? "adopted" : "invalid",
     diagnostics,
