@@ -22,6 +22,7 @@ import { activatePullRequestAutoMerge } from "./pr-auto-merge.ts";
 import type { MergeMethod } from "./pr.ts";
 import { pullRequestMergeEligibility } from "./pr-eligibility.ts";
 import { publicContractCommand } from "./public-contract.ts";
+import { remediationPlanCommand } from "./remediation-plan.ts";
 import { fleetAudit, repositoryMetadataCommand } from "./repository-metadata.ts";
 import { repositoryProgressScoreCommand } from "./repository-progress-score.ts";
 import { repositoryEvidenceCommand } from "./repository-evidence.ts";
@@ -48,6 +49,7 @@ function expectationUsage(): never {
   console.error(`Usage:
   coding-tooling analyze [--json]
   coding-tooling score [--validation-report <path>] [--json]
+  coding-tooling remediation plan [--include-baseline] [--json]
   coding-tooling findings [--new|--baseline] [--all] [--json]
   coding-tooling finding <finding-id> [--json]
   coding-tooling baseline [--json]
@@ -107,6 +109,19 @@ export function entryMain(argv = process.argv.slice(2)): number {
     }
     const result = repositoryProgressScoreCommand(repositoryRoot(), {
       validationReportPath: option(argv, "validation-report"),
+    });
+    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
+    return resultExitCode(result.status);
+  }
+
+  if (command === "remediation") {
+    if (argv[1] !== "plan") return expectationUsage();
+    const unknown = argv
+      .slice(2)
+      .filter((value) => !["--include-baseline", "--json"].includes(value));
+    if (unknown.length > 0) return expectationUsage();
+    const result = remediationPlanCommand(repositoryRoot(), {
+      includeBaseline: argv.includes("--include-baseline"),
     });
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
