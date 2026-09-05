@@ -1,0 +1,159 @@
+name: One-shot sidecar Oxlint runner
+
+on:
+  push:
+    branches: ["fix/sidecar-versioned-oxlint-runner"]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Apply narrow sidecar runner fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source_path = Path('src/convention-enforcement.ts')
+          source = source_path.read_text()
+          marker = '''function resultStatus(status: number, error?: string): ResultStatus {
+            return error ? "error" : status === 0 ? "passed" : "failed";
+          }
+
+          function runOxlint(
+          '''
+          replacement = '''function resultStatus(status: number, error?: string): ResultStatus {
+            return error ? "error" : status === 0 ? "passed" : "failed";
+          }
+
+          const exactVersionedOxlint = /^oxlint@\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$/;
+
+          function versionedOxlintInvocation(script: string): string[] | undefined {
+            if (/&&|\\|\\||[;|<>\\n\\r]/.test(script)) return undefined;
+            const tokens = script.trim().split(/\\s+/);
+            const runner = basename(tokens[0] ?? "");
+            if (
+              (runner === "bunx" || runner === "npx") &&
+              exactVersionedOxlint.test(basename(tokens[1] ?? ""))
+            ) {
+              return tokens.slice(0, 2);
+            }
+            if (
+              (runner === "pnpm" || runner === "yarn") &&
+              tokens[1] === "dlx" &&
+              exactVersionedOxlint.test(basename(tokens[2] ?? ""))
+            ) {
+              return tokens.slice(0, 3);
+            }
+            return undefined;
+          }
+
+          function declaredOxlintInvocation(root: string, componentRoot: string): string[] | undefined {
+            for (const directory of [...new Set([componentRoot, root])]) {
+              const manifest = readJson<{ scripts?: Record<string, string> }>(join(directory, "package.json"));
+              const script = manifest?.scripts?.lint;
+              if (!script) continue;
+              const invocation = versionedOxlintInvocation(script);
+              if (invocation) return invocation;
+            }
+            return undefined;
+          }
+
+          function oxlintInvocation(root: string, componentRoot: string): string[] | undefined {
+            const declared = declaredOxlintInvocation(root, componentRoot);
+            if (declared) {
+              const runner = executable(root, componentRoot, basename(declared[0]!));
+              if (runner) return [runner, ...declared.slice(1)];
+            }
+            const installed = executable(root, componentRoot, "oxlint");
+            return installed ? [installed] : undefined;
+          }
+
+          function runOxlint(
+          '''
+          if source.count(marker) != 1:
+              raise SystemExit(f'expected one runOxlint insertion marker, found {source.count(marker)}')
+          source = source.replace(marker, replacement, 1)
+          old = '''  const componentRoot = component.path === "." ? root : join(root, component.path);
+            const oxlint = executable(root, componentRoot, "oxlint");
+            if (!oxlint) {
+          '''
+          new = '''  const componentRoot = component.path === "." ? root : join(root, component.path);
+            const invocation = oxlintInvocation(root, componentRoot);
+            if (!invocation) {
+          '''
+          if source.count(old) != 1:
+              raise SystemExit(f'expected one oxlint resolution block, found {source.count(old)}')
+          source = source.replace(old, new, 1)
+          old_command = '    const command = [oxlint, "--config", config, "."];\n'
+          new_command = '    const command = [...invocation, "--config", config, "."];\n'
+          if source.count(old_command) != 1:
+              raise SystemExit(f'expected one oxlint command line, found {source.count(old_command)}')
+          source_path.write_text(source.replace(old_command, new_command, 1))
+
+          test_path = Path('tests/convention-enforcement.test.ts')
+          test = test_path.read_text()
+          old_import = 'import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";\n'
+          new_import = 'import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";\n'
+          if test.count(old_import) != 1:
+              raise SystemExit(f'expected one fs import, found {test.count(old_import)}')
+          test = test.replace(old_import, new_import, 1)
+          anchor = '''  test("requires actionable TODO syntax and rejects FIXME", () => {
+          '''
+          addition = '''  test("uses a repository-declared exact Oxlint runner for sidecar enforcement", () => {
+            const root = repository({ scripts: { lint: "bunx oxlint@1.80.0 --format=github" } });
+            const binDirectory = join(root, "node_modules", ".bin");
+            mkdirSync(binDirectory, { recursive: true });
+            const runner = join(binDirectory, process.platform === "win32" ? "bunx.cmd" : "bunx");
+            writeFileSync(
+              runner,
+              process.platform === "win32"
+                ? '@echo off\\r\\nif not "%1"=="oxlint@1.80.0" exit /b 2\\r\\nexit /b 0\\r\\n'
+                : '#!/bin/sh\\n[ "$1" = "oxlint@1.80.0" ] || exit 2\\nexit 0\\n',
+            );
+            if (process.platform !== "win32") chmodSync(runner, 0o755);
+            enforce(root, "REACT-004", { kind: "oxlint", config: { rules: {} } });
+
+            const result = runConventionChecks(root, discoverComponents(root));
+            expect(result.status).toBe("passed");
+            expect(result.results[0]?.command?.[0]).toBe(runner);
+            expect(result.results[0]?.command?.[1]).toBe("oxlint@1.80.0");
+          });
+
+          '''
+          if test.count(anchor) != 1:
+              raise SystemExit(f'expected one test insertion anchor, found {test.count(anchor)}')
+          test_path.write_text(test.replace(anchor, addition + anchor, 1))
+          PY
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Run focused convention enforcement tests
+        run: bun test tests/convention-enforcement.test.ts --timeout 15000
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Lint
+        run: bun run lint
+      - name: Format check
+        run: bun run format:check
+      - name: Commit durable slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/one-shot-sidecar-oxlint-runner.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/convention-enforcement.ts tests/convention-enforcement.test.ts .github/workflows/one-shot-sidecar-oxlint-runner.yml
+          git commit -m "fix: honor versioned Oxlint runner for convention sidecars"
+          git push origin HEAD:fix/sidecar-versioned-oxlint-runner
