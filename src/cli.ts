@@ -17,6 +17,7 @@ import {
 import { verifyEnvironmentFingerprint } from "./environment-verification.ts";
 import { executeGeneratorCommand } from "./generator-execution.ts";
 import { generatorCommand } from "./generators.ts";
+import { dependencyInstallPlan, prepareDependencies } from "./install-plan.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
 import { integratePullRequest, type MergeMethod, type RemoteChecksPolicy } from "./pr.ts";
 import { repositoryRoot } from "./shared.ts";
@@ -145,6 +146,7 @@ function usage(): never {
   coding-tooling environment <fingerprint|verify> [--profile <default|source-development>] [--json]
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
   coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
+  coding-tooling install <plan|prepare> --tier <name> [--component <name>] [--config <path>] [--json]
   coding-tooling pr integrate <number> [--tier <name>] [--merge-method <squash|merge|rebase>] [--remote <name>] [--remote-checks <required|advisory>] [--dry-run] [--json]
   coding-tooling source-deps <activate|status|deactivate> [--config <path>] [--json]
   coding-tooling dependencies audit [--config <path>] [--strict] [--json]
@@ -211,6 +213,17 @@ export function main(argv = process.argv.slice(2)): number {
         : runPlan({ ...common, strict: Boolean(options.strict) });
     const report = stringOption(options, "report");
     if (report) writeReport(result, resolve(root, report));
+  } else if (command === "install") {
+    const action = positional[0];
+    const tier = stringOption(options, "tier");
+    if ((action !== "plan" && action !== "prepare") || !tier) return usage();
+    const common = {
+      root,
+      tier,
+      component: stringOption(options, "component"),
+      configPath: stringOption(options, "config"),
+    };
+    result = action === "plan" ? dependencyInstallPlan(common) : prepareDependencies(common);
   } else if (command === "pr") {
     const action = positional[0];
     const prNumber = Number(positional[1]);
