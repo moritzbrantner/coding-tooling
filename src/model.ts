@@ -39,6 +39,7 @@ export type ResultOperation =
   | "bootstrap"
   | "plan"
   | "run"
+  | "install"
   | "contract"
   | "source-deps"
   | "dependencies"

@@ -30,6 +30,17 @@ describe("composite action contract", () => {
     expect(source).not.toContain(fingerprintInstallCondition);
   });
 
+  test("derives run dependency preparation from the selected validation scope", () => {
+    const source = actionSource();
+
+    expect(source).toContain('if [[ "$INPUT_OPERATION" == "run" ]]');
+    expect(source).toContain(
+      'args=(install prepare --tier "$INPUT_TIER" --config "$INPUT_CONFIG" --json)',
+    );
+    expect(source).toContain('args+=(--component "$INPUT_COMPONENT")');
+    expect(source).toContain('bun "${{ github.action_path }}/src/cli.ts" "${args[@]}"');
+  });
+
   test("exposes read-only foundation audit capture", () => {
     const source = actionSource();
 

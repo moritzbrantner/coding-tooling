@@ -39,7 +39,7 @@ inputs:
     required: false
     default: 1.4.0
   install-mode:
-    description: Install dependencies from a supported lockfile automatically, or skip installation.
+    description: Install dependencies from supported repository-owned lockfiles automatically, or skip installation.
     required: false
     default: auto
 
@@ -59,6 +59,10 @@ runs:
       if: inputs.operation == 'run' || inputs.operation == 'public-contract' || inputs.operation == 'score'
       shell: bash
       env:
+        INPUT_OPERATION: ${{ inputs.operation }}
+        INPUT_TIER: ${{ inputs.tier }}
+        INPUT_COMPONENT: ${{ inputs.component }}
+        INPUT_CONFIG: ${{ inputs.config }}
         INPUT_INSTALL_MODE: ${{ inputs.install-mode }}
       run: |
         if [[ "$INPUT_INSTALL_MODE" == "none" ]]; then
@@ -67,6 +71,14 @@ runs:
         if [[ "$INPUT_INSTALL_MODE" != "auto" ]]; then
           echo "::error::install-mode must be 'auto' or 'none'"
           exit 2
+        fi
+        if [[ "$INPUT_OPERATION" == "run" ]]; then
+          args=(install prepare --tier "$INPUT_TIER" --config "$INPUT_CONFIG" --json)
+          if [[ -n "$INPUT_COMPONENT" ]]; then
+            args+=(--component "$INPUT_COMPONENT")
+          fi
+          bun "${{ github.action_path }}/src/cli.ts" "${args[@]}"
+          exit $?
         fi
         if [[ -f bun.lock || -f bun.lockb ]]; then
           bun install --frozen-lockfile
