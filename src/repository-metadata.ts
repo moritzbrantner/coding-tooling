@@ -43,6 +43,20 @@ type MetadataRead = {
   diagnostics: Diagnostic[];
 };
 
+type StaleAgentPolicyFinding = {
+  code: "legacy-agent-loop-config" | "legacy-agent-loop-policy";
+  path: string;
+  message: string;
+};
+
+const agentPolicyPaths = [
+  "AGENTS.md",
+  "CONTRIBUTING.md",
+  "docs/agents/issue-tracker.md",
+  "docs/agents/planning-workflow.md",
+  "docs/agents/triage-labels.md",
+] as const;
+
 function stringField(source: string, name: string): string | undefined {
   const match = source.match(new RegExp(`^\\s*${name}\\s*=\\s*"((?:\\\\.|[^"])*)"\\s*$`, "m"));
   return match ? (JSON.parse(`"${match[1]}"`) as string) : undefined;
@@ -204,6 +218,38 @@ function repositoryDirectories(fleetRoot: string): string[] {
   }
 }
 
+function staleAgentPolicyFindings(root: string): StaleAgentPolicyFinding[] {
+  const findings: StaleAgentPolicyFinding[] = [];
+  if (existsSync(join(root, ".agent-loop.toml"))) {
+    findings.push({
+      code: "legacy-agent-loop-config",
+      path: ".agent-loop.toml",
+      message:
+        "root .agent-loop.toml belongs to the retired repository-local loop model; use direct skills or optional .agent-loop/config.toml orchestration instead",
+    });
+  }
+  for (const path of agentPolicyPaths) {
+    const absolutePath = join(root, path);
+    if (!existsSync(absolutePath)) continue;
+    let source: string;
+    try {
+      source = readFileSync(absolutePath, "utf8");
+    } catch {
+      continue;
+    }
+    const copiedSkillMapping = /mattpocock\/skills/.test(source);
+    const legacyLoopLabels = /ready-for-agent/.test(source) && /agent-loop:/.test(source);
+    if (!copiedSkillMapping && !legacyLoopLabels) continue;
+    findings.push({
+      code: "legacy-agent-loop-policy",
+      path,
+      message:
+        "copied Agent Loop label/routing policy is stale shared policy; remove it or keep only repository-specific issue guidance",
+    });
+  }
+  return findings.sort((left, right) => left.path.localeCompare(right.path));
+}
+
 function foundationRequired(status: RepositoryStatus | undefined): boolean {
   return status !== "retiring" && status !== "archived";
 }
@@ -261,6 +307,8 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       .sort((left, right) => left.component.localeCompare(right.component));
     const authoritativeMissing = enforceFoundation ? observedAuthoritativeMissing : [];
     const authoritativeBlockers = enforceFoundation ? observedAuthoritativeBlockers : [];
+    const observedStaleAgentPolicy = staleAgentPolicyFindings(repositoryRoot);
+    const staleAgentPolicy = enforceFoundation ? observedStaleAgentPolicy : [];
     const lifecycleDiagnostics = lifecycleBlockers(metadata.metadata);
     const remediation = new Set<string>();
     if (authoritativeMissing.length > 0) {
@@ -275,6 +323,8 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       remediation.add(`classify ${basename(repositoryRoot)} and add .repository.toml`);
     if (lifecycleDiagnostics.length > 0)
       remediation.add(`resolve lifecycle metadata in ${join(repositoryRoot, ".repository.toml")}`);
+    if (staleAgentPolicy.length > 0)
+      remediation.add(`remove stale Agent Loop policy from ${basename(repositoryRoot)}`);
 
     return {
       name: basename(repositoryRoot),
@@ -285,6 +335,11 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
         status: metadata.metadata?.status ?? null,
         foundationRequired: enforceFoundation,
         blockers: lifecycleDiagnostics,
+      },
+      agentPolicy: {
+        enforced: enforceFoundation,
+        stale: staleAgentPolicy,
+        observedStale: observedStaleAgentPolicy,
       },
       foundation,
       foundationAudit: {
@@ -317,6 +372,7 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       (repository) =>
         repository.missing.length > 0 ||
         repository.lifecycle.blockers.length > 0 ||
+        repository.agentPolicy.stale.length > 0 ||
         repository.foundationAudit.missing.length > 0 ||
         repository.foundationAudit.blockers.length > 0,
     )
@@ -336,6 +392,7 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
         (repository) =>
           repository.missing.length === 0 &&
           repository.lifecycle.blockers.length === 0 &&
+          repository.agentPolicy.stale.length === 0 &&
           repository.foundationAudit.missing.length === 0 &&
           repository.foundationAudit.blockers.length === 0,
       ).length,
