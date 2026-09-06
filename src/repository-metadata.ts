@@ -204,6 +204,24 @@ function repositoryDirectories(fleetRoot: string): string[] {
   }
 }
 
+function foundationRequired(status: RepositoryStatus | undefined): boolean {
+  return status !== "retiring" && status !== "archived";
+}
+
+function lifecycleBlockers(metadata: RepositoryMetadata | undefined): Diagnostic[] {
+  if (!metadata) return [];
+  const blockers: Diagnostic[] = [];
+  if (metadata.status === "retiring" && metadata.replacedBy.length === 0) {
+    blockers.push({
+      code: "repository-retiring-without-replacement",
+      message:
+        "retiring repositories must declare replaced_by so consumers have a deterministic migration target",
+      path: ".repository.toml",
+    });
+  }
+  return blockers;
+}
+
 export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const root = resolve(fleetRoot);
@@ -224,21 +242,26 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       pages: hasPagesWorkflow(repositoryRoot, workflows),
       runtimeProfiler: existsSync(join(repositoryRoot, "profiles", "runtime-profiler")),
     };
+    const enforceFoundation = foundationRequired(metadata.metadata?.status);
     const optionalFoundationKeys = new Set(["workflows", "pages", "runtimeProfiler"]);
-    const missing = Object.entries(foundation)
+    const observedMissing = Object.entries(foundation)
       .filter(([key, present]) => !present && !optionalFoundationKeys.has(key))
       .map(([key]) => key);
+    const missing = enforceFoundation ? observedMissing : foundation.metadata ? [] : ["metadata"];
     const mechanicalComponents = mechanicalFoundation.data.components as
       | Record<string, { status?: unknown }>
       | undefined;
-    const authoritativeMissing = Object.entries(mechanicalComponents ?? {})
+    const observedAuthoritativeMissing = Object.entries(mechanicalComponents ?? {})
       .filter(([, value]) => value?.status === "missing")
       .map(([key]) => key)
       .sort();
-    const authoritativeBlockers = Object.entries(mechanicalComponents ?? {})
+    const observedAuthoritativeBlockers = Object.entries(mechanicalComponents ?? {})
       .filter(([, value]) => value?.status === "invalid" || value?.status === "unsupported")
       .map(([key, value]) => ({ component: key, status: value.status }))
       .sort((left, right) => left.component.localeCompare(right.component));
+    const authoritativeMissing = enforceFoundation ? observedAuthoritativeMissing : [];
+    const authoritativeBlockers = enforceFoundation ? observedAuthoritativeBlockers : [];
+    const lifecycleDiagnostics = lifecycleBlockers(metadata.metadata);
     const remediation = new Set<string>();
     if (authoritativeMissing.length > 0) {
       remediation.add(
@@ -250,22 +273,33 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
     }
     if (!foundation.metadata)
       remediation.add(`classify ${basename(repositoryRoot)} and add .repository.toml`);
+    if (lifecycleDiagnostics.length > 0)
+      remediation.add(`resolve lifecycle metadata in ${join(repositoryRoot, ".repository.toml")}`);
 
     return {
       name: basename(repositoryRoot),
       root: repositoryRoot,
       metadata: metadata.metadata ?? null,
       metadataDiagnostics: metadata.diagnostics,
+      lifecycle: {
+        status: metadata.metadata?.status ?? null,
+        foundationRequired: enforceFoundation,
+        blockers: lifecycleDiagnostics,
+      },
       foundation,
       foundationAudit: {
         status: mechanicalFoundation.status,
+        enforced: enforceFoundation,
         summary: mechanicalFoundation.data.summary ?? null,
         components: mechanicalComponents ?? {},
         missing: authoritativeMissing,
         blockers: authoritativeBlockers,
+        observedMissing: observedAuthoritativeMissing,
+        observedBlockers: observedAuthoritativeBlockers,
         diagnostics: mechanicalFoundation.diagnostics,
       },
       missing,
+      observedMissing,
       remediation: [...remediation],
     };
   });
@@ -282,6 +316,7 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
     repositories.some(
       (repository) =>
         repository.missing.length > 0 ||
+        repository.lifecycle.blockers.length > 0 ||
         repository.foundationAudit.missing.length > 0 ||
         repository.foundationAudit.blockers.length > 0,
     )
@@ -300,6 +335,7 @@ export function fleetAudit(fleetRoot: string): ResultEnvelope<Record<string, unk
       conformingRepositoryCount: repositories.filter(
         (repository) =>
           repository.missing.length === 0 &&
+          repository.lifecycle.blockers.length === 0 &&
           repository.foundationAudit.missing.length === 0 &&
           repository.foundationAudit.blockers.length === 0,
       ).length,
