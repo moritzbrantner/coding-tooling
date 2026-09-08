@@ -5,5 +5,13 @@
     "self": ["format:check", "lint", "typecheck", "test:unit"]
   },
   "requiredCapabilities": ["format:check", "lint", "typecheck", "test:unit"],
-  "conventionRefs": ["AGENT-001", "AGENT-007"]
+  "conventionRefs": ["AGENT-001", "AGENT-007"],
+  "merge": {
+    "authority": "hosted",
+    "requiredChecks": [
+      "dogfood-private-action",
+      "Cross-platform / macos-latest",
+      "Cross-platform / windows-latest"
+    ]
+  }
 }
