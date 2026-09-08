@@ -46,7 +46,10 @@ export async function remoteCommand(value, argv, options = {}) {
   if (!reference?.owner || !reference?.name)
     return timed(
       envelope("remote-command", "error", { requestedArgv: inputArgv(argv) }, [
-        { code: "invalid-repository", message: "Enter owner/repository or a github.com repository URL." },
+        {
+          code: "invalid-repository",
+          message: "Enter owner/repository or a github.com repository URL.",
+        },
       ]),
       started,
     );
@@ -76,7 +79,10 @@ export async function remoteCommand(value, argv, options = {}) {
         repository: `${reference.owner}/${reference.name}`,
         requestedArgv: args,
       }, [
-        { code: "remote-command-failed", message: error instanceof Error ? error.message : String(error) },
+        {
+          code: "remote-command-failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
       ]),
       started,
     );
@@ -102,9 +108,16 @@ export function remoteCommandFromSnapshot(snapshot, argv, now = new Date()) {
     );
 
   const analysis = analyzeSnapshot(snapshot, now);
-  const incompleteDiagnostic = analysis.summary.status === "incomplete"
-    ? [{ code: "remote-source-incomplete", message: "GitHub did not provide a complete repository snapshot; treat this result as incomplete." }]
-    : [];
+  const incompleteDiagnostic =
+    analysis.summary.status === "incomplete"
+      ? [
+          {
+            code: "remote-source-incomplete",
+            message:
+              "GitHub did not provide a complete repository snapshot; treat this result as incomplete.",
+          },
+        ]
+      : [];
 
   try {
     if (request.key === "inspect") {
@@ -188,7 +201,10 @@ export function remoteCommandFromSnapshot(snapshot, argv, now = new Date()) {
       root: remoteRoot(snapshot),
       requestedArgv: args,
     }, [
-      { code: "invalid-remote-command", message: error instanceof Error ? error.message : String(error) },
+      {
+        code: "invalid-remote-command",
+        message: error instanceof Error ? error.message : String(error),
+      },
       ...incompleteDiagnostic,
     ]);
   }
@@ -207,7 +223,9 @@ function remotePlan(snapshot, analysis, args) {
     .map((component) => applyCapabilityCommands(componentView(component), config))
     .filter(
       (component) =>
-        !options.component || component.name === options.component || component.path === options.component,
+        !options.component ||
+        component.name === options.component ||
+        component.path === options.component,
     );
   if (options.component && components.length === 0)
     throw new Error(`Unknown component: ${options.component}`);
@@ -228,8 +246,10 @@ function remotePlan(snapshot, analysis, args) {
   const missing = [];
   for (const capability of [...new Set(selected)]) {
     if (available.has(capability)) continue;
-    if (required.has(capability)) missing.push({ capability, component: scope, optional: false });
-    else if (optional.has(capability)) missing.push({ capability, component: scope, optional: true });
+    if (required.has(capability))
+      missing.push({ capability, component: scope, optional: false });
+    else if (optional.has(capability))
+      missing.push({ capability, component: scope, optional: true });
   }
 
   const diagnostics = missing.map((item) => ({
@@ -244,7 +264,8 @@ function remotePlan(snapshot, analysis, args) {
   if ((config.conventionRefs ?? []).length > 0)
     diagnostics.push({
       code: "remote-convention-execution-not-evaluated",
-      message: "Installed convention execution is local-only; this Pages plan includes repository-declared capabilities but does not project executable convention configuration.",
+      message:
+        "Installed convention execution is local-only; this Pages plan includes repository-declared capabilities but does not project executable convention configuration.",
     });
 
   return envelope(
@@ -309,7 +330,9 @@ function parsePlanOptions(args) {
       continue;
     }
     if (value === "--config")
-      throw new Error("Pages supports the default .coding-tooling.json only; custom --config paths require the local CLI.");
+      throw new Error(
+        "Pages supports the default .coding-tooling.json only; custom --config paths require the local CLI.",
+      );
     throw new Error(`Unsupported Pages plan argument: ${value}`);
   }
   if (!tier) throw new Error("plan requires --tier <name>.");
@@ -343,13 +366,19 @@ function commandRequest(args) {
   const clean = args.filter((value) => value !== "--json");
   const command = clean[0] ?? "";
   const action = clean[1] ?? "";
-  if (command === "bootstrap") return { key: `${command} ${action}`.trim(), operation: "bootstrap" };
-  if (command === "repository") return { key: `${command} ${action}`.trim(), operation: "repository-metadata" };
+  if (command === "bootstrap")
+    return { key: `${command} ${action}`.trim(), operation: "bootstrap" };
+  if (command === "repository")
+    return { key: `${command} ${action}`.trim(), operation: "repository-metadata" };
   return { key: command, operation: command || "remote-command" };
 }
 
 function unavailableEnvelope(reference, args, key) {
-  const localCommand = ["coding-tooling", ...args.filter((value) => value !== "--json"), "--json"].join(" ");
+  const localCommand = [
+    "coding-tooling",
+    ...args.filter((value) => value !== "--json"),
+    "--json",
+  ].join(" ");
   return envelope(key || "remote-command", "unavailable", {
     repository: `${reference.owner}/${reference.name}`,
     requestedArgv: args,
@@ -364,7 +393,8 @@ function unavailableEnvelope(reference, args, key) {
   }, [
     {
       code: "remote-command-unavailable",
-      message: "This command needs repository execution, mutation, local Git history, local environment state, or analysis that the static Pages boundary cannot reproduce safely.",
+      message:
+        "This command needs repository execution, mutation, local Git history, local environment state, or analysis that the static Pages boundary cannot reproduce safely.",
     },
   ]);
 }

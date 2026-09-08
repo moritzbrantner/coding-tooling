@@ -9,7 +9,9 @@ const argv = repeatedArgs.length > 0 ? repeatedArgs : parameters.get("argv");
 try {
   if (!repository) throw new Error("Missing required ?repo=owner/repository query parameter.");
   if (!argv || (Array.isArray(argv) && argv.length === 0))
-    throw new Error("Missing required ?argv=<cli arguments> or repeated ?arg=<argument> parameters.");
+    throw new Error(
+      "Missing required ?argv=<cli arguments> or repeated ?arg=<argument> parameters.",
+    );
 
   const result = await remoteCommand(repository, argv);
   target.textContent = `${JSON.stringify(result, null, 2)}\n`;
