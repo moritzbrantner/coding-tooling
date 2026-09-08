@@ -342,15 +342,29 @@ function findingsFor(snapshot, paths, components) {
 
   const production = [...paths].filter(isProductionSource);
   const tests = [...paths].filter(isTestPath);
-  if (production.length && !tests.length)
-    add(
-      "REMOTE-TEST-001",
-      "high",
-      "No structural test files detected",
-      `${production.length} production source file(s) were detected but no test-like files were found.`,
-      "Use local deterministic findings before scaffolding tests.",
-      "coding-tooling findings --json",
-    );
+  if (production.length && !tests.length) {
+    const rustOnlyProduction =
+      components.some((component) => component.kind === "rust") &&
+      production.every((path) => path.toLowerCase().endsWith(".rs"));
+    if (rustOnlyProduction)
+      add(
+        "REMOTE-TEST-002",
+        "low",
+        "Rust structural test evidence is incomplete",
+        `${production.length} Rust production source file(s) were detected with no separate test-like paths. Inline #[cfg(test)] modules are not observable from the tree-only remote boundary.`,
+        "Use local deterministic findings and test execution before deciding that Rust tests are missing.",
+        "coding-tooling findings --json",
+      );
+    else
+      add(
+        "REMOTE-TEST-001",
+        "high",
+        "No structural test files detected",
+        `${production.length} production source file(s) were detected but no test-like files were found.`,
+        "Use local deterministic findings before scaffolding tests.",
+        "coding-tooling findings --json",
+      );
+  }
 
   for (const component of components.filter((item) => item.kind === "package")) {
     const outcomes = canonicalPackageCapabilityOutcomes(component.evidence);
