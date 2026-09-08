@@ -24,6 +24,10 @@ jobs:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
+      - name: Show exact formatter patch
+        run: |
+          ./node_modules/.bin/oxfmt site/remote-command.js
+          git diff -- site/remote-command.js
       - name: Validate through the local Action
         uses: ./
         with:
