@@ -75,15 +75,20 @@ export async function remoteCommand(value, argv, options = {}) {
     return timed(remoteCommandFromSnapshot(snapshot, args, options.now ?? new Date()), started);
   } catch (error) {
     return timed(
-      envelope(request.operation, "error", {
-        repository: `${reference.owner}/${reference.name}`,
-        requestedArgv: args,
-      }, [
+      envelope(
+        request.operation,
+        "error",
         {
-          code: "remote-command-failed",
-          message: error instanceof Error ? error.message : String(error),
+          repository: `${reference.owner}/${reference.name}`,
+          requestedArgv: args,
         },
-      ]),
+        [
+          {
+            code: "remote-command-failed",
+            message: error instanceof Error ? error.message : String(error),
+          },
+        ],
+      ),
       started,
     );
   }
@@ -197,16 +202,21 @@ export function remoteCommandFromSnapshot(snapshot, argv, now = new Date()) {
 
     return remotePlan(snapshot, analysis, args);
   } catch (error) {
-    return envelope(request.operation, "error", {
-      root: remoteRoot(snapshot),
-      requestedArgv: args,
-    }, [
+    return envelope(
+      request.operation,
+      "error",
       {
-        code: "invalid-remote-command",
-        message: error instanceof Error ? error.message : String(error),
+        root: remoteRoot(snapshot),
+        requestedArgv: args,
       },
-      ...incompleteDiagnostic,
-    ]);
+      [
+        {
+          code: "invalid-remote-command",
+          message: error instanceof Error ? error.message : String(error),
+        },
+        ...incompleteDiagnostic,
+      ],
+    );
   }
 }
 
@@ -232,7 +242,7 @@ function remotePlan(snapshot, analysis, args) {
 
   const checks = [];
   for (const component of components) {
-    for (const capability of [...new Set(selected)]) {
+    for (const capability of new Set(selected)) {
       const command = component.capabilities[capability];
       if (command)
         checks.push({ capability, component: component.name, path: component.path, command });
@@ -244,10 +254,9 @@ function remotePlan(snapshot, analysis, args) {
   const optional = new Set(config.optionalCapabilities ?? []);
   const scope = components.length === 1 ? components[0].name : "selected components";
   const missing = [];
-  for (const capability of [...new Set(selected)]) {
+  for (const capability of new Set(selected)) {
     if (available.has(capability)) continue;
-    if (required.has(capability))
-      missing.push({ capability, component: scope, optional: false });
+    if (required.has(capability)) missing.push({ capability, component: scope, optional: false });
     else if (optional.has(capability))
       missing.push({ capability, component: scope, optional: true });
   }
@@ -259,7 +268,8 @@ function remotePlan(snapshot, analysis, args) {
   if (analysis.summary.status === "incomplete")
     diagnostics.push({
       code: "remote-source-incomplete",
-      message: "GitHub did not provide a complete repository snapshot; treat this plan as incomplete.",
+      message:
+        "GitHub did not provide a complete repository snapshot; treat this plan as incomplete.",
     });
   if ((config.conventionRefs ?? []).length > 0)
     diagnostics.push({
@@ -292,8 +302,7 @@ function readToolingConfig(snapshot) {
   if (!raw) return { schemaVersion: 1 };
   const config = JSON.parse(raw);
   if (config?.schemaVersion !== 1) throw new Error(".coding-tooling.json must use schemaVersion 1");
-  if (config.tiers)
-    for (const values of Object.values(config.tiers)) validateCapabilities(values);
+  if (config.tiers) for (const values of Object.values(config.tiers)) validateCapabilities(values);
   return config;
 }
 
@@ -379,24 +388,29 @@ function unavailableEnvelope(reference, args, key) {
     ...args.filter((value) => value !== "--json"),
     "--json",
   ].join(" ");
-  return envelope(key || "remote-command", "unavailable", {
-    repository: `${reference.owner}/${reference.name}`,
-    requestedArgv: args,
-    localCommand,
-    remoteAlternatives: [
-      "inspect --json",
-      "findings --json",
-      "bootstrap plan --json",
-      "plan --tier fast --json",
-      "repository metadata --json",
-    ],
-  }, [
+  return envelope(
+    key || "remote-command",
+    "unavailable",
     {
-      code: "remote-command-unavailable",
-      message:
-        "This command needs repository execution, mutation, local Git history, local environment state, or analysis that the static Pages boundary cannot reproduce safely.",
+      repository: `${reference.owner}/${reference.name}`,
+      requestedArgv: args,
+      localCommand,
+      remoteAlternatives: [
+        "inspect --json",
+        "findings --json",
+        "bootstrap plan --json",
+        "plan --tier fast --json",
+        "repository metadata --json",
+      ],
     },
-  ]);
+    [
+      {
+        code: "remote-command-unavailable",
+        message:
+          "This command needs repository execution, mutation, local Git history, local environment state, or analysis that the static Pages boundary cannot reproduce safely.",
+      },
+    ],
+  );
 }
 
 function remoteRoot(snapshot) {
