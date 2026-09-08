@@ -349,7 +349,7 @@ function findingsFor(snapshot, paths, components) {
     if (rustOnlyProduction)
       add(
         "REMOTE-TEST-002",
-        "info",
+        "low",
         "Rust structural test evidence is incomplete",
         `${production.length} Rust production source file(s) were detected with no separate test-like paths. Inline #[cfg(test)] modules are not observable from the tree-only remote boundary.`,
         "Use local deterministic findings and test execution before deciding that Rust tests are missing.",
