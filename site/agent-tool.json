@@ -3,13 +3,19 @@
   "id": "coding-tooling",
   "kind": "browser-repository-preflight",
   "baseUrl": "https://moritzbrantner.github.io/coding-tooling/",
-  "description": "Deterministic zero-install structural preflight and testing-scaffold planning for public GitHub repositories, with machine-readable output and local coding-tooling handoff.",
+  "description": "Deterministic zero-install structural repository tooling for public GitHub repositories, including CLI-style URL invocation, preflight analysis, testing-scaffold planning, coverage observation, and local coding-tooling handoff.",
   "operations": [
     {
       "id": "tool-registry",
       "transport": "static-json",
       "href": "https://moritzbrantner.github.io/coding-tooling/tools.json",
       "description": "Discover the other public coding-agent tools and their stable agent-tool.json contracts."
+    },
+    {
+      "id": "cli-run-json",
+      "transport": "browser-json-view",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/run.json/?repo={owner}/{repository}&argv={urlEncodedArgv}",
+      "description": "Invoke a CLI-style coding-tooling argv through the browser. Remote-safe read-only commands return normal CLI envelopes; execution or mutation commands fail closed with a local-command handoff."
     },
     {
       "id": "analyze-repository",
@@ -48,6 +54,13 @@
       "description": "Versioned coding-tooling/score-history/v1 snapshots retained on the dedicated score-history branch."
     }
   ],
+  "remoteCliCommands": [
+    "inspect --json",
+    "findings --json",
+    "bootstrap plan --json",
+    "plan --tier <name> [--component <name>] --json",
+    "repository metadata --json"
+  ],
   "authoritativeLocalOperations": [
     "coding-tooling inspect --json",
     "coding-tooling bootstrap plan --json",
@@ -59,10 +72,11 @@
   ],
   "limitations": [
     "Remote analysis and testing plans support public GitHub repositories only and use anonymous GitHub API data.",
+    "The CLI URL surface mirrors only operations derivable safely from repository metadata, the Git tree, and bounded text manifests. Unsupported argv returns status unavailable plus the exact local handoff instead of executing or approximating unsafe operations.",
     "The testing plan can identify structural targets and setup work, but behavioral assertions require reading the source before writing a test; TSX-to-Storybook classification remains a conservative heuristic.",
-    "GitHub Pages cannot execute repository commands; local coding-tooling or repository CI remains authoritative for coverage generation, validation, conformance, environment verification, findings, scoring, and mutations.",
+    "GitHub Pages cannot execute repository commands; local coding-tooling or repository CI remains authoritative for coverage generation, validation execution, conformance, environment verification, findings that require full-source semantics, scoring, and mutations.",
     "A complete repository progress score requires a fresh local or CI coding-tooling run report; structural-only scoring remains explicitly incomplete.",
     "Score history is a per-commit trend for the versioned scoring profile; scoring-profile expansion can change what 100 means.",
-    "The analysis-json, testing-scaffold-plan, and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
+    "The run-json, analysis-json, testing-scaffold-plan, and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
   ]
 }
