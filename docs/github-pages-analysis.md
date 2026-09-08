@@ -6,11 +6,43 @@ The Pages site is the zero-install remote entry point for `coding-tooling`. A hu
 
 GitHub Pages is static hosting. The browser therefore reads anonymous GitHub API data only: repository metadata, a recursive Git tree, and a bounded set of text manifests. It does not execute repository code, request a GitHub token, call an LLM, or claim semantic correctness.
 
-The local CLI remains authoritative for `inspect`, `bootstrap plan`, conformance, environment verification, deterministic findings, validation execution, and mutations. Private repositories are intentionally local-only in this first version.
+The local CLI remains authoritative whenever a command needs repository execution, mutation, local Git history, local environment state, full source analysis, or convention execution. Private repositories remain local-only for this browser surface.
 
-## Output contract
+## CLI-style `run.json` interface
 
-The page returns a `schemaVersion: 1`, `operation: "remote-preflight"` JSON result containing repository provenance, discovered package/Rust/.NET components, declared capabilities, findings, limitations, and an agent handoff with the local command sequence.
+The generic Pages command view accepts the same argv shape a caller would pass after the `coding-tooling` executable:
+
+```text
+https://moritzbrantner.github.io/coding-tooling/run.json/?repo=owner/repository&argv=inspect%20--json
+https://moritzbrantner.github.io/coding-tooling/run.json/?repo=owner/repository&argv=findings%20--json
+https://moritzbrantner.github.io/coding-tooling/run.json/?repo=owner/repository&argv=bootstrap%20plan%20--json
+https://moritzbrantner.github.io/coding-tooling/run.json/?repo=owner/repository&argv=plan%20--tier%20fast%20--json
+https://moritzbrantner.github.io/coding-tooling/run.json/?repo=owner/repository&argv=repository%20metadata%20--json
+```
+
+Callers that do not want shell-style quoting can pass repeated `arg` query parameters instead:
+
+```text
+https://moritzbrantner.github.io/coding-tooling/run.json/?repo=owner/repository&arg=plan&arg=--tier&arg=fast&arg=--json
+```
+
+The browser returns the normal `schemaVersion: 1` CLI result envelope with `operation`, `status`, `durationMs`, `data`, and `diagnostics`. The `coding-tooling` binary prefix is optional in `argv`, and `--json` is accepted even though the view always renders JSON.
+
+The first remote-safe command set is deliberately narrow:
+
+- `inspect --json` mirrors mechanical component, technology, and capability discovery from the GitHub snapshot.
+- `findings --json` returns conservative remote structural findings. High-priority remote findings make the command fail, matching the CLI convention that blocking findings are not a passing result.
+- `bootstrap plan --json` turns those structural findings into a non-mutating remote action plan.
+- `plan --tier <name> [--component <name>] --json` resolves repository-declared/default validation capabilities without executing them. It honors root `.coding-tooling.json` tiers, required/optional capabilities, and capability-command overrides. Installed convention execution remains local-only and is called out in diagnostics.
+- `repository metadata --json` returns GitHub/default-branch repository metadata plus discovered components and technologies.
+
+Every other CLI argv is still accepted by the URL surface, but fails closed with `status: "unavailable"`, a `remote-command-unavailable` diagnostic, the exact local command to run, and the supported remote alternatives. This makes the URL a stable entry point without pretending that static hosting can run builds, tests, Git operations, dependency installation, environment checks, PR integration, code generation, or mutations.
+
+The generic browser implementation lives in `site/remote-command.js`. `remoteCommand(repository, argv, options?)` performs GitHub loading, while `remoteCommandFromSnapshot(snapshot, argv, now?)` is the deterministic pure dispatcher used by tests.
+
+## Remote preflight output contract
+
+The original repository analysis page returns a `schemaVersion: 1`, `operation: "remote-preflight"` JSON result containing repository provenance, discovered package/Rust/.NET components, declared capabilities, findings, limitations, and an agent handoff with the local command sequence.
 
 Remote findings cover conservative signals such as missing `.coding-tooling.json`, CI, exact Node/Bun/Rust pins, dependency-update automation, structural test evidence, and package validation scripts. Fixture, generated, vendor, build-output, and dependency trees are excluded from component discovery so test data and derived files cannot masquerade as repository toolchains. They do not claim behavioral coverage, security, or runtime performance.
 
@@ -30,7 +62,7 @@ https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/reposi
 
 It renders only the JSON envelope and is intended for browser-capable agents and tools that can execute the page JavaScript.
 
-This is deliberately not described as a conventional HTTP JSON API. GitHub Pages cannot execute server-side code, so a plain `curl` request receives the static HTML shell rather than a dynamically generated `application/json` response. A true HTTP `analysis.json?repo=...` endpoint would require a separate serverless/runtime deployment and should be introduced only if that additional operational dependency is justified.
+This is deliberately not described as a conventional HTTP JSON API. GitHub Pages cannot execute server-side code, so a plain `curl` request receives the static HTML shell rather than a dynamically generated `application/json` response. The same limitation applies to `run.json`. A true HTTP endpoint would require a separate serverless/runtime deployment and should be introduced only if that additional operational dependency is justified.
 
 ## `test-coverage.json` observation
 
