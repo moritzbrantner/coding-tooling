@@ -67,7 +67,7 @@ export async function remoteCommand(value, argv, options = {}) {
   }
 
   const request = commandRequest(args);
-  if (!supportedCommands.has(request.key))
+  if (!supportedCommands.has(request.key) || requiresLocalHandoff(request.key, args))
     return timed(unavailableEnvelope(reference, args, request.key), started);
 
   try {
@@ -105,7 +105,7 @@ export function remoteCommandFromSnapshot(snapshot, argv, now = new Date()) {
   }
 
   const request = commandRequest(args);
-  if (!supportedCommands.has(request.key))
+  if (!supportedCommands.has(request.key) || requiresLocalHandoff(request.key, args))
     return unavailableEnvelope(
       { owner: snapshot.repository.owner, name: snapshot.repository.name },
       args,
@@ -302,7 +302,30 @@ function readToolingConfig(snapshot) {
   if (!raw) return { schemaVersion: 1 };
   const config = JSON.parse(raw);
   if (config?.schemaVersion !== 1) throw new Error(".coding-tooling.json must use schemaVersion 1");
-  if (config.tiers) for (const values of Object.values(config.tiers)) validateCapabilities(values);
+  for (const values of Object.values(config.tiers ?? {})) validateCapabilities(values);
+  validateCapabilities(config.requiredCapabilities ?? []);
+  validateCapabilities(config.optionalCapabilities ?? []);
+  const requiredCapabilities = new Set(config.requiredCapabilities ?? []);
+  for (const capability of config.optionalCapabilities ?? []) {
+    if (requiredCapabilities.has(capability))
+      throw new Error(`${capability} cannot be both required and optional`);
+  }
+  for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {
+    if (!selector.trim()) throw new Error("capabilityCommands selectors must not be empty");
+    if (!commands || typeof commands !== "object" || Array.isArray(commands))
+      throw new Error(`capabilityCommands.${selector} must be a capability map`);
+    for (const [capability, command] of Object.entries(commands)) {
+      validateCapabilities([capability]);
+      if (
+        !Array.isArray(command) ||
+        command.length === 0 ||
+        command.some((part) => typeof part !== "string" || !part)
+      )
+        throw new Error(
+          `capabilityCommands.${selector}.${capability} must be a non-empty argv array`,
+        );
+    }
+  }
   return config;
 }
 
@@ -382,19 +405,24 @@ function commandRequest(args) {
   return { key: command, operation: command || "remote-command" };
 }
 
+function requiresLocalHandoff(key, args) {
+  if (key === "findings")
+    return args.some((value) => value === "--new" || value === "--baseline" || value === "--all");
+  if (key === "plan") return args.includes("--config");
+  if (key === "repository metadata") return args.includes("--root");
+  return false;
+}
+
 function unavailableEnvelope(reference, args, key) {
-  const localCommand = [
-    "coding-tooling",
-    ...args.filter((value) => value !== "--json"),
-    "--json",
-  ].join(" ");
+  const localArgv = ["coding-tooling", ...args.filter((value) => value !== "--json"), "--json"];
   return envelope(
     key || "remote-command",
     "unavailable",
     {
       repository: `${reference.owner}/${reference.name}`,
       requestedArgv: args,
-      localCommand,
+      localArgv,
+      localCommand: localArgv.map(shellQuote).join(" "),
       remoteAlternatives: [
         "inspect --json",
         "findings --json",
@@ -411,6 +439,11 @@ function unavailableEnvelope(reference, args, key) {
       },
     ],
   );
+}
+
+function shellQuote(value) {
+  if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) return value;
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
 function remoteRoot(snapshot) {

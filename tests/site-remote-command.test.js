@@ -63,8 +63,68 @@ describe("GitHub Pages CLI URL surface", () => {
 
     expect(result.operation).toBe("run");
     expect(result.status).toBe("unavailable");
+    expect(result.data.localArgv).toEqual([
+      "coding-tooling",
+      "run",
+      "--tier",
+      "fast",
+      "--strict",
+      "--json",
+    ]);
     expect(result.data.localCommand).toBe("coding-tooling run --tier fast --strict --json");
     expect(result.diagnostics[0].code).toBe("remote-command-unavailable");
+  });
+
+  test("preserves shell-sensitive handoff arguments as exact argv", () => {
+    const result = remoteCommandFromSnapshot(
+      repository(),
+      ["run", "--component", "web app; $(touch nope)", "--json"],
+      now,
+    );
+
+    expect(result.status).toBe("unavailable");
+    expect(result.data.localArgv).toEqual([
+      "coding-tooling",
+      "run",
+      "--component",
+      "web app; $(touch nope)",
+      "--json",
+    ]);
+    expect(result.data.localCommand).toBe(
+      "coding-tooling run --component 'web app; $(touch nope)' --json",
+    );
+  });
+
+  test("routes local-only findings variants through the unavailable handoff", () => {
+    for (const argv of ["findings --new --json", "findings --baseline --all --json"]) {
+      const result = remoteCommandFromSnapshot(repository(), argv, now);
+
+      expect(result.operation).toBe("findings");
+      expect(result.status).toBe("unavailable");
+      expect(result.diagnostics[0].code).toBe("remote-command-unavailable");
+      expect(result.data.localArgv[0]).toBe("coding-tooling");
+    }
+  });
+
+  test("rejects malformed capability command overrides instead of emitting a passed plan", () => {
+    const invalid = repository({
+      files: {
+        ".coding-tooling.json": JSON.stringify({
+          schemaVersion: 1,
+          tiers: { fast: ["lint"] },
+          capabilityCommands: { fixture: { lint: "bun run lint" } },
+        }),
+      },
+    });
+
+    const result = remoteCommandFromSnapshot(invalid, "plan --tier fast --json", now);
+
+    expect(result.operation).toBe("plan");
+    expect(result.status).toBe("error");
+    expect(result.diagnostics[0].code).toBe("invalid-remote-command");
+    expect(result.diagnostics[0].message).toContain(
+      "capabilityCommands.fixture.lint must be a non-empty argv array",
+    );
   });
 });
 
