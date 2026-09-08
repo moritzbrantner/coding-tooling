@@ -26,7 +26,7 @@ describe("remote structural test evidence", () => {
     expect(analysis.findings).toContainEqual(
       expect.objectContaining({
         id: "REMOTE-TEST-002",
-        severity: "info",
+        severity: "low",
       }),
     );
     expect(analysis.summary.highPriorityFindingCount).toBe(0);
