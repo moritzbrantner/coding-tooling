@@ -92,7 +92,7 @@ function repository(overrides) {
 }
 
 function rustValidationWorkflow() {
-  return `on:\n  pull_request:\njobs:\n  validate:\n    steps:\n      - run: cargo test\n`;
+  return `on:\n  pull_request:\njobs:\n  validate:\n    steps:\n      - run: cargo test --locked --lib\n`;
 }
 
 function blob(path) {
