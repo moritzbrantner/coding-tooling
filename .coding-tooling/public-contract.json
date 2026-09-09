@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "coding-tooling-public-contract-snapshot",
+  "repository": {
+    "fullName": "moritzbrantner/coding-tooling",
+    "revision": "413e7ddc499d5f2a23299ac0ac06a563ad4f7e7d"
+  },
+  "generatedAt": "2026-09-09T13:55:22.000Z",
+  "producer": {
+    "id": "coding-tooling",
+    "protocolVersion": 1,
+    "status": "passed",
+    "diagnostics": []
+  },
+  "report": {
+    "schemaVersion": 1,
+    "revision": "413e7ddc499d5f2a23299ac0ac06a563ad4f7e7d",
+    "enforcement": "observe",
+    "manifestPath": ".coding-tooling.contracts.json",
+    "summary": {
+      "discovered": 2,
+      "verified": 0,
+      "unverified": 2,
+      "incompleteDiscovery": 2,
+      "failedEvidence": 0,
+      "unavailableEvidence": 0,
+      "errorEvidence": 0,
+      "verifiedRatio": 0,
+      "strictReady": false
+    },
+    "surfaces": [
+      {
+        "id": "cli-command:coding-tooling",
+        "kind": "cli-command",
+        "component": ".",
+        "subject": "coding-tooling",
+        "discovery": {
+          "status": "partial",
+          "reason": "The executable is discovered from package metadata; subcommands and flags are not enumerated yet."
+        },
+        "status": "unverified",
+        "evidence": []
+      },
+      {
+        "id": "github-action:.",
+        "kind": "github-action",
+        "component": ".",
+        "subject": ".",
+        "discovery": {
+          "status": "partial",
+          "reason": "The action boundary is known, but action inputs and outputs are not enumerated yet."
+        },
+        "status": "unverified",
+        "evidence": []
+      }
+    ],
+    "unsupportedAnalyzers": [
+      "github-action-io",
+      "cli-subcommands"
+    ]
+  }
+}
