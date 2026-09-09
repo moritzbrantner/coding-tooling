@@ -18,7 +18,7 @@ The analysis exposes:
 - checklist completion percentage;
 - the first remaining checklist item in the bounded window.
 
-When the GitHub issue window is full, checklist aggregation is `incomplete` rather than claiming an exhaustive repository total.
+Checklist totals are mechanical task-box counts. Overlapping umbrella/dependent issues are not semantically de-duplicated, so the aggregate is not a claim of unique convergence work. When the GitHub issue window is full, checklist aggregation is `incomplete` rather than claiming an exhaustive repository total.
 
 ### Test coverage
 
@@ -77,6 +77,7 @@ The KPI block includes the current remote-preflight finding count and high-prior
 - Malformed observation data is `incomplete`, never green.
 - Revision-bearing evidence must match the observed default-branch head to be current.
 - A full bounded issue window makes aggregate checklist evidence incomplete.
+- Checklist totals are mechanical and are not de-duplicated across overlapping issue scopes.
 - Endpoint verification requires executed strong public-contract evidence.
 - Coverage and public-contract evidence remain separate: line/function execution coverage does not substitute for public contract verification.
 
