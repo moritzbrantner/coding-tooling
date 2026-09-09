@@ -1,0 +1,68 @@
+name: Replay remote validation evidence
+
+on:
+  push:
+    branches: [feat/remote-validation-evidence-v1]
+    paths:
+      - ".github/workflows/replay-remote-validation-evidence-v1.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: feat/remote-validation-evidence-v1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Replay implementation with resilient block replacement
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import textwrap
+
+          workflow = Path('.github/workflows/remote-validation-evidence-v1.yml').read_text().splitlines()
+          start = workflow.index('      - name: Implement validation evidence')
+          run_line = next(i for i in range(start + 1, len(workflow)) if workflow[i].strip() == 'run: |')
+          end = workflow.index('      - name: Commit product changes')
+          script = textwrap.dedent('\n'.join(workflow[run_line + 1:end])) + '\n'
+
+          old = '''def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"{label} anchor not found")
+              return text.replace(old, new, 1)
+          '''
+          new = '''def replace_once(text, old, new, label):
+              if old in text:
+                  return text.replace(old, new, 1)
+              old_lines = old.splitlines()
+              text_lines = text.splitlines(keepends=True)
+              wanted = [line.strip() for line in old_lines]
+              for start in range(0, len(text_lines) - len(old_lines) + 1):
+                  candidate = [line.strip() for line in text_lines[start:start + len(old_lines)]]
+                  if candidate == wanted:
+                      return "".join(text_lines[:start]) + new + "".join(text_lines[start + len(old_lines):])
+              raise SystemExit(f"{label} anchor not found")
+          '''
+          if old not in script:
+              raise SystemExit('replace_once harness anchor not found')
+          Path('/tmp/replay-remote-validation-evidence.sh').write_text(script.replace(old, new, 1))
+          PY
+          bash /tmp/replay-remote-validation-evidence.sh
+      - name: Commit product changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/evidence-model.js site/preflight.js site/github-analysis.js tests/site-preflight.test.js tests/remote-validation-evidence.test.js docs/github-pages-analysis.md
+          git commit -m "Add conservative remote CI validation evidence"
+          git push origin HEAD:feat/remote-validation-evidence-v1
