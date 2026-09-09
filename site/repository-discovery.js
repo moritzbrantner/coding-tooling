@@ -57,7 +57,11 @@ function isEligibleRepository(owner, repository) {
 }
 
 function candidate(repository, now) {
-  const lastActivityAt = latestDate(repository.pushed_at, repository.updated_at, repository.created_at);
+  const lastActivityAt = latestDate(
+    repository.pushed_at,
+    repository.updated_at,
+    repository.created_at,
+  );
   const ageDays = daysSince(lastActivityAt, now);
   const openItemCount = Math.max(0, Number(repository.open_issues_count) || 0);
   const fork = Boolean(repository.fork);
