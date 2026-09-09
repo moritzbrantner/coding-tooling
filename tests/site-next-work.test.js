@@ -193,7 +193,7 @@ describe("GitHub Pages next-work discovery", () => {
     ).rejects.toThrow("Next-work discovery remains token-free");
   });
 
-  test("advertises the open-work browser view to registry-driven agents", () => {
+  test("advertises the fail-closed open-work browser view to registry-driven agents", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../site/agent-tool.json", import.meta.url), "utf8"),
     );
@@ -203,6 +203,12 @@ describe("GitHub Pages next-work discovery", () => {
     expect(operation?.hrefTemplate).toBe(
       "https://moritzbrantner.github.io/coding-tooling/next-work.json/?repo={owner}/{repository}",
     );
+    expect(operation?.description).toContain("fail-closed observed CI evidence");
+    expect(
+      manifest.limitations.some((limitation) =>
+        limitation.includes("Missing, truncated, pending, unavailable"),
+      ),
+    ).toBe(true);
   });
 });
 
