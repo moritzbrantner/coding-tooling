@@ -1,0 +1,183 @@
+name: Harden remote validation evidence matching
+
+on:
+  push:
+    branches: [feat/remote-validation-evidence-v1]
+    paths:
+      - ".github/workflows/harden-remote-validation-matching.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: feat/remote-validation-evidence-v1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Harden command and action matching
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("site/evidence-model.js")
+          text = path.read_text()
+          pattern = re.compile(
+              r'function workflowRunsCommand\(content, command\) \{.*?\n\}\n\nfunction workflowUsesCodingToolingAction\(content, localActionIsCodingTooling\) \{.*?\n\}',
+              re.S,
+          )
+          replacement = r'''function workflowRunsCommand(content, command) {
+            const needle = normalizeCommand(command);
+            if (!needle) return false;
+            const lines = String(content).split(/\r?\n/);
+            for (let index = 0; index < lines.length; index += 1) {
+              const raw = lines[index];
+              const match = raw.match(/^(\s*)-?\s*run\s*:\s*(.*)$/);
+              if (!match) continue;
+              const indent = match[1].length;
+              const inline = match[2].trim();
+              if (inline && !new Set(["|", ">", "|-", ">-", "|+", ">+"]).has(inline)) {
+                if (shellCommandMatches(inline, needle)) return true;
+                continue;
+              }
+              for (let blockIndex = index + 1; blockIndex < lines.length; blockIndex += 1) {
+                const blockRaw = lines[blockIndex];
+                if (!blockRaw.trim()) continue;
+                const blockIndent = blockRaw.match(/^\s*/)?.[0].length ?? 0;
+                if (blockIndent <= indent) break;
+                const shellLine = blockRaw.trim();
+                if (shellLine.startsWith("#")) continue;
+                if (shellCommandMatches(shellLine, needle)) return true;
+              }
+            }
+            return false;
+          }
+
+          function shellCommandMatches(value, command) {
+            const normalized = normalizeCommand(value);
+            return normalized === command || normalized.startsWith(`${command} `);
+          }
+
+          function workflowUsesCodingToolingAction(content, localActionIsCodingTooling) {
+            const lines = String(content).split(/\r?\n/);
+            for (let index = 0; index < lines.length; index += 1) {
+              const raw = lines[index];
+              const match = raw.match(/^(\s*)-\s*uses\s*:\s*([^\s#]+)(?:\s+#.*)?$/);
+              if (!match) continue;
+              const reference = match[2];
+              const external = /^moritzbrantner\/coding-tooling@[^\s#]+$/.test(reference);
+              const local = localActionIsCodingTooling && /^\.\/?$/.test(reference);
+              if (!external && !local) continue;
+
+              const stepIndent = match[1].length;
+              let operation = null;
+              let withIndent = null;
+              for (let stepIndex = index + 1; stepIndex < lines.length; stepIndex += 1) {
+                const stepRaw = lines[stepIndex];
+                if (!stepRaw.trim()) continue;
+                const indent = stepRaw.match(/^\s*/)?.[0].length ?? 0;
+                if (indent <= stepIndent && /^\s*-\s*/.test(stepRaw)) break;
+                if (indent <= stepIndent) break;
+                const trimmed = stepRaw.trim();
+                if (/^with\s*:\s*$/.test(trimmed)) {
+                  withIndent = indent;
+                  continue;
+                }
+                if (withIndent === null || indent <= withIndent) continue;
+                const operationMatch = trimmed.match(/^operation\s*:\s*["']?([^"'#]+?)["']?\s*(?:#.*)?$/);
+                if (operationMatch) operation = operationMatch[1].trim();
+              }
+              if (operation === null || operation === "run") return true;
+            }
+            return false;
+          }'''
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit("validation matcher block not found")
+          path.write_text(text)
+
+          test_path = Path("tests/remote-validation-evidence.test.js")
+          tests = test_path.read_text()
+          marker = '  test("deployment-only workflows do not prove validation", () => {\n'
+          additions = '''  test("mentions of a validation command do not prove execution", () => {
+            const result = remoteValidationOutcome({
+              workflowPaths: [".github/workflows/mentions.yml"],
+              workflows: [
+                {
+                  path: ".github/workflows/mentions.yml",
+                  content: `on:\n  pull_request:\njobs:\n  verify:\n    steps:\n      - run: echo "bun run typecheck"\n      # run: bun run typecheck\n`,
+                },
+              ],
+              externalCiPaths: [],
+              workflowFetchTruncated: false,
+              defaultBranch: "main",
+              declaredCommands: ["bun run typecheck"],
+            });
+            expect(result.status).toBe("finding");
+            expect(result.workflowEvidence[0].matchedCommands).toEqual([]);
+          });
+
+          test("non-run coding-tooling Action operations do not prove validation", () => {
+            const result = remoteValidationOutcome({
+              workflowPaths: [".github/workflows/score.yml"],
+              workflows: [
+                {
+                  path: ".github/workflows/score.yml",
+                  content: `on:\n  push:\n    branches: [main]\njobs:\n  score:\n    steps:\n      - uses: ./\n        with:\n          operation: score\n`,
+                },
+              ],
+              externalCiPaths: [],
+              workflowFetchTruncated: false,
+              defaultBranch: "main",
+              declaredCommands: [],
+              localActionIsCodingTooling: true,
+            });
+            expect(result.status).toBe("finding");
+            expect(result.workflowEvidence[0].codingToolingAction).toBe(false);
+          });
+
+          test("the default coding-tooling Action operation proves validation", () => {
+            const result = remoteValidationOutcome({
+              workflowPaths: [".github/workflows/validate.yml"],
+              workflows: [
+                {
+                  path: ".github/workflows/validate.yml",
+                  content: `on:\n  pull_request:\njobs:\n  validate:\n    steps:\n      - uses: ./\n        with:\n          tier: self\n`,
+                },
+              ],
+              externalCiPaths: [],
+              workflowFetchTruncated: false,
+              defaultBranch: "main",
+              declaredCommands: [],
+              localActionIsCodingTooling: true,
+            });
+            expect(result.status).toBe("satisfied");
+            expect(result.workflowEvidence[0].codingToolingAction).toBe(true);
+          });
+
+          '''
+          if marker not in tests:
+              raise SystemExit("validation test insertion point not found")
+          test_path.write_text(tests.replace(marker, additions + marker, 1))
+          PY
+          bunx oxfmt site/evidence-model.js tests/remote-validation-evidence.test.js tests/rust-remote-test-evidence.test.js
+          bunx oxlint site/evidence-model.js tests/remote-validation-evidence.test.js tests/rust-remote-test-evidence.test.js
+          bun test tests/remote-validation-evidence.test.js tests/site-preflight.test.js tests/site-change-aware.test.js tests/rust-remote-test-evidence.test.js
+      - name: Commit hardening
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/evidence-model.js tests/remote-validation-evidence.test.js tests/rust-remote-test-evidence.test.js
+          git commit -m "Harden remote validation evidence matching"
+          git push origin HEAD:feat/remote-validation-evidence-v1
