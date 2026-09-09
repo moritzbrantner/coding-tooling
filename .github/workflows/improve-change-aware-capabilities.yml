@@ -1,0 +1,411 @@
+name: Improve change-aware capabilities
+
+on:
+  push:
+    branches: [feat/change-aware-dogfood-v2]
+    paths:
+      - ".github/workflows/improve-change-aware-capabilities.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  improve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: feat/change-aware-dogfood-v2
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Apply dogfood improvements
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"{label} insertion point not found")
+              return text.replace(old, new, 1)
+
+          source_path = Path("site/change-aware.js")
+          source = source_path.read_text()
+
+          old = '''  const checks = buildChecks(selectedComponents, selected);
+          const missing = missingCapabilities(checks, selected, config, selectedComponents);
+          const affectedComponents = selectedComponents.map((component) => {
+            const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
+            return {
+              name: component.name,
+              path: component.path,
+              kind: component.kind,
+              technologies: component.technologies,
+              changedPaths,
+              governingContracts: governingContracts(snapshot, component, changedPaths),
+              candidateTests: candidateTests(snapshot, component, changedPaths, discoveredComponents),
+              selectedCapabilities: [...new Set(selected)].filter(
+                (capability) => component.capabilities[capability],
+              ),
+            };
+          });
+
+          const sourceIncomplete =
+            analysis.summary.status === "incomplete" ||
+            change.filesTruncated ||
+            Boolean(change.compareIncomplete);
+          '''
+          new = '''  const checks = buildChecks(selectedComponents, selected);
+          const missing = missingCapabilities(checks, selected, config, selectedComponents);
+          const componentEvidenceIncomplete =
+            analysis.summary.status === "incomplete" ||
+            change.filesTruncated ||
+            Boolean(change.compareIncomplete);
+          const affectedComponents = selectedComponents.map((component) => {
+            const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
+            const candidates = candidateTests(snapshot, component, changedPaths, discoveredComponents);
+            return {
+              name: component.name,
+              path: component.path,
+              kind: component.kind,
+              technologies: component.technologies,
+              changedPaths,
+              governingContracts: governingContracts(snapshot, component, changedPaths),
+              testEvidence: componentTestEvidence(
+                snapshot,
+                component,
+                changedPaths,
+                discoveredComponents,
+                candidates,
+                componentEvidenceIncomplete,
+              ),
+              candidateTests: candidates,
+              selectedCapabilities: [...new Set(selected)].filter(
+                (capability) => component.capabilities[capability],
+              ),
+            };
+          });
+
+          const sourceIncomplete = componentEvidenceIncomplete;
+          '''
+          source = replace_once(source, old, new, "affected component evidence")
+
+          old = '''    repository: snapshot.repository,
+            source: { ...analysis.source, ref: change.head },
+            change: {
+          '''
+          new = '''    repository: snapshot.repository,
+            source: { ...analysis.source, ref: change.head },
+            declaredMergeAuthority: mergeAuthorityEvidence(config),
+            change: {
+          '''
+          source = replace_once(source, old, new, "merge authority output")
+
+          old = '''  const agentStarts =
+              changedPaths.length > 0 ? changedPaths.map((changed) => dirname(changed)) : [component.path];
+          '''
+          new = '''  const agentStarts =
+              changedPaths.length > 0 ? changedPaths.map((changed) => dirname(changed)) : [component.path];
+          '''
+          if old not in source:
+              raise SystemExit("governing contract anchor not found")
+
+          old = '''function candidateTests(snapshot, component, changedPaths, components) {
+            const tests = snapshot.tree
+              .filter((entry) => {
+                if (entry.type !== "blob" || !isTestPath(entry.path)) return false;
+                return mostSpecificOwners(components, entry.path).some(
+                  (owner) => componentIdentity(owner) === componentIdentity(component),
+                );
+              })
+              .map((entry) => entry.path);
+            const changedStems = new Set(changedPaths.map(stem).filter(Boolean));
+            const changed = new Set(changedPaths);
+            return tests
+          '''
+          new = '''function candidateTests(snapshot, component, changedPaths, components) {
+            const changed = new Set(changedPaths);
+            const tests = componentTestPaths(snapshot, component, components).filter(
+              (path) => !isAuxiliaryTestPath(path) || changed.has(path),
+            );
+            const changedStems = new Set(changedPaths.map(stem).filter(Boolean));
+            return tests
+          '''
+          source = replace_once(source, old, new, "candidate test filtering")
+
+          marker = '''function readToolingConfig(snapshot) {
+          '''
+          helpers = '''function componentTestEvidence(
+            snapshot,
+            component,
+            changedPaths,
+            components,
+            candidates,
+            incomplete,
+          ) {
+            const testPaths = componentTestPaths(snapshot, component, components).filter(
+              (path) => !isAuxiliaryTestPath(path),
+            );
+            const changedTestPaths = changedPaths.filter(isTestPath).toSorted();
+            let state = "finding";
+            if (incomplete) state = "incomplete";
+            else if (testPaths.length > 0) state = "satisfied";
+            else if (component.kind === "rust") state = "unsupported";
+            return {
+              state,
+              authority: "advisory",
+              basis: "component-test-path-existence",
+              testPathCount: testPaths.length,
+              changedTestPaths,
+              candidateCount: candidates.length,
+            };
+          }
+
+          function componentTestPaths(snapshot, component, components) {
+            return snapshot.tree
+              .filter((entry) => {
+                if (entry.type !== "blob" || !isTestPath(entry.path)) return false;
+                return mostSpecificOwners(components, entry.path).some(
+                  (owner) => componentIdentity(owner) === componentIdentity(component),
+                );
+              })
+              .map((entry) => entry.path)
+              .toSorted();
+          }
+
+          function mergeAuthorityEvidence(config) {
+            if (!config.merge)
+              return {
+                state: "unavailable",
+                authority: null,
+                requiredChecks: [],
+                reason: null,
+                source: null,
+                observedEnforcement: "not-evaluated",
+              };
+            return {
+              state: "declared",
+              authority: config.merge.authority,
+              requiredChecks: [...new Set(config.merge.requiredChecks ?? [])].toSorted(),
+              reason: config.merge.reason ?? null,
+              source: ".coding-tooling.json",
+              observedEnforcement: "not-evaluated",
+            };
+          }
+
+          '''
+          source = replace_once(source, marker, helpers + marker, "evidence helpers")
+
+          old = '''  const required = new Set(config.requiredCapabilities ?? []);
+            for (const capability of config.optionalCapabilities ?? []) {
+              if (required.has(capability))
+                throw new Error(`${capability} cannot be both required and optional`);
+            }
+            for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {
+          '''
+          new = '''  const required = new Set(config.requiredCapabilities ?? []);
+            for (const capability of config.optionalCapabilities ?? []) {
+              if (required.has(capability))
+                throw new Error(`${capability} cannot be both required and optional`);
+            }
+            if (config.merge !== undefined) {
+              if (!config.merge || typeof config.merge !== "object" || Array.isArray(config.merge))
+                throw new Error("merge must be an object");
+              if (!new Set(["hosted", "local"]).has(config.merge.authority))
+                throw new Error("merge.authority must be hosted or local");
+              if (config.merge.authority === "hosted") {
+                if (
+                  !Array.isArray(config.merge.requiredChecks) ||
+                  config.merge.requiredChecks.length === 0 ||
+                  config.merge.requiredChecks.some(
+                    (check) => typeof check !== "string" || !check.trim(),
+                  )
+                )
+                  throw new Error("hosted merge authority requires non-empty requiredChecks");
+              }
+              if (
+                config.merge.authority === "local" &&
+                (typeof config.merge.reason !== "string" || !config.merge.reason.trim())
+              )
+                throw new Error("local merge authority requires a non-empty reason");
+            }
+            for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {
+          '''
+          source = replace_once(source, old, new, "merge config validation")
+
+          old = '''    lower.endsWith("agents.md") ||
+              lower.includes("contract") ||
+          '''
+          new = '''    lower.endsWith("agents.md") ||
+              lower.endsWith("agent-tool.json") ||
+              lower.includes("contract") ||
+          '''
+          source = replace_once(source, old, new, "machine contract recognition")
+
+          marker = '''function stem(path) {
+          '''
+          helper = '''function isAuxiliaryTestPath(path) {
+            return /(^|\\/)(fixtures?|node_modules|vendor|dist|build|coverage)(\\/|$)/i.test(path);
+          }
+
+          '''
+          source = replace_once(source, marker, helper + marker, "auxiliary test helper")
+          source_path.write_text(source)
+
+          test_path = Path("tests/site-change-aware.test.js")
+          tests = test_path.read_text()
+
+          old = '''    expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
+              "packages/a/tests/widget.test.ts",
+            );
+          '''
+          new = '''    expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
+              "packages/a/tests/widget.test.ts",
+            );
+            expect(result.data.scope.affectedComponents[0].testEvidence).toEqual(
+              expect.objectContaining({
+                state: "satisfied",
+                authority: "advisory",
+                basis: "component-test-path-existence",
+                testPathCount: 1,
+                changedTestPaths: [],
+              }),
+            );
+          '''
+          tests = replace_once(tests, old, new, "test evidence assertion")
+
+          marker = '''  test("change-aware plan honors an affected component filter", () => {
+          '''
+          additions = '''  test("keeps fixture tests out of candidate navigation", () => {
+            const result = remoteChangeCommandFromSnapshot(
+              repository(),
+              change(["src/index.ts"]),
+              request("affected"),
+              now,
+            );
+
+            const component = result.data.scope.affectedComponents[0];
+            expect(component.candidateTests).toContain("tests/index.test.ts");
+            expect(component.candidateTests).not.toContain(
+              "calibration/fixtures/noise/tests/noise.test.ts",
+            );
+            expect(component.candidateTests).not.toContain("fixtures/noise/tests/noise.test.ts");
+            expect(component.testEvidence.testPathCount).toBe(1);
+          });
+
+          test("recognizes changed agent tool descriptors as governing contracts", () => {
+            const result = remoteChangeCommandFromSnapshot(
+              repository(),
+              change(["site/agent-tool.json"]),
+              request("affected"),
+              now,
+            );
+
+            expect(result.data.scope.affectedComponents[0].governingContracts).toContain(
+              "site/agent-tool.json",
+            );
+          });
+
+          test("exposes declared hosted merge authority without claiming enforcement", () => {
+            const snapshot = repository();
+            const config = JSON.parse(snapshot.files[".coding-tooling.json"]);
+            config.merge = {
+              authority: "hosted",
+              requiredChecks: ["Validate", "Pages"],
+            };
+            snapshot.files[".coding-tooling.json"] = JSON.stringify(config);
+
+            const result = remoteChangeCommandFromSnapshot(
+              snapshot,
+              change(["src/index.ts"]),
+              request("affected"),
+              now,
+            );
+
+            expect(result.data.declaredMergeAuthority).toEqual({
+              state: "declared",
+              authority: "hosted",
+              requiredChecks: ["Pages", "Validate"],
+              reason: null,
+              source: ".coding-tooling.json",
+              observedEnforcement: "not-evaluated",
+            });
+          });
+
+          test("rejects invalid hosted merge authority instead of emitting acceptance evidence", () => {
+            const snapshot = repository();
+            const config = JSON.parse(snapshot.files[".coding-tooling.json"]);
+            config.merge = { authority: "hosted", requiredChecks: [] };
+            snapshot.files[".coding-tooling.json"] = JSON.stringify(config);
+
+            const result = remoteChangeCommandFromSnapshot(
+              snapshot,
+              change(["src/index.ts"]),
+              request("affected"),
+              now,
+            );
+
+            expect(result.status).toBe("error");
+            expect(result.diagnostics[0].message).toContain(
+              "hosted merge authority requires non-empty requiredChecks",
+            );
+          });
+
+          '''
+          tests = replace_once(tests, marker, additions + marker, "dogfood regression tests")
+
+          old = '''    blob("tsconfig.json", "17"),
+            ];
+          '''
+          new = '''    blob("tsconfig.json", "17"),
+            blob("site/agent-tool.json", "19"),
+            blob("calibration/fixtures/noise/tests/noise.test.ts", "20"),
+            blob("fixtures/noise/tests/noise.test.ts", "21"),
+            ];
+          '''
+          tests = replace_once(tests, old, new, "fixture noise paths")
+          test_path.write_text(tests)
+
+          docs_path = Path("docs/change-aware-pages.md")
+          docs = docs_path.read_text()
+          docs = replace_once(
+              docs,
+              "- which structurally related tests are worth reading first; and\n- which repository-declared validation commands form the smallest safe component-scoped plan for the selected tier.",
+              "- which structurally related tests are worth reading first;\n- what advisory component-level structural test evidence exists;\n- which repository-declared validation commands form the smallest safe component-scoped plan for the selected tier; and\n- which merge authority and hosted check names the repository declares without claiming those checks have run.",
+              "docs purpose",
+          )
+          docs = replace_once(
+              docs,
+              "- `governingContracts` — structural contracts such as `.coding-tooling.json`, the component manifest, the nearest `AGENTS.md`, and directly changed contract/invariant/schema files;\n- `candidateTests` — a bounded, deterministic shortlist of test-like files, ranked toward directly changed tests and files whose stems match changed source files; and\n- `selectedCapabilities` — the selected tier capabilities that the component can actually provide.\n\n`candidateTests` is navigation evidence, not a claim of behavioral coverage. A coding agent still has to read source and tests before deciding what proves the intended behavior.",
+              "- `governingContracts` — structural contracts such as `.coding-tooling.json`, the component manifest, the nearest `AGENTS.md`, directly changed contract/invariant/schema files, and changed `agent-tool.json` machine descriptors;\n- `testEvidence` — advisory tree-only component evidence with explicit `satisfied | finding | unsupported | incomplete` state, changed test paths, and test-path counts;\n- `candidateTests` — a bounded, deterministic shortlist of test-like files, ranked toward directly changed tests and files whose stems match changed source files; fixture, vendor, dependency, coverage, and build-output test trees are excluded from fallback navigation; and\n- `selectedCapabilities` — the selected tier capabilities that the component can actually provide.\n\n`candidateTests` and `testEvidence` are navigation/structural evidence, not claims of behavioral coverage. A coding agent still has to read source and tests before deciding what proves the intended behavior. Rust with no separate test path remains `unsupported` rather than a missing-test claim because inline `#[cfg(test)]` modules are not tree-visible.\n\n## Declared merge authority\n\nWhen `.coding-tooling.json` declares `merge.authority`, the change-aware result includes `declaredMergeAuthority`. Hosted authority exposes the sorted declared `requiredChecks`; local authority exposes its reason. `observedEnforcement` is always `not-evaluated` on this Pages surface: the declaration is agent guidance, not proof of branch protection or current check conclusions. Invalid hosted/local declarations fail closed instead of being serialized as usable acceptance evidence.",
+              "docs evidence section",
+          )
+          docs_path.write_text(docs)
+
+          agent_path = Path("site/agent-tool.json")
+          agent = agent_path.read_text()
+          agent = replace_once(
+              agent,
+              '"description": "Browser-executed change-aware affected-component analysis with governing contracts, candidate tests, and a component-scoped validation plan. Repeated file parameters can supply changed paths directly instead of using GitHub compare."',
+              '"description": "Browser-executed change-aware affected-component analysis with governing contracts, advisory component test evidence, candidate tests, declared merge authority, and a component-scoped validation plan. Repeated file parameters can supply changed paths directly instead of using GitHub compare."',
+              "agent-tool description",
+          )
+          agent_path.write_text(agent)
+          PY
+          bunx oxfmt site/change-aware.js tests/site-change-aware.test.js
+          bunx oxlint site/change-aware.js tests/site-change-aware.test.js
+          bun test tests/site-change-aware.test.js
+          python -m json.tool site/agent-tool.json >/dev/null
+      - name: Commit improvements
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/change-aware.js tests/site-change-aware.test.js docs/change-aware-pages.md site/agent-tool.json
+          git commit -m "Improve change-aware agent evidence"
+          git push origin HEAD:feat/change-aware-dogfood-v2
