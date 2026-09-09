@@ -175,12 +175,10 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
     change.filesTruncated ||
     Boolean(change.compareIncomplete);
   const blockingMissing = missing.some((item) => !item.optional);
-  const diagnostics = [
-    ...missing.map((item) => ({
-      code: item.optional ? "optional-capability-unavailable" : "capability-unavailable",
-      message: `${item.capability} is unavailable for ${item.component}`,
-    })),
-  ];
+  const diagnostics = missing.map((item) => ({
+    code: item.optional ? "optional-capability-unavailable" : "capability-unavailable",
+    message: `${item.capability} is unavailable for ${item.component}`,
+  }));
   if (sourceIncomplete)
     diagnostics.push({
       code: "remote-change-source-incomplete",
