@@ -1,3 +1,5 @@
+import { issueChecklistEvidence, issueChecklistNextStep } from "./issue-checklist.js";
+
 export const NEXT_WORK_PULL_LIMIT = 20;
 export const NEXT_WORK_ISSUE_LIMIT = 20;
 export const NEXT_WORK_CANDIDATE_LIMIT = 12;
@@ -70,6 +72,8 @@ export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()
       issueWindowTruncated: issueWindow.length >= NEXT_WORK_ISSUE_LIMIT,
       issueWindowSemantics:
         "GitHub's issues endpoint includes pull requests; pull-request entries are filtered after the bounded issue window is fetched.",
+      issueChecklistSemantics:
+        "Markdown task-list items outside fenced code blocks are counted mechanically. Checklist text is exposed as written and is not interpreted semantically.",
     },
     ranking: {
       policy:
@@ -77,6 +81,8 @@ export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()
       semanticPriority: "not-inferred",
       ciHealth: "not-inspected",
       ciAffectsRanking: false,
+      checklistProgress: "observed-not-ranked",
+      checklistAffectsRanking: false,
     },
     summary: {
       status: candidates.length ? "ready" : "empty",
@@ -224,6 +230,7 @@ function pullCandidate(pull, now) {
 function issueCandidate(issue, now) {
   const updatedAt = validDate(issue.updated_at);
   const ageDays = daysSince(updatedAt, now);
+  const checklist = issueChecklistEvidence(issue.body);
   return {
     score: freshnessScore(ageDays) + 20,
     kind: "issue",
@@ -234,7 +241,12 @@ function issueCandidate(issue, now) {
     author: issue.user?.login ?? null,
     draft: false,
     action: "implement-issue",
-    signals: itemSignals({ ageDays, kind: "issue", draft: false, authorType: issue.user?.type }),
+    checklist,
+    nextStep: issueChecklistNextStep(checklist),
+    signals: [
+      ...itemSignals({ ageDays, kind: "issue", draft: false, authorType: issue.user?.type }),
+      ...checklistSignals(checklist),
+    ],
   };
 }
 
@@ -284,6 +296,12 @@ function itemSignals({ ageDays, kind, draft, authorType }) {
   else if (ageDays <= 30) signals.push("active-this-month");
   if (authorType === "Bot") signals.push("bot-authored");
   return signals;
+}
+
+function checklistSignals(checklist) {
+  if (checklist.status !== "present") return [];
+  if (checklist.remaining > 0) return ["issue-checklist", "open-checklist-items"];
+  return ["issue-checklist", "completed-checklist-open-issue"];
 }
 
 function freshnessScore(ageDays) {
