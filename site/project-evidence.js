@@ -13,6 +13,7 @@ export function createProjectManifestEvidence(input) {
   const manifestPaths = [
     ...new Set((input.manifestPaths ?? []).filter((path) => typeof path === "string" && path)),
   ].toSorted();
+  const complete = input.complete !== false;
 
   return {
     schemaVersion: NORMALIZED_EVIDENCE_SCHEMA_VERSION,
@@ -23,7 +24,7 @@ export function createProjectManifestEvidence(input) {
     },
     facts: {
       manifests: {
-        status: manifestPaths.length ? "available" : "incomplete",
+        status: manifestPaths.length && complete ? "available" : "incomplete",
         value: manifestPaths,
         provenance: manifestPaths.map((path) => ({ collector: input.collector, path })),
       },
@@ -33,6 +34,7 @@ export function createProjectManifestEvidence(input) {
 
 export function collectGithubProjectManifestEvidence(snapshot, components) {
   const manifestPaths = (snapshot?.tree ?? [])
+    .filter((entry) => entry?.type === "blob")
     .map((entry) => entry?.path)
     .filter(
       (path) =>
@@ -51,6 +53,7 @@ export function collectGithubProjectManifestEvidence(snapshot, components) {
         manifestPaths: manifestPaths.filter((manifestPath) =>
           manifestBelongsToComponent(manifestPath, component.path, component.kind),
         ),
+        complete: snapshot?.treeTruncated !== true,
       }),
     );
 }
