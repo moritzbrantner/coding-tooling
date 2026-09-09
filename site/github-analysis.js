@@ -1,3 +1,4 @@
+import { analysisKpisJson } from "./analysis-kpis.js";
 import { applyHostedMergePolicy } from "./hosted-merge-policy.js";
 import {
   declaredMergeAuthorityEvidence,
@@ -16,16 +17,23 @@ export async function analysisJson(value, options = {}) {
     throw new Error("Enter owner/repository or a github.com repository URL.");
 
   const snapshot = await loadSnapshot(reference, options);
-  const analysis = analyzeSnapshot(snapshot, options.now ?? new Date());
+  const structuralAnalysis = analyzeSnapshot(snapshot, options.now ?? new Date());
   const declaredMergeAuthority = declaredMergeAuthorityFromSnapshot(snapshot);
   const mergeAuthority = mergeAuthorityConsistency(
     declaredMergeAuthority,
     snapshot.repository.governance.defaultBranchProtection,
   );
+  const analysis = applyHostedMergePolicy(
+    structuralAnalysis,
+    declaredMergeAuthority,
+    mergeAuthority,
+  );
+  const kpis = await analysisKpisJson(reference, analysis, snapshot, options);
   return {
-    ...applyHostedMergePolicy(analysis, declaredMergeAuthority, mergeAuthority),
+    ...analysis,
     declaredMergeAuthority,
     mergeAuthorityConsistency: mergeAuthority,
+    kpis,
   };
 }
 
@@ -103,6 +111,7 @@ export async function loadSnapshot(reference, options = {}) {
       name: repository.name,
       fullName: repository.full_name,
       defaultBranch: repository.default_branch,
+      revision: defaultBranchRevision(defaultBranch),
       htmlUrl: repository.html_url,
       description: repository.description,
       archived: repository.archived,
@@ -193,6 +202,12 @@ function declaredMergeAuthorityFromSnapshot(snapshot) {
       observedEnforcement: "not-evaluated",
     };
   }
+}
+
+function defaultBranchRevision(observation) {
+  if (observation?.status !== "observed") return null;
+  const revision = observation.value?.commit?.sha;
+  return /^[0-9a-f]{40}$/i.test(revision ?? "") ? revision : null;
 }
 
 function defaultBranchProtectionEvidence(observation) {

@@ -1,4 +1,4 @@
-name: Publish Test Coverage
+name: Publish Test Coverage and Contract Evidence
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: test-coverage-publication
+  group: coding-tooling-observation-publication
   cancel-in-progress: true
 
 jobs:
@@ -35,9 +35,23 @@ jobs:
           --revision "$GITHUB_SHA"
           --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           --output "$RUNNER_TEMP/test-coverage.json"
+      - name: Generate public-contract verification report
+        run: >-
+          bun src/entry.ts contract verify
+          --report "$RUNNER_TEMP/public-contract-report.json"
+          --json
+      - name: Build normalized public-contract snapshot
+        run: >-
+          bun scripts/build-public-contract-snapshot.js
+          --input "$RUNNER_TEMP/public-contract-report.json"
+          --repository "$GITHUB_REPOSITORY"
+          --revision "$GITHUB_SHA"
+          --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          --output "$RUNNER_TEMP/public-contract.json"
       - name: Publish observation branch
         env:
-          SNAPSHOT_PATH: ${{ runner.temp }}/test-coverage.json
+          COVERAGE_SNAPSHOT_PATH: ${{ runner.temp }}/test-coverage.json
+          CONTRACT_SNAPSHOT_PATH: ${{ runner.temp }}/public-contract.json
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -52,7 +66,8 @@ jobs:
           fi
 
           mkdir -p .coding-tooling
-          cp "$SNAPSHOT_PATH" .coding-tooling/test-coverage.json
-          git add .coding-tooling/test-coverage.json
-          git commit -m "Publish test coverage for ${GITHUB_SHA}"
+          cp "$COVERAGE_SNAPSHOT_PATH" .coding-tooling/test-coverage.json
+          cp "$CONTRACT_SNAPSHOT_PATH" .coding-tooling/public-contract.json
+          git add .coding-tooling/test-coverage.json .coding-tooling/public-contract.json
+          git commit -m "Publish coding-tooling observations for ${GITHUB_SHA}"
           git push origin HEAD:coding-tooling-observations
