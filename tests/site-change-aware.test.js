@@ -40,6 +40,9 @@ describe("GitHub Pages change-aware analysis", () => {
     expect(result.data.scope.affectedComponents[0].governingContracts).toContain(
       "packages/a/package.json",
     );
+    expect(result.data.scope.affectedComponents[0].governingContracts).toContain(
+      "packages/a/src/AGENTS.md",
+    );
   });
 
   test("widens cross-repository contract changes to all discovered components", () => {
@@ -57,6 +60,20 @@ describe("GitHub Pages change-aware analysis", () => {
     expect(
       result.diagnostics.some((diagnostic) => diagnostic.code === "remote-change-scope-widened"),
     ).toBe(true);
+  });
+
+  test("treats Markdown convention snapshots as global contracts", () => {
+    const result = remoteChangeCommandFromSnapshot(
+      repository(),
+      change([".conventions/index.md"]),
+      request("affected"),
+      now,
+    );
+
+    expect(result.data.scope.mode).toBe("conservative-all");
+    expect(new Set(result.data.validationPlan.checks.map((check) => check.component))).toEqual(
+      new Set(["fixture", "package-a", "package-b"]),
+    );
   });
 
   test("does not let a component filter weaken conservative widening", () => {
@@ -85,6 +102,23 @@ describe("GitHub Pages change-aware analysis", () => {
     expect(result.data.scope.mode).toBe("documentation-only");
     expect(result.data.scope.affectedComponents).toEqual([]);
     expect(result.data.validationPlan.checks).toEqual([]);
+  });
+
+  test("fails closed when a changed path cannot be mapped to a component", () => {
+    const result = remoteChangeCommandFromSnapshot(
+      repositoryWithoutComponents(),
+      change(["src/app.py"]),
+      request("affected"),
+      now,
+    );
+
+    expect(result.status).toBe("unavailable");
+    expect(result.data.validationPlan.complete).toBe(false);
+    expect(result.data.scope.mode).toBe("conservative-all");
+    expect(result.data.scope.unresolvedChangedPaths).toEqual(["src/app.py"]);
+    expect(
+      result.diagnostics.some((diagnostic) => diagnostic.code === "remote-change-scope-incomplete"),
+    ).toBe(true);
   });
 
   test("widening is fail-closed when the repository snapshot is incomplete", () => {
@@ -127,6 +161,25 @@ describe("GitHub Pages change-aware analysis", () => {
     expect(result.data.validationPlan.missing).toEqual([
       { capability: "test:e2e", component: "package-a", optional: false },
     ]);
+  });
+
+  test("keeps all equally specific co-located component owners", () => {
+    const result = remoteChangeCommandFromSnapshot(
+      mixedRootRepository(),
+      change(["src/lib.rs"]),
+      request("affected"),
+      now,
+    );
+
+    expect(result.status).toBe("passed");
+    expect(result.data.scope.mode).toBe("targeted");
+    expect(
+      result.data.scope.affectedComponents.map((component) => component.kind).toSorted(),
+    ).toEqual(["package", "rust"]);
+    expect(result.data.validationPlan.checks).toHaveLength(4);
+    expect(new Set(result.data.validationPlan.checks.map((check) => check.kind))).toEqual(
+      new Set(["package", "rust"]),
+    );
   });
 
   test("change-aware plan honors an affected component filter", () => {
@@ -267,6 +320,7 @@ function repository(overrides = {}) {
     blob("src/index.ts", "4"),
     blob("tests/index.test.ts", "5"),
     blob("packages/a/src/widget.ts", "6"),
+    blob("packages/a/src/AGENTS.md", "18"),
     blob("packages/a/tests/widget.test.ts", "7"),
     blob("packages/b/src/index.ts", "8"),
     blob("packages/b/tests/index.test.ts", "9"),
@@ -288,6 +342,40 @@ function repository(overrides = {}) {
     manifestFetchTruncated: false,
     unreadablePaths: [],
     ...rest,
+  };
+}
+
+function repositoryWithoutComponents() {
+  return {
+    repository: snapshotRepositoryMetadata(),
+    tree: [blob("src/app.py", "101")],
+    files: {},
+    treeTruncated: false,
+    manifestFetchTruncated: false,
+    unreadablePaths: [],
+  };
+}
+
+function mixedRootRepository() {
+  const snapshot = repository({
+    files: {
+      ".coding-tooling.json": JSON.stringify({
+        schemaVersion: 1,
+        profile: "mixed-root",
+        tiers: { fast: ["build", "test:unit"] },
+        requiredCapabilities: ["build", "test:unit"],
+      }),
+      "rust-toolchain.toml": '[toolchain]\nchannel = "1.98.0"\n',
+    },
+  });
+  return {
+    ...snapshot,
+    tree: [
+      ...snapshot.tree,
+      blob("Cargo.toml", "102"),
+      blob("rust-toolchain.toml", "103"),
+      blob("src/lib.rs", "104"),
+    ],
   };
 }
 

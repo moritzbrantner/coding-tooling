@@ -174,6 +174,8 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
     analysis.summary.status === "incomplete" ||
     change.filesTruncated ||
     Boolean(change.compareIncomplete);
+  const scopeIncomplete = scope.unresolvedChangedPaths.length > 0;
+  const evidenceIncomplete = sourceIncomplete || scopeIncomplete;
   const blockingMissing = missing.some((item) => !item.optional);
   const diagnostics = missing.map((item) => ({
     code: item.optional ? "optional-capability-unavailable" : "capability-unavailable",
@@ -184,6 +186,11 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
       code: "remote-change-source-incomplete",
       message:
         "The GitHub change or repository snapshot is incomplete; the plan was widened conservatively where possible.",
+    });
+  if (scopeIncomplete)
+    diagnostics.push({
+      code: "remote-change-scope-incomplete",
+      message: `Could not safely map changed paths to repository components: ${scope.unresolvedChangedPaths.join(", ")}`,
     });
   if (scope.mode === "conservative-all")
     diagnostics.push({
@@ -236,12 +243,12 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
   if (request.operation === "affected")
     return envelope(
       "affected",
-      sourceIncomplete || blockingMissing ? "unavailable" : "passed",
+      evidenceIncomplete || blockingMissing ? "unavailable" : "passed",
       {
         ...common,
         validationPlan: {
           tier: request.tier,
-          complete: !sourceIncomplete && !blockingMissing,
+          complete: !evidenceIncomplete && !blockingMissing,
           checks,
           missing,
           remoteScope: "change-aware-structural-plan-only",
@@ -252,7 +259,7 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
 
   let planStatus = "unavailable";
   if (
-    !sourceIncomplete &&
+    !evidenceIncomplete &&
     !blockingMissing &&
     (checks.length > 0 || ["documentation-only", "no-changes"].includes(scope.mode))
   )
@@ -266,7 +273,7 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
       profile: config.profile,
       tier: request.tier,
       dependencyResolution: "distribution",
-      complete: !sourceIncomplete && !blockingMissing,
+      complete: !evidenceIncomplete && !blockingMissing,
       checks,
       missing,
       conventionRequiredCapabilities: [],
@@ -479,11 +486,6 @@ function deriveAffectedScope(snapshot, components, changedFiles) {
   for (const file of changedFiles) {
     const paths = [file.path, file.previousPath].filter(Boolean);
     for (const path of paths) {
-      if (isDocumentationPath(path)) {
-        documentationPaths.push(path);
-        continue;
-      }
-
       const globalKinds = globalImpactKinds(path);
       if (globalKinds === "all") {
         widenAll = true;
@@ -502,9 +504,15 @@ function deriveAffectedScope(snapshot, components, changedFiles) {
         continue;
       }
 
-      const owner = mostSpecificOwner(allComponents, path);
-      if (owner) addChanged(changedByComponent, owner, path);
-      else {
+      if (isDocumentationPath(path)) {
+        documentationPaths.push(path);
+        continue;
+      }
+
+      const owners = mostSpecificOwners(allComponents, path);
+      if (owners.length > 0) {
+        for (const owner of owners) addChanged(changedByComponent, owner, path);
+      } else {
         unresolvedChangedPaths.push(path);
         widenAll = true;
         reasons.push(`unresolved-path:${path}`);
@@ -566,6 +574,7 @@ function buildChecks(components, selectedCapabilities) {
       checks.push({
         capability,
         component: component.name,
+        kind: component.kind,
         path: component.path,
         command,
         reason: "affected-component",
@@ -580,12 +589,12 @@ function missingCapabilities(checks, selected, config, components) {
   const required = new Set(config.requiredCapabilities ?? []);
   const optional = new Set(config.optionalCapabilities ?? []);
   const present = new Set(
-    checks.map((check) => `${check.path}:${check.component}:${check.capability}`),
+    checks.map((check) => `${check.kind}:${check.path}:${check.component}:${check.capability}`),
   );
   const missing = [];
   for (const component of components) {
     for (const capability of new Set(selected)) {
-      if (present.has(`${component.path}:${component.name}:${capability}`)) continue;
+      if (present.has(`${componentIdentity(component)}:${capability}`)) continue;
       if (required.has(capability))
         missing.push({ capability, component: component.name, optional: false });
       else if (optional.has(capability))
@@ -603,8 +612,12 @@ function governingContracts(snapshot, component, changedPaths) {
   if (paths.has(".coding-tooling.json")) contracts.push(".coding-tooling.json");
   const manifest = componentManifest(component);
   if (manifest && paths.has(manifest)) contracts.push(manifest);
-  const agent = nearestAncestorFile(paths, component.path, "AGENTS.md");
-  if (agent) contracts.push(agent);
+  const agentStarts =
+    changedPaths.length > 0 ? changedPaths.map((changed) => dirname(changed)) : [component.path];
+  for (const start of agentStarts) {
+    const agent = nearestAncestorFile(paths, start, "AGENTS.md");
+    if (agent) contracts.push(agent);
+  }
   for (const changed of changedPaths) {
     if (isContractLikePath(changed) && paths.has(changed)) contracts.push(changed);
   }
@@ -613,13 +626,12 @@ function governingContracts(snapshot, component, changedPaths) {
 
 function candidateTests(snapshot, component, changedPaths, components) {
   const tests = snapshot.tree
-    .filter(
-      (entry) =>
-        entry.type === "blob" &&
-        isTestPath(entry.path) &&
-        componentIdentity(mostSpecificOwner(components, entry.path) ?? component) ===
-          componentIdentity(component),
-    )
+    .filter((entry) => {
+      if (entry.type !== "blob" || !isTestPath(entry.path)) return false;
+      return mostSpecificOwners(components, entry.path).some(
+        (owner) => componentIdentity(owner) === componentIdentity(component),
+      );
+    })
     .map((entry) => entry.path);
   const changedStems = new Set(changedPaths.map(stem).filter(Boolean));
   const changed = new Set(changedPaths);
@@ -703,12 +715,16 @@ function globalImpactKinds(path) {
   return null;
 }
 
-function mostSpecificOwner(components, path) {
-  return components
-    .filter((component) => componentContains(component, path))
-    .toSorted(
-      (left, right) => normalizedComponentPath(right).length - normalizedComponentPath(left).length,
-    )[0];
+function mostSpecificOwners(components, path) {
+  const matches = components.filter((component) => componentContains(component, path));
+  if (matches.length === 0) return [];
+  const maximumPathLength = matches.reduce(
+    (maximum, component) => Math.max(maximum, normalizedComponentPath(component).length),
+    -1,
+  );
+  return matches.filter(
+    (component) => normalizedComponentPath(component).length === maximumPathLength,
+  );
 }
 
 function componentContains(component, path) {
