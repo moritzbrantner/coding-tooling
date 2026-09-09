@@ -21,7 +21,7 @@ function blob(path) {
   return { path, type: "blob", sha: path };
 }
 
-function snapshot(tree) {
+function snapshot(tree, treeTruncated = false) {
   return {
     repository: {
       name: "fixture",
@@ -32,7 +32,7 @@ function snapshot(tree) {
     files: {
       ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
     },
-    treeTruncated: false,
+    treeTruncated,
     manifestFetchTruncated: false,
     workflowFetchTruncated: false,
     unreadablePaths: [],
@@ -119,6 +119,38 @@ describe("normalized Rust and .NET manifest evidence", () => {
       kind: "dotnet",
       manifestStatus: "incomplete",
       manifestPaths: [],
+    });
+  });
+
+  test("keeps a discovered manifest incomplete when the GitHub tree is truncated", () => {
+    const evidence = collectGithubProjectManifestEvidence(
+      snapshot([blob("service/Service.csproj")], true),
+      [{ name: "service", path: "service", kind: "dotnet" }],
+    )[0];
+
+    expect(projectManifestSemantics(evidence)).toEqual({
+      kind: "dotnet",
+      manifestStatus: "incomplete",
+      manifestPaths: ["service/Service.csproj"],
+    });
+    expect(evidence.facts.manifests.provenance).toEqual([
+      { collector: "github", path: "service/Service.csproj" },
+    ]);
+  });
+
+  test("ignores GitHub tree entries whose directory names look like manifests", () => {
+    const evidence = collectGithubProjectManifestEvidence(
+      snapshot([
+        { path: "service/Fake.csproj", type: "tree", sha: "fake-tree" },
+        blob("service/Real.csproj"),
+      ]),
+      [{ name: "service", path: "service", kind: "dotnet" }],
+    )[0];
+
+    expect(projectManifestSemantics(evidence)).toEqual({
+      kind: "dotnet",
+      manifestStatus: "available",
+      manifestPaths: ["service/Real.csproj"],
     });
   });
 });
