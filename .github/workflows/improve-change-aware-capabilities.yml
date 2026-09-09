@@ -28,6 +28,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           def replace_once(text, old, new, label):
               if old not in text:
@@ -37,110 +38,109 @@ jobs:
           source_path = Path("site/change-aware.js")
           source = source_path.read_text()
 
-          old = '''  const checks = buildChecks(selectedComponents, selected);
-          const missing = missingCapabilities(checks, selected, config, selectedComponents);
-          const affectedComponents = selectedComponents.map((component) => {
-            const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
-            return {
-              name: component.name,
-              path: component.path,
-              kind: component.kind,
-              technologies: component.technologies,
-              changedPaths,
-              governingContracts: governingContracts(snapshot, component, changedPaths),
-              candidateTests: candidateTests(snapshot, component, changedPaths, discoveredComponents),
-              selectedCapabilities: [...new Set(selected)].filter(
-                (capability) => component.capabilities[capability],
-              ),
-            };
-          });
+          source = replace_once(
+              source,
+              '  const config = readToolingConfig(snapshot);\n',
+              '''  let config;
+          try {
+            config = readToolingConfig(snapshot);
+          } catch (error) {
+            return invalidEnvelope(
+              request.operation,
+              snapshot,
+              error instanceof Error ? error.message : String(error),
+            );
+          }
+          ''',
+              "config error boundary",
+          )
 
-          const sourceIncomplete =
-            analysis.summary.status === "incomplete" ||
-            change.filesTruncated ||
-            Boolean(change.compareIncomplete);
-          '''
-          new = '''  const checks = buildChecks(selectedComponents, selected);
-          const missing = missingCapabilities(checks, selected, config, selectedComponents);
+          source = replace_once(
+              source,
+              '''  const missing = missingCapabilities(checks, selected, config, selectedComponents);
+          const affectedComponents = selectedComponents.map((component) => {
+          ''',
+              '''  const missing = missingCapabilities(checks, selected, config, selectedComponents);
           const componentEvidenceIncomplete =
             analysis.summary.status === "incomplete" ||
             change.filesTruncated ||
             Boolean(change.compareIncomplete);
           const affectedComponents = selectedComponents.map((component) => {
-            const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
-            const candidates = candidateTests(snapshot, component, changedPaths, discoveredComponents);
-            return {
-              name: component.name,
-              path: component.path,
-              kind: component.kind,
-              technologies: component.technologies,
-              changedPaths,
-              governingContracts: governingContracts(snapshot, component, changedPaths),
-              testEvidence: componentTestEvidence(
-                snapshot,
-                component,
-                changedPaths,
-                discoveredComponents,
-                candidates,
-                componentEvidenceIncomplete,
-              ),
-              candidateTests: candidates,
-              selectedCapabilities: [...new Set(selected)].filter(
-                (capability) => component.capabilities[capability],
-              ),
-            };
-          });
+          ''',
+              "component evidence prelude",
+          )
+          source = replace_once(
+              source,
+              '''    const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
+              return {
+          ''',
+              '''    const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
+              const candidates = candidateTests(snapshot, component, changedPaths, discoveredComponents);
+              return {
+          ''',
+              "candidate binding",
+          )
+          source = replace_once(
+              source,
+              '''      governingContracts: governingContracts(snapshot, component, changedPaths),
+                candidateTests: candidateTests(snapshot, component, changedPaths, discoveredComponents),
+          ''',
+              '''      governingContracts: governingContracts(snapshot, component, changedPaths),
+                testEvidence: componentTestEvidence(
+                  snapshot,
+                  component,
+                  changedPaths,
+                  discoveredComponents,
+                  candidates,
+                  componentEvidenceIncomplete,
+                ),
+                candidateTests: candidates,
+          ''',
+              "component evidence fields",
+          )
+          source = replace_once(
+              source,
+              '''  const sourceIncomplete =
+              analysis.summary.status === "incomplete" ||
+              change.filesTruncated ||
+              Boolean(change.compareIncomplete);
+          ''',
+              '''  const sourceIncomplete = componentEvidenceIncomplete;
+          ''',
+              "shared incomplete state",
+          )
+          source = replace_once(
+              source,
+              '''    repository: snapshot.repository,
+              source: { ...analysis.source, ref: change.head },
+          ''',
+              '''    repository: snapshot.repository,
+              source: { ...analysis.source, ref: change.head },
+              declaredMergeAuthority: mergeAuthorityEvidence(config),
+          ''',
+              "merge authority output",
+          )
 
-          const sourceIncomplete = componentEvidenceIncomplete;
-          '''
-          source = replace_once(source, old, new, "affected component evidence")
-
-          old = '''    repository: snapshot.repository,
-            source: { ...analysis.source, ref: change.head },
-            change: {
-          '''
-          new = '''    repository: snapshot.repository,
-            source: { ...analysis.source, ref: change.head },
-            declaredMergeAuthority: mergeAuthorityEvidence(config),
-            change: {
-          '''
-          source = replace_once(source, old, new, "merge authority output")
-
-          old = '''  const agentStarts =
-              changedPaths.length > 0 ? changedPaths.map((changed) => dirname(changed)) : [component.path];
-          '''
-          new = '''  const agentStarts =
-              changedPaths.length > 0 ? changedPaths.map((changed) => dirname(changed)) : [component.path];
-          '''
-          if old not in source:
-              raise SystemExit("governing contract anchor not found")
-
-          old = '''function candidateTests(snapshot, component, changedPaths, components) {
-            const tests = snapshot.tree
-              .filter((entry) => {
-                if (entry.type !== "blob" || !isTestPath(entry.path)) return false;
-                return mostSpecificOwners(components, entry.path).some(
-                  (owner) => componentIdentity(owner) === componentIdentity(component),
-                );
-              })
-              .map((entry) => entry.path);
-            const changedStems = new Set(changedPaths.map(stem).filter(Boolean));
-            const changed = new Set(changedPaths);
-            return tests
-          '''
-          new = '''function candidateTests(snapshot, component, changedPaths, components) {
+          replacement = '''function candidateTests(snapshot, component, changedPaths, components) {
             const changed = new Set(changedPaths);
             const tests = componentTestPaths(snapshot, component, components).filter(
               (path) => !isAuxiliaryTestPath(path) || changed.has(path),
             );
             const changedStems = new Set(changedPaths.map(stem).filter(Boolean));
             return tests
-          '''
-          source = replace_once(source, old, new, "candidate test filtering")
+              .map((path) => ({
+                path,
+                score:
+                  (changed.has(path) ? 100 : 0) +
+                  (changedStems.has(stem(path)) ? 50 : 0) +
+                  (changedPaths.some((candidate) => dirname(candidate) === dirname(path)) ? 10 : 0),
+              }))
+              .toSorted((left, right) => right.score - left.score || left.path.localeCompare(right.path))
+              .slice(0, CANDIDATE_TEST_LIMIT)
+              .map(({ path }) => path);
+          }
 
-          marker = '''function readToolingConfig(snapshot) {
-          '''
-          helpers = '''function componentTestEvidence(
+          function componentTestEvidence(
             snapshot,
             component,
             changedPaths,
@@ -198,17 +198,27 @@ jobs:
             };
           }
 
-          '''
-          source = replace_once(source, marker, helpers + marker, "evidence helpers")
+          function readToolingConfig'''
+          source, count = re.subn(
+              r'function candidateTests\(snapshot, component, changedPaths, components\) \{.*?\n\}\n\nfunction readToolingConfig',
+              replacement,
+              source,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit("candidate/evidence function replacement failed")
 
-          old = '''  const required = new Set(config.requiredCapabilities ?? []);
+          source = replace_once(
+              source,
+              '''  const required = new Set(config.requiredCapabilities ?? []);
             for (const capability of config.optionalCapabilities ?? []) {
               if (required.has(capability))
                 throw new Error(`${capability} cannot be both required and optional`);
             }
             for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {
-          '''
-          new = '''  const required = new Set(config.requiredCapabilities ?? []);
+          ''',
+              '''  const required = new Set(config.requiredCapabilities ?? []);
             for (const capability of config.optionalCapabilities ?? []) {
               if (required.has(capability))
                 throw new Error(`${capability} cannot be both required and optional`);
@@ -235,36 +245,42 @@ jobs:
                 throw new Error("local merge authority requires a non-empty reason");
             }
             for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {
-          '''
-          source = replace_once(source, old, new, "merge config validation")
-
-          old = '''    lower.endsWith("agents.md") ||
+          ''',
+              "merge config validation",
+          )
+          source = replace_once(
+              source,
+              '''    lower.endsWith("agents.md") ||
               lower.includes("contract") ||
-          '''
-          new = '''    lower.endsWith("agents.md") ||
+          ''',
+              '''    lower.endsWith("agents.md") ||
               lower.endsWith("agent-tool.json") ||
               lower.includes("contract") ||
-          '''
-          source = replace_once(source, old, new, "machine contract recognition")
-
-          marker = '''function stem(path) {
-          '''
-          helper = '''function isAuxiliaryTestPath(path) {
+          ''',
+              "machine contract recognition",
+          )
+          source = replace_once(
+              source,
+              'function stem(path) {\n',
+              '''function isAuxiliaryTestPath(path) {
             return /(^|\\/)(fixtures?|node_modules|vendor|dist|build|coverage)(\\/|$)/i.test(path);
           }
 
-          '''
-          source = replace_once(source, marker, helper + marker, "auxiliary test helper")
+          function stem(path) {
+          ''',
+              "auxiliary test helper",
+          )
           source_path.write_text(source)
 
           test_path = Path("tests/site-change-aware.test.js")
           tests = test_path.read_text()
-
-          old = '''    expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
+          tests = replace_once(
+              tests,
+              '''    expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
               "packages/a/tests/widget.test.ts",
             );
-          '''
-          new = '''    expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
+          ''',
+              '''    expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
               "packages/a/tests/widget.test.ts",
             );
             expect(result.data.scope.affectedComponents[0].testEvidence).toEqual(
@@ -276,11 +292,10 @@ jobs:
                 changedTestPaths: [],
               }),
             );
-          '''
-          tests = replace_once(tests, old, new, "test evidence assertion")
-
-          marker = '''  test("change-aware plan honors an affected component filter", () => {
-          '''
+          ''',
+              "test evidence assertion",
+          )
+          marker = '  test("change-aware plan honors an affected component filter", () => {\n'
           additions = '''  test("keeps fixture tests out of candidate navigation", () => {
             const result = remoteChangeCommandFromSnapshot(
               repository(),
@@ -314,10 +329,7 @@ jobs:
           test("exposes declared hosted merge authority without claiming enforcement", () => {
             const snapshot = repository();
             const config = JSON.parse(snapshot.files[".coding-tooling.json"]);
-            config.merge = {
-              authority: "hosted",
-              requiredChecks: ["Validate", "Pages"],
-            };
+            config.merge = { authority: "hosted", requiredChecks: ["Validate", "Pages"] };
             snapshot.files[".coding-tooling.json"] = JSON.stringify(config);
 
             const result = remoteChangeCommandFromSnapshot(
@@ -358,17 +370,17 @@ jobs:
 
           '''
           tests = replace_once(tests, marker, additions + marker, "dogfood regression tests")
-
-          old = '''    blob("tsconfig.json", "17"),
+          tests = replace_once(
+              tests,
+              '    blob("tsconfig.json", "17"),\n  ];\n',
+              '''    blob("tsconfig.json", "17"),
+              blob("site/agent-tool.json", "19"),
+              blob("calibration/fixtures/noise/tests/noise.test.ts", "20"),
+              blob("fixtures/noise/tests/noise.test.ts", "21"),
             ];
-          '''
-          new = '''    blob("tsconfig.json", "17"),
-            blob("site/agent-tool.json", "19"),
-            blob("calibration/fixtures/noise/tests/noise.test.ts", "20"),
-            blob("fixtures/noise/tests/noise.test.ts", "21"),
-            ];
-          '''
-          tests = replace_once(tests, old, new, "fixture noise paths")
+          ''',
+              "fixture noise paths",
+          )
           test_path.write_text(tests)
 
           docs_path = Path("docs/change-aware-pages.md")
