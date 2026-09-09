@@ -27,7 +27,7 @@ jobs:
         run: |
           test "$(git hash-object Cargo.toml)" = "7977027e5231602cf2623a6501345e2fbc270ee9"
           test "$(git hash-object crates/guitar-tuner-core/Cargo.toml)" = "c61f1c195398b9b4b01f8a112c114f10d99f54d8"
-          test "$(git hash-object crates/guitar-tuner-core/src/lib.rs)" = "bf5f1238b1a99becbe13e591d5446f991953d28f"
+          test "$(git hash-object crates/guitar-tuner-core/src/lib.rs)" = "4743b8b1244a16141e1c69983314ce153a0a9426"
 
       - name: Generate exact Rust lockfile
         working-directory: .scratch/tauri-template-pr12/src-tauri

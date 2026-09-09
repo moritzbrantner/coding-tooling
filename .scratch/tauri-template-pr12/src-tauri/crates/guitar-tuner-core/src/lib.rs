@@ -247,7 +247,11 @@ mod tests {
     fn silence_returns_to_listening_and_clears_smoothing_history() {
         let mut tuner = GuitarTuner::default();
         let pitched = harmonic_tone(110.0, 48_000, 0.17, &[1.0, 0.3, 0.15]);
-        assert!(tuner.analyze(&pitched, 48_000).unwrap().detected_frequency_hz.is_some());
+        assert!(tuner
+            .analyze(&pitched, 48_000)
+            .unwrap()
+            .detected_frequency_hz
+            .is_some());
 
         let silence = tuner.analyze(&vec![0.0; 8192], 48_000).unwrap();
         assert_eq!(silence.status, TuningStatus::Listening);
@@ -258,7 +262,9 @@ mod tests {
     fn rejects_unbounded_or_invalid_input() {
         let mut tuner = GuitarTuner::default();
         assert!(tuner.analyze(&[0.0; 3], 0).is_err());
-        assert!(tuner.analyze(&vec![0.0; MAX_INPUT_SAMPLES + 1], 48_000).is_err());
+        assert!(tuner
+            .analyze(&vec![0.0; MAX_INPUT_SAMPLES + 1], 48_000)
+            .is_err());
         assert!(tuner.analyze(&[f32::NAN], 48_000).is_err());
     }
 }
