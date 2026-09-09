@@ -85,7 +85,7 @@ describe("GitHub Pages repository governance evidence", () => {
     });
   });
 
-  test("surfaces an unprotected branch and empty required checks with one bounded request", async () => {
+  test("surfaces an unprotected branch and empty required checks with one bounded governance request", async () => {
     const requests = [];
     const analysis = await analysisJson("example/repo", {
       fetchImpl: async (url) => {
@@ -107,7 +107,7 @@ describe("GitHub Pages repository governance evidence", () => {
       },
     });
 
-    expect(requests).toHaveLength(3);
+    expect(requests).toHaveLength(7);
     expect(analysis.repository.governance.license).toEqual({
       status: "observed",
       present: true,

@@ -199,7 +199,7 @@ function workAction(action) {
 async function run(value) {
   controller?.abort();
   controller = new AbortController();
-  setStatus("Reading public GitHub metadata and structural evidence…");
+  setStatus("Reading public GitHub metadata, structural evidence, and published KPIs…");
   output.hidden = true;
 
   try {
@@ -227,6 +227,7 @@ function render(analysis) {
     metric("Findings", analysis.summary.findingCount),
   );
 
+  renderKpis(analysis.kpis);
   const technologies = document.querySelector("#technologies");
   technologies.replaceChildren(...analysis.technologies.map((name) => chip(name)));
   renderComponents(analysis.components);
@@ -243,6 +244,105 @@ function render(analysis) {
   const machineUrl = new URL("./analysis.json/", location.href);
   machineUrl.searchParams.set("repo", analysis.repository.fullName);
   document.querySelector("#analysis-json-link").href = machineUrl.href;
+}
+
+function renderKpis(kpis) {
+  const target = document.querySelector("#kpis");
+  const rows = [
+    [
+      "Checklist work",
+      checklistValue(kpis?.work?.checklist),
+      kpiState(kpis?.work?.checklist),
+      "Bounded open-issue task lists; older issues may be omitted when the window is full.",
+    ],
+    [
+      "Public contracts verified",
+      ratioValue(kpis?.publicContracts?.contracts?.verified, kpis?.publicContracts?.contracts?.discovered),
+      kpiState(kpis?.publicContracts),
+      "Executed public-contract evidence only; declarations without a passing verifier do not count.",
+    ],
+    [
+      "HTTP endpoints verified",
+      ratioValue(
+        kpis?.publicContracts?.httpEndpoints?.verified,
+        kpis?.publicContracts?.httpEndpoints?.discovered,
+      ),
+      kpiState(kpis?.publicContracts),
+      "HTTP operations discovered through public-contract verification evidence.",
+    ],
+    [
+      "Functions covered by tests",
+      coverageValue(kpis?.testCoverage?.functions),
+      kpiState(kpis?.testCoverage),
+      "Native test coverage; execution coverage is not a claim that every function has meaningful assertions.",
+    ],
+    [
+      "Lines covered by tests",
+      coverageValue(kpis?.testCoverage?.lines),
+      kpiState(kpis?.testCoverage),
+      "Native test coverage from the published current-revision snapshot when available.",
+    ],
+    [
+      "Verification checks passed",
+      ratioValue(kpis?.verification?.checks?.passed, kpis?.verification?.checks?.planned),
+      kpiState(kpis?.verification),
+      "Planned checks remain obligations even when an earlier check blocks later execution.",
+    ],
+    [
+      "Actionable findings",
+      kpis?.findings?.total == null
+        ? "Unavailable"
+        : `${kpis.findings.total} total · ${kpis.findings.highPriority} high priority`,
+      kpiState(kpis?.findings),
+      "Current remote-preflight findings, including opted-in hosted governance policy.",
+    ],
+  ];
+
+  target.replaceChildren(
+    ...rows.map(([name, value, state, note]) => {
+      const row = document.createElement("tr");
+      const nameCell = document.createElement("th");
+      nameCell.scope = "row";
+      nameCell.textContent = name;
+      const valueCell = document.createElement("td");
+      valueCell.textContent = value;
+      const stateCell = document.createElement("td");
+      stateCell.textContent = state;
+      const noteCell = document.createElement("td");
+      noteCell.className = "muted";
+      noteCell.textContent = note;
+      row.append(nameCell, valueCell, stateCell, noteCell);
+      return row;
+    }),
+  );
+}
+
+function checklistValue(checklist) {
+  if (!checklist || checklist.remaining == null || checklist.total == null) return "Unavailable";
+  if (checklist.total === 0) return "No checklist items in inspected issues";
+  return `${checklist.remaining} remaining · ${checklist.completed}/${checklist.total} complete`;
+}
+
+function coverageValue(metric) {
+  if (!metric) return "Unavailable";
+  return `${metric.covered}/${metric.total} · ${formatPercent(metric.percent)}`;
+}
+
+function ratioValue(numerator, denominator) {
+  if (numerator == null || denominator == null) return "Unavailable";
+  if (denominator === 0) return "0 discovered";
+  return `${numerator}/${denominator} · ${formatPercent((numerator / denominator) * 100)}`;
+}
+
+function formatPercent(value) {
+  if (!Number.isFinite(Number(value))) return "n/a";
+  return `${Number(value).toFixed(2).replace(/\.00$/, "")}%`;
+}
+
+function kpiState(kpi) {
+  const statusValue = kpi?.status ?? "unavailable";
+  const freshness = kpi?.freshness;
+  return freshness && freshness !== "unknown" ? `${statusValue} · ${freshness}` : statusValue;
 }
 
 function renderComponents(components) {

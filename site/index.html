@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Discover recent public repositories and concrete open work, then run deterministic remote repository preflight from coding-tooling."
+      content="Discover recent public repositories and concrete open work, then run deterministic remote repository preflight with measured KPI evidence from coding-tooling."
     />
     <title>coding-tooling · repository discovery</title>
     <link rel="stylesheet" href="./styles.css" />
@@ -90,6 +90,30 @@
         </section>
         <section id="summary" class="metrics" aria-label="Analysis summary"></section>
         <section>
+          <div class="section-heading">
+            <p class="eyebrow">Measured evidence</p>
+            <h2>Repository KPIs</h2>
+          </div>
+          <p class="muted">
+            KPI values retain their evidence state and current-revision freshness. Missing or stale
+            evidence is never converted into zero or success, and endpoint verification requires an
+            executed public-contract verifier rather than a declaration alone.
+          </p>
+          <div class="table-scroll">
+            <table class="evidence-table">
+              <thead>
+                <tr>
+                  <th scope="col">KPI</th>
+                  <th scope="col">Current evidence</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Meaning</th>
+                </tr>
+              </thead>
+              <tbody id="kpis"></tbody>
+            </table>
+          </div>
+        </section>
+        <section>
           <h2>Technologies</h2>
           <div id="technologies" class="chips"></div>
         </section>
@@ -136,10 +160,10 @@
         <section class="boundary">
           <h2>Boundary</h2>
           <p>
-            This page reads public GitHub metadata, a recursive tree, and a bounded set of
-            manifests. It does not clone or run the repository. Use local
-            <code>coding-tooling</code> for conformance, environment verification, full findings,
-            and validation execution.
+            This page reads public GitHub metadata, a recursive tree, a bounded set of manifests,
+            and bounded published observation artifacts. It does not clone or run the repository.
+            Use local <code>coding-tooling</code> for conformance, environment verification, full
+            findings, validation execution, and production of the evidence summarized above.
           </p>
         </section>
       </div>

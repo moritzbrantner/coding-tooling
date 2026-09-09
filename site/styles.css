@@ -219,6 +219,51 @@ section {
   letter-spacing: 0.08em;
 }
 
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.evidence-table th,
+.evidence-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.evidence-table thead th {
+  color: var(--muted);
+  font:
+    800 0.72rem ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.evidence-table tbody th {
+  min-width: 190px;
+  font-weight: 750;
+}
+
+.evidence-table td:nth-child(2),
+.evidence-table td:nth-child(3) {
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.evidence-table tr:last-child th,
+.evidence-table tr:last-child td {
+  border-bottom: 0;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
