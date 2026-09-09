@@ -77,3 +77,11 @@ Schema version 1 looks for recognized coverage reports committed on the reposito
 The browser never runs the repository test suite and never treats missing coverage evidence as `0%`. If no recognized report exists, the result is `unavailable`; if a discovered report cannot be read or parsed, or GitHub truncates the repository tree, the result is `incomplete`.
 
 This keeps the first Pages coverage contract conservative. CI-generated but ephemeral GitHub Actions artifacts are intentionally outside schema version 1 because the static browser path does not yet have a deterministic, zero-token artifact-content transport. A later producer protocol can publish a stable machine-readable coverage snapshot without weakening this observation boundary.
+
+## Remote CI validation evidence
+
+Remote preflight distinguishes automation presence from mechanically evidenced validation. GitHub Actions workflow names do not count as validation by themselves. A workflow satisfies the v1 signal only when its inspected YAML text shows a pull-request or default-branch trigger and also invokes a repository validation command discovered from component capabilities or the coding-tooling Action seam.
+
+Deployment/release-only workflows therefore remain automation without proven validation. Supported external CI configuration is reported as `unsupported`/external rather than as missing CI because Pages does not execute or interpret those providers. If the bounded GitHub workflow evidence cannot be inspected completely, validation evidence is `incomplete`, never satisfied or absent.
+
+This check is structural and non-executing. Hosted check conclusions, branch protection, and whether CI actually passed remain separate evidence.

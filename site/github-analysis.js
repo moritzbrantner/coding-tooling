@@ -1,4 +1,9 @@
-import { analyzeSnapshot, parseRepositoryReference, selectedRemoteFiles } from "./preflight.js";
+import {
+  analyzeSnapshot,
+  parseRepositoryReference,
+  selectedRemoteFiles,
+  selectedWorkflowFiles,
+} from "./preflight.js";
 
 export async function analysisJson(value, options = {}) {
   const reference = typeof value === "string" ? parseRepositoryReference(value) : value;
@@ -25,10 +30,25 @@ export async function loadSnapshot(reference, options = {}) {
   const entries = (tree.tree ?? []).filter(
     (entry) => entry.path && entry.sha && ["blob", "tree"].includes(entry.type),
   );
-  const selected = selectedRemoteFiles(entries);
+  const selectedBase = selectedRemoteFiles(entries);
+  const selectedWorkflows = selectedWorkflowFiles(entries);
+  const rootAction = entries.find(
+    (entry) => entry.type === "blob" && ["action.yml", "action.yaml"].includes(entry.path),
+  );
+  const selected = [
+    ...selectedBase,
+    ...selectedWorkflows,
+    ...(rootAction && !selectedBase.some((entry) => entry.path === rootAction.path)
+      ? [rootAction]
+      : []),
+  ];
   const eligible = selectedRemoteFiles(entries, entries.length);
+  const eligibleWorkflows = selectedWorkflowFiles(entries, entries.length);
   const packageCount = eligible.filter((entry) => entry.path.endsWith("package.json")).length;
-  const selectedPackages = selected.filter((entry) => entry.path.endsWith("package.json")).length;
+  const selectedPackages = selectedBase.filter((entry) =>
+    entry.path.endsWith("package.json"),
+  ).length;
+  const workflowFetchTruncated = selectedWorkflows.length < eligibleWorkflows.length;
   const files = {};
   const unreadablePaths = [];
 
@@ -66,6 +86,7 @@ export async function loadSnapshot(reference, options = {}) {
     files,
     treeTruncated: Boolean(tree.truncated),
     manifestFetchTruncated: selectedPackages < packageCount,
+    workflowFetchTruncated,
     unreadablePaths: unreadablePaths.toSorted(),
   };
 }

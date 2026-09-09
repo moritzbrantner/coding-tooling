@@ -165,7 +165,9 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
   const checks = buildChecks(selectedComponents, selected);
   const missing = missingCapabilities(checks, selected, config, selectedComponents);
   const componentEvidenceIncomplete =
-    analysis.summary.status === "incomplete" ||
+    snapshot.treeTruncated ||
+    snapshot.manifestFetchTruncated ||
+    snapshot.unreadablePaths.length > 0 ||
     change.filesTruncated ||
     Boolean(change.compareIncomplete);
   const affectedComponents = selectedComponents.map((component) => {

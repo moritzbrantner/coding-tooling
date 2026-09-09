@@ -4,6 +4,7 @@ import {
   packageCommandManager,
   packageSemantics,
   packageToolchainOutcome,
+  remoteValidationOutcome,
   structuralTestOutcome,
 } from "./evidence-model.js";
 
@@ -38,6 +39,18 @@ export function parseRepositoryReference(value) {
   }
 }
 
+export function selectedWorkflowFiles(tree, limit = 8) {
+  return tree
+    .filter(
+      (entry) =>
+        entry.type === "blob" &&
+        /^\.github\/workflows\/.+\.ya?ml$/i.test(entry.path) &&
+        !isIgnoredAnalysisPath(entry.path),
+    )
+    .toSorted((left, right) => left.path.localeCompare(right.path))
+    .slice(0, limit);
+}
+
 export function selectedRemoteFiles(tree, limit = 24) {
   return tree
     .filter(
@@ -63,11 +76,13 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
   const technologies = [
     ...new Set(components.flatMap((component) => component.technologies)),
   ].toSorted();
-  const findings = findingsFor(snapshot, paths, components);
+  const validationEvidence = validationEvidenceFor(snapshot, paths, components);
+  const findings = findingsFor(snapshot, paths, components, validationEvidence);
   const incomplete =
     snapshot.treeTruncated ||
     snapshot.manifestFetchTruncated ||
-    snapshot.unreadablePaths.length > 0;
+    snapshot.unreadablePaths.length > 0 ||
+    validationEvidence.status === "incomplete";
   const highPriorityFindingCount = findings.filter((finding) => finding.severity === "high").length;
 
   return {
@@ -80,6 +95,7 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
       defaultBranch: snapshot.repository.defaultBranch,
       treeTruncated: snapshot.treeTruncated,
       manifestFetchTruncated: snapshot.manifestFetchTruncated,
+      workflowFetchTruncated: Boolean(snapshot.workflowFetchTruncated),
       unreadablePaths: snapshot.unreadablePaths,
       analyzedFiles: Object.keys(snapshot.files).length,
     },
@@ -93,6 +109,7 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
     },
     technologies,
     components,
+    validationEvidence,
     findings,
     limitations: [
       "Remote preflight reads GitHub metadata, a recursive tree, and bounded text manifests; it does not clone or execute repository code.",
@@ -224,7 +241,7 @@ function discoverComponents(snapshot, paths) {
   );
 }
 
-function findingsFor(snapshot, paths, components) {
+function findingsFor(snapshot, paths, components, validationEvidence) {
   const findings = [];
   const add = (id, severity, title, evidence, recommendation, command) =>
     findings.push({
@@ -255,13 +272,32 @@ function findingsFor(snapshot, paths, components) {
       "coding-tooling conformance --json",
     );
 
-  if (![...paths].some((path) => path.startsWith(".github/workflows/") && /\.ya?ml$/.test(path)))
+  if (validationEvidence.status === "finding" && validationEvidence.reason === "no-ci-config")
     add(
       "REMOTE-CI-001",
       "high",
-      "No GitHub Actions workflow detected",
-      "No workflow YAML exists under .github/workflows/.",
+      "No CI configuration detected",
+      "No supported GitHub Actions or external CI configuration was found.",
       "Add deterministic CI around repository-declared validation capabilities.",
+    );
+  else if (
+    validationEvidence.status === "finding" &&
+    validationEvidence.reason === "automation-without-validation-evidence"
+  )
+    add(
+      "REMOTE-CI-002",
+      "high",
+      "Automation exists without proven validation",
+      `${validationEvidence.githubWorkflowPaths.length} GitHub Actions workflow file(s) exist, but none of the inspected workflows mechanically proves a relevant trigger plus a repository validation invocation.`,
+      "Wire a repository-declared validation capability or coding-tooling action into pull-request or default-branch CI.",
+    );
+  else if (validationEvidence.status === "incomplete")
+    add(
+      "REMOTE-CI-003",
+      "medium",
+      "Remote CI validation evidence is incomplete",
+      "Not every discovered GitHub Actions workflow could be inspected within the remote evidence boundary.",
+      "Use local or hosted repository evidence before deciding whether validation is absent.",
     );
 
   const renovate = [...paths].some((path) =>
@@ -442,6 +478,53 @@ function findingsFor(snapshot, paths, components) {
   const rank = { high: 0, medium: 1, low: 2, info: 3 };
   return findings.toSorted(
     (left, right) => rank[left.severity] - rank[right.severity] || left.id.localeCompare(right.id),
+  );
+}
+
+function validationEvidenceFor(snapshot, paths, components) {
+  const workflowPaths = [...paths]
+    .filter((path) => /^\.github\/workflows\/.+\.ya?ml$/i.test(path))
+    .toSorted();
+  const externalCiPaths = [...paths].filter(isExternalCiPath).toSorted();
+  const declaredCommands = components
+    .flatMap((component) => Object.values(component.capabilities ?? {}))
+    .filter(Array.isArray)
+    .map((command) => command.join(" "));
+  const workflows = workflowPaths
+    .filter((path) => typeof snapshot.files[path] === "string")
+    .map((path) => ({ path, content: snapshot.files[path] }));
+  return remoteValidationOutcome({
+    workflowPaths,
+    workflows,
+    externalCiPaths,
+    workflowFetchTruncated: Boolean(snapshot.workflowFetchTruncated),
+    defaultBranch: snapshot.repository.defaultBranch,
+    declaredCommands,
+    localActionIsCodingTooling: isCodingToolingAction(snapshot.files["action.yml"]),
+  });
+}
+
+function isExternalCiPath(path) {
+  return [
+    ".circleci/config.yml",
+    ".circleci/config.yaml",
+    ".gitlab-ci.yml",
+    ".gitlab-ci.yaml",
+    ".travis.yml",
+    "Jenkinsfile",
+    "azure-pipelines.yml",
+    "azure-pipelines.yaml",
+    ".buildkite/pipeline.yml",
+    ".buildkite/pipeline.yaml",
+  ].includes(path);
+}
+
+function isCodingToolingAction(content) {
+  if (typeof content !== "string") return false;
+  return (
+    /Run coding tooling/i.test(content) &&
+    /src\/cli\.ts/.test(content) &&
+    /\.coding-tooling\.json/.test(content)
   );
 }
 
