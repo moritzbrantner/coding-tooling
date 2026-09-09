@@ -32,15 +32,7 @@ const defaultTiers = {
   fast: ["format:check", "lint", "typecheck", "test:unit", "build"],
   integration: ["test:integration"],
   e2e: ["test:e2e"],
-  full: [
-    "format:check",
-    "lint",
-    "typecheck",
-    "test:unit",
-    "test:integration",
-    "test:e2e",
-    "build",
-  ],
+  full: ["format:check", "lint", "typecheck", "test:unit", "test:integration", "test:e2e", "build"],
 };
 
 const allComponentGlobalPaths = new Set([
@@ -359,9 +351,7 @@ async function loadChangeSnapshot(reference, request, options) {
       .map((file) => ({
         path: normalizePath(file.filename),
         status: file.status ?? "modified",
-        ...(file.previous_filename
-          ? { previousPath: normalizePath(file.previous_filename) }
-          : {}),
+        ...(file.previous_filename ? { previousPath: normalizePath(file.previous_filename) } : {}),
       }));
   }
 
@@ -374,7 +364,10 @@ async function loadChangeSnapshot(reference, request, options) {
     (entry) => entry.path && entry.sha && ["blob", "tree"].includes(entry.type),
   );
   const eligible = selectedRemoteFiles(entries, entries.length);
-  const selected = selectChangeRemoteFiles(entries, files.map((file) => file.path));
+  const selected = selectChangeRemoteFiles(
+    entries,
+    files.map((file) => file.path),
+  );
   const selectedPackages = selected.filter((entry) => entry.path.endsWith("package.json")).length;
   const packageCount = eligible.filter((entry) => entry.path.endsWith("package.json")).length;
   const fileContents = {};
@@ -764,9 +757,7 @@ function nearestAncestorFile(paths, componentPath, filename) {
 
 function isDocumentationPath(path) {
   const lower = path.toLowerCase();
-  return [".md", ".mdx", ".rst", ".adoc", ".txt"].some((extension) =>
-    lower.endsWith(extension),
-  );
+  return [".md", ".mdx", ".rst", ".adoc", ".txt"].some((extension) => lower.endsWith(extension));
 }
 
 function isContractLikePath(path) {
@@ -789,7 +780,10 @@ function isTestPath(path) {
 
 function stem(path) {
   const name = path.split("/").at(-1) ?? "";
-  return name.replace(/\.(test|spec)/i, "").replace(/\.[^.]+$/, "").toLowerCase();
+  return name
+    .replace(/\.(test|spec)/i, "")
+    .replace(/\.[^.]+$/, "")
+    .toLowerCase();
 }
 
 function componentView(component) {
@@ -866,8 +860,7 @@ function normalizeArgv(value) {
 }
 
 function tokenize(input) {
-  if (typeof input !== "string")
-    throw new Error("argv must be a string or an array of arguments.");
+  if (typeof input !== "string") throw new Error("argv must be a string or an array of arguments.");
   const args = [];
   let token = "";
   let quote = null;

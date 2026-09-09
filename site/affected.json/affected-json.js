@@ -12,7 +12,9 @@ const changedFiles = parameters.getAll("file");
 try {
   if (!repository) throw new Error("Missing required ?repo=owner/repository query parameter.");
   if (!base && changedFiles.length === 0)
-    throw new Error("Provide ?base=<git-ref> or at least one repeated ?file=<changed-path> parameter.");
+    throw new Error(
+      "Provide ?base=<git-ref> or at least one repeated ?file=<changed-path> parameter.",
+    );
 
   const argv = ["affected", "--tier", tier, "--json"];
   if (base) argv.push("--base", base);
