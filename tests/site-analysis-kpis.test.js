@@ -32,6 +32,7 @@ describe("GitHub Pages analysis KPIs", () => {
           commit: revision,
           score: 95,
           verification: {
+            status: "failed",
             score: 80,
             plannedChecks: 5,
             passedChecks: 4,
