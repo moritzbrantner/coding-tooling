@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -104,6 +106,26 @@ describe("GitHub Pages repository discovery", () => {
         fetchImpl: async () => ({ ok: false, status: 403 }),
       }),
     ).rejects.toThrow("Repository discovery remains token-free");
+  });
+
+  test("advertises the browser discovery view to registry-driven agents", () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL("../site/agent-tool.json", import.meta.url), "utf8"),
+    );
+    const operation = manifest.operations.find((entry) => entry.id === "repository-discovery");
+
+    expect(operation).toEqual({
+      id: "repository-discovery",
+      transport: "browser-json-view",
+      hrefTemplate: "https://moritzbrantner.github.io/coding-tooling/discovery.json/?owner={owner}",
+      description:
+        "Browser-executed token-free discovery of bounded public GitHub repository metadata with a deterministic suggested repository candidate.",
+    });
+    expect(
+      manifest.limitations.some((limitation) =>
+        limitation.includes("run-json, repository-discovery, affected-json"),
+      ),
+    ).toBe(true);
   });
 });
 
