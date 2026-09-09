@@ -319,7 +319,7 @@ jobs:
     expect(analysis.operation).toBe("remote-preflight");
     expect(analysis.repository.fullName).toBe("example/repo");
     expect(analysis.generatedAt).toBe("2026-09-02T20:00:00.000Z");
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(6);
   });
 });
 
