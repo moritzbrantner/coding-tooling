@@ -1,5 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
+const producerStatuses = new Set(["passed", "failed", "unavailable", "error"]);
+
 export function buildPublicContractSnapshot({ input, repository, revision, generatedAt }) {
   if (!repository || !/^[-A-Za-z0-9_.]+\/[-A-Za-z0-9_.]+$/.test(repository))
     throw new Error("--repository must be owner/repository");
@@ -9,9 +11,9 @@ export function buildPublicContractSnapshot({ input, repository, revision, gener
     throw new Error("--generated-at must be an ISO timestamp");
 
   const parsed = typeof input === "string" ? JSON.parse(input) : input;
-  const report = publicContractReport(parsed);
-  if (!report) throw new Error("Input is not a schemaVersion 1 public-contract report");
-  if (report.revision && report.revision !== revision)
+  const observation = publicContractObservation(parsed);
+  if (!observation) throw new Error("Input is not a schemaVersion 1 public-contract report");
+  if (observation.report.revision && observation.report.revision !== revision)
     throw new Error("Public-contract report revision does not match --revision");
 
   return {
@@ -25,24 +27,32 @@ export function buildPublicContractSnapshot({ input, repository, revision, gener
     producer: {
       id: "coding-tooling",
       protocolVersion: 1,
+      status: observation.status,
+      diagnostics: observation.diagnostics,
     },
     report: {
-      ...report,
+      ...observation.report,
       revision,
     },
   };
 }
 
-function publicContractReport(value) {
-  if (value?.schemaVersion === 1 && value?.summary && Array.isArray(value?.surfaces)) return value;
+function publicContractObservation(value) {
+  if (value?.schemaVersion === 1 && value?.summary && Array.isArray(value?.surfaces))
+    return { status: "passed", diagnostics: [], report: value };
   if (
     value?.schemaVersion === 1 &&
     value?.operation === "contract" &&
+    producerStatuses.has(value?.status) &&
     value?.data?.schemaVersion === 1 &&
     value?.data?.summary &&
     Array.isArray(value?.data?.surfaces)
   )
-    return value.data;
+    return {
+      status: value.status,
+      diagnostics: Array.isArray(value.diagnostics) ? value.diagnostics : [],
+      report: value.data,
+    };
   return null;
 }
 
