@@ -35,13 +35,19 @@ jobs:
                   raise SystemExit(f"{label} insertion point not found")
               return text.replace(old, new, 1)
 
+          def regex_once(text, pattern, replacement, label):
+              text, count = re.subn(pattern, lambda _: replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"{label} replacement failed")
+              return text
+
           source_path = Path("site/change-aware.js")
           source = source_path.read_text()
 
           source = replace_once(
               source,
-              '  const config = readToolingConfig(snapshot);\n',
-              '''  let config;
+              "const config = readToolingConfig(snapshot);",
+              '''let config;
           try {
             config = readToolingConfig(snapshot);
           } catch (error) {
@@ -50,78 +56,58 @@ jobs:
               snapshot,
               error instanceof Error ? error.message : String(error),
             );
-          }
-          ''',
+          }''',
               "config error boundary",
           )
-
-          source = replace_once(
+          source = regex_once(
               source,
-              '''  const missing = missingCapabilities(checks, selected, config, selectedComponents);
-          const affectedComponents = selectedComponents.map((component) => {
-          ''',
-              '''  const missing = missingCapabilities(checks, selected, config, selectedComponents);
+              r'const missing = missingCapabilities\(checks, selected, config, selectedComponents\);\s*const affectedComponents = selectedComponents\.map\(\(component\) => \{',
+              '''const missing = missingCapabilities(checks, selected, config, selectedComponents);
           const componentEvidenceIncomplete =
             analysis.summary.status === "incomplete" ||
             change.filesTruncated ||
             Boolean(change.compareIncomplete);
-          const affectedComponents = selectedComponents.map((component) => {
-          ''',
+          const affectedComponents = selectedComponents.map((component) => {''',
               "component evidence prelude",
           )
           source = replace_once(
               source,
-              '''    const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
-              return {
-          ''',
-              '''    const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
-              const candidates = candidateTests(snapshot, component, changedPaths, discoveredComponents);
-              return {
-          ''',
+              "const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];",
+              '''const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
+          const candidates = candidateTests(snapshot, component, changedPaths, discoveredComponents);''',
               "candidate binding",
           )
-          source = replace_once(
+          source = regex_once(
               source,
-              '''      governingContracts: governingContracts(snapshot, component, changedPaths),
-                candidateTests: candidateTests(snapshot, component, changedPaths, discoveredComponents),
-          ''',
-              '''      governingContracts: governingContracts(snapshot, component, changedPaths),
-                testEvidence: componentTestEvidence(
-                  snapshot,
-                  component,
-                  changedPaths,
-                  discoveredComponents,
-                  candidates,
-                  componentEvidenceIncomplete,
-                ),
-                candidateTests: candidates,
-          ''',
+              r'governingContracts: governingContracts\(snapshot, component, changedPaths\),\s*candidateTests: candidateTests\(snapshot, component, changedPaths, discoveredComponents\),',
+              '''governingContracts: governingContracts(snapshot, component, changedPaths),
+          testEvidence: componentTestEvidence(
+            snapshot,
+            component,
+            changedPaths,
+            discoveredComponents,
+            candidates,
+            componentEvidenceIncomplete,
+          ),
+          candidateTests: candidates,''',
               "component evidence fields",
           )
-          source = replace_once(
+          source = regex_once(
               source,
-              '''  const sourceIncomplete =
-              analysis.summary.status === "incomplete" ||
-              change.filesTruncated ||
-              Boolean(change.compareIncomplete);
-          ''',
-              '''  const sourceIncomplete = componentEvidenceIncomplete;
-          ''',
+              r'const sourceIncomplete =\s*analysis\.summary\.status === "incomplete" \|\|\s*change\.filesTruncated \|\|\s*Boolean\(change\.compareIncomplete\);',
+              "const sourceIncomplete = componentEvidenceIncomplete;",
               "shared incomplete state",
           )
-          source = replace_once(
+          source = regex_once(
               source,
-              '''    repository: snapshot.repository,
-              source: { ...analysis.source, ref: change.head },
-          ''',
-              '''    repository: snapshot.repository,
-              source: { ...analysis.source, ref: change.head },
-              declaredMergeAuthority: mergeAuthorityEvidence(config),
-          ''',
+              r'repository: snapshot\.repository,\s*source: \{ \.\.\.analysis\.source, ref: change\.head \},',
+              '''repository: snapshot.repository,
+          source: { ...analysis.source, ref: change.head },
+          declaredMergeAuthority: mergeAuthorityEvidence(config),''',
               "merge authority output",
           )
 
-          replacement = '''function candidateTests(snapshot, component, changedPaths, components) {
+          evidence_functions = '''function candidateTests(snapshot, component, changedPaths, components) {
             const changed = new Set(changedPaths);
             const tests = componentTestPaths(snapshot, component, components).filter(
               (path) => !isAuxiliaryTestPath(path) || changed.has(path),
@@ -199,111 +185,86 @@ jobs:
           }
 
           function readToolingConfig'''
-          source, count = re.subn(
-              r'function candidateTests\(snapshot, component, changedPaths, components\) \{.*?\n\}\n\nfunction readToolingConfig',
-              replacement,
+          source = regex_once(
               source,
-              count=1,
-              flags=re.S,
+              r'function candidateTests\(snapshot, component, changedPaths, components\) \{.*?\n\}\n\nfunction readToolingConfig',
+              evidence_functions,
+              "candidate/evidence functions",
           )
-          if count != 1:
-              raise SystemExit("candidate/evidence function replacement failed")
 
+          merge_validation = '''if (config.merge !== undefined) {
+            if (!config.merge || typeof config.merge !== "object" || Array.isArray(config.merge))
+              throw new Error("merge must be an object");
+            if (!new Set(["hosted", "local"]).has(config.merge.authority))
+              throw new Error("merge.authority must be hosted or local");
+            if (config.merge.authority === "hosted") {
+              if (
+                !Array.isArray(config.merge.requiredChecks) ||
+                config.merge.requiredChecks.length === 0 ||
+                config.merge.requiredChecks.some(
+                  (check) => typeof check !== "string" || !check.trim(),
+                )
+              )
+                throw new Error("hosted merge authority requires non-empty requiredChecks");
+            }
+            if (
+              config.merge.authority === "local" &&
+              (typeof config.merge.reason !== "string" || !config.merge.reason.trim())
+            )
+              throw new Error("local merge authority requires a non-empty reason");
+          }
+          '''
           source = replace_once(
               source,
-              '''  const required = new Set(config.requiredCapabilities ?? []);
-            for (const capability of config.optionalCapabilities ?? []) {
-              if (required.has(capability))
-                throw new Error(`${capability} cannot be both required and optional`);
-            }
-            for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {
-          ''',
-              '''  const required = new Set(config.requiredCapabilities ?? []);
-            for (const capability of config.optionalCapabilities ?? []) {
-              if (required.has(capability))
-                throw new Error(`${capability} cannot be both required and optional`);
-            }
-            if (config.merge !== undefined) {
-              if (!config.merge || typeof config.merge !== "object" || Array.isArray(config.merge))
-                throw new Error("merge must be an object");
-              if (!new Set(["hosted", "local"]).has(config.merge.authority))
-                throw new Error("merge.authority must be hosted or local");
-              if (config.merge.authority === "hosted") {
-                if (
-                  !Array.isArray(config.merge.requiredChecks) ||
-                  config.merge.requiredChecks.length === 0 ||
-                  config.merge.requiredChecks.some(
-                    (check) => typeof check !== "string" || !check.trim(),
-                  )
-                )
-                  throw new Error("hosted merge authority requires non-empty requiredChecks");
-              }
-              if (
-                config.merge.authority === "local" &&
-                (typeof config.merge.reason !== "string" || !config.merge.reason.trim())
-              )
-                throw new Error("local merge authority requires a non-empty reason");
-            }
-            for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {
-          ''',
+              "for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {",
+              merge_validation + "for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {",
               "merge config validation",
           )
           source = replace_once(
               source,
-              '''    lower.endsWith("agents.md") ||
-              lower.includes("contract") ||
-          ''',
-              '''    lower.endsWith("agents.md") ||
-              lower.endsWith("agent-tool.json") ||
-              lower.includes("contract") ||
-          ''',
+              'lower.endsWith("agents.md") ||',
+              'lower.endsWith("agents.md") ||\n    lower.endsWith("agent-tool.json") ||',
               "machine contract recognition",
           )
           source = replace_once(
               source,
-              'function stem(path) {\n',
+              "function stem(path) {",
               '''function isAuxiliaryTestPath(path) {
             return /(^|\\/)(fixtures?|node_modules|vendor|dist|build|coverage)(\\/|$)/i.test(path);
           }
 
-          function stem(path) {
-          ''',
+          function stem(path) {''',
               "auxiliary test helper",
           )
           source_path.write_text(source)
 
           test_path = Path("tests/site-change-aware.test.js")
           tests = test_path.read_text()
-          tests = replace_once(
+          tests = regex_once(
               tests,
-              '''    expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
-              "packages/a/tests/widget.test.ts",
-            );
-          ''',
-              '''    expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
-              "packages/a/tests/widget.test.ts",
-            );
-            expect(result.data.scope.affectedComponents[0].testEvidence).toEqual(
-              expect.objectContaining({
-                state: "satisfied",
-                authority: "advisory",
-                basis: "component-test-path-existence",
-                testPathCount: 1,
-                changedTestPaths: [],
-              }),
-            );
-          ''',
+              r'expect\(result\.data\.scope\.affectedComponents\[0\]\.candidateTests\)\.toContain\(\s*"packages/a/tests/widget\.test\.ts",\s*\);',
+              '''expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
+            "packages/a/tests/widget.test.ts",
+          );
+          expect(result.data.scope.affectedComponents[0].testEvidence).toEqual(
+            expect.objectContaining({
+              state: "satisfied",
+              authority: "advisory",
+              basis: "component-test-path-existence",
+              testPathCount: 1,
+              changedTestPaths: [],
+            }),
+          );''',
               "test evidence assertion",
           )
-          marker = '  test("change-aware plan honors an affected component filter", () => {\n'
-          additions = '''  test("keeps fixture tests out of candidate navigation", () => {
+          marker = 'test("change-aware plan honors an affected component filter", () => {'
+          additions = '''test("keeps fixture tests out of candidate navigation", () => {
             const result = remoteChangeCommandFromSnapshot(
               repository(),
               change(["src/index.ts"]),
               request("affected"),
               now,
             );
-
             const component = result.data.scope.affectedComponents[0];
             expect(component.candidateTests).toContain("tests/index.test.ts");
             expect(component.candidateTests).not.toContain(
@@ -320,7 +281,6 @@ jobs:
               request("affected"),
               now,
             );
-
             expect(result.data.scope.affectedComponents[0].governingContracts).toContain(
               "site/agent-tool.json",
             );
@@ -331,14 +291,12 @@ jobs:
             const config = JSON.parse(snapshot.files[".coding-tooling.json"]);
             config.merge = { authority: "hosted", requiredChecks: ["Validate", "Pages"] };
             snapshot.files[".coding-tooling.json"] = JSON.stringify(config);
-
             const result = remoteChangeCommandFromSnapshot(
               snapshot,
               change(["src/index.ts"]),
               request("affected"),
               now,
             );
-
             expect(result.data.declaredMergeAuthority).toEqual({
               state: "declared",
               authority: "hosted",
@@ -354,14 +312,12 @@ jobs:
             const config = JSON.parse(snapshot.files[".coding-tooling.json"]);
             config.merge = { authority: "hosted", requiredChecks: [] };
             snapshot.files[".coding-tooling.json"] = JSON.stringify(config);
-
             const result = remoteChangeCommandFromSnapshot(
               snapshot,
               change(["src/index.ts"]),
               request("affected"),
               now,
             );
-
             expect(result.status).toBe("error");
             expect(result.diagnostics[0].message).toContain(
               "hosted merge authority requires non-empty requiredChecks",
@@ -372,13 +328,11 @@ jobs:
           tests = replace_once(tests, marker, additions + marker, "dogfood regression tests")
           tests = replace_once(
               tests,
-              '    blob("tsconfig.json", "17"),\n  ];\n',
-              '''    blob("tsconfig.json", "17"),
-              blob("site/agent-tool.json", "19"),
-              blob("calibration/fixtures/noise/tests/noise.test.ts", "20"),
-              blob("fixtures/noise/tests/noise.test.ts", "21"),
-            ];
-          ''',
+              'blob("tsconfig.json", "17"),',
+              '''blob("tsconfig.json", "17"),
+          blob("site/agent-tool.json", "19"),
+          blob("calibration/fixtures/noise/tests/noise.test.ts", "20"),
+          blob("fixtures/noise/tests/noise.test.ts", "21"),''',
               "fixture noise paths",
           )
           test_path.write_text(tests)
