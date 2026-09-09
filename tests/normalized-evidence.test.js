@@ -10,6 +10,7 @@ import {
   packageCommandManager,
   packageSemantics,
   packageToolchainOutcome,
+  structuralTestOutcome,
 } from "../site/evidence-model.js";
 import { analyzeSnapshot } from "../site/preflight.js";
 
@@ -235,5 +236,45 @@ describe("normalized package evidence", () => {
       reason: "exact-node-version",
       provenance: [{ collector: "github", path: "packages/nested/.node-version" }],
     });
+  });
+
+  test("keeps structural test outcomes explicit and conservative", () => {
+    expect(
+      structuralTestOutcome({
+        kind: "package",
+        complete: true,
+        productionPaths: ["src/index.ts"],
+        testPaths: ["tests/index.test.ts"],
+      }).status,
+    ).toBe("satisfied");
+    expect(
+      structuralTestOutcome({
+        kind: "package",
+        complete: true,
+        productionPaths: ["src/index.ts"],
+        testPaths: [],
+      }).status,
+    ).toBe("finding");
+    expect(
+      structuralTestOutcome({
+        kind: "rust",
+        complete: true,
+        productionPaths: ["src/lib.rs"],
+        testPaths: [],
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        status: "unsupported",
+        reason: "rust-inline-tests-unobservable",
+      }),
+    );
+    expect(
+      structuralTestOutcome({
+        kind: "package",
+        complete: false,
+        productionPaths: ["src/index.ts"],
+        testPaths: [],
+      }).status,
+    ).toBe("incomplete");
   });
 });

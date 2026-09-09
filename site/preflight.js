@@ -4,6 +4,7 @@ import {
   packageCommandManager,
   packageSemantics,
   packageToolchainOutcome,
+  structuralTestOutcome,
 } from "./evidence-model.js";
 
 const CONTEXT_FILES = new Set([".coding-tooling.json", ".node-version", "rust-toolchain.toml"]);
@@ -204,6 +205,20 @@ function discoverComponents(snapshot, paths) {
       },
     });
   }
+  const evidenceComplete = !(
+    snapshot.treeTruncated ||
+    snapshot.manifestFetchTruncated ||
+    snapshot.unreadablePaths.length > 0
+  );
+  for (const component of components) {
+    component.testEvidence = structuralTestOutcome({
+      kind: component.kind,
+      complete: evidenceComplete,
+      productionPaths: componentOwnedPaths(paths, components, component, isProductionSource),
+      testPaths: componentOwnedPaths(paths, components, component, isTestPath),
+    });
+  }
+
   return components.toSorted(
     (left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name),
   );
@@ -339,29 +354,26 @@ function findingsFor(snapshot, paths, components) {
         );
     }
   }
-
-  const production = [...paths].filter(isProductionSource);
-  const tests = [...paths].filter(isTestPath);
-  if (production.length && !tests.length) {
-    const rustOnlyProduction =
-      components.some((component) => component.kind === "rust") &&
-      production.every((path) => path.toLowerCase().endsWith(".rs"));
-    if (rustOnlyProduction)
+  for (const component of components) {
+    const outcome = component.testEvidence;
+    const suffix = component.path === "." ? "" : `-${stableId(component.path)}`;
+    const nestedPrefix = component.path === "." ? "" : `${component.name}: `;
+    if (outcome.status === "finding")
       add(
-        "REMOTE-TEST-002",
-        "low",
-        "Rust structural test evidence is incomplete",
-        `${production.length} Rust production source file(s) were detected with no separate test-like paths. Inline #[cfg(test)] modules are not observable from the tree-only remote boundary.`,
-        "Use local deterministic findings and test execution before deciding that Rust tests are missing.",
+        `REMOTE-TEST-001${suffix}`,
+        "high",
+        `${nestedPrefix}No structural test files detected`,
+        `${outcome.productionPathCount} component-owned production source file(s) were detected but no separate test-like files were found.`,
+        "Use local deterministic findings before scaffolding tests.",
         "coding-tooling findings --json",
       );
-    else
+    else if (outcome.reason === "rust-inline-tests-unobservable")
       add(
-        "REMOTE-TEST-001",
-        "high",
-        "No structural test files detected",
-        `${production.length} production source file(s) were detected but no test-like files were found.`,
-        "Use local deterministic findings before scaffolding tests.",
+        `REMOTE-TEST-002${suffix}`,
+        "low",
+        `${nestedPrefix}Rust structural test evidence is incomplete`,
+        `${outcome.productionPathCount} component-owned Rust production source file(s) were detected with no separate test-like paths. Inline #[cfg(test)] modules are not observable from the tree-only remote boundary.`,
+        "Use local deterministic findings and test execution before deciding that Rust tests are missing.",
         "coding-tooling findings --json",
       );
   }
@@ -431,6 +443,56 @@ function findingsFor(snapshot, paths, components) {
   return findings.toSorted(
     (left, right) => rank[left.severity] - rank[right.severity] || left.id.localeCompare(right.id),
   );
+}
+
+function componentOwnedPaths(paths, components, component, predicate) {
+  return [...paths]
+    .filter((path) => {
+      if (
+        isIgnoredAnalysisPath(path) ||
+        !predicate(path) ||
+        !componentSupportsSourceKind(component, path)
+      )
+        return false;
+      return mostSpecificOwners(components, path).some(
+        (owner) => componentIdentity(owner) === componentIdentity(component),
+      );
+    })
+    .toSorted();
+}
+
+function mostSpecificOwners(components, path) {
+  const matches = components.filter(
+    (component) =>
+      componentSupportsSourceKind(component, path) && componentContains(component, path),
+  );
+  if (matches.length === 0) return [];
+  const maximumPathLength = Math.max(
+    ...matches.map((component) => normalizedComponentPath(component).length),
+  );
+  return matches.filter(
+    (component) => normalizedComponentPath(component).length === maximumPathLength,
+  );
+}
+
+function componentSupportsSourceKind(component, path) {
+  if (component.kind === "package") return /\.(?:[cm]?[jt]sx?)$/i.test(path);
+  if (component.kind === "rust") return /\.rs$/i.test(path);
+  if (component.kind === "dotnet") return /\.cs$/i.test(path);
+  return false;
+}
+
+function componentContains(component, path) {
+  const directory = normalizedComponentPath(component);
+  return !directory || path === directory || path.startsWith(`${directory}/`);
+}
+
+function normalizedComponentPath(component) {
+  return component.path === "." ? "" : component.path;
+}
+
+function componentIdentity(component) {
+  return `${component.kind}:${component.path}:${component.name}`;
 }
 
 function priority(path) {
