@@ -1,3 +1,4 @@
+import { applyHostedMergePolicy } from "./hosted-merge-policy.js";
 import {
   declaredMergeAuthorityEvidence,
   mergeAuthorityConsistency,
@@ -17,13 +18,14 @@ export async function analysisJson(value, options = {}) {
   const snapshot = await loadSnapshot(reference, options);
   const analysis = analyzeSnapshot(snapshot, options.now ?? new Date());
   const declaredMergeAuthority = declaredMergeAuthorityFromSnapshot(snapshot);
-  return {
-    ...analysis,
+  const mergeAuthority = mergeAuthorityConsistency(
     declaredMergeAuthority,
-    mergeAuthorityConsistency: mergeAuthorityConsistency(
-      declaredMergeAuthority,
-      snapshot.repository.governance.defaultBranchProtection,
-    ),
+    snapshot.repository.governance.defaultBranchProtection,
+  );
+  return {
+    ...applyHostedMergePolicy(analysis, declaredMergeAuthority, mergeAuthority),
+    declaredMergeAuthority,
+    mergeAuthorityConsistency: mergeAuthority,
   };
 }
 
