@@ -1,0 +1,396 @@
+name: Normalize component test evidence
+
+on:
+  push:
+    branches: [feat/component-test-evidence-v2]
+    paths:
+      - ".github/workflows/component-test-evidence-v2.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: feat/component-test-evidence-v2
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Implement normalized component test evidence
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"{label} anchor not found")
+              return text.replace(old, new, 1)
+
+          evidence_path = Path("site/evidence-model.js")
+          evidence = evidence_path.read_text()
+          if "export function structuralTestOutcome" not in evidence:
+              evidence += '''
+
+          export function structuralTestOutcome(input) {
+            const productionPaths = [...new Set(input.productionPaths ?? [])].toSorted();
+            const testPaths = [...new Set(input.testPaths ?? [])].toSorted();
+            const base = {
+              productionPathCount: productionPaths.length,
+              testPathCount: testPaths.length,
+              productionPaths,
+              testPaths,
+            };
+            if (!input.complete)
+              return { ...base, status: "incomplete", reason: "evidence-incomplete" };
+            if (productionPaths.length === 0)
+              return { ...base, status: "unsupported", reason: "no-production-source" };
+            if (testPaths.length > 0)
+              return { ...base, status: "satisfied", reason: "separate-test-path-present" };
+            if (input.kind === "rust")
+              return { ...base, status: "unsupported", reason: "rust-inline-tests-unobservable" };
+            return { ...base, status: "finding", reason: "no-separate-test-path" };
+          }
+          '''
+          evidence_path.write_text(evidence)
+
+          preflight_path = Path("site/preflight.js")
+          preflight = preflight_path.read_text()
+          preflight = replace_once(
+              preflight,
+              '  packageToolchainOutcome,\n',
+              '  packageToolchainOutcome,\n  structuralTestOutcome,\n',
+              "preflight import",
+          )
+          marker = '  return components.toSorted(\n'
+          component_evidence = '''  const evidenceComplete = !(
+            snapshot.treeTruncated ||
+            snapshot.manifestFetchTruncated ||
+            snapshot.unreadablePaths.length > 0
+          );
+            for (const component of components) {
+              component.testEvidence = structuralTestOutcome({
+                kind: component.kind,
+                complete: evidenceComplete,
+                productionPaths: componentOwnedPaths(paths, components, component, isProductionSource),
+                testPaths: componentOwnedPaths(paths, components, component, isTestPath),
+              });
+            }
+
+          '''
+          preflight = replace_once(preflight, marker, component_evidence + marker, "component evidence")
+
+          pattern = re.compile(
+              r'\n\s*const production = \[\.\.\.paths\]\.filter\(isProductionSource\);.*?\n\s*for \(const component of components\.filter\(\(item\) => item\.kind === "package"\)\) \{',
+              re.S,
+          )
+          replacement = '''
+            for (const component of components) {
+              const outcome = component.testEvidence;
+              const suffix = component.path === "." ? "" : `-${stableId(component.path)}`;
+              const nestedPrefix = component.path === "." ? "" : `${component.name}: `;
+              if (outcome.status === "finding")
+                add(
+                  `REMOTE-TEST-001${suffix}`,
+                  "high",
+                  `${nestedPrefix}No structural test files detected`,
+                  `${outcome.productionPathCount} component-owned production source file(s) were detected but no separate test-like files were found.`,
+                  "Use local deterministic findings before scaffolding tests.",
+                  "coding-tooling findings --json",
+                );
+              else if (outcome.reason === "rust-inline-tests-unobservable")
+                add(
+                  `REMOTE-TEST-002${suffix}`,
+                  "low",
+                  `${nestedPrefix}Rust structural test evidence is incomplete`,
+                  `${outcome.productionPathCount} component-owned Rust production source file(s) were detected with no separate test-like paths. Inline #[cfg(test)] modules are not observable from the tree-only remote boundary.`,
+                  "Use local deterministic findings and test execution before deciding that Rust tests are missing.",
+                  "coding-tooling findings --json",
+                );
+            }
+
+            for (const component of components.filter((item) => item.kind === "package")) {'''
+          preflight, count = pattern.subn(replacement, preflight, count=1)
+          if count != 1:
+              raise SystemExit("global test finding block replacement failed")
+
+          helper_marker = 'function priority(path) {\n'
+          helpers = '''function componentOwnedPaths(paths, components, component, predicate) {
+            return [...paths]
+              .filter((path) => {
+                if (isIgnoredAnalysisPath(path) || !predicate(path) || !componentSupportsSourceKind(component, path))
+                  return false;
+                return mostSpecificOwners(components, path).some(
+                  (owner) => componentIdentity(owner) === componentIdentity(component),
+                );
+              })
+              .toSorted();
+          }
+
+          function mostSpecificOwners(components, path) {
+            const matches = components.filter(
+              (component) => componentSupportsSourceKind(component, path) && componentContains(component, path),
+            );
+            if (matches.length === 0) return [];
+            const maximumPathLength = Math.max(...matches.map((component) => normalizedComponentPath(component).length));
+            return matches.filter(
+              (component) => normalizedComponentPath(component).length === maximumPathLength,
+            );
+          }
+
+          function componentSupportsSourceKind(component, path) {
+            if (component.kind === "package") return /\\.(?:[cm]?[jt]sx?)$/i.test(path);
+            if (component.kind === "rust") return /\\.rs$/i.test(path);
+            if (component.kind === "dotnet") return /\\.cs$/i.test(path);
+            return false;
+          }
+
+          function componentContains(component, path) {
+            const directory = normalizedComponentPath(component);
+            return !directory || path === directory || path.startsWith(`${directory}/`);
+          }
+
+          function normalizedComponentPath(component) {
+            return component.path === "." ? "" : component.path;
+          }
+
+          function componentIdentity(component) {
+            return `${component.kind}:${component.path}:${component.name}`;
+          }
+
+          '''
+          preflight = replace_once(preflight, helper_marker, helpers + helper_marker, "preflight ownership helpers")
+          preflight_path.write_text(preflight)
+
+          change_path = Path("site/change-aware.js")
+          change = change_path.read_text()
+          change = replace_once(
+              change,
+              'import { analyzeSnapshot, parseRepositoryReference, selectedRemoteFiles } from "./preflight.js";\n',
+              'import { structuralTestOutcome } from "./evidence-model.js";\nimport { analyzeSnapshot, parseRepositoryReference, selectedRemoteFiles } from "./preflight.js";\n',
+              "change-aware evidence import",
+          )
+          function_pattern = re.compile(
+              r'function componentTestEvidence\(.*?\n\}\n\nfunction componentTestPaths',
+              re.S,
+          )
+          function_replacement = '''function componentTestEvidence(
+            snapshot,
+            component,
+            changedPaths,
+            components,
+            candidates,
+            incomplete,
+          ) {
+            const testPaths = componentTestPaths(snapshot, component, components).filter(
+              (path) => !isAuxiliaryTestPath(path),
+            );
+            const outcome = structuralTestOutcome({
+              kind: component.kind,
+              complete: !incomplete,
+              productionPaths: componentProductionPaths(snapshot, component, components),
+              testPaths,
+            });
+            return {
+              ...outcome,
+              authority: "advisory",
+              basis: "component-test-path-existence",
+              changedTestPaths: changedPaths.filter(isTestPath).toSorted(),
+              candidateCount: candidates.length,
+            };
+          }
+
+          function componentProductionPaths(snapshot, component, components) {
+            return snapshot.tree
+              .filter((entry) => {
+                if (
+                  entry.type !== "blob" ||
+                  !isProductionSourcePath(entry.path) ||
+                  !componentSupportsSourceKind(component, entry.path)
+                )
+                  return false;
+                const compatible = components.filter((owner) =>
+                  componentSupportsSourceKind(owner, entry.path),
+                );
+                return mostSpecificOwners(compatible, entry.path).some(
+                  (owner) => componentIdentity(owner) === componentIdentity(component),
+                );
+              })
+              .map((entry) => entry.path)
+              .toSorted();
+          }
+
+          function componentTestPaths'''
+          change, count = function_pattern.subn(function_replacement, change, count=1)
+          if count != 1:
+              raise SystemExit("change-aware test evidence replacement failed")
+
+          old = '''      if (entry.type !== "blob" || !isTestPath(entry.path)) return false;
+                return mostSpecificOwners(components, entry.path).some(
+          '''
+          new = '''      if (
+                  entry.type !== "blob" ||
+                  !isTestPath(entry.path) ||
+                  !componentSupportsSourceKind(component, entry.path)
+                )
+                  return false;
+                const compatible = components.filter((owner) =>
+                  componentSupportsSourceKind(owner, entry.path),
+                );
+                return mostSpecificOwners(compatible, entry.path).some(
+          '''
+          change = replace_once(change, old, new, "change-aware test ownership")
+
+          helper_marker = 'function isAuxiliaryTestPath(path) {\n'
+          change_helpers = '''function isProductionSourcePath(path) {
+            const lower = path.toLowerCase();
+            if (isAuxiliaryTestPath(path) || isTestPath(path)) return false;
+            return !/\\.stories\\.[cm]?[jt]sx?$/.test(lower) && /\\.(ts|tsx|js|jsx|mjs|cjs|rs|cs)$/.test(lower);
+          }
+
+          function componentSupportsSourceKind(component, path) {
+            if (component.kind === "package") return /\\.(?:[cm]?[jt]sx?)$/i.test(path);
+            if (component.kind === "rust") return /\\.rs$/i.test(path);
+            if (component.kind === "dotnet") return /\\.cs$/i.test(path);
+            return false;
+          }
+
+          '''
+          change = replace_once(change, helper_marker, change_helpers + helper_marker, "change-aware source helpers")
+          change_path.write_text(change)
+
+          normalized_test_path = Path("tests/normalized-evidence.test.js")
+          normalized = normalized_test_path.read_text()
+          normalized = replace_once(
+              normalized,
+              '  packageToolchainOutcome,\n',
+              '  packageToolchainOutcome,\n  structuralTestOutcome,\n',
+              "normalized test import",
+          )
+          addition = '''
+
+            test("keeps structural test outcomes explicit and conservative", () => {
+              expect(
+                structuralTestOutcome({
+                  kind: "package",
+                  complete: true,
+                  productionPaths: ["src/index.ts"],
+                  testPaths: ["tests/index.test.ts"],
+                }).status,
+              ).toBe("satisfied");
+              expect(
+                structuralTestOutcome({
+                  kind: "package",
+                  complete: true,
+                  productionPaths: ["src/index.ts"],
+                  testPaths: [],
+                }).status,
+              ).toBe("finding");
+              expect(
+                structuralTestOutcome({
+                  kind: "rust",
+                  complete: true,
+                  productionPaths: ["src/lib.rs"],
+                  testPaths: [],
+                }),
+              ).toEqual(
+                expect.objectContaining({
+                  status: "unsupported",
+                  reason: "rust-inline-tests-unobservable",
+                }),
+              );
+              expect(
+                structuralTestOutcome({
+                  kind: "package",
+                  complete: false,
+                  productionPaths: ["src/index.ts"],
+                  testPaths: [],
+                }).status,
+              ).toBe("incomplete");
+            });
+          '''
+          normalized, count = re.subn(r'\n\}\);\s*$', addition + '\n});\n', normalized, count=1)
+          if count != 1:
+              raise SystemExit("normalized test insertion failed")
+          normalized_test_path.write_text(normalized)
+
+          preflight_test_path = Path("tests/site-preflight.test.js")
+          tests = preflight_test_path.read_text()
+          marker = '  test("analysisJson resolves a repository through the public GitHub API seam", async () => {\n'
+          monorepo_test = '''  test("scopes structural test evidence to sibling components", () => {
+            const manifest = (name) => ({
+              name,
+              packageManager: "bun@1.4.0",
+              scripts: { "format:check": "fmt", lint: "lint", typecheck: "tsc", test: "test" },
+            });
+            const analysis = analyzeSnapshot(
+              repository({
+                tree: [
+                  blob("packages/a/package.json", "1"),
+                  blob("packages/a/src/index.ts", "2"),
+                  blob("packages/a/tests/index.test.ts", "3"),
+                  blob("packages/b/package.json", "4"),
+                  blob("packages/b/src/index.ts", "5"),
+                  blob(".coding-tooling.json", "6"),
+                  blob("AGENTS.md", "7"),
+                  blob("renovate.json", "8"),
+                  blob(".github/workflows/validate.yml", "9"),
+                ],
+                files: {
+                  "packages/a/package.json": JSON.stringify(manifest("package-a")),
+                  "packages/b/package.json": JSON.stringify(manifest("package-b")),
+                  ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+                },
+              }),
+            );
+            const packageA = analysis.components.find((component) => component.name === "package-a");
+            const packageB = analysis.components.find((component) => component.name === "package-b");
+            expect(packageA.testEvidence).toEqual(
+              expect.objectContaining({ status: "satisfied", testPathCount: 1 }),
+            );
+            expect(packageB.testEvidence).toEqual(
+              expect.objectContaining({ status: "finding", testPathCount: 0 }),
+            );
+            expect(
+              analysis.findings
+                .filter((finding) => finding.id.startsWith("REMOTE-TEST-001"))
+                .map((finding) => finding.title),
+            ).toEqual(["package-b: No structural test files detected"]);
+          });
+
+          '''
+          tests = replace_once(tests, marker, monorepo_test + marker, "preflight monorepo test")
+          preflight_test_path.write_text(tests)
+
+          docs_path = Path("docs/normalized-evidence.md")
+          docs = docs_path.read_text()
+          if "## Structural test evidence" not in docs:
+              docs += '''
+
+          ## Structural test evidence
+
+          Remote structural source/test evidence now uses the same pure outcome semantics in ordinary preflight and change-aware analysis. Ownership is component-scoped to the most-specific compatible package, Rust, or .NET component.
+
+          The outcome is explicitly one of `satisfied`, `finding`, `unsupported`, or `incomplete`. It reports tree-visible production/test paths only and never claims assertion intent or execution success. Rust without a separate test path remains `unsupported` because inline `#[cfg(test)]` modules are outside the Git-tree boundary. Incomplete GitHub tree/manifest evidence remains `incomplete`, never satisfied.
+          '''
+          docs_path.write_text(docs)
+          PY
+          bunx oxfmt site/evidence-model.js site/preflight.js site/change-aware.js tests/normalized-evidence.test.js tests/site-preflight.test.js
+          bunx oxlint site/evidence-model.js site/preflight.js site/change-aware.js tests/normalized-evidence.test.js tests/site-preflight.test.js
+          bun test tests/normalized-evidence.test.js tests/site-preflight.test.js tests/site-change-aware.test.js
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/evidence-model.js site/preflight.js site/change-aware.js tests/normalized-evidence.test.js tests/site-preflight.test.js docs/normalized-evidence.md
+          git commit -m "Normalize component structural test evidence"
+          git push origin HEAD:feat/component-test-evidence-v2
