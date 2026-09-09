@@ -1,4 +1,8 @@
 import {
+  declaredMergeAuthorityEvidence,
+  mergeAuthorityConsistency,
+} from "./merge-authority-evidence.js";
+import {
   analyzeSnapshot,
   parseRepositoryReference,
   selectedRemoteFiles,
@@ -11,7 +15,16 @@ export async function analysisJson(value, options = {}) {
     throw new Error("Enter owner/repository or a github.com repository URL.");
 
   const snapshot = await loadSnapshot(reference, options);
-  return analyzeSnapshot(snapshot, options.now ?? new Date());
+  const analysis = analyzeSnapshot(snapshot, options.now ?? new Date());
+  const declaredMergeAuthority = declaredMergeAuthorityFromSnapshot(snapshot);
+  return {
+    ...analysis,
+    declaredMergeAuthority,
+    mergeAuthorityConsistency: mergeAuthorityConsistency(
+      declaredMergeAuthority,
+      snapshot.repository.governance.defaultBranchProtection,
+    ),
+  };
 }
 
 export async function loadSnapshot(reference, options = {}) {
@@ -28,7 +41,10 @@ export async function loadSnapshot(reference, options = {}) {
         fetchImpl,
         signal,
       )
-    : Promise.resolve({ status: "unavailable", reason: "repository-governance-metadata-unavailable" });
+    : Promise.resolve({
+        status: "unavailable",
+        reason: "repository-governance-metadata-unavailable",
+      });
   const [tree, defaultBranch] = await Promise.all([
     githubJson(
       `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`,
@@ -151,7 +167,8 @@ async function githubOptionalJson(path, fetchImpl, signal) {
         "X-GitHub-Api-Version": "2022-11-28",
       },
     });
-    if (!response.ok) return { status: "unavailable", reason: `github-http-${response.status}` };
+    if (!response.ok)
+      return { status: "unavailable", reason: `github-http-${response.status}` };
     return { status: "observed", value: await response.json() };
   } catch (error) {
     if (error?.name === "AbortError") throw error;
@@ -159,9 +176,28 @@ async function githubOptionalJson(path, fetchImpl, signal) {
   }
 }
 
+function declaredMergeAuthorityFromSnapshot(snapshot) {
+  const raw = snapshot.files[".coding-tooling.json"];
+  if (!raw) return declaredMergeAuthorityEvidence(null);
+  try {
+    return declaredMergeAuthorityEvidence(JSON.parse(raw));
+  } catch {
+    return {
+      state: "invalid",
+      authority: null,
+      requiredChecks: [],
+      reason: "coding-tooling-config-invalid-json",
+      source: ".coding-tooling.json",
+      observedEnforcement: "not-evaluated",
+    };
+  }
+}
+
 function defaultBranchProtectionEvidence(observation) {
   if (observation?.status !== "observed")
-    return unavailableBranchProtectionEvidence(observation?.reason ?? "branch-metadata-not-inspected");
+    return unavailableBranchProtectionEvidence(
+      observation?.reason ?? "branch-metadata-not-inspected",
+    );
 
   const branch = observation.value;
   if (typeof branch?.protected !== "boolean")
