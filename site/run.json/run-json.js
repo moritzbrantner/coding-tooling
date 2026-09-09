@@ -1,3 +1,4 @@
+import { isChangeAwareArgv, remoteChangeCommand } from "../change-aware.js";
 import { remoteCommand } from "../remote-command.js";
 
 const target = document.querySelector("#result");
@@ -13,7 +14,9 @@ try {
       "Missing required ?argv=<cli arguments> or repeated ?arg=<argument> parameters.",
     );
 
-  const result = await remoteCommand(repository, argv);
+  const result = isChangeAwareArgv(argv)
+    ? await remoteChangeCommand(repository, argv)
+    : await remoteCommand(repository, argv);
   target.textContent = `${JSON.stringify(result, null, 2)}\n`;
   document.title = `${repository} · ${result.operation} · run.json`;
 } catch (error) {
