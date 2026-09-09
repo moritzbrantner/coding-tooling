@@ -45,7 +45,9 @@ export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()
 
   const candidates = [
     ...pulls.map((pull) => pullCandidate(pull, now)),
-    ...issueWindow.filter((issue) => !issue.pull_request).map((issue) => issueCandidate(issue, now)),
+    ...issueWindow
+      .filter((issue) => !issue.pull_request)
+      .map((issue) => issueCandidate(issue, now)),
   ]
     .sort(compareCandidates)
     .slice(0, NEXT_WORK_CANDIDATE_LIMIT);
