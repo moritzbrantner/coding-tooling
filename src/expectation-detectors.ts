@@ -21,7 +21,6 @@ import { missingJavaScriptTestFindings, missingTestFindings } from "./expectatio
 import type {
   ExpectationDescriptor,
   ExpectationRegistryRecord,
-  RawFinding,
 } from "./expectation-detector-types.ts";
 
 export { createDetectorContext };
