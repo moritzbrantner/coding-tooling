@@ -235,20 +235,31 @@ async function loadPublicContractKpis(reference, repository, currentRevision, fe
     const snapshot = parsePublicContractSnapshot(decodeBase64(resource.content), repository.fullName);
     const freshness = evidenceFreshness(snapshot.repository.revision, currentRevision);
     const report = snapshot.report;
-    const surfaces = Array.isArray(report.surfaces) ? report.surfaces : [];
+    const surfaces = report.surfaces;
     const endpoints = surfaces.filter((surface) => surface?.kind === "http-operation");
     const verifiedEndpoints = endpoints.filter((surface) => surfaceIsVerified(surface)).length;
+    const discovered = integerOrNull(report.summary?.discovered);
+    const verified = integerOrNull(report.summary?.verified);
+    const unverified = integerOrNull(report.summary?.unverified);
+    const incompleteDiscovery = integerOrNull(report.summary?.incompleteDiscovery);
+    const summaryComplete = [discovered, verified, unverified, incompleteDiscovery].every(
+      (value) => value !== null,
+    );
+    const status =
+      freshness !== "current" || !summaryComplete || incompleteDiscovery > 0
+        ? "incomplete"
+        : "observed";
 
     return {
-      status: freshness === "current" ? "observed" : "incomplete",
+      status,
       freshness,
       revision: snapshot.repository.revision,
       generatedAt: snapshot.generatedAt,
       contracts: {
-        discovered: integerOrNull(report.summary?.discovered),
-        verified: integerOrNull(report.summary?.verified),
-        unverified: integerOrNull(report.summary?.unverified),
-        incompleteDiscovery: integerOrNull(report.summary?.incompleteDiscovery),
+        discovered,
+        verified,
+        unverified,
+        incompleteDiscovery,
         verifiedRatio: finiteOrNull(report.summary?.verifiedRatio),
       },
       httpEndpoints: {
@@ -257,6 +268,12 @@ async function loadPublicContractKpis(reference, repository, currentRevision, fe
         unverified: endpoints.length - verifiedEndpoints,
         verifiedRatio: endpoints.length ? verifiedEndpoints / endpoints.length : null,
       },
+      reason:
+        incompleteDiscovery > 0
+          ? "public-contract-discovery-partial"
+          : !summaryComplete
+            ? "public-contract-summary-incomplete"
+            : null,
       source: {
         branch: ANALYSIS_KPI_OBSERVATION_BRANCH,
         path: ANALYSIS_KPI_PUBLIC_CONTRACT_PATH,
@@ -280,7 +297,11 @@ export function parsePublicContractSnapshot(content, expectedRepository) {
     throw new Error("public-contract-snapshot-revision-invalid");
   if (!parsed.generatedAt || Number.isNaN(Date.parse(parsed.generatedAt)))
     throw new Error("public-contract-snapshot-generated-at-invalid");
-  if (parsed?.report?.schemaVersion !== 1 || !parsed?.report?.summary)
+  if (
+    parsed?.report?.schemaVersion !== 1 ||
+    !parsed?.report?.summary ||
+    !Array.isArray(parsed?.report?.surfaces)
+  )
     throw new Error("public-contract-report-invalid");
   if (parsed.report.revision && parsed.report.revision !== parsed.repository.revision)
     throw new Error("public-contract-snapshot-report-revision-mismatch");
