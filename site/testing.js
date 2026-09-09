@@ -94,7 +94,7 @@ export function testingPlan(snapshot, now = new Date()) {
         id: storybookSetupId,
         kind: "storybook-setup",
         priority: "medium",
-        confidence: "high",
+        confidence: "medium",
         component: componentRef(component),
         evidence: `${reactSources.length} React component candidate(s) exist but Storybook was not detected in package dependencies.`,
         recommendation:
@@ -122,7 +122,7 @@ export function testingPlan(snapshot, now = new Date()) {
           id: `TESTING-UNIT-${stableId(sourcePath)}`,
           kind: "unit-test",
           priority: "medium",
-          confidence: "high",
+          confidence: "medium",
           component: componentRef(component),
           sourcePath,
           targetPath,
@@ -225,7 +225,7 @@ export function testingPlan(snapshot, now = new Date()) {
     },
     limitations: [
       "This browser-only plan reads GitHub metadata, a recursive tree, and bounded manifests; it does not execute repository code or tests.",
-      "File-level unit-test recommendations are structural reachability hints. Type-only modules and barrels may be legitimate skip cases after source inspection.",
+      "File-level unit-test recommendations are structural reachability hints and therefore carry medium confidence until the source is read; type-only modules and barrels may be legitimate skip cases.",
       "React component detection is a conservative filename/path heuristic for TSX files, so Storybook actions have medium confidence until the source is read.",
       "The local coding-tooling findings and repository CI remain authoritative for deterministic validation and behavioral correctness.",
     ],
