@@ -18,6 +18,7 @@ describe("remote structural test evidence", () => {
       files: {
         ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
         "rust-toolchain.toml": '[toolchain]\nchannel = "1.91.0"\n',
+        ".github/workflows/validate.yml": rustValidationWorkflow(),
       },
     });
     const analysis = analyzeSnapshot(snapshot);
@@ -88,6 +89,10 @@ function repository(overrides) {
     unreadablePaths: [],
     ...overrides,
   };
+}
+
+function rustValidationWorkflow() {
+  return `on:\n  pull_request:\njobs:\n  validate:\n    steps:\n      - run: cargo test --locked --lib\n`;
 }
 
 function blob(path) {

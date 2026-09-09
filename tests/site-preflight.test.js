@@ -5,6 +5,7 @@ import {
   analyzeSnapshot,
   parseRepositoryReference,
   selectedRemoteFiles,
+  selectedWorkflowFiles,
 } from "../site/preflight.js";
 
 describe("GitHub Pages repository preflight", () => {
@@ -37,6 +38,19 @@ describe("GitHub Pages repository preflight", () => {
     );
   });
 
+  test("selects GitHub workflow evidence separately from the manifest budget", () => {
+    const tree = [
+      blob("package.json", "1"),
+      blob(".github/workflows/pages.yml", "2"),
+      blob(".github/workflows/validate.yml", "3"),
+    ];
+    expect(selectedRemoteFiles(tree).map((entry) => entry.path)).toEqual(["package.json"]);
+    expect(selectedWorkflowFiles(tree).map((entry) => entry.path)).toEqual([
+      ".github/workflows/pages.yml",
+      ".github/workflows/validate.yml",
+    ]);
+  });
+
   test("returns a ready result for a repository with structural foundation evidence", () => {
     const analysis = analyzeSnapshot(
       repository({
@@ -59,6 +73,7 @@ describe("GitHub Pages repository preflight", () => {
           }),
           ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
           ".node-version": "24.20.0\n",
+          ".github/workflows/validate.yml": validatingWorkflow(),
         },
       }),
       new Date("2026-09-02T18:00:00.000Z"),
@@ -91,6 +106,7 @@ describe("GitHub Pages repository preflight", () => {
             scripts: { "format:check": "fmt", lint: "lint", typecheck: "tsc", test: "test" },
           }),
           ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+          ".github/workflows/validate.yml": validatingWorkflow(),
           "fixtures/app/package.json": JSON.stringify({ name: "ignored-fixture" }),
         },
       }),
@@ -118,10 +134,65 @@ describe("GitHub Pages repository preflight", () => {
             scripts: { "format:check": "fmt", lint: "lint", typecheck: "tsc", test: "test" },
           }),
           ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+          ".github/workflows/validate.yml": validatingWorkflow(),
         },
       }),
     );
     expect(analysis.findings.map((finding) => finding.id)).toEqual(["REMOTE-ENV-005"]);
+  });
+
+  test("does not treat deployment-only automation as validation", () => {
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [
+          blob("package.json", "1"),
+          blob(".coding-tooling.json", "2"),
+          blob("AGENTS.md", "3"),
+          blob("renovate.json", "4"),
+          blob(".github/workflows/pages.yml", "5"),
+        ],
+        files: {
+          "package.json": JSON.stringify({
+            name: "fixture",
+            packageManager: "bun@1.4.0",
+            scripts: { test: "test" },
+          }),
+          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+          ".github/workflows/pages.yml": `name: Validate
+on:
+  pull_request:
+jobs:
+  deploy:
+    steps:
+      - uses: actions/deploy-pages@0123456789012345678901234567890123456789
+`,
+        },
+      }),
+    );
+    expect(analysis.validationEvidence).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "automation-without-validation-evidence",
+      }),
+    );
+    expect(analysis.findings.map((finding) => finding.id)).toContain("REMOTE-CI-002");
+  });
+
+  test("represents external CI as unsupported rather than missing validation", () => {
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [blob(".gitlab-ci.yml", "1")],
+        files: {},
+      }),
+    );
+    expect(analysis.validationEvidence).toEqual(
+      expect.objectContaining({
+        status: "unsupported",
+        provider: "external",
+      }),
+    );
+    expect(analysis.findings.map((finding) => finding.id)).not.toContain("REMOTE-CI-001");
+    expect(analysis.findings.map((finding) => finding.id)).not.toContain("REMOTE-CI-002");
   });
 
   test("marks truncated or bounded GitHub evidence incomplete", () => {
@@ -212,6 +283,7 @@ describe("GitHub Pages repository preflight", () => {
           "packages/a/package.json": JSON.stringify(manifest("package-a")),
           "packages/b/package.json": JSON.stringify(manifest("package-b")),
           ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+          ".github/workflows/validate.yml": validatingWorkflow(),
         },
       }),
     );
@@ -269,9 +341,21 @@ function repository(overrides) {
     files: {},
     treeTruncated: false,
     manifestFetchTruncated: false,
+    workflowFetchTruncated: false,
     unreadablePaths: [],
     ...overrides,
   };
+}
+
+function validatingWorkflow() {
+  return `name: Anything
+on:
+  pull_request:
+jobs:
+  verify:
+    steps:
+      - run: bun run typecheck
+`;
 }
 
 function githubRepositoryMetadata() {
