@@ -182,10 +182,20 @@ async function loadVerificationKpis(reference, repository, currentRevision, fetc
         revision: latest.commit ?? null,
       };
 
+    const producerStatus =
+      typeof verification.status === "string" ? verification.status : "unavailable";
+    const status =
+      producerStatus === "error"
+        ? "incomplete"
+        : freshness === "current"
+          ? "observed"
+          : "incomplete";
+
     return {
-      status: freshness === "current" ? "observed" : "incomplete",
+      status,
       freshness,
       revision: latest.commit ?? null,
+      producerStatus,
       repositoryScore: finiteOrNull(latest.score),
       verificationScore: finiteOrNull(verification.score),
       checks: {
@@ -196,6 +206,7 @@ async function loadVerificationKpis(reference, repository, currentRevision, fetc
         blocked: integerOrNull(verification.blockedChecks),
         missingRequiredCapabilities: integerOrNull(verification.missingRequiredCapabilities),
       },
+      reason: producerStatus === "error" ? "score-production-error-tombstone" : null,
       source: {
         branch: ANALYSIS_KPI_SCORE_HISTORY_BRANCH,
         path: ANALYSIS_KPI_SCORE_HISTORY_PATH,
@@ -332,6 +343,7 @@ function unavailableVerification(reason) {
     status: "unavailable",
     freshness: "unknown",
     revision: null,
+    producerStatus: null,
     repositoryScore: null,
     verificationScore: null,
     checks: {
