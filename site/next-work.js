@@ -89,8 +89,16 @@ export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()
 export function summarizeCiEvidence(checkSuitePayload, statusPayload) {
   const checkSuites = Array.isArray(checkSuitePayload?.check_suites)
     ? checkSuitePayload.check_suites
-    : [];
-  const legacyStatuses = Array.isArray(statusPayload?.statuses) ? statusPayload.statuses : [];
+    : null;
+  const legacyStatuses = Array.isArray(statusPayload?.statuses) ? statusPayload.statuses : null;
+  if (!checkSuites || !legacyStatuses)
+    return ciSummary(
+      "incomplete",
+      checkSuites?.length ?? null,
+      legacyStatuses?.length ?? null,
+      false,
+    );
+
   const checkSuiteTotal = Number(checkSuitePayload?.total_count);
   const checkSuitesTruncated =
     (Number.isFinite(checkSuiteTotal) && checkSuiteTotal > checkSuites.length) ||
@@ -176,7 +184,11 @@ async function loadCiHealth(encodedRepository, headSha, fetchImpl, requestOption
       checkSuiteResponse.json(),
       statusResponse.json(),
     ]);
-    return { exactHeadSha: headSha, requiredness: "not-inspected", ...summarizeCiEvidence(checkSuitePayload, statusPayload) };
+    return {
+      exactHeadSha: headSha,
+      requiredness: "not-inspected",
+      ...summarizeCiEvidence(checkSuitePayload, statusPayload),
+    };
   } catch {
     return {
       status: "unavailable",
