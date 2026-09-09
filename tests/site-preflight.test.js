@@ -187,6 +187,49 @@ describe("GitHub Pages repository preflight", () => {
     expect(Object.keys(snapshot.files)).toHaveLength(24);
   });
 
+  test("scopes structural test evidence to sibling components", () => {
+    function manifest(name) {
+      return {
+        name,
+        packageManager: "bun@1.4.0",
+        scripts: { "format:check": "fmt", lint: "lint", typecheck: "tsc", test: "test" },
+      };
+    }
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [
+          blob("packages/a/package.json", "1"),
+          blob("packages/a/src/index.ts", "2"),
+          blob("packages/a/tests/index.test.ts", "3"),
+          blob("packages/b/package.json", "4"),
+          blob("packages/b/src/index.ts", "5"),
+          blob(".coding-tooling.json", "6"),
+          blob("AGENTS.md", "7"),
+          blob("renovate.json", "8"),
+          blob(".github/workflows/validate.yml", "9"),
+        ],
+        files: {
+          "packages/a/package.json": JSON.stringify(manifest("package-a")),
+          "packages/b/package.json": JSON.stringify(manifest("package-b")),
+          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+        },
+      }),
+    );
+    const packageA = analysis.components.find((component) => component.name === "package-a");
+    const packageB = analysis.components.find((component) => component.name === "package-b");
+    expect(packageA.testEvidence).toEqual(
+      expect.objectContaining({ status: "satisfied", testPathCount: 1 }),
+    );
+    expect(packageB.testEvidence).toEqual(
+      expect.objectContaining({ status: "finding", testPathCount: 0 }),
+    );
+    expect(
+      analysis.findings
+        .filter((finding) => finding.id.startsWith("REMOTE-TEST-001"))
+        .map((finding) => finding.title),
+    ).toEqual(["package-b: No structural test files detected"]);
+  });
+
   test("analysisJson resolves a repository through the public GitHub API seam", async () => {
     const requests = [];
     const analysis = await analysisJson("example/repo", {

@@ -31,3 +31,9 @@ Package toolchain outcomes add the fourth state required for environment boundar
 A root Bun lock, root `packageManager`, or root `.node-version` is not silently copied into an unrelated nested package. Nested `.node-version` files are collected when available, and package command selection uses the component's own manifest/lock evidence. Workspace inheritance is intentionally not guessed in this slice: a future adapter may establish an inherited toolchain only when the workspace relationship itself is mechanically evidenced.
 
 Structural test reachability, Rust/.NET normalized evidence, CI validation evidence, and governance evidence remain incremental work under #84/#86/#85 rather than reasons to duplicate or broaden the evidence model speculatively.
+
+## Structural test evidence
+
+Remote structural source/test evidence now uses the same pure outcome semantics in ordinary preflight and change-aware analysis. Ownership is component-scoped to the most-specific compatible package, Rust, or .NET component.
+
+The outcome is explicitly one of `satisfied`, `finding`, `unsupported`, or `incomplete`. It reports tree-visible production/test paths only and never claims assertion intent or execution success. Rust without a separate test path remains `unsupported` because inline `#[cfg(test)]` modules are outside the Git-tree boundary. Incomplete GitHub tree/manifest evidence remains `incomplete`, never satisfied.

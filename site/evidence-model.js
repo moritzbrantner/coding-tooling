@@ -276,3 +276,22 @@ export function canonicalPackageCapabilityOutcomes(
     provenance: [evidence.facts.scripts.provenance],
   }));
 }
+
+export function structuralTestOutcome(input) {
+  const productionPaths = [...new Set(input.productionPaths ?? [])].toSorted();
+  const testPaths = [...new Set(input.testPaths ?? [])].toSorted();
+  const base = {
+    productionPathCount: productionPaths.length,
+    testPathCount: testPaths.length,
+    productionPaths,
+    testPaths,
+  };
+  if (!input.complete) return { ...base, status: "incomplete", reason: "evidence-incomplete" };
+  if (productionPaths.length === 0)
+    return { ...base, status: "unsupported", reason: "no-production-source" };
+  if (testPaths.length > 0)
+    return { ...base, status: "satisfied", reason: "separate-test-path-present" };
+  if (input.kind === "rust")
+    return { ...base, status: "unsupported", reason: "rust-inline-tests-unobservable" };
+  return { ...base, status: "finding", reason: "no-separate-test-path" };
+}

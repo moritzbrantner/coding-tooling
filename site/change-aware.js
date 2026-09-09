@@ -1,3 +1,4 @@
+import { structuralTestOutcome } from "./evidence-model.js";
 import { analyzeSnapshot, parseRepositoryReference, selectedRemoteFiles } from "./preflight.js";
 
 const REMOTE_FILE_LIMIT = 32;
@@ -674,26 +675,55 @@ function componentTestEvidence(
   const testPaths = componentTestPaths(snapshot, component, components).filter(
     (path) => !isAuxiliaryTestPath(path),
   );
-  const changedTestPaths = changedPaths.filter(isTestPath).toSorted();
-  let state = "finding";
-  if (incomplete) state = "incomplete";
-  else if (testPaths.length > 0) state = "satisfied";
-  else if (component.kind === "rust") state = "unsupported";
+  const outcome = structuralTestOutcome({
+    kind: component.kind,
+    complete: !incomplete,
+    productionPaths: componentProductionPaths(snapshot, component, components),
+    testPaths,
+  });
   return {
-    state,
+    ...outcome,
+    state: outcome.status,
     authority: "advisory",
     basis: "component-test-path-existence",
-    testPathCount: testPaths.length,
-    changedTestPaths,
+    changedTestPaths: changedPaths.filter(isTestPath).toSorted(),
     candidateCount: candidates.length,
   };
+}
+
+function componentProductionPaths(snapshot, component, components) {
+  return snapshot.tree
+    .filter((entry) => {
+      if (
+        entry.type !== "blob" ||
+        !isProductionSourcePath(entry.path) ||
+        !componentSupportsSourceKind(component, entry.path)
+      )
+        return false;
+      const compatible = components.filter((owner) =>
+        componentSupportsSourceKind(owner, entry.path),
+      );
+      return mostSpecificOwners(compatible, entry.path).some(
+        (owner) => componentIdentity(owner) === componentIdentity(component),
+      );
+    })
+    .map((entry) => entry.path)
+    .toSorted();
 }
 
 function componentTestPaths(snapshot, component, components) {
   return snapshot.tree
     .filter((entry) => {
-      if (entry.type !== "blob" || !isTestPath(entry.path)) return false;
-      return mostSpecificOwners(components, entry.path).some(
+      if (
+        entry.type !== "blob" ||
+        !isTestPath(entry.path) ||
+        !componentSupportsSourceKind(component, entry.path)
+      )
+        return false;
+      const compatible = components.filter((owner) =>
+        componentSupportsSourceKind(owner, entry.path),
+      );
+      return mostSpecificOwners(compatible, entry.path).some(
         (owner) => componentIdentity(owner) === componentIdentity(component),
       );
     })
@@ -881,6 +911,19 @@ function isTestPath(path) {
     /(^|\/)(tests?|__tests__|e2e|specs?)(\/|$)/i.test(path) ||
     /\.(test|spec)\.[A-Za-z0-9]+$/i.test(path)
   );
+}
+
+function isProductionSourcePath(path) {
+  const lower = path.toLowerCase();
+  if (isAuxiliaryTestPath(path) || isTestPath(path)) return false;
+  return !/\.stories\.[cm]?[jt]sx?$/.test(lower) && /\.(ts|tsx|js|jsx|mjs|cjs|rs|cs)$/.test(lower);
+}
+
+function componentSupportsSourceKind(component, path) {
+  if (component.kind === "package") return /\.(?:[cm]?[jt]sx?)$/i.test(path);
+  if (component.kind === "rust") return /\.rs$/i.test(path);
+  if (component.kind === "dotnet") return /\.cs$/i.test(path);
+  return false;
 }
 
 function isAuxiliaryTestPath(path) {
