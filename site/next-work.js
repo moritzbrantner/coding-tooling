@@ -1,6 +1,8 @@
 export const NEXT_WORK_PULL_LIMIT = 20;
 export const NEXT_WORK_ISSUE_LIMIT = 20;
 export const NEXT_WORK_CANDIDATE_LIMIT = 12;
+export const NEXT_WORK_CI_PULL_LIMIT = 2;
+export const NEXT_WORK_CI_EVIDENCE_LIMIT = 100;
 
 export async function nextWorkJson(repository, options = {}) {
   const fullName = normalizeRepository(repository);
@@ -36,7 +38,8 @@ export async function nextWorkJson(repository, options = {}) {
   if (!Array.isArray(pulls) || !Array.isArray(issueWindow))
     throw new Error("GitHub returned an invalid open-work list.");
 
-  return analyzeOpenWork(fullName, pulls, issueWindow, now);
+  const result = analyzeOpenWork(fullName, pulls, issueWindow, now);
+  return enrichCiHealth(result, encodedRepository, fetchImpl, requestOptions);
 }
 
 export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()) {
@@ -73,6 +76,7 @@ export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()
         "Rank by recent activity with a modest boost for in-flight pull requests and ready-for-review pull requests.",
       semanticPriority: "not-inferred",
       ciHealth: "not-inspected",
+      ciAffectsRanking: false,
     },
     summary: {
       status: candidates.length ? "ready" : "empty",
@@ -80,6 +84,110 @@ export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()
     },
     candidates,
   };
+}
+
+export function summarizeCiEvidence(checkSuitePayload, statusPayload) {
+  const checkSuites = Array.isArray(checkSuitePayload?.check_suites)
+    ? checkSuitePayload.check_suites
+    : [];
+  const legacyStatuses = Array.isArray(statusPayload?.statuses) ? statusPayload.statuses : [];
+  const checkSuiteTotal = Number(checkSuitePayload?.total_count);
+  const checkSuitesTruncated =
+    (Number.isFinite(checkSuiteTotal) && checkSuiteTotal > checkSuites.length) ||
+    checkSuites.length >= NEXT_WORK_CI_EVIDENCE_LIMIT;
+  const legacyStatusesTruncated = legacyStatuses.length >= NEXT_WORK_CI_EVIDENCE_LIMIT;
+  const evidenceTruncated = checkSuitesTruncated || legacyStatusesTruncated;
+  const evidenceCount = checkSuites.length + legacyStatuses.length;
+
+  if (evidenceTruncated)
+    return ciSummary("incomplete", checkSuites.length, legacyStatuses.length, true);
+  if (evidenceCount === 0) return ciSummary("missing", 0, 0, false);
+  if (hasFailingEvidence(checkSuites, legacyStatuses))
+    return ciSummary("failing", checkSuites.length, legacyStatuses.length, false);
+  if (hasPendingEvidence(checkSuites, legacyStatuses))
+    return ciSummary("pending", checkSuites.length, legacyStatuses.length, false);
+  if (hasUnknownEvidence(checkSuites, legacyStatuses))
+    return ciSummary("incomplete", checkSuites.length, legacyStatuses.length, false);
+  return ciSummary("passing", checkSuites.length, legacyStatuses.length, false);
+}
+
+async function enrichCiHealth(result, encodedRepository, fetchImpl, requestOptions) {
+  const inspectedPulls = result.candidates
+    .filter((candidate) => candidate.kind === "pull-request" && candidate.headSha)
+    .slice(0, NEXT_WORK_CI_PULL_LIMIT);
+  const ciEntries = await Promise.all(
+    inspectedPulls.map(async (candidate) => [
+      candidate.number,
+      await loadCiHealth(encodedRepository, candidate.headSha, fetchImpl, requestOptions),
+    ]),
+  );
+  const ciByNumber = new Map(ciEntries);
+  const candidates = result.candidates.map((candidate) => {
+    const ci = ciByNumber.get(candidate.number);
+    return ci ? { ...candidate, ci } : candidate;
+  });
+
+  return {
+    ...result,
+    source: {
+      ...result.source,
+      ciPullLimit: NEXT_WORK_CI_PULL_LIMIT,
+      ciEvidenceLimit: NEXT_WORK_CI_EVIDENCE_LIMIT,
+      ciEvidence:
+        "For the top pull-request candidates, modern check suites and legacy commit statuses are both inspected. Missing or incomplete evidence is never treated as passing.",
+    },
+    ranking: {
+      ...result.ranking,
+      ciHealth: inspectedPulls.length ? "inspected-for-top-pull-requests" : "not-applicable",
+    },
+    summary: {
+      ...result.summary,
+      suggestedWork: candidates[0] ?? null,
+    },
+    candidates,
+  };
+}
+
+async function loadCiHealth(encodedRepository, headSha, fetchImpl, requestOptions) {
+  try {
+    const [checkSuiteResponse, statusResponse] = await Promise.all([
+      fetchImpl(
+        `https://api.github.com/repos/${encodedRepository}/commits/${encodeURIComponent(headSha)}/check-suites?per_page=${NEXT_WORK_CI_EVIDENCE_LIMIT}`,
+        requestOptions,
+      ),
+      fetchImpl(
+        `https://api.github.com/repos/${encodedRepository}/commits/${encodeURIComponent(headSha)}/status?per_page=${NEXT_WORK_CI_EVIDENCE_LIMIT}`,
+        requestOptions,
+      ),
+    ]);
+
+    if (!checkSuiteResponse.ok || !statusResponse.ok)
+      return {
+        status: "unavailable",
+        exactHeadSha: headSha,
+        requiredness: "not-inspected",
+        checkSuiteCount: null,
+        legacyStatusCount: null,
+        evidenceTruncated: false,
+        reason: `github-http-${!checkSuiteResponse.ok ? checkSuiteResponse.status : statusResponse.status}`,
+      };
+
+    const [checkSuitePayload, statusPayload] = await Promise.all([
+      checkSuiteResponse.json(),
+      statusResponse.json(),
+    ]);
+    return { exactHeadSha: headSha, requiredness: "not-inspected", ...summarizeCiEvidence(checkSuitePayload, statusPayload) };
+  } catch {
+    return {
+      status: "unavailable",
+      exactHeadSha: headSha,
+      requiredness: "not-inspected",
+      checkSuiteCount: null,
+      legacyStatusCount: null,
+      evidenceTruncated: false,
+      reason: "request-failed",
+    };
+  }
 }
 
 function pullCandidate(pull, now) {
@@ -92,6 +200,7 @@ function pullCandidate(pull, now) {
     number: pull.number,
     title: String(pull.title ?? "Untitled pull request"),
     htmlUrl: pull.html_url,
+    headSha: pull.head?.sha ?? null,
     updatedAt: updatedAt?.toISOString() ?? null,
     author: pull.user?.login ?? null,
     draft,
@@ -115,6 +224,45 @@ function issueCandidate(issue, now) {
     action: "implement-issue",
     signals: itemSignals({ ageDays, kind: "issue", draft: false, authorType: issue.user?.type }),
   };
+}
+
+function ciSummary(status, checkSuiteCount, legacyStatusCount, evidenceTruncated) {
+  return {
+    status,
+    checkSuiteCount,
+    legacyStatusCount,
+    evidenceTruncated,
+  };
+}
+
+function hasFailingEvidence(checkSuites, legacyStatuses) {
+  const failingConclusions = new Set([
+    "action_required",
+    "cancelled",
+    "failure",
+    "stale",
+    "startup_failure",
+    "timed_out",
+  ]);
+  return (
+    checkSuites.some((suite) => failingConclusions.has(suite.conclusion)) ||
+    legacyStatuses.some((status) => status.state === "failure" || status.state === "error")
+  );
+}
+
+function hasPendingEvidence(checkSuites, legacyStatuses) {
+  return (
+    checkSuites.some((suite) => suite.status !== "completed" || suite.conclusion == null) ||
+    legacyStatuses.some((status) => status.state === "pending")
+  );
+}
+
+function hasUnknownEvidence(checkSuites, legacyStatuses) {
+  const passingConclusions = new Set(["neutral", "skipped", "success"]);
+  return (
+    checkSuites.some((suite) => !passingConclusions.has(suite.conclusion)) ||
+    legacyStatuses.some((status) => status.state !== "success")
+  );
 }
 
 function itemSignals({ ageDays, kind, draft, authorType }) {
