@@ -19,6 +19,7 @@ const strongContractEvidenceKinds = new Set([
   "compile",
 ]);
 const publicContractProducerStatuses = new Set(["passed", "failed", "unavailable", "error"]);
+const verificationProducerStatuses = new Set(["passed", "failed", "unavailable", "error"]);
 
 export async function analysisKpisJson(reference, analysis, snapshot, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -183,14 +184,35 @@ async function loadVerificationKpis(reference, repository, currentRevision, fetc
         revision: latest.commit ?? null,
       };
 
-    const producerStatus =
-      typeof verification.status === "string" ? verification.status : "unavailable";
+    const producerStatus = typeof verification.status === "string" ? verification.status : null;
+    const verificationScore = finiteOrNull(verification.score);
+    const checks = {
+      planned: integerOrNull(verification.plannedChecks),
+      passed: integerOrNull(verification.passedChecks),
+      failed: integerOrNull(verification.failedChecks),
+      error: integerOrNull(verification.errorChecks),
+      blocked: integerOrNull(verification.blockedChecks),
+      missingRequiredCapabilities: integerOrNull(verification.missingRequiredCapabilities),
+    };
+    const statusRecognized = verificationProducerStatuses.has(producerStatus);
+    const countsComplete = Object.values(checks).every((value) => value !== null);
+    const scoreComplete =
+      producerStatus === "passed" || producerStatus === "failed" ? verificationScore !== null : true;
+    const summaryComplete = statusRecognized && countsComplete && scoreComplete;
     const status =
-      producerStatus === "error"
+      freshness !== "current" ||
+      !summaryComplete ||
+      producerStatus === "error" ||
+      producerStatus === "unavailable"
         ? "incomplete"
-        : freshness === "current"
-          ? "observed"
-          : "incomplete";
+        : "observed";
+    const reason = !summaryComplete
+      ? "verification-summary-incomplete"
+      : producerStatus === "error"
+        ? "score-production-error-tombstone"
+        : producerStatus === "unavailable"
+          ? "verification-summary-unavailable"
+          : null;
 
     return {
       status,
@@ -198,16 +220,9 @@ async function loadVerificationKpis(reference, repository, currentRevision, fetc
       revision: latest.commit ?? null,
       producerStatus,
       repositoryScore: finiteOrNull(latest.score),
-      verificationScore: finiteOrNull(verification.score),
-      checks: {
-        planned: integerOrNull(verification.plannedChecks),
-        passed: integerOrNull(verification.passedChecks),
-        failed: integerOrNull(verification.failedChecks),
-        error: integerOrNull(verification.errorChecks),
-        blocked: integerOrNull(verification.blockedChecks),
-        missingRequiredCapabilities: integerOrNull(verification.missingRequiredCapabilities),
-      },
-      reason: producerStatus === "error" ? "score-production-error-tombstone" : null,
+      verificationScore,
+      checks,
+      reason,
       source: {
         branch: ANALYSIS_KPI_SCORE_HISTORY_BRANCH,
         path: ANALYSIS_KPI_SCORE_HISTORY_PATH,
