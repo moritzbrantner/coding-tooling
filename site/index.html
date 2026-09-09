@@ -5,23 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Deterministic remote repository preflight from coding-tooling."
+      content="Discover recent public repositories and run deterministic remote repository preflight from coding-tooling."
     />
-    <title>coding-tooling · repository preflight</title>
+    <title>coding-tooling · repository discovery</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header>
       <a href="https://github.com/moritzbrantner/coding-tooling">coding-tooling</a>
-      <span><a href="./score/">score history</a> · remote preflight / schema v1</span>
+      <span><a href="./score/">score history</a> · remote discovery / schema v1</span>
     </header>
     <main>
       <section class="hero">
         <p class="eyebrow">For humans and coding agents</p>
-        <h1>Load a GitHub repository.<br />Get structural evidence.</h1>
+        <h1>Find the next repository.<br />Get structural evidence.</h1>
         <p class="lede">
-          A zero-install, deterministic first pass over public repositories. No token, no code
-          execution, no LLM.
+          A zero-install, deterministic first pass over public repositories. By default the page
+          ranks recent public work without a token; any candidate can then flow into the existing
+          repository preflight.
         </p>
         <form>
           <label for="repository">GitHub repository</label>
@@ -39,6 +40,25 @@
         <p id="status" class="status" role="status">
           Remote preflight is intentionally narrower than the local coding-tooling CLI.
         </p>
+      </section>
+
+      <section id="repository-discovery" hidden>
+        <div class="section-heading row">
+          <div>
+            <p class="eyebrow">Repository discovery</p>
+            <h2>Next public repository</h2>
+          </div>
+          <a id="discovery-json-link" href="./discovery.json/" target="_blank" rel="noreferrer"
+            >Open discovery.json</a
+          >
+        </div>
+        <p class="muted">
+          Ranking uses bounded anonymous GitHub repository metadata: recent repository activity,
+          the combined open issue/pull-request count, and source-versus-fork status. This slice
+          selects a repository only; it does not yet claim a specific roadmap task.
+        </p>
+        <p id="discovery-status" class="status" role="status"></p>
+        <div id="repository-candidates" class="stack"></div>
       </section>
 
       <div id="output" hidden>
