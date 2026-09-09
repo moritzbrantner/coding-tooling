@@ -31,6 +31,30 @@ export function createProjectManifestEvidence(input) {
   };
 }
 
+export function collectGithubProjectManifestEvidence(snapshot, components) {
+  const manifestPaths = (snapshot?.tree ?? [])
+    .map((entry) => entry?.path)
+    .filter(
+      (path) =>
+        typeof path === "string" &&
+        (baseName(path) === "Cargo.toml" || path.endsWith(".sln") || path.endsWith(".csproj")),
+    );
+
+  return (components ?? [])
+    .filter((component) => component?.kind === "rust" || component?.kind === "dotnet")
+    .map((component) =>
+      createProjectManifestEvidence({
+        collector: "github",
+        name: component.name,
+        path: component.path,
+        kind: component.kind,
+        manifestPaths: manifestPaths.filter((manifestPath) =>
+          manifestBelongsToComponent(manifestPath, component.path, component.kind),
+        ),
+      }),
+    );
+}
+
 export function projectManifestSemantics(evidence) {
   if (evidence?.schemaVersion !== NORMALIZED_EVIDENCE_SCHEMA_VERSION)
     throw new Error("Unsupported normalized project evidence schema");
@@ -42,4 +66,21 @@ export function projectManifestSemantics(evidence) {
     manifestStatus: evidence.facts.manifests.status,
     manifestPaths: [...evidence.facts.manifests.value].toSorted(),
   };
+}
+
+function manifestBelongsToComponent(manifestPath, componentPath, kind) {
+  const manifestDirectory = directoryName(manifestPath);
+  if (manifestDirectory !== componentPath) return false;
+  if (kind === "rust") return baseName(manifestPath) === "Cargo.toml";
+  return manifestPath.endsWith(".sln") || manifestPath.endsWith(".csproj");
+}
+
+function directoryName(path) {
+  const index = path.lastIndexOf("/");
+  return index < 0 ? "." : path.slice(0, index) || ".";
+}
+
+function baseName(path) {
+  const index = path.lastIndexOf("/");
+  return index < 0 ? path : path.slice(index + 1);
 }
