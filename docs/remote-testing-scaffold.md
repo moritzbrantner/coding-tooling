@@ -25,7 +25,7 @@ Test paths follow the local detector convention of mapping `src/foo.ts` to `test
 
 The remote plan does **not** generate behavioral assertions from filenames. For every file-level action, the consumer must read `sourcePath` before writing `targetPath`. Type-only modules, barrels, generated adapters, and other files without useful runtime behavior may be skipped with an explicit reason rather than receiving meaningless tests.
 
-React component detection is deliberately conservative: schema version 1 treats TSX files under conventional `components`/`ui` paths, or TSX files with PascalCase filenames, as Storybook candidates. That is structural evidence, not proof that the file is a reusable component, so these actions carry medium confidence until the source is inspected.
+File-level unit-test targets are structural hints, not proof that a source file needs a dedicated test. They therefore carry medium confidence until the source is inspected. React component detection is likewise deliberately conservative: schema version 1 treats TSX files under conventional `components`/`ui` paths, or TSX files with PascalCase filenames, as Storybook candidates. That is structural evidence, not proof that the file is a reusable component, so Storybook setup/story actions also carry medium confidence until the source is inspected.
 
 The local `coding-tooling findings --json` path remains authoritative because it can inspect source reachability and run repository-owned validation. The Pages plan is a zero-install PR-planning seam, not a replacement for CI.
 
