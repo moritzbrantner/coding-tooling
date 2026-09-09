@@ -1,9 +1,13 @@
 import { analysisJson } from "./github-analysis.js";
+import { DEFAULT_DISCOVERY_OWNER, discoveryJson } from "./repository-discovery.js";
 
 const form = document.querySelector("form");
 const input = document.querySelector("#repository");
 const status = document.querySelector("#status");
 const output = document.querySelector("#output");
+const discovery = document.querySelector("#repository-discovery");
+const discoveryStatus = document.querySelector("#discovery-status");
+const discoveryCandidates = document.querySelector("#repository-candidates");
 let controller;
 
 form.addEventListener("submit", (event) => {
@@ -11,10 +15,88 @@ form.addEventListener("submit", (event) => {
   void run(input.value);
 });
 
-const initial = new URL(location.href).searchParams.get("repo");
+const searchParams = new URL(location.href).searchParams;
+const initial = searchParams.get("repo");
 if (initial) {
   input.value = initial;
   void run(initial);
+} else {
+  discovery.hidden = false;
+  void loadDiscovery(searchParams.get("owner") ?? DEFAULT_DISCOVERY_OWNER);
+}
+
+async function loadDiscovery(owner) {
+  setDiscoveryStatus(`Reading recent public repositories for ${owner}…`);
+
+  try {
+    const result = await discoveryJson(owner);
+    renderDiscovery(result);
+    const qualifier = result.source.truncated ? " within the bounded public API window" : "";
+    setDiscoveryStatus(`Ranked public repository candidates for ${result.owner}${qualifier}.`);
+  } catch (error) {
+    setDiscoveryStatus(error instanceof Error ? error.message : String(error), true);
+  }
+}
+
+function renderDiscovery(result) {
+  const machineUrl = new URL("./discovery.json/", location.href);
+  machineUrl.searchParams.set("owner", result.owner);
+  document.querySelector("#discovery-json-link").href = machineUrl.href;
+
+  if (!result.candidates.length) {
+    discoveryCandidates.replaceChildren(empty(`No active public repositories found for ${result.owner}.`));
+    return;
+  }
+
+  discoveryCandidates.replaceChildren(
+    ...result.candidates.map((candidate, index) => repositoryCandidate(candidate, index === 0)),
+  );
+}
+
+function repositoryCandidate(candidate, suggested) {
+  const article = document.createElement("article");
+  article.className = "card";
+
+  const label = document.createElement("div");
+  label.className = "finding-label";
+  label.textContent = suggested ? "Suggested starting repository" : "Repository candidate";
+
+  const heading = document.createElement("h3");
+  heading.textContent = candidate.fullName;
+
+  const description = document.createElement("p");
+  description.className = "muted";
+  description.textContent = candidate.description ?? "No repository description.";
+
+  const evidence = document.createElement("p");
+  evidence.className = "muted";
+  evidence.textContent = candidateEvidence(candidate);
+
+  const signals = document.createElement("div");
+  signals.className = "chips";
+  signals.replaceChildren(...candidate.signals.map((signal) => chip(signal)));
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Analyze repository";
+  button.onclick = () => {
+    input.value = candidate.fullName;
+    void run(candidate.fullName);
+  };
+
+  article.append(label, heading, description, evidence, signals, button);
+  return article;
+}
+
+function candidateEvidence(candidate) {
+  const parts = [];
+  if (candidate.language) parts.push(candidate.language);
+  if (candidate.lastActivityAt)
+    parts.push(`last repository activity ${new Date(candidate.lastActivityAt).toLocaleDateString()}`);
+  parts.push(
+    `${candidate.openItemCount} open GitHub ${candidate.openItemCount === 1 ? "item" : "items"} (issues and pull requests combined)`,
+  );
+  return parts.join(" · ");
 }
 
 async function run(value) {
@@ -156,6 +238,11 @@ function empty(message) {
 function setStatus(message, error = false) {
   status.textContent = message;
   status.dataset.state = error ? "error" : "normal";
+}
+
+function setDiscoveryStatus(message, error = false) {
+  discoveryStatus.textContent = message;
+  discoveryStatus.dataset.state = error ? "error" : "normal";
 }
 
 function download(name, content) {
