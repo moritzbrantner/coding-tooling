@@ -1,0 +1,100 @@
+name: Harden change-aware scope
+
+on:
+  push:
+    branches: [feat/change-aware-pages]
+    paths:
+      - ".github/workflows/harden-change-aware-scope.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: feat/change-aware-pages
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Make conservative widening authoritative
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source_path = Path("site/change-aware.js")
+          source = source_path.read_text()
+          old = '''function selectComponents(components, scope, requestedComponent) {
+            if (["documentation-only", "no-changes"].includes(scope.mode)) return [];
+            let selected =
+              scope.mode === "conservative-all"
+                ? components
+                : components.filter((component) =>
+                    scope.changedByComponent.has(componentIdentity(component)),
+                  );
+            if (requestedComponent)
+              selected = selected.filter(
+                (component) => component.name === requestedComponent || component.path === requestedComponent,
+              );
+            return selected;
+          }
+          '''
+          new = '''function selectComponents(components, scope, requestedComponent) {
+            if (["documentation-only", "no-changes"].includes(scope.mode)) return [];
+            if (scope.mode === "conservative-all") return components;
+            let selected = components.filter((component) =>
+              scope.changedByComponent.has(componentIdentity(component)),
+            );
+            if (requestedComponent)
+              selected = selected.filter(
+                (component) => component.name === requestedComponent || component.path === requestedComponent,
+              );
+            return selected;
+          }
+          '''
+          if old not in source:
+              raise SystemExit("expected selectComponents block not found")
+          source_path.write_text(source.replace(old, new, 1))
+
+          test_path = Path("tests/site-change-aware.test.js")
+          tests = test_path.read_text()
+          marker = '''  test("keeps documentation-only changes out of code validation", () => {
+          '''
+          addition = '''  test("does not let a component filter weaken conservative widening", () => {
+            const result = remoteChangeCommandFromSnapshot(
+              repository(),
+              change([".coding-tooling.json"]),
+              request("plan", { component: "package-a" }),
+              now,
+            );
+
+            expect(result.data.scope.mode).toBe("conservative-all");
+            expect(new Set(result.data.checks.map((check) => check.component))).toEqual(
+              new Set(["fixture", "package-a", "package-b"]),
+            );
+          });
+
+          '''
+          if marker not in tests:
+              raise SystemExit("expected test insertion marker not found")
+          test_path.write_text(tests.replace(marker, addition + marker, 1))
+          PY
+          bunx oxfmt site/change-aware.js tests/site-change-aware.test.js
+          bunx oxlint site/change-aware.js tests/site-change-aware.test.js
+          bun test tests/site-change-aware.test.js
+      - name: Commit hardened scope logic
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/change-aware.js tests/site-change-aware.test.js
+          git commit -m "Keep conservative change scope authoritative"
+          git push origin HEAD:feat/change-aware-pages
