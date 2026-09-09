@@ -92,6 +92,8 @@ describe("GitHub Pages analysis KPIs", () => {
         completed: 1,
         remaining: 1,
         completionPercent: 50,
+        semantics:
+          "Mechanical task-box counts across inspected issues; overlapping issue scopes are not de-duplicated.",
       }),
     );
     expect(result.testCoverage).toEqual(
@@ -136,6 +138,51 @@ describe("GitHub Pages analysis KPIs", () => {
     expect(result.findings.total).toBe(3);
   });
 
+  test("keeps explicit null score-history fields null instead of coercing them to zero", async () => {
+    const scoreHistory = {
+      schemaVersion: "coding-tooling/score-history/v1",
+      repository: "example/repo",
+      entries: [
+        {
+          commit: revision,
+          score: null,
+          verification: {
+            score: null,
+            plannedChecks: null,
+            passedChecks: null,
+            failedChecks: null,
+            errorChecks: null,
+            blockedChecks: null,
+            missingRequiredCapabilities: null,
+          },
+        },
+      ],
+    };
+
+    const result = await analysisKpisJson(
+      { owner: "example", name: "repo" },
+      analysis(),
+      repositorySnapshot(),
+      {
+        fetchImpl: async (url) => {
+          if (url.includes("history.json")) return fileResponse(scoreHistory);
+          return jsonResponse({}, 404);
+        },
+      },
+    );
+
+    expect(result.verification.repositoryScore).toBeNull();
+    expect(result.verification.verificationScore).toBeNull();
+    expect(result.verification.checks).toEqual({
+      planned: null,
+      passed: null,
+      failed: null,
+      error: null,
+      blocked: null,
+      missingRequiredCapabilities: null,
+    });
+  });
+
   test("rejects a public-contract observation belonging to another repository", () => {
     expect(() =>
       parsePublicContractSnapshot(
@@ -149,6 +196,26 @@ describe("GitHub Pages analysis KPIs", () => {
         "example/repo",
       ),
     ).toThrow("public-contract-snapshot-repository-mismatch");
+  });
+
+  test("rejects a public-contract report revision that disagrees with snapshot provenance", () => {
+    expect(() =>
+      parsePublicContractSnapshot(
+        JSON.stringify({
+          schemaVersion: 1,
+          kind: "coding-tooling-public-contract-snapshot",
+          repository: { fullName: "example/repo", revision },
+          generatedAt: "2026-09-09T10:00:00.000Z",
+          report: {
+            schemaVersion: 1,
+            revision: "fedcba9876543210fedcba9876543210fedcba98",
+            summary: {},
+            surfaces: [],
+          },
+        }),
+        "example/repo",
+      ),
+    ).toThrow("public-contract-snapshot-report-revision-mismatch");
   });
 });
 
