@@ -1,9 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
-import { readJson } from "./shared.ts";
+import { readJson, relativePosix, walkFiles } from "./shared.ts";
 import { createPackageEvidence, type PackageEvidenceV1 } from "../site/evidence-model.js";
+import {
+  createProjectManifestEvidence,
+  type ProjectManifestEvidenceV1,
+} from "../site/project-evidence.js";
 
 type PackageManifest = {
   name?: string;
@@ -42,4 +46,38 @@ export function collectLocalPackageEvidence(root: string): PackageEvidenceV1[] {
         lockfiles: packageLockfiles.filter((name) => existsSync(join(directory, name))),
       });
     });
+}
+
+export function collectLocalProjectManifestEvidence(root: string): ProjectManifestEvidenceV1[] {
+  const files = walkFiles(root, 4);
+  const relativeManifestPaths = files
+    .filter(
+      (file) => basename(file) === "Cargo.toml" || file.endsWith(".sln") || file.endsWith(".csproj"),
+    )
+    .map((file) => relativePosix(root, file));
+
+  return discoverComponents(root)
+    .filter((component) => component.kind === "rust" || component.kind === "dotnet")
+    .map((component) =>
+      createProjectManifestEvidence({
+        collector: "filesystem",
+        name: component.name,
+        path: component.path,
+        kind: component.kind,
+        manifestPaths: relativeManifestPaths.filter((manifestPath) =>
+          manifestBelongsToComponent(manifestPath, component.path, component.kind),
+        ),
+      }),
+    );
+}
+
+function manifestBelongsToComponent(
+  manifestPath: string,
+  componentPath: string,
+  kind: "rust" | "dotnet",
+): boolean {
+  const manifestDirectory = dirname(manifestPath).replaceAll("\\", "/") || ".";
+  if (manifestDirectory !== componentPath) return false;
+  if (kind === "rust") return basename(manifestPath) === "Cargo.toml";
+  return manifestPath.endsWith(".sln") || manifestPath.endsWith(".csproj");
 }
