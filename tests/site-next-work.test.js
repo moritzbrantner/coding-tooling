@@ -138,10 +138,12 @@ describe("GitHub Pages next-work discovery", () => {
     });
 
     expect(ciRequests).toHaveLength(NEXT_WORK_CI_PULL_LIMIT * 2);
-    expect(ciRequests.some((url) => url.includes("head-3"))).toBe(false);
+    expect(ciRequests.some((url) => url.includes("head-1"))).toBe(false);
+    expect(ciRequests.some((url) => url.includes("head-2"))).toBe(true);
+    expect(ciRequests.some((url) => url.includes("head-3"))).toBe(true);
   });
 
-  test("keeps missing, failing, pending, and truncated CI evidence non-green", () => {
+  test("keeps missing, failing, pending, truncated, and malformed CI evidence non-green", () => {
     expect(summarizeCiEvidence({ total_count: 0, check_suites: [] }, { statuses: [] }).status).toBe(
       "missing",
     );
@@ -167,6 +169,15 @@ describe("GitHub Pages next-work discovery", () => {
           })),
         },
         { statuses: [] },
+      ).status,
+    ).toBe("incomplete");
+    expect(summarizeCiEvidence({}, { statuses: [{ state: "success" }] }).status).toBe(
+      "incomplete",
+    );
+    expect(
+      summarizeCiEvidence(
+        { total_count: 1, check_suites: [{ status: "completed", conclusion: "success" }] },
+        {},
       ).status,
     ).toBe("incomplete");
   });
