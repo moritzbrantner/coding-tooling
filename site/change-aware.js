@@ -123,7 +123,16 @@ export async function remoteChangeCommand(value, argv, options = {}) {
 
 export function remoteChangeCommandFromSnapshot(snapshot, change, request, now = new Date()) {
   const analysis = analyzeSnapshot(snapshot, now);
-  const config = readToolingConfig(snapshot);
+  let config;
+  try {
+    config = readToolingConfig(snapshot);
+  } catch (error) {
+    return invalidEnvelope(
+      request.operation,
+      snapshot,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
   const selected = config.tiers?.[request.tier] ?? defaultTiers[request.tier];
   if (!selected)
     return invalidEnvelope(request.operation, snapshot, `Unknown tier: ${request.tier}`);
@@ -154,8 +163,13 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
 
   const checks = buildChecks(selectedComponents, selected);
   const missing = missingCapabilities(checks, selected, config, selectedComponents);
+  const componentEvidenceIncomplete =
+    analysis.summary.status === "incomplete" ||
+    change.filesTruncated ||
+    Boolean(change.compareIncomplete);
   const affectedComponents = selectedComponents.map((component) => {
     const changedPaths = scope.changedByComponent.get(componentIdentity(component)) ?? [];
+    const candidates = candidateTests(snapshot, component, changedPaths, discoveredComponents);
     return {
       name: component.name,
       path: component.path,
@@ -163,17 +177,22 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
       technologies: component.technologies,
       changedPaths,
       governingContracts: governingContracts(snapshot, component, changedPaths),
-      candidateTests: candidateTests(snapshot, component, changedPaths, discoveredComponents),
+      testEvidence: componentTestEvidence(
+        snapshot,
+        component,
+        changedPaths,
+        discoveredComponents,
+        candidates,
+        componentEvidenceIncomplete,
+      ),
+      candidateTests: candidates,
       selectedCapabilities: [...new Set(selected)].filter(
         (capability) => component.capabilities[capability],
       ),
     };
   });
 
-  const sourceIncomplete =
-    analysis.summary.status === "incomplete" ||
-    change.filesTruncated ||
-    Boolean(change.compareIncomplete);
+  const sourceIncomplete = componentEvidenceIncomplete;
   const scopeIncomplete = scope.unresolvedChangedPaths.length > 0;
   const evidenceIncomplete = sourceIncomplete || scopeIncomplete;
   const blockingMissing = missing.some((item) => !item.optional);
@@ -220,6 +239,7 @@ export function remoteChangeCommandFromSnapshot(snapshot, change, request, now =
     root: remoteRoot(snapshot, change.head),
     repository: snapshot.repository,
     source: { ...analysis.source, ref: change.head },
+    declaredMergeAuthority: mergeAuthorityEvidence(config),
     change: {
       base: change.base ?? null,
       head: change.head,
@@ -625,16 +645,11 @@ function governingContracts(snapshot, component, changedPaths) {
 }
 
 function candidateTests(snapshot, component, changedPaths, components) {
-  const tests = snapshot.tree
-    .filter((entry) => {
-      if (entry.type !== "blob" || !isTestPath(entry.path)) return false;
-      return mostSpecificOwners(components, entry.path).some(
-        (owner) => componentIdentity(owner) === componentIdentity(component),
-      );
-    })
-    .map((entry) => entry.path);
-  const changedStems = new Set(changedPaths.map(stem).filter(Boolean));
   const changed = new Set(changedPaths);
+  const tests = componentTestPaths(snapshot, component, components).filter(
+    (path) => !isAuxiliaryTestPath(path) || changed.has(path),
+  );
+  const changedStems = new Set(changedPaths.map(stem).filter(Boolean));
   return tests
     .map((path) => ({
       path,
@@ -646,6 +661,64 @@ function candidateTests(snapshot, component, changedPaths, components) {
     .toSorted((left, right) => right.score - left.score || left.path.localeCompare(right.path))
     .slice(0, CANDIDATE_TEST_LIMIT)
     .map(({ path }) => path);
+}
+
+function componentTestEvidence(
+  snapshot,
+  component,
+  changedPaths,
+  components,
+  candidates,
+  incomplete,
+) {
+  const testPaths = componentTestPaths(snapshot, component, components).filter(
+    (path) => !isAuxiliaryTestPath(path),
+  );
+  const changedTestPaths = changedPaths.filter(isTestPath).toSorted();
+  let state = "finding";
+  if (incomplete) state = "incomplete";
+  else if (testPaths.length > 0) state = "satisfied";
+  else if (component.kind === "rust") state = "unsupported";
+  return {
+    state,
+    authority: "advisory",
+    basis: "component-test-path-existence",
+    testPathCount: testPaths.length,
+    changedTestPaths,
+    candidateCount: candidates.length,
+  };
+}
+
+function componentTestPaths(snapshot, component, components) {
+  return snapshot.tree
+    .filter((entry) => {
+      if (entry.type !== "blob" || !isTestPath(entry.path)) return false;
+      return mostSpecificOwners(components, entry.path).some(
+        (owner) => componentIdentity(owner) === componentIdentity(component),
+      );
+    })
+    .map((entry) => entry.path)
+    .toSorted();
+}
+
+function mergeAuthorityEvidence(config) {
+  if (!config.merge)
+    return {
+      state: "unavailable",
+      authority: null,
+      requiredChecks: [],
+      reason: null,
+      source: null,
+      observedEnforcement: "not-evaluated",
+    };
+  return {
+    state: "declared",
+    authority: config.merge.authority,
+    requiredChecks: [...new Set(config.merge.requiredChecks ?? [])].toSorted(),
+    reason: config.merge.reason ?? null,
+    source: ".coding-tooling.json",
+    observedEnforcement: "not-evaluated",
+  };
 }
 
 function readToolingConfig(snapshot) {
@@ -660,6 +733,25 @@ function readToolingConfig(snapshot) {
   for (const capability of config.optionalCapabilities ?? []) {
     if (required.has(capability))
       throw new Error(`${capability} cannot be both required and optional`);
+  }
+  if (config.merge !== undefined) {
+    if (!config.merge || typeof config.merge !== "object" || Array.isArray(config.merge))
+      throw new Error("merge must be an object");
+    if (!new Set(["hosted", "local"]).has(config.merge.authority))
+      throw new Error("merge.authority must be hosted or local");
+    if (config.merge.authority === "hosted") {
+      if (
+        !Array.isArray(config.merge.requiredChecks) ||
+        config.merge.requiredChecks.length === 0 ||
+        config.merge.requiredChecks.some((check) => typeof check !== "string" || !check.trim())
+      )
+        throw new Error("hosted merge authority requires non-empty requiredChecks");
+    }
+    if (
+      config.merge.authority === "local" &&
+      (typeof config.merge.reason !== "string" || !config.merge.reason.trim())
+    )
+      throw new Error("local merge authority requires a non-empty reason");
   }
   for (const [selector, commands] of Object.entries(config.capabilityCommands ?? {})) {
     if (!selector.trim()) throw new Error("capabilityCommands selectors must not be empty");
@@ -776,6 +868,7 @@ function isContractLikePath(path) {
   const lower = path.toLowerCase();
   return (
     lower.endsWith("agents.md") ||
+    lower.endsWith("agent-tool.json") ||
     lower.includes("contract") ||
     lower.includes("invariant") ||
     lower.includes("schema") ||
@@ -788,6 +881,10 @@ function isTestPath(path) {
     /(^|\/)(tests?|__tests__|e2e|specs?)(\/|$)/i.test(path) ||
     /\.(test|spec)\.[A-Za-z0-9]+$/i.test(path)
   );
+}
+
+function isAuxiliaryTestPath(path) {
+  return /(^|\/)(fixtures?|node_modules|vendor|dist|build|coverage)(\/|$)/i.test(path);
 }
 
 function stem(path) {

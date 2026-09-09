@@ -37,6 +37,15 @@ describe("GitHub Pages change-aware analysis", () => {
     expect(result.data.scope.affectedComponents[0].candidateTests).toContain(
       "packages/a/tests/widget.test.ts",
     );
+    expect(result.data.scope.affectedComponents[0].testEvidence).toEqual(
+      expect.objectContaining({
+        state: "satisfied",
+        authority: "advisory",
+        basis: "component-test-path-existence",
+        testPathCount: 1,
+        changedTestPaths: [],
+      }),
+    );
     expect(result.data.scope.affectedComponents[0].governingContracts).toContain(
       "packages/a/package.json",
     );
@@ -179,6 +188,72 @@ describe("GitHub Pages change-aware analysis", () => {
     expect(result.data.validationPlan.checks).toHaveLength(4);
     expect(new Set(result.data.validationPlan.checks.map((check) => check.kind))).toEqual(
       new Set(["package", "rust"]),
+    );
+  });
+
+  test("keeps fixture tests out of candidate navigation", () => {
+    const result = remoteChangeCommandFromSnapshot(
+      repository(),
+      change(["src/index.ts"]),
+      request("affected"),
+      now,
+    );
+    const component = result.data.scope.affectedComponents[0];
+    expect(component.candidateTests).toContain("tests/index.test.ts");
+    expect(component.candidateTests).not.toContain(
+      "calibration/fixtures/noise/tests/noise.test.ts",
+    );
+    expect(component.candidateTests).not.toContain("fixtures/noise/tests/noise.test.ts");
+    expect(component.testEvidence.testPathCount).toBe(1);
+  });
+
+  test("recognizes changed agent tool descriptors as governing contracts", () => {
+    const result = remoteChangeCommandFromSnapshot(
+      repository(),
+      change(["site/agent-tool.json"]),
+      request("affected"),
+      now,
+    );
+    expect(result.data.scope.affectedComponents[0].governingContracts).toContain(
+      "site/agent-tool.json",
+    );
+  });
+
+  test("exposes declared hosted merge authority without claiming enforcement", () => {
+    const snapshot = repository();
+    const config = JSON.parse(snapshot.files[".coding-tooling.json"]);
+    config.merge = { authority: "hosted", requiredChecks: ["Validate", "Pages"] };
+    snapshot.files[".coding-tooling.json"] = JSON.stringify(config);
+    const result = remoteChangeCommandFromSnapshot(
+      snapshot,
+      change(["src/index.ts"]),
+      request("affected"),
+      now,
+    );
+    expect(result.data.declaredMergeAuthority).toEqual({
+      state: "declared",
+      authority: "hosted",
+      requiredChecks: ["Pages", "Validate"],
+      reason: null,
+      source: ".coding-tooling.json",
+      observedEnforcement: "not-evaluated",
+    });
+  });
+
+  test("rejects invalid hosted merge authority instead of emitting acceptance evidence", () => {
+    const snapshot = repository();
+    const config = JSON.parse(snapshot.files[".coding-tooling.json"]);
+    config.merge = { authority: "hosted", requiredChecks: [] };
+    snapshot.files[".coding-tooling.json"] = JSON.stringify(config);
+    const result = remoteChangeCommandFromSnapshot(
+      snapshot,
+      change(["src/index.ts"]),
+      request("affected"),
+      now,
+    );
+    expect(result.status).toBe("error");
+    expect(result.diagnostics[0].message).toContain(
+      "hosted merge authority requires non-empty requiredChecks",
     );
   });
 
@@ -332,6 +407,9 @@ function repository(overrides = {}) {
     blob("docs/architecture.md", "15"),
     blob("bun.lock", "16"),
     blob("tsconfig.json", "17"),
+    blob("site/agent-tool.json", "19"),
+    blob("calibration/fixtures/noise/tests/noise.test.ts", "20"),
+    blob("fixtures/noise/tests/noise.test.ts", "21"),
   ];
 
   return {
