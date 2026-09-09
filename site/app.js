@@ -1,4 +1,5 @@
 import { analysisJson } from "./github-analysis.js";
+import { nextWorkJson } from "./next-work.js";
 import { DEFAULT_DISCOVERY_OWNER, discoveryJson } from "./repository-discovery.js";
 
 const form = document.querySelector("form");
@@ -8,6 +9,9 @@ const output = document.querySelector("#output");
 const discovery = document.querySelector("#repository-discovery");
 const discoveryStatus = document.querySelector("#discovery-status");
 const discoveryCandidates = document.querySelector("#repository-candidates");
+const nextWork = document.querySelector("#next-work");
+const nextWorkStatus = document.querySelector("#next-work-status");
+const nextWorkCandidates = document.querySelector("#next-work-candidates");
 let controller;
 
 form.addEventListener("submit", (event) => {
@@ -33,8 +37,29 @@ async function loadDiscovery(owner) {
     renderDiscovery(result);
     const qualifier = result.source.truncated ? " within the bounded public API window" : "";
     setDiscoveryStatus(`Ranked public repository candidates for ${result.owner}${qualifier}.`);
+
+    if (result.summary.suggestedRepository) {
+      nextWork.hidden = false;
+      void loadNextWork(result.summary.suggestedRepository);
+    } else {
+      nextWork.hidden = true;
+    }
   } catch (error) {
     setDiscoveryStatus(error instanceof Error ? error.message : String(error), true);
+  }
+}
+
+async function loadNextWork(repository) {
+  setNextWorkStatus(`Reading recent open work for ${repository}…`);
+
+  try {
+    const result = await nextWorkJson(repository);
+    renderNextWork(result);
+    const bounded = result.source.pullsTruncated || result.source.issueWindowTruncated;
+    const qualifier = bounded ? " within bounded public API windows" : "";
+    setNextWorkStatus(`Ranked concrete open work for ${repository}${qualifier}.`);
+  } catch (error) {
+    setNextWorkStatus(error instanceof Error ? error.message : String(error), true);
   }
 }
 
@@ -52,6 +77,22 @@ function renderDiscovery(result) {
 
   discoveryCandidates.replaceChildren(
     ...result.candidates.map((candidate, index) => repositoryCandidate(candidate, index === 0)),
+  );
+}
+
+function renderNextWork(result) {
+  const machineUrl = new URL("./next-work.json/", location.href);
+  machineUrl.searchParams.set("repo", result.repository.fullName);
+  document.querySelector("#next-work-json-link").href = machineUrl.href;
+  document.querySelector("#next-work-repository").textContent = result.repository.fullName;
+
+  if (!result.candidates.length) {
+    nextWorkCandidates.replaceChildren(empty("No open pull requests or issues found."));
+    return;
+  }
+
+  nextWorkCandidates.replaceChildren(
+    ...result.candidates.map((candidate, index) => workCandidate(candidate, index === 0)),
   );
 }
 
@@ -90,6 +131,35 @@ function repositoryCandidate(candidate, suggested) {
   return article;
 }
 
+function workCandidate(candidate, suggested) {
+  const article = document.createElement("article");
+  article.className = "card";
+
+  const label = document.createElement("div");
+  label.className = "finding-label";
+  label.textContent = suggested ? "Suggested next work" : "Open work candidate";
+
+  const heading = document.createElement("h3");
+  heading.textContent = `#${candidate.number} ${candidate.title}`;
+
+  const evidence = document.createElement("p");
+  evidence.className = "muted";
+  evidence.textContent = workEvidence(candidate);
+
+  const signals = document.createElement("div");
+  signals.className = "chips";
+  signals.replaceChildren(...candidate.signals.map((signal) => chip(signal)));
+
+  const link = document.createElement("a");
+  link.href = candidate.htmlUrl;
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  link.textContent = "Open on GitHub";
+
+  article.append(label, heading, evidence, signals, link);
+  return article;
+}
+
 function candidateEvidence(candidate) {
   const parts = [];
   if (candidate.language) parts.push(candidate.language);
@@ -101,6 +171,21 @@ function candidateEvidence(candidate) {
     `${candidate.openItemCount} open GitHub ${candidate.openItemCount === 1 ? "item" : "items"} (issues and pull requests combined)`,
   );
   return parts.join(" · ");
+}
+
+function workEvidence(candidate) {
+  const kind = candidate.kind === "pull-request" ? "Pull request" : "Issue";
+  const parts = [kind, workAction(candidate.action)];
+  if (candidate.updatedAt)
+    parts.push(`updated ${new Date(candidate.updatedAt).toLocaleDateString()}`);
+  if (candidate.author) parts.push(`by ${candidate.author}`);
+  return parts.join(" · ");
+}
+
+function workAction(action) {
+  if (action === "continue-or-review-pull-request") return "continue or review";
+  if (action === "continue-pull-request") return "continue implementation";
+  return "implementation candidate";
 }
 
 async function run(value) {
@@ -247,6 +332,11 @@ function setStatus(message, error = false) {
 function setDiscoveryStatus(message, error = false) {
   discoveryStatus.textContent = message;
   discoveryStatus.dataset.state = error ? "error" : "normal";
+}
+
+function setNextWorkStatus(message, error = false) {
+  nextWorkStatus.textContent = message;
+  nextWorkStatus.dataset.state = error ? "error" : "normal";
 }
 
 function download(name, content) {

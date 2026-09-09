@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Discover recent public repositories and run deterministic remote repository preflight from coding-tooling."
+      content="Discover recent public repositories and concrete open work, then run deterministic remote repository preflight from coding-tooling."
     />
     <title>coding-tooling · repository discovery</title>
     <link rel="stylesheet" href="./styles.css" />
@@ -18,11 +18,11 @@
     <main>
       <section class="hero">
         <p class="eyebrow">For humans and coding agents</p>
-        <h1>Find the next repository.<br />Get structural evidence.</h1>
+        <h1>Find the next repository.<br />Find the next work.</h1>
         <p class="lede">
           A zero-install, deterministic first pass over public repositories. By default the page
-          ranks recent public work without a token; any candidate can then flow into the existing
-          repository preflight.
+          ranks recent repositories without a token, then inspects bounded open pull requests and
+          issues in the suggested repository before handing off to repository preflight.
         </p>
         <form>
           <label for="repository">GitHub repository</label>
@@ -53,12 +53,31 @@
           >
         </div>
         <p class="muted">
-          Ranking uses bounded anonymous GitHub repository metadata: recent repository activity, the
-          combined open issue/pull-request count, and source-versus-fork status. This slice selects
-          a repository only; it does not yet claim a specific roadmap task.
+          Repository ranking uses bounded anonymous GitHub metadata: recent repository activity, the
+          combined open issue/pull-request count, and source-versus-fork status. It selects a
+          starting repository without claiming roadmap priority.
         </p>
         <p id="discovery-status" class="status" role="status"></p>
         <div id="repository-candidates" class="stack"></div>
+      </section>
+
+      <section id="next-work" hidden>
+        <div class="section-heading row">
+          <div>
+            <p class="eyebrow">Open work discovery</p>
+            <h2>Suggested concrete work</h2>
+          </div>
+          <a id="next-work-json-link" href="./next-work.json/" target="_blank" rel="noreferrer"
+            >Open next-work.json</a
+          >
+        </div>
+        <p id="next-work-repository" class="muted"></p>
+        <p class="muted">
+          Ranking uses item recency plus a modest preference for in-flight pull requests and
+          ready-for-review work. It does not infer roadmap priority, dependencies, or CI health.
+        </p>
+        <p id="next-work-status" class="status" role="status"></p>
+        <div id="next-work-candidates" class="stack"></div>
       </section>
 
       <div id="output" hidden>
