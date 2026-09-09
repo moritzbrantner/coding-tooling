@@ -100,6 +100,8 @@ async function loadWorkKpis(reference, repository, fetchImpl, signal) {
       completed: totals.completed,
       remaining: totals.remaining,
       completionPercent: percentage(totals.completed, totals.total),
+      semantics:
+        "Mechanical task-box counts across inspected issues; overlapping issue scopes are not de-duplicated.",
       firstRemaining:
         firstRemaining && firstRemainingIssue
           ? {
@@ -269,6 +271,8 @@ export function parsePublicContractSnapshot(content, expectedRepository) {
     throw new Error("public-contract-snapshot-generated-at-invalid");
   if (parsed?.report?.schemaVersion !== 1 || !parsed?.report?.summary)
     throw new Error("public-contract-report-invalid");
+  if (parsed.report.revision && parsed.report.revision !== parsed.repository.revision)
+    throw new Error("public-contract-snapshot-report-revision-mismatch");
   return parsed;
 }
 
@@ -403,11 +407,13 @@ function percentage(completed, total) {
 }
 
 function finiteOrNull(value) {
+  if (value === null || value === undefined) return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
 function integerOrNull(value) {
+  if (value === null || value === undefined) return null;
   const number = Number(value);
   return Number.isInteger(number) && number >= 0 ? number : null;
 }
