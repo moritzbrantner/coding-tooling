@@ -24,10 +24,6 @@ jobs:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
-      - name: Show formatter diff for Pages discovery
-        run: |
-          bun run format:write
-          git diff -- site/app.js site/index.html site/repository-discovery.js
       - name: Validate through the local Action
         uses: ./
         with:
