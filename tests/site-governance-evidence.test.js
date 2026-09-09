@@ -46,58 +46,128 @@ describe("GitHub Pages repository governance evidence", () => {
     expect(governance.defaultBranchProtection.requiredStatusChecks).toEqual({
       status: "unavailable",
       names: null,
-      reason: "branch-protection-details-not-inspected",
+      reason: "branch-metadata-not-inspected",
     });
   });
 
-  test("surfaces governance in remote preflight without another anonymous API request", async () => {
+  test("normalizes observed branch protection and required check names", () => {
+    const governance = repositoryGovernanceEvidence(
+      {},
+      {
+        status: "observed",
+        value: {
+          protected: true,
+          protection: {
+            required_status_checks: {
+              contexts: ["Validate", "Cross-platform / macos-latest"],
+              checks: [
+                { context: "Cross-platform / windows-latest" },
+                { context: "Validate" },
+              ],
+            },
+          },
+        },
+      },
+    );
+
+    expect(governance.defaultBranchProtection).toEqual({
+      status: "observed",
+      protected: true,
+      provenance: { source: "default-branch-metadata" },
+      requiredStatusChecks: {
+        status: "observed",
+        names: [
+          "Cross-platform / macos-latest",
+          "Cross-platform / windows-latest",
+          "Validate",
+        ],
+      },
+    });
+  });
+
+  test("surfaces an unprotected branch and empty required checks with one bounded request", async () => {
     const requests = [];
     const analysis = await analysisJson("example/repo", {
       fetchImpl: async (url) => {
         requests.push(url);
         if (url === "https://api.github.com/repos/example/repo")
-          return jsonResponse({
-            owner: { login: "example" },
-            name: "repo",
-            full_name: "example/repo",
-            default_branch: "main",
-            html_url: "https://github.com/example/repo",
-            description: null,
-            archived: false,
-            fork: false,
-            stargazers_count: 0,
-            open_issues_count: 0,
-            license: { spdx_id: "MIT", name: "MIT License" },
-            allow_merge_commit: false,
-            allow_squash_merge: true,
-            allow_rebase_merge: true,
-            allow_auto_merge: false,
-            has_pages: true,
-          });
+          return jsonResponse(repositoryMetadata());
         if (url === "https://api.github.com/repos/example/repo/git/trees/main?recursive=1")
           return jsonResponse({ tree: [], truncated: false });
+        if (url === "https://api.github.com/repos/example/repo/branches/main")
+          return jsonResponse({
+            name: "main",
+            protected: false,
+            protection: {
+              enabled: false,
+              required_status_checks: { enforcement_level: "off", contexts: [], checks: [] },
+            },
+          });
         throw new Error(`Unexpected request: ${url}`);
       },
     });
 
-    expect(requests).toHaveLength(2);
-    expect(analysis.repository.governance).toEqual(
-      expect.objectContaining({
-        schemaVersion: 1,
-        license: {
-          status: "observed",
-          present: true,
-          spdxId: "MIT",
-          name: "MIT License",
-        },
-      }),
-    );
-    expect(analysis.repository.governance.mergeStrategies.squash).toEqual({
+    expect(requests).toHaveLength(3);
+    expect(analysis.repository.governance.license).toEqual({
       status: "observed",
-      value: true,
+      present: true,
+      spdxId: "MIT",
+      name: "MIT License",
+    });
+    expect(analysis.repository.governance.defaultBranchProtection).toEqual({
+      status: "observed",
+      protected: false,
+      provenance: { source: "default-branch-metadata" },
+      requiredStatusChecks: { status: "observed", names: [] },
+    });
+  });
+
+  test("keeps branch governance unavailable when the optional request is rejected", async () => {
+    const analysis = await analysisJson("example/repo", {
+      fetchImpl: async (url) => {
+        if (url === "https://api.github.com/repos/example/repo")
+          return jsonResponse(repositoryMetadata());
+        if (url === "https://api.github.com/repos/example/repo/git/trees/main?recursive=1")
+          return jsonResponse({ tree: [], truncated: false });
+        if (url === "https://api.github.com/repos/example/repo/branches/main")
+          return jsonResponse({}, 403);
+        throw new Error(`Unexpected request: ${url}`);
+      },
+    });
+
+    expect(analysis.repository.governance.defaultBranchProtection).toEqual({
+      status: "unavailable",
+      protected: null,
+      reason: "github-http-403",
+      requiredStatusChecks: {
+        status: "unavailable",
+        names: null,
+        reason: "github-http-403",
+      },
     });
   });
 });
+
+function repositoryMetadata() {
+  return {
+    owner: { login: "example" },
+    name: "repo",
+    full_name: "example/repo",
+    default_branch: "main",
+    html_url: "https://github.com/example/repo",
+    description: null,
+    archived: false,
+    fork: false,
+    stargazers_count: 0,
+    open_issues_count: 0,
+    license: { spdx_id: "MIT", name: "MIT License" },
+    allow_merge_commit: false,
+    allow_squash_merge: true,
+    allow_rebase_merge: true,
+    allow_auto_merge: false,
+    has_pages: true,
+  };
+}
 
 function jsonResponse(value, status = 200) {
   return {
