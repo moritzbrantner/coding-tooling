@@ -3,7 +3,7 @@
   "id": "coding-tooling",
   "kind": "browser-repository-preflight",
   "baseUrl": "https://moritzbrantner.github.io/coding-tooling/",
-  "description": "Deterministic zero-install structural repository tooling for public GitHub repositories, including repository and open-work discovery, CLI-style URL invocation, change-aware affected-component planning, preflight analysis, testing-scaffold planning, coverage observation, and local coding-tooling handoff.",
+  "description": "Deterministic zero-install structural repository tooling for public GitHub repositories, including repository and open-work discovery, bounded observed CI evidence, CLI-style URL invocation, change-aware affected-component planning, preflight analysis, testing-scaffold planning, coverage observation, and local coding-tooling handoff.",
   "operations": [
     {
       "id": "tool-registry",
@@ -27,7 +27,7 @@
       "id": "next-work-discovery",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/next-work.json/?repo={owner}/{repository}",
-      "description": "Browser-executed token-free ranking of bounded open pull requests and issues with a deterministic suggested work candidate."
+      "description": "Browser-executed token-free ranking of bounded open pull requests and issues, with fail-closed observed CI evidence for the highest-ranked pull-request candidates."
     },
     {
       "id": "affected-json",
@@ -94,7 +94,9 @@
   "limitations": [
     "Remote repository discovery, open-work discovery, analysis, and testing plans support public GitHub repositories only and use anonymous GitHub API data.",
     "Repository discovery uses a bounded recent-repository window and repository-level structural signals only; it suggests a repository candidate but does not claim roadmap priority.",
-    "Next-work discovery ranks bounded open pull requests and issues mechanically using recency, pull-request state, and draft status; it does not infer roadmap priority, dependencies, or CI health.",
+    "Next-work discovery ranks bounded open pull requests and issues mechanically using recency, pull-request state, and draft status; CI evidence does not currently alter that ranking.",
+    "Next-work CI observation is bounded to the two highest-ranked pull-request candidates and inspects both modern check suites and legacy commit statuses for each exact head. Missing, truncated, pending, unavailable, or otherwise incomplete evidence is never treated as passing.",
+    "Next-work discovery does not infer which checks are required by branch protection, nor does it infer roadmap priority or pull-request dependencies; observed CI is evidence rather than merge authorization.",
     "Change-aware analysis narrows validation by mechanically discovered component ownership but does not infer that a repository-declared tier capability can be skipped; cross-component or incomplete evidence widens scope and fails closed.",
     "The CLI URL surface mirrors only operations derivable safely from repository metadata, the Git tree, bounded text manifests, and public GitHub compare data. Unsupported argv returns status unavailable plus the exact local handoff instead of executing or approximating unsafe operations.",
     "The testing plan can identify structural targets and setup work, but behavioral assertions require reading the source before writing a test; TSX-to-Storybook classification remains a conservative heuristic.",

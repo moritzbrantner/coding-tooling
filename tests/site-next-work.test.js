@@ -5,7 +5,10 @@ import { describe, expect, test } from "bun:test";
 import {
   analyzeOpenWork,
   nextWorkJson,
+  summarizeCiEvidence,
   NEXT_WORK_CANDIDATE_LIMIT,
+  NEXT_WORK_CI_EVIDENCE_LIMIT,
+  NEXT_WORK_CI_PULL_LIMIT,
   NEXT_WORK_ISSUE_LIMIT,
   NEXT_WORK_PULL_LIMIT,
 } from "../site/next-work.js";
@@ -78,27 +81,119 @@ describe("GitHub Pages next-work discovery", () => {
     expect(result.source.issueWindowTruncated).toBe(true);
     expect(result.ranking.semanticPriority).toBe("not-inferred");
     expect(result.ranking.ciHealth).toBe("not-inspected");
+    expect(result.ranking.ciAffectsRanking).toBe(false);
   });
 
-  test("loads open pull requests and issues with two anonymous bounded requests", async () => {
+  test("loads bounded open work and CI evidence through anonymous GitHub requests", async () => {
     const requests = [];
     const result = await nextWorkJson("example/repo", {
       now,
       fetchImpl: async (url, options) => {
         requests.push({ url, options });
         if (url.includes("/pulls?")) return jsonResponse([pullRequest({ number: 10 })]);
-        return jsonResponse([issue({ number: 11 })]);
+        if (url.includes("/issues?")) return jsonResponse([issue({ number: 11 })]);
+        if (url.includes("/check-suites?"))
+          return jsonResponse({
+            total_count: 1,
+            check_suites: [{ status: "completed", conclusion: "success" }],
+          });
+        if (url.includes("/status?")) return jsonResponse({ statuses: [{ state: "success" }] });
+        throw new Error(`Unexpected request: ${url}`);
       },
     });
 
     expect(requests.map(({ url }) => url)).toEqual([
       "https://api.github.com/repos/example/repo/pulls?state=open&sort=updated&direction=desc&per_page=20",
       "https://api.github.com/repos/example/repo/issues?state=open&sort=updated&direction=desc&per_page=20",
+      "https://api.github.com/repos/example/repo/commits/head-10/check-suites?per_page=100",
+      "https://api.github.com/repos/example/repo/commits/head-10/status?per_page=100",
     ]);
     expect(
       requests.every(({ options }) => options.headers.Accept === "application/vnd.github+json"),
     ).toBe(true);
     expect(result.summary.status).toBe("ready");
+    expect(result.candidates[0].ci.status).toBe("passing");
+    expect(result.candidates[0].ci.exactHeadSha).toBe("head-10");
+    expect(result.candidates[0].ci.requiredness).toBe("not-inspected");
+    expect(result.ranking.ciHealth).toBe("inspected-for-top-pull-requests");
+  });
+
+  test("limits CI inspection to the highest-ranked pull requests", async () => {
+    const ciRequests = [];
+    await nextWorkJson("example/repo", {
+      now,
+      fetchImpl: async (url) => {
+        if (url.includes("/pulls?"))
+          return jsonResponse([
+            pullRequest({ number: 1 }),
+            pullRequest({ number: 2 }),
+            pullRequest({ number: 3 }),
+          ]);
+        if (url.includes("/issues?")) return jsonResponse([]);
+        ciRequests.push(url);
+        if (url.includes("/check-suites?"))
+          return jsonResponse({ total_count: 0, check_suites: [] });
+        return jsonResponse({ statuses: [] });
+      },
+    });
+
+    expect(ciRequests).toHaveLength(NEXT_WORK_CI_PULL_LIMIT * 2);
+    expect(ciRequests.some((url) => url.includes("head-1"))).toBe(false);
+    expect(ciRequests.some((url) => url.includes("head-2"))).toBe(true);
+    expect(ciRequests.some((url) => url.includes("head-3"))).toBe(true);
+  });
+
+  test("keeps missing, failing, pending, truncated, and malformed CI evidence non-green", () => {
+    expect(summarizeCiEvidence({ total_count: 0, check_suites: [] }, { statuses: [] }).status).toBe(
+      "missing",
+    );
+    expect(
+      summarizeCiEvidence(
+        { total_count: 1, check_suites: [{ status: "completed", conclusion: "failure" }] },
+        { statuses: [] },
+      ).status,
+    ).toBe("failing");
+    expect(
+      summarizeCiEvidence(
+        { total_count: 1, check_suites: [{ status: "in_progress", conclusion: null }] },
+        { statuses: [] },
+      ).status,
+    ).toBe("pending");
+    expect(
+      summarizeCiEvidence(
+        {
+          total_count: NEXT_WORK_CI_EVIDENCE_LIMIT + 1,
+          check_suites: Array.from({ length: NEXT_WORK_CI_EVIDENCE_LIMIT }, () => ({
+            status: "completed",
+            conclusion: "success",
+          })),
+        },
+        { statuses: [] },
+      ).status,
+    ).toBe("incomplete");
+    expect(summarizeCiEvidence({}, { statuses: [{ state: "success" }] }).status).toBe(
+      "incomplete",
+    );
+    expect(
+      summarizeCiEvidence(
+        { total_count: 1, check_suites: [{ status: "completed", conclusion: "success" }] },
+        {},
+      ).status,
+    ).toBe("incomplete");
+  });
+
+  test("does not fail open when CI evidence cannot be loaded", async () => {
+    const result = await nextWorkJson("example/repo", {
+      now,
+      fetchImpl: async (url) => {
+        if (url.includes("/pulls?")) return jsonResponse([pullRequest({ number: 10 })]);
+        if (url.includes("/issues?")) return jsonResponse([]);
+        return jsonResponse({}, 403);
+      },
+    });
+
+    expect(result.candidates[0].ci.status).toBe("unavailable");
+    expect(result.candidates[0].ci.reason).toBe("github-http-403");
   });
 
   test("reports anonymous rate limiting without suggesting authentication", async () => {
@@ -109,7 +204,7 @@ describe("GitHub Pages next-work discovery", () => {
     ).rejects.toThrow("Next-work discovery remains token-free");
   });
 
-  test("advertises the open-work browser view to registry-driven agents", () => {
+  test("advertises the fail-closed open-work browser view to registry-driven agents", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../site/agent-tool.json", import.meta.url), "utf8"),
     );
@@ -119,14 +214,22 @@ describe("GitHub Pages next-work discovery", () => {
     expect(operation?.hrefTemplate).toBe(
       "https://moritzbrantner.github.io/coding-tooling/next-work.json/?repo={owner}/{repository}",
     );
+    expect(operation?.description).toContain("fail-closed observed CI evidence");
+    expect(
+      manifest.limitations.some((limitation) =>
+        limitation.includes("Missing, truncated, pending, unavailable"),
+      ),
+    ).toBe(true);
   });
 });
 
 function pullRequest(overrides = {}) {
+  const number = overrides.number ?? 1;
   return {
-    number: 1,
+    number,
     title: "Pull request",
-    html_url: "https://github.com/example/repo/pull/1",
+    html_url: `https://github.com/example/repo/pull/${number}`,
+    head: { sha: `head-${number}` },
     updated_at: "2026-09-09T05:00:00.000Z",
     draft: false,
     user: { login: "example", type: "User" },
