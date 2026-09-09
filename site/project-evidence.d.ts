@@ -24,6 +24,7 @@ export type ProjectManifestEvidenceInput = {
   path: string;
   kind: ProjectEvidenceKind;
   manifestPaths?: string[];
+  complete?: boolean;
 };
 
 export type ProjectManifestSemantics = {
@@ -39,7 +40,8 @@ export type ProjectComponentReference = {
 };
 
 export type GithubProjectSnapshot = {
-  tree?: Array<{ path?: string | null }>;
+  tree?: Array<{ path?: string | null; type?: string | null }>;
+  treeTruncated?: boolean;
 };
 
 export function createProjectManifestEvidence(
