@@ -546,12 +546,10 @@ function deriveAffectedScope(snapshot, components, changedFiles) {
 
 function selectComponents(components, scope, requestedComponent) {
   if (["documentation-only", "no-changes"].includes(scope.mode)) return [];
-  let selected =
-    scope.mode === "conservative-all"
-      ? components
-      : components.filter((component) =>
-          scope.changedByComponent.has(componentIdentity(component)),
-        );
+  if (scope.mode === "conservative-all") return components;
+  let selected = components.filter((component) =>
+    scope.changedByComponent.has(componentIdentity(component)),
+  );
   if (requestedComponent)
     selected = selected.filter(
       (component) => component.name === requestedComponent || component.path === requestedComponent,

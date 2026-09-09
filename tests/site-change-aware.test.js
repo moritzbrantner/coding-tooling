@@ -59,6 +59,20 @@ describe("GitHub Pages change-aware analysis", () => {
     ).toBe(true);
   });
 
+  test("does not let a component filter weaken conservative widening", () => {
+    const result = remoteChangeCommandFromSnapshot(
+      repository(),
+      change([".coding-tooling.json"]),
+      request("plan", { component: "package-a" }),
+      now,
+    );
+
+    expect(result.data.scope.mode).toBe("conservative-all");
+    expect(new Set(result.data.checks.map((check) => check.component))).toEqual(
+      new Set(["fixture", "package-a", "package-b"]),
+    );
+  });
+
   test("keeps documentation-only changes out of code validation", () => {
     const result = remoteChangeCommandFromSnapshot(
       repository(),
