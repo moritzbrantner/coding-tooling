@@ -43,6 +43,86 @@ describe("remote validation evidence", () => {
     expect(result.reason).toBe("automation-without-validation-evidence");
   });
 
+  test("mentions of a validation command do not prove execution", () => {
+    const result = remoteValidationOutcome({
+      workflowPaths: [".github/workflows/mentions.yml"],
+      workflows: [
+        {
+          path: ".github/workflows/mentions.yml",
+          content: `on:
+  pull_request:
+jobs:
+  verify:
+    steps:
+      - run: echo "bun run typecheck"
+      # run: bun run typecheck
+`,
+        },
+      ],
+      externalCiPaths: [],
+      workflowFetchTruncated: false,
+      defaultBranch: "main",
+      declaredCommands: ["bun run typecheck"],
+    });
+    expect(result.status).toBe("finding");
+    expect(result.workflowEvidence[0].matchedCommands).toEqual([]);
+  });
+
+  test("non-run coding-tooling Action operations do not prove validation", () => {
+    const result = remoteValidationOutcome({
+      workflowPaths: [".github/workflows/score.yml"],
+      workflows: [
+        {
+          path: ".github/workflows/score.yml",
+          content: `on:
+  push:
+    branches: [main]
+jobs:
+  score:
+    steps:
+      - uses: ./
+        with:
+          operation: score
+`,
+        },
+      ],
+      externalCiPaths: [],
+      workflowFetchTruncated: false,
+      defaultBranch: "main",
+      declaredCommands: [],
+      localActionIsCodingTooling: true,
+    });
+    expect(result.status).toBe("finding");
+    expect(result.workflowEvidence[0].codingToolingAction).toBe(false);
+  });
+
+  test("the default coding-tooling Action operation proves validation", () => {
+    const result = remoteValidationOutcome({
+      workflowPaths: [".github/workflows/validate.yml"],
+      workflows: [
+        {
+          path: ".github/workflows/validate.yml",
+          content: `on:
+  pull_request:
+jobs:
+  validate:
+    steps:
+      - uses: ./
+        with:
+          tier: self
+`,
+        },
+      ],
+      externalCiPaths: [],
+      workflowFetchTruncated: false,
+      defaultBranch: "main",
+      declaredCommands: [],
+      localActionIsCodingTooling: true,
+    });
+    expect(result.status).toBe("satisfied");
+    expect(result.workflowEvidence[0].codingToolingAction).toBe(true);
+  });
+
   test("deployment-only workflows do not prove validation", () => {
     const result = remoteValidationOutcome({
       workflowPaths: [".github/workflows/pages.yml"],

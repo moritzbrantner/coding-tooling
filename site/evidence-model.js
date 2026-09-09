@@ -427,15 +427,67 @@ function workflowHasRelevantTrigger(content, defaultBranch) {
 function workflowRunsCommand(content, command) {
   const needle = normalizeCommand(command);
   if (!needle) return false;
-  return String(content)
-    .split(/\r?\n/)
-    .some((line) => normalizeCommand(line.replace(/^\s*(?:run\s*:\s*)?/, "")).includes(needle));
+  const lines = String(content).split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index];
+    const match = raw.match(/^(\s*)-?\s*run\s*:\s*(.*)$/);
+    if (!match) continue;
+    const indent = match[1].length;
+    const inline = match[2].trim();
+    if (inline && !new Set(["|", ">", "|-", ">-", "|+", ">+"]).has(inline)) {
+      if (shellCommandMatches(inline, needle)) return true;
+      continue;
+    }
+    for (let blockIndex = index + 1; blockIndex < lines.length; blockIndex += 1) {
+      const blockRaw = lines[blockIndex];
+      if (!blockRaw.trim()) continue;
+      const blockIndent = blockRaw.match(/^\s*/)?.[0].length ?? 0;
+      if (blockIndent <= indent) break;
+      const shellLine = blockRaw.trim();
+      if (shellLine.startsWith("#")) continue;
+      if (shellCommandMatches(shellLine, needle)) return true;
+    }
+  }
+  return false;
+}
+
+function shellCommandMatches(value, command) {
+  const normalized = normalizeCommand(value);
+  return normalized === command || normalized.startsWith(`${command} `);
 }
 
 function workflowUsesCodingToolingAction(content, localActionIsCodingTooling) {
-  const external = /^\s*-?\s*uses\s*:\s*moritzbrantner\/coding-tooling@[^\s#]+/m.test(content);
-  if (external) return true;
-  return localActionIsCodingTooling && /^\s*-?\s*uses\s*:\s*\.\/?\s*(?:#.*)?$/m.test(content);
+  const lines = String(content).split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index];
+    const match = raw.match(/^(\s*)-\s*uses\s*:\s*([^\s#]+)(?:\s+#.*)?$/);
+    if (!match) continue;
+    const reference = match[2];
+    const external = /^moritzbrantner\/coding-tooling@[^\s#]+$/.test(reference);
+    const local = localActionIsCodingTooling && /^\.\/?$/.test(reference);
+    if (!external && !local) continue;
+
+    const stepIndent = match[1].length;
+    let operation = null;
+    let withIndent = null;
+    for (let stepIndex = index + 1; stepIndex < lines.length; stepIndex += 1) {
+      const stepRaw = lines[stepIndex];
+      if (!stepRaw.trim()) continue;
+      const indent = stepRaw.match(/^\s*/)?.[0].length ?? 0;
+      if (indent <= stepIndent && /^\s*-\s*/.test(stepRaw)) break;
+      if (indent <= stepIndent) break;
+      const trimmed = stepRaw.trim();
+      if (/^with\s*:\s*$/.test(trimmed)) {
+        withIndent = indent;
+        continue;
+      }
+      if (withIndent === null || indent <= withIndent) continue;
+      const operationMatch = trimmed.match(/^operation\s*:\s*["']?([^"'#]+?)["']?\s*(?:#.*)?$/);
+      if (operationMatch) operation = operationMatch[1].trim();
+    }
+    if (operation === null || operation === "run") return true;
+  }
+  return false;
 }
 
 function normalizedYamlLines(content) {
