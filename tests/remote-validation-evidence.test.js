@@ -123,6 +123,40 @@ jobs:
     expect(result.workflowEvidence[0].codingToolingAction).toBe(true);
   });
 
+  test("inline push branch filters must include the default branch", () => {
+    const offDefault = remoteValidationOutcome({
+      workflowPaths: [".github/workflows/validate.yml"],
+      workflows: [
+        {
+          path: ".github/workflows/validate.yml",
+          content: `on:\n  push: { branches: [develop] }\njobs:\n  verify:\n    steps:\n      - run: bun run typecheck\n`,
+        },
+      ],
+      externalCiPaths: [],
+      workflowFetchTruncated: false,
+      defaultBranch: "main",
+      declaredCommands: ["bun run typecheck"],
+    });
+    expect(offDefault.status).toBe("finding");
+    expect(offDefault.workflowEvidence[0].relevantTrigger).toBe(false);
+
+    const onDefault = remoteValidationOutcome({
+      workflowPaths: [".github/workflows/validate.yml"],
+      workflows: [
+        {
+          path: ".github/workflows/validate.yml",
+          content: `on:\n  push: { branches: [main] }\njobs:\n  verify:\n    steps:\n      - run: bun run typecheck\n`,
+        },
+      ],
+      externalCiPaths: [],
+      workflowFetchTruncated: false,
+      defaultBranch: "main",
+      declaredCommands: ["bun run typecheck"],
+    });
+    expect(onDefault.status).toBe("satisfied");
+    expect(onDefault.workflowEvidence[0].relevantTrigger).toBe(true);
+  });
+
   test("deployment-only workflows do not prove validation", () => {
     const result = remoteValidationOutcome({
       workflowPaths: [".github/workflows/pages.yml"],

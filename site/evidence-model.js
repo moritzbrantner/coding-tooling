@@ -402,7 +402,7 @@ function workflowHasRelevantTrigger(content, defaultBranch) {
   if (pushIndex === -1) return false;
   const push = block[pushIndex];
   const pushInline = push.text.replace(/^push\s*:\s*/, "");
-  if (pushInline && pushInline !== "{}") return true;
+  if (pushInline) return inlinePushRelevant(pushInline, defaultBranch);
   const pushBlock = [];
   for (let index = pushIndex + 1; index < block.length; index += 1) {
     const line = block[index];
@@ -422,6 +422,18 @@ function workflowHasRelevantTrigger(content, defaultBranch) {
     if (value === defaultBranch) return true;
   }
   return false;
+}
+
+function inlinePushRelevant(value, defaultBranch) {
+  const trimmed = String(value).trim();
+  if (trimmed === "{}") return true;
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false;
+  const body = trimmed.slice(1, -1);
+  const branches = body.match(/(?:^|,)\s*branches\s*:\s*(\[[^\]]*\])/);
+  if (branches) return yamlListValues(branches[1]).includes(defaultBranch);
+  const ignored = body.match(/(?:^|,)\s*branches-ignore\s*:\s*(\[[^\]]*\])/);
+  if (ignored) return !yamlListValues(ignored[1]).includes(defaultBranch);
+  return true;
 }
 
 function workflowRunsCommand(content, command) {
