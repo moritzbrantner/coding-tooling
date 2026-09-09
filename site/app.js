@@ -148,7 +148,10 @@ function workCandidate(candidate, suggested) {
 
   const signals = document.createElement("div");
   signals.className = "chips";
-  signals.replaceChildren(...candidate.signals.map((signal) => chip(signal)));
+  const displayedSignals = candidate.ci
+    ? [...candidate.signals, `ci-${candidate.ci.status}`]
+    : candidate.signals;
+  signals.replaceChildren(...displayedSignals.map((signal) => chip(signal)));
 
   const link = document.createElement("a");
   link.href = candidate.htmlUrl;
@@ -179,6 +182,7 @@ function workEvidence(candidate) {
   if (candidate.updatedAt)
     parts.push(`updated ${new Date(candidate.updatedAt).toLocaleDateString()}`);
   if (candidate.author) parts.push(`by ${candidate.author}`);
+  if (candidate.ci) parts.push(`observed CI ${candidate.ci.status}`);
   return parts.join(" · ");
 }
 
