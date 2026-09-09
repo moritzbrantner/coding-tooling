@@ -81,6 +81,7 @@ export async function loadSnapshot(reference, options = {}) {
       fork: repository.fork,
       stars: repository.stargazers_count,
       openIssues: repository.open_issues_count,
+      governance: repositoryGovernanceEvidence(repository),
     },
     tree: entries,
     files,
@@ -88,6 +89,35 @@ export async function loadSnapshot(reference, options = {}) {
     manifestFetchTruncated: selectedPackages < packageCount,
     workflowFetchTruncated,
     unreadablePaths: unreadablePaths.toSorted(),
+  };
+}
+
+export function repositoryGovernanceEvidence(repository) {
+  return {
+    schemaVersion: 1,
+    provenance: {
+      provider: "github",
+      source: "repository-metadata",
+      authentication: "none",
+    },
+    license: licenseEvidence(repository),
+    mergeStrategies: {
+      mergeCommit: booleanMetadataEvidence(repository, "allow_merge_commit"),
+      squash: booleanMetadataEvidence(repository, "allow_squash_merge"),
+      rebase: booleanMetadataEvidence(repository, "allow_rebase_merge"),
+      autoMerge: booleanMetadataEvidence(repository, "allow_auto_merge"),
+    },
+    pages: booleanMetadataEvidence(repository, "has_pages"),
+    defaultBranchProtection: {
+      status: "unavailable",
+      protected: null,
+      reason: "not-exposed-by-repository-metadata",
+      requiredStatusChecks: {
+        status: "unavailable",
+        names: null,
+        reason: "branch-protection-details-not-inspected",
+      },
+    },
   };
 }
 
@@ -109,6 +139,28 @@ async function githubJson(path, fetchImpl, signal) {
       "GitHub rejected the anonymous request, usually because the public API rate limit was reached. Run coding-tooling locally for an unthrottled analysis.",
     );
   throw new Error(`GitHub API request failed (${response.status}).`);
+}
+
+function licenseEvidence(repository) {
+  if (!Object.hasOwn(repository, "license")) return unavailableMetadataEvidence();
+  const license = repository.license;
+  return {
+    status: "observed",
+    present: license != null,
+    spdxId: license?.spdx_id ?? null,
+    name: license?.name ?? null,
+  };
+}
+
+function booleanMetadataEvidence(repository, field) {
+  if (!Object.hasOwn(repository, field)) return unavailableMetadataEvidence();
+  const value = repository[field];
+  if (typeof value !== "boolean") return unavailableMetadataEvidence("invalid-metadata-shape");
+  return { status: "observed", value };
+}
+
+function unavailableMetadataEvidence(reason = "field-not-exposed") {
+  return { status: "unavailable", value: null, reason };
 }
 
 function decodeBase64(value) {
