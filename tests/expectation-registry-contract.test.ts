@@ -7,6 +7,7 @@ import {
   dotNetAssignabilityFindings,
   typeScriptAssignabilityFindings,
 } from "../src/expectation-analysis-detector.ts";
+import type { DetectorContext } from "../src/expectation-package-context.ts";
 import type { RawFinding } from "../src/expectation-detector-types.ts";
 import { expectationDescriptors, expectationRegistry } from "../src/expectation-detectors.ts";
 import {
@@ -57,6 +58,25 @@ function fixture(): string {
   return root;
 }
 
+function detectorBatches(context: DetectorContext): RawFinding[][] {
+  return [
+    missingBenchmarkEvidenceFindings(context),
+    dotNetAssignabilityFindings(context),
+    missingJavaScriptTestFindings(context),
+    missingAggregateCheckFindings(context),
+    missingCliWiringFindings(context),
+    missingTestCapabilityFindings(context),
+    missingRequiredCapabilityFindings(context),
+    missingCargoTargetPathFindings(context),
+    missingRustTestFindings(context),
+    sourceDebtMarkerFindings(context),
+    sourceUnimplementedStubFindings(context),
+    missingTypeScriptConfigFindings(context),
+    missingTestFindings(context),
+    typeScriptAssignabilityFindings(context),
+  ];
+}
+
 describe("expectation detector registry contract", () => {
   test("exposes versioned deterministic detector metadata", () => {
     const registry = expectationRegistry();
@@ -99,6 +119,56 @@ describe("expectation detector registry contract", () => {
     );
   });
 
+  test("publishes bounded evidence claims without inventing confidence", () => {
+    const registry = expectationRegistry();
+
+    expect(
+      registry.every(
+        (entry) =>
+          entry.evidenceContract.oracle.length > 0 &&
+          entry.evidenceContract.independenceKey.length > 0 &&
+          entry.evidenceContract.proves.length > 0 &&
+          entry.evidenceContract.limitations.length > 0,
+      ),
+    ).toBeTrue();
+
+    const typescriptAssignability = registry.find(
+      (entry) => entry.id === "typescript-type-assignability",
+    );
+    expect(typescriptAssignability?.evidenceContract).toMatchObject({
+      basis: "semantic",
+      oracle: "typescript-compiler",
+      independenceKey: "typescript-compiler",
+    });
+
+    const dotNetAssignability = registry.find(
+      (entry) => entry.id === "dotnet-type-assignability",
+    );
+    expect(dotNetAssignability?.evidenceContract).toMatchObject({
+      basis: "semantic",
+      oracle: "dotnet-roslyn",
+      independenceKey: "dotnet-roslyn",
+    });
+
+    const testReachabilityKeys = registry
+      .filter((entry) =>
+        ["javascript-source-test", "rust-source-test", "typescript-source-test"].includes(
+          entry.id,
+        ),
+      )
+      .map((entry) => entry.evidenceContract.independenceKey);
+    expect(testReachabilityKeys).toEqual([
+      "static-test-reachability",
+      "static-test-reachability",
+      "static-test-reachability",
+    ]);
+
+    const sourceScanKeys = registry
+      .filter((entry) => ["source-debt-marker", "source-unimplemented-stub"].includes(entry.id))
+      .map((entry) => entry.evidenceContract.independenceKey);
+    expect(sourceScanKeys).toEqual(["source-text-scan", "source-text-scan"]);
+  });
+
   test("versions semantic IDs and keeps detector output deterministic", () => {
     const v1 = semanticFindingId(
       "typescript-source-test",
@@ -123,24 +193,11 @@ describe("expectation detector registry contract", () => {
     expect(v2).not.toBe(v1);
     expect(duplicateValues(["a", "b", "a"])).toEqual(["a"]);
 
-    const context = createDetectorContext(fixture());
-    const batches: RawFinding[][] = [
-      missingBenchmarkEvidenceFindings(context),
-      dotNetAssignabilityFindings(context),
-      missingJavaScriptTestFindings(context),
-      missingAggregateCheckFindings(context),
-      missingCliWiringFindings(context),
-      missingTestCapabilityFindings(context),
-      missingRequiredCapabilityFindings(context),
-      missingCargoTargetPathFindings(context),
-      missingRustTestFindings(context),
-      sourceDebtMarkerFindings(context),
-      sourceUnimplementedStubFindings(context),
-      missingTypeScriptConfigFindings(context),
-      missingTestFindings(context),
-      typeScriptAssignabilityFindings(context),
-    ];
+    const root = fixture();
+    const batches = detectorBatches(createDetectorContext(root));
+    const repeatedBatches = detectorBatches(createDetectorContext(root));
 
+    expect(repeatedBatches).toEqual(batches);
     expect(batches.map((batch) => batch.length)).toEqual([
       0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0,
     ]);
