@@ -93,9 +93,9 @@ describe("GitHub Pages next-work discovery", () => {
       "https://api.github.com/repos/example/repo/pulls?state=open&sort=updated&direction=desc&per_page=20",
       "https://api.github.com/repos/example/repo/issues?state=open&sort=updated&direction=desc&per_page=20",
     ]);
-    expect(requests.every(({ options }) => options.headers.Accept === "application/vnd.github+json")).toBe(
-      true,
-    );
+    expect(
+      requests.every(({ options }) => options.headers.Accept === "application/vnd.github+json"),
+    ).toBe(true);
     expect(result.summary.status).toBe("ready");
   });
 
