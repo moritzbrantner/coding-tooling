@@ -22,11 +22,21 @@ export async function loadSnapshot(reference, options = {}) {
     fetchImpl,
     signal,
   );
-  const tree = await githubJson(
-    `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`,
-    fetchImpl,
-    signal,
-  );
+  const defaultBranchObservation = shouldInspectDefaultBranch(repository)
+    ? githubOptionalJson(
+        `/repos/${reference.owner}/${reference.name}/branches/${encodeURIComponent(repository.default_branch)}`,
+        fetchImpl,
+        signal,
+      )
+    : Promise.resolve({ status: "unavailable", reason: "repository-governance-metadata-unavailable" });
+  const [tree, defaultBranch] = await Promise.all([
+    githubJson(
+      `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`,
+      fetchImpl,
+      signal,
+    ),
+    defaultBranchObservation,
+  ]);
   const entries = (tree.tree ?? []).filter(
     (entry) => entry.path && entry.sha && ["blob", "tree"].includes(entry.type),
   );
@@ -81,7 +91,7 @@ export async function loadSnapshot(reference, options = {}) {
       fork: repository.fork,
       stars: repository.stargazers_count,
       openIssues: repository.open_issues_count,
-      governance: repositoryGovernanceEvidence(repository),
+      governance: repositoryGovernanceEvidence(repository, defaultBranch),
     },
     tree: entries,
     files,
@@ -92,7 +102,7 @@ export async function loadSnapshot(reference, options = {}) {
   };
 }
 
-export function repositoryGovernanceEvidence(repository) {
+export function repositoryGovernanceEvidence(repository, defaultBranch = {}) {
   return {
     schemaVersion: 1,
     provenance: {
@@ -108,16 +118,7 @@ export function repositoryGovernanceEvidence(repository) {
       autoMerge: booleanMetadataEvidence(repository, "allow_auto_merge"),
     },
     pages: booleanMetadataEvidence(repository, "has_pages"),
-    defaultBranchProtection: {
-      status: "unavailable",
-      protected: null,
-      reason: "not-exposed-by-repository-metadata",
-      requiredStatusChecks: {
-        status: "unavailable",
-        names: null,
-        reason: "branch-protection-details-not-inspected",
-      },
-    },
+    defaultBranchProtection: defaultBranchProtectionEvidence(defaultBranch),
   };
 }
 
@@ -139,6 +140,81 @@ async function githubJson(path, fetchImpl, signal) {
       "GitHub rejected the anonymous request, usually because the public API rate limit was reached. Run coding-tooling locally for an unthrottled analysis.",
     );
   throw new Error(`GitHub API request failed (${response.status}).`);
+}
+
+async function githubOptionalJson(path, fetchImpl, signal) {
+  try {
+    const response = await fetchImpl(`https://api.github.com${path}`, {
+      signal,
+      headers: {
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+    if (!response.ok) return { status: "unavailable", reason: `github-http-${response.status}` };
+    return { status: "observed", value: await response.json() };
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    return { status: "unavailable", reason: "request-failed" };
+  }
+}
+
+function defaultBranchProtectionEvidence(observation) {
+  if (observation?.status !== "observed")
+    return unavailableBranchProtectionEvidence(observation?.reason ?? "branch-metadata-not-inspected");
+
+  const branch = observation.value;
+  if (typeof branch?.protected !== "boolean")
+    return unavailableBranchProtectionEvidence("invalid-branch-metadata-shape");
+
+  return {
+    status: "observed",
+    protected: branch.protected,
+    provenance: { source: "default-branch-metadata" },
+    requiredStatusChecks: requiredStatusChecksEvidence(branch),
+  };
+}
+
+function requiredStatusChecksEvidence(branch) {
+  const required = branch.protection?.required_status_checks;
+  if (!required) {
+    if (!branch.protected) return { status: "observed", names: [] };
+    return {
+      status: "unavailable",
+      names: null,
+      reason: "required-status-checks-not-exposed",
+    };
+  }
+
+  const contexts = Array.isArray(required.contexts)
+    ? required.contexts.filter((context) => typeof context === "string")
+    : [];
+  const checks = Array.isArray(required.checks)
+    ? required.checks
+        .map((check) => check?.context)
+        .filter((context) => typeof context === "string")
+    : [];
+  return { status: "observed", names: [...new Set([...contexts, ...checks])].toSorted() };
+}
+
+function unavailableBranchProtectionEvidence(reason) {
+  return {
+    status: "unavailable",
+    protected: null,
+    reason,
+    requiredStatusChecks: { status: "unavailable", names: null, reason },
+  };
+}
+
+function shouldInspectDefaultBranch(repository) {
+  return [
+    "license",
+    "allow_merge_commit",
+    "allow_squash_merge",
+    "allow_rebase_merge",
+    "allow_auto_merge",
+    "has_pages",
+  ].some((field) => Object.hasOwn(repository, field));
 }
 
 function licenseEvidence(repository) {
