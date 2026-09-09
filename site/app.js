@@ -183,6 +183,10 @@ function workEvidence(candidate) {
     parts.push(`updated ${new Date(candidate.updatedAt).toLocaleDateString()}`);
   if (candidate.author) parts.push(`by ${candidate.author}`);
   if (candidate.ci) parts.push(`observed CI ${candidate.ci.status}`);
+  if (candidate.nextStep?.kind === "checklist-item" && candidate.nextStep.text)
+    parts.push(`next checklist item: ${candidate.nextStep.text}`);
+  else if (candidate.nextStep?.kind === "reconcile-completed-checklist")
+    parts.push("checklist complete; reconcile issue state");
   return parts.join(" · ");
 }
 
