@@ -36,6 +36,8 @@ jobs:
           --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           --output "$RUNNER_TEMP/test-coverage.json"
       - name: Generate public-contract verification report
+        id: contract-verification
+        continue-on-error: true
         run: >-
           bun src/entry.ts contract verify
           --report "$RUNNER_TEMP/public-contract-report.json"
@@ -71,3 +73,8 @@ jobs:
           git add .coding-tooling/test-coverage.json .coding-tooling/public-contract.json
           git commit -m "Publish coding-tooling observations for ${GITHUB_SHA}"
           git push origin HEAD:coding-tooling-observations
+      - name: Preserve public-contract verification failure
+        if: steps.contract-verification.outcome != 'success'
+        run: |
+          echo "Public-contract verification reported a non-success result after its evidence was published." >&2
+          exit 1
