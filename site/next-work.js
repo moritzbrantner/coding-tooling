@@ -43,7 +43,7 @@ export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()
   const fullName = normalizeRepository(repository);
   if (!fullName) throw new Error("Repository must be a public GitHub owner/name value.");
 
-  const candidates = [
+  const rankedCandidates = [
     ...pulls.map((pull) => pullCandidate(pull, now)),
     ...issueWindow
       .filter((issue) => !issue.pull_request)
@@ -51,6 +51,7 @@ export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()
   ]
     .sort(compareCandidates)
     .slice(0, NEXT_WORK_CANDIDATE_LIMIT);
+  const candidates = rankedCandidates.map(({ score: _score, ...candidate }) => candidate);
 
   return {
     schemaVersion: 1,
@@ -77,7 +78,7 @@ export function analyzeOpenWork(repository, pulls, issueWindow, now = new Date()
       status: candidates.length ? "ready" : "empty",
       suggestedWork: candidates[0] ?? null,
     },
-    candidates: candidates.map(({ score: _score, ...candidate }) => candidate),
+    candidates,
   };
 }
 
