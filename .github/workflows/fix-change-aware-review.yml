@@ -1,0 +1,392 @@
+name: Fix change-aware review findings
+
+on:
+  push:
+    branches: [feat/change-aware-pages]
+    paths:
+      - ".github/workflows/fix-change-aware-review.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: feat/change-aware-pages
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Apply review fixes and regression tests
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source_path = Path("site/change-aware.js")
+          source = source_path.read_text()
+
+          old = '''  const sourceIncomplete =
+            analysis.summary.status === "incomplete" ||
+            change.filesTruncated ||
+            Boolean(change.compareIncomplete);
+          const blockingMissing = missing.some((item) => !item.optional);
+          const diagnostics = missing.map((item) => ({
+          '''
+          new = '''  const sourceIncomplete =
+            analysis.summary.status === "incomplete" ||
+            change.filesTruncated ||
+            Boolean(change.compareIncomplete);
+          const scopeIncomplete = scope.unresolvedChangedPaths.length > 0;
+          const evidenceIncomplete = sourceIncomplete || scopeIncomplete;
+          const blockingMissing = missing.some((item) => !item.optional);
+          const diagnostics = missing.map((item) => ({
+          '''
+          if old not in source:
+              raise SystemExit("source completeness block not found")
+          source = source.replace(old, new, 1)
+
+          old = '''  if (sourceIncomplete)
+            diagnostics.push({
+              code: "remote-change-source-incomplete",
+              message:
+                "The GitHub change or repository snapshot is incomplete; the plan was widened conservatively where possible.",
+            });
+          if (scope.mode === "conservative-all")
+          '''
+          new = '''  if (sourceIncomplete)
+            diagnostics.push({
+              code: "remote-change-source-incomplete",
+              message:
+                "The GitHub change or repository snapshot is incomplete; the plan was widened conservatively where possible.",
+            });
+          if (scopeIncomplete)
+            diagnostics.push({
+              code: "remote-change-scope-incomplete",
+              message: `Could not safely map changed paths to repository components: ${scope.unresolvedChangedPaths.join(", ")}`,
+            });
+          if (scope.mode === "conservative-all")
+          '''
+          if old not in source:
+              raise SystemExit("source diagnostics block not found")
+          source = source.replace(old, new, 1)
+
+          source = source.replace(
+              'sourceIncomplete || blockingMissing ? "unavailable" : "passed"',
+              'evidenceIncomplete || blockingMissing ? "unavailable" : "passed"',
+              1,
+          )
+          source = source.replace(
+              'complete: !sourceIncomplete && !blockingMissing,',
+              'complete: !evidenceIncomplete && !blockingMissing,',
+              1,
+          )
+          source = source.replace(
+              '''    !sourceIncomplete &&
+              !blockingMissing &&''',
+              '''    !evidenceIncomplete &&
+              !blockingMissing &&''',
+              1,
+          )
+          source = source.replace(
+              'complete: !sourceIncomplete && !blockingMissing,',
+              'complete: !evidenceIncomplete && !blockingMissing,',
+              1,
+          )
+
+          old = '''    for (const path of paths) {
+              if (isDocumentationPath(path)) {
+                documentationPaths.push(path);
+                continue;
+              }
+
+              const globalKinds = globalImpactKinds(path);
+          '''
+          new = '''    for (const path of paths) {
+              const globalKinds = globalImpactKinds(path);
+          '''
+          if old not in source:
+              raise SystemExit("documentation/global ordering block not found")
+          source = source.replace(old, new, 1)
+
+          old = '''      if (Array.isArray(globalKinds)) {
+                const matches = allComponents.filter((component) => globalKinds.includes(component.kind));
+                if (matches.length === 0) {
+                  unresolvedChangedPaths.push(path);
+                  widenAll = true;
+                  reasons.push(`unresolved-global:${path}`);
+                } else {
+                  for (const component of matches) addChanged(changedByComponent, component, path);
+                }
+                continue;
+              }
+
+              const owner = mostSpecificOwner(allComponents, path);
+              if (owner) addChanged(changedByComponent, owner, path);
+              else {
+                unresolvedChangedPaths.push(path);
+                widenAll = true;
+                reasons.push(`unresolved-path:${path}`);
+              }
+          '''
+          new = '''      if (Array.isArray(globalKinds)) {
+                const matches = allComponents.filter((component) => globalKinds.includes(component.kind));
+                if (matches.length === 0) {
+                  unresolvedChangedPaths.push(path);
+                  widenAll = true;
+                  reasons.push(`unresolved-global:${path}`);
+                } else {
+                  for (const component of matches) addChanged(changedByComponent, component, path);
+                }
+                continue;
+              }
+
+              if (isDocumentationPath(path)) {
+                documentationPaths.push(path);
+                continue;
+              }
+
+              const owners = mostSpecificOwners(allComponents, path);
+              if (owners.length > 0) {
+                for (const owner of owners) addChanged(changedByComponent, owner, path);
+              } else {
+                unresolvedChangedPaths.push(path);
+                widenAll = true;
+                reasons.push(`unresolved-path:${path}`);
+              }
+          '''
+          if old not in source:
+              raise SystemExit("owner resolution block not found")
+          source = source.replace(old, new, 1)
+
+          old = '''  const agent = nearestAncestorFile(paths, component.path, "AGENTS.md");
+            if (agent) contracts.push(agent);
+            for (const changed of changedPaths) {
+          '''
+          new = '''  const agentStarts =
+              changedPaths.length > 0 ? changedPaths.map((changed) => dirname(changed)) : [component.path];
+            for (const start of agentStarts) {
+              const agent = nearestAncestorFile(paths, start, "AGENTS.md");
+              if (agent) contracts.push(agent);
+            }
+            for (const changed of changedPaths) {
+          '''
+          if old not in source:
+              raise SystemExit("governing AGENTS block not found")
+          source = source.replace(old, new, 1)
+
+          old = '''function candidateTests(snapshot, component, changedPaths, components) {
+            const tests = snapshot.tree
+              .filter(
+                (entry) =>
+                  entry.type === "blob" &&
+                  isTestPath(entry.path) &&
+                  componentIdentity(mostSpecificOwner(components, entry.path) ?? component) ===
+                    componentIdentity(component),
+              )
+              .map((entry) => entry.path);
+          '''
+          new = '''function candidateTests(snapshot, component, changedPaths, components) {
+            const tests = snapshot.tree
+              .filter((entry) => {
+                if (entry.type !== "blob" || !isTestPath(entry.path)) return false;
+                return mostSpecificOwners(components, entry.path).some(
+                  (owner) => componentIdentity(owner) === componentIdentity(component),
+                );
+              })
+              .map((entry) => entry.path);
+          '''
+          if old not in source:
+              raise SystemExit("candidate test ownership block not found")
+          source = source.replace(old, new, 1)
+
+          old = '''function mostSpecificOwner(components, path) {
+            return components
+              .filter((component) => componentContains(component, path))
+              .toSorted(
+                (left, right) => normalizedComponentPath(right).length - normalizedComponentPath(left).length,
+              )[0];
+          }
+          '''
+          new = '''function mostSpecificOwners(components, path) {
+            const matches = components.filter((component) => componentContains(component, path));
+            if (matches.length === 0) return [];
+            const maximumPathLength = matches.reduce(
+              (maximum, component) => Math.max(maximum, normalizedComponentPath(component).length),
+              -1,
+            );
+            return matches.filter(
+              (component) => normalizedComponentPath(component).length === maximumPathLength,
+            );
+          }
+          '''
+          if old not in source:
+              raise SystemExit("mostSpecificOwner function not found")
+          source = source.replace(old, new, 1)
+
+          source_path.write_text(source)
+
+          test_path = Path("tests/site-change-aware.test.js")
+          tests = test_path.read_text()
+
+          old = '''    expect(result.data.scope.affectedComponents[0].governingContracts).toContain(
+              "packages/a/package.json",
+            );
+          });
+          '''
+          new = '''    expect(result.data.scope.affectedComponents[0].governingContracts).toContain(
+              "packages/a/package.json",
+            );
+            expect(result.data.scope.affectedComponents[0].governingContracts).toContain(
+              "packages/a/src/AGENTS.md",
+            );
+          });
+          '''
+          if old not in tests:
+              raise SystemExit("nested AGENTS assertion insertion point not found")
+          tests = tests.replace(old, new, 1)
+
+          marker = '''  test("does not let a component filter weaken conservative widening", () => {
+          '''
+          addition = '''  test("treats Markdown convention snapshots as global contracts", () => {
+            const result = remoteChangeCommandFromSnapshot(
+              repository(),
+              change([".conventions/index.md"]),
+              request("affected"),
+              now,
+            );
+
+            expect(result.data.scope.mode).toBe("conservative-all");
+            expect(new Set(result.data.validationPlan.checks.map((check) => check.component))).toEqual(
+              new Set(["fixture", "package-a", "package-b"]),
+            );
+          });
+
+          '''
+          if marker not in tests:
+              raise SystemExit("convention test insertion point not found")
+          tests = tests.replace(marker, addition + marker, 1)
+
+          marker = '''  test("widening is fail-closed when the repository snapshot is incomplete", () => {
+          '''
+          addition = '''  test("fails closed when a changed path cannot be mapped to a component", () => {
+            const result = remoteChangeCommandFromSnapshot(
+              repositoryWithoutComponents(),
+              change(["src/app.py"]),
+              request("affected"),
+              now,
+            );
+
+            expect(result.status).toBe("unavailable");
+            expect(result.data.validationPlan.complete).toBe(false);
+            expect(result.data.scope.mode).toBe("conservative-all");
+            expect(result.data.scope.unresolvedChangedPaths).toEqual(["src/app.py"]);
+            expect(
+              result.diagnostics.some(
+                (diagnostic) => diagnostic.code === "remote-change-scope-incomplete",
+              ),
+            ).toBe(true);
+          });
+
+          '''
+          if marker not in tests:
+              raise SystemExit("unresolved test insertion point not found")
+          tests = tests.replace(marker, addition + marker, 1)
+
+          marker = '''  test("change-aware plan honors an affected component filter", () => {
+          '''
+          addition = '''  test("keeps all equally specific co-located component owners", () => {
+            const result = remoteChangeCommandFromSnapshot(
+              mixedRootRepository(),
+              change(["src/lib.rs"]),
+              request("affected"),
+              now,
+            );
+
+            expect(result.status).toBe("passed");
+            expect(result.data.scope.mode).toBe("targeted");
+            expect(
+              result.data.scope.affectedComponents.map((component) => component.kind).toSorted(),
+            ).toEqual(["package", "rust"]);
+            expect(result.data.validationPlan.checks).toHaveLength(4);
+          });
+
+          '''
+          if marker not in tests:
+              raise SystemExit("co-located owner test insertion point not found")
+          tests = tests.replace(marker, addition + marker, 1)
+
+          old = '''    blob("packages/a/src/widget.ts", "6"),
+            blob("packages/a/tests/widget.test.ts", "7"),
+            blob("packages/b/src/index.ts", "8"),
+          '''
+          new = '''    blob("packages/a/src/widget.ts", "6"),
+            blob("packages/a/src/AGENTS.md", "18"),
+            blob("packages/a/tests/widget.test.ts", "7"),
+            blob("packages/b/src/index.ts", "8"),
+          '''
+          if old not in tests:
+              raise SystemExit("fixture tree insertion point not found")
+          tests = tests.replace(old, new, 1)
+
+          marker = '''function packageManifest(name) {
+          '''
+          helpers = '''function repositoryWithoutComponents() {
+            return {
+              repository: snapshotRepositoryMetadata(),
+              tree: [blob("src/app.py", "101")],
+              files: {},
+              treeTruncated: false,
+              manifestFetchTruncated: false,
+              unreadablePaths: [],
+            };
+          }
+
+          function mixedRootRepository() {
+            const snapshot = repository({
+              files: {
+                ".coding-tooling.json": JSON.stringify({
+                  schemaVersion: 1,
+                  profile: "mixed-root",
+                  tiers: { fast: ["build", "test:unit"] },
+                  requiredCapabilities: ["build", "test:unit"],
+                }),
+                "rust-toolchain.toml": '[toolchain]\\nchannel = "1.98.0"\\n',
+              },
+            });
+            return {
+              ...snapshot,
+              tree: [
+                ...snapshot.tree,
+                blob("Cargo.toml", "102"),
+                blob("rust-toolchain.toml", "103"),
+                blob("src/lib.rs", "104"),
+              ],
+            };
+          }
+
+          '''
+          if marker not in tests:
+              raise SystemExit("fixture helper insertion point not found")
+          tests = tests.replace(marker, helpers + marker, 1)
+
+          test_path.write_text(tests)
+          PY
+          bunx oxfmt site/change-aware.js tests/site-change-aware.test.js
+          bunx oxlint site/change-aware.js tests/site-change-aware.test.js
+          bun test tests/site-change-aware.test.js
+      - name: Commit review fixes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/change-aware.js tests/site-change-aware.test.js
+          git commit -m "Harden change-aware scope resolution"
+          git push origin HEAD:feat/change-aware-pages
