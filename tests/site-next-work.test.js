@@ -29,6 +29,8 @@ describe("GitHub Pages next-work discovery", () => {
       "pull-request:5",
       "issue:6",
     ]);
+    expect(result.summary.suggestedWork).toEqual(result.candidates[0]);
+    expect(result.summary.suggestedWork).not.toHaveProperty("score");
     expect(result.summary.suggestedWork.action).toBe("continue-or-review-pull-request");
   });
 
