@@ -56,19 +56,21 @@ export function collectLocalProjectManifestEvidence(root: string): ProjectManife
     )
     .map((file) => relativePosix(root, file));
 
-  return discoverComponents(root)
-    .filter((component) => component.kind === "rust" || component.kind === "dotnet")
-    .map((component) =>
+  return discoverComponents(root).flatMap((component) => {
+    if (component.kind !== "rust" && component.kind !== "dotnet") return [];
+    const kind = component.kind;
+    return [
       createProjectManifestEvidence({
         collector: "filesystem",
         name: component.name,
         path: component.path,
-        kind: component.kind,
+        kind,
         manifestPaths: relativeManifestPaths.filter((manifestPath) =>
-          manifestBelongsToComponent(manifestPath, component.path, component.kind),
+          manifestBelongsToComponent(manifestPath, component.path, kind),
         ),
       }),
-    );
+    ];
+  });
 }
 
 function manifestBelongsToComponent(
