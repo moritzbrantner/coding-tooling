@@ -7,8 +7,10 @@ The purpose is to let a coding agent answer, before cloning:
 - which discovered components own the change;
 - whether the change has cross-component impact and must widen validation;
 - which repository contracts govern the affected components;
-- which structurally related tests are worth reading first; and
-- which repository-declared validation commands form the smallest safe component-scoped plan for the selected tier.
+- which structurally related tests are worth reading first;
+- what advisory component-level structural test evidence exists;
+- which repository-declared validation commands form the smallest safe component-scoped plan for the selected tier; and
+- which merge authority and hosted check names the repository declares without claiming those checks have run.
 
 Pages still does not execute repository code. Local `coding-tooling` or hosted repository CI remains authoritative for validation results.
 
@@ -70,11 +72,16 @@ Documentation-only changes select no code validation commands. This optimization
 For every affected component the result includes:
 
 - `changedPaths` — the paths attributed to that component;
-- `governingContracts` — structural contracts such as `.coding-tooling.json`, the component manifest, the nearest `AGENTS.md`, and directly changed contract/invariant/schema files;
-- `candidateTests` — a bounded, deterministic shortlist of test-like files, ranked toward directly changed tests and files whose stems match changed source files; and
+- `governingContracts` — structural contracts such as `.coding-tooling.json`, the component manifest, the nearest `AGENTS.md`, directly changed contract/invariant/schema files, and changed `agent-tool.json` machine descriptors;
+- `testEvidence` — advisory tree-only component evidence with explicit `satisfied | finding | unsupported | incomplete` state, changed test paths, and test-path counts;
+- `candidateTests` — a bounded, deterministic shortlist of test-like files, ranked toward directly changed tests and files whose stems match changed source files; fixture, vendor, dependency, coverage, and build-output test trees are excluded from fallback navigation; and
 - `selectedCapabilities` — the selected tier capabilities that the component can actually provide.
 
-`candidateTests` is navigation evidence, not a claim of behavioral coverage. A coding agent still has to read source and tests before deciding what proves the intended behavior.
+`candidateTests` and `testEvidence` are navigation/structural evidence, not claims of behavioral coverage. A coding agent still has to read source and tests before deciding what proves the intended behavior. Rust with no separate test path remains `unsupported` rather than a missing-test claim because inline `#[cfg(test)]` modules are not tree-visible.
+
+## Declared merge authority
+
+When `.coding-tooling.json` declares `merge.authority`, the change-aware result includes `declaredMergeAuthority`. Hosted authority exposes the sorted declared `requiredChecks`; local authority exposes its reason. `observedEnforcement` is always `not-evaluated` on this Pages surface: the declaration is agent guidance, not proof of branch protection or current check conclusions. Invalid hosted/local declarations fail closed instead of being serialized as usable acceptance evidence.
 
 ## Why capability pruning stays conservative
 

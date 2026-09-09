@@ -27,7 +27,7 @@
       "id": "affected-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/affected.json/?repo={owner}/{repository}&base={baseRef}&head={headRef}&tier=fast",
-      "description": "Browser-executed change-aware affected-component analysis with governing contracts, candidate tests, and a component-scoped validation plan. Repeated file parameters can supply changed paths directly instead of using GitHub compare."
+      "description": "Browser-executed change-aware affected-component analysis with governing contracts, advisory component test evidence, candidate tests, declared merge authority, and a component-scoped validation plan. Repeated file parameters can supply changed paths directly instead of using GitHub compare."
     },
     {
       "id": "analyze-repository",
