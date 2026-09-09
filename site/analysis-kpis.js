@@ -18,6 +18,7 @@ const strongContractEvidenceKinds = new Set([
   "package",
   "compile",
 ]);
+const publicContractProducerStatuses = new Set(["passed", "failed", "unavailable", "error"]);
 
 export async function analysisKpisJson(reference, analysis, snapshot, options = {}) {
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -234,6 +235,23 @@ async function loadPublicContractKpis(reference, repository, currentRevision, fe
       throw new Error("published-public-contract-not-readable");
     const snapshot = parsePublicContractSnapshot(decodeBase64(resource.content), repository.fullName);
     const freshness = evidenceFreshness(snapshot.repository.revision, currentRevision);
+    const producerStatus = snapshot.producer?.status ?? null;
+    const producerDiagnostics = Array.isArray(snapshot.producer?.diagnostics)
+      ? snapshot.producer.diagnostics
+      : [];
+
+    if (producerStatus === "error") {
+      return {
+        ...unavailablePublicContracts("public-contract-producer-error"),
+        status: "incomplete",
+        freshness,
+        revision: snapshot.repository.revision,
+        generatedAt: snapshot.generatedAt,
+        producerStatus,
+        producerDiagnostics,
+      };
+    }
+
     const report = snapshot.report;
     const surfaces = report.surfaces;
     const endpoints = surfaces.filter((surface) => surface?.kind === "http-operation");
@@ -245,8 +263,12 @@ async function loadPublicContractKpis(reference, repository, currentRevision, fe
     const summaryComplete = [discovered, verified, unverified, incompleteDiscovery].every(
       (value) => value !== null,
     );
+    const producerStatusAvailable = producerStatus !== null;
     const status =
-      freshness !== "current" || !summaryComplete || incompleteDiscovery > 0
+      freshness !== "current" ||
+      !producerStatusAvailable ||
+      !summaryComplete ||
+      incompleteDiscovery > 0
         ? "incomplete"
         : "observed";
 
@@ -255,6 +277,8 @@ async function loadPublicContractKpis(reference, repository, currentRevision, fe
       freshness,
       revision: snapshot.repository.revision,
       generatedAt: snapshot.generatedAt,
+      producerStatus,
+      producerDiagnostics,
       contracts: {
         discovered,
         verified,
@@ -273,7 +297,9 @@ async function loadPublicContractKpis(reference, repository, currentRevision, fe
           ? "public-contract-discovery-partial"
           : !summaryComplete
             ? "public-contract-summary-incomplete"
-            : null,
+            : !producerStatusAvailable
+              ? "public-contract-producer-status-unavailable"
+              : null,
       source: {
         branch: ANALYSIS_KPI_OBSERVATION_BRANCH,
         path: ANALYSIS_KPI_PUBLIC_CONTRACT_PATH,
@@ -297,6 +323,11 @@ export function parsePublicContractSnapshot(content, expectedRepository) {
     throw new Error("public-contract-snapshot-revision-invalid");
   if (!parsed.generatedAt || Number.isNaN(Date.parse(parsed.generatedAt)))
     throw new Error("public-contract-snapshot-generated-at-invalid");
+  if (
+    parsed?.producer?.status !== undefined &&
+    !publicContractProducerStatuses.has(parsed.producer.status)
+  )
+    throw new Error("public-contract-snapshot-producer-status-invalid");
   if (
     parsed?.report?.schemaVersion !== 1 ||
     !parsed?.report?.summary ||
@@ -389,6 +420,8 @@ function unavailablePublicContracts(reason) {
     freshness: "unknown",
     revision: null,
     generatedAt: null,
+    producerStatus: null,
+    producerDiagnostics: [],
     contracts: {
       discovered: null,
       verified: null,
