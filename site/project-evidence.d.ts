@@ -32,9 +32,23 @@ export type ProjectManifestSemantics = {
   manifestPaths: string[];
 };
 
+export type ProjectComponentReference = {
+  name: string;
+  path: string;
+  kind: ProjectEvidenceKind | string;
+};
+
+export type GithubProjectSnapshot = {
+  tree?: Array<{ path?: string | null }>;
+};
+
 export function createProjectManifestEvidence(
   input: ProjectManifestEvidenceInput,
 ): ProjectManifestEvidenceV1;
+export function collectGithubProjectManifestEvidence(
+  snapshot: GithubProjectSnapshot,
+  components: ProjectComponentReference[],
+): ProjectManifestEvidenceV1[];
 export function projectManifestSemantics(
   evidence: ProjectManifestEvidenceV1,
 ): ProjectManifestSemantics;
