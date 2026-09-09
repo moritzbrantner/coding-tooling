@@ -1,4 +1,5 @@
 name: Retry remote validation evidence matching
+# retry after exact Rust fixture alignment
 
 on:
   push:
