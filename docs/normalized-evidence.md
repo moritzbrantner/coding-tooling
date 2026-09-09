@@ -32,7 +32,6 @@ A root Bun lock, root `packageManager`, or root `.node-version` is not silently 
 
 Structural test reachability, Rust/.NET normalized evidence, CI validation evidence, and governance evidence remain incremental work under #84/#86/#85 rather than reasons to duplicate or broaden the evidence model speculatively.
 
-
 ## Structural test evidence
 
 Remote structural source/test evidence now uses the same pure outcome semantics in ordinary preflight and change-aware analysis. Ownership is component-scoped to the most-specific compatible package, Rust, or .NET component.
