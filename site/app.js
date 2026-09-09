@@ -44,7 +44,9 @@ function renderDiscovery(result) {
   document.querySelector("#discovery-json-link").href = machineUrl.href;
 
   if (!result.candidates.length) {
-    discoveryCandidates.replaceChildren(empty(`No active public repositories found for ${result.owner}.`));
+    discoveryCandidates.replaceChildren(
+      empty(`No active public repositories found for ${result.owner}.`),
+    );
     return;
   }
 
@@ -79,10 +81,10 @@ function repositoryCandidate(candidate, suggested) {
   const button = document.createElement("button");
   button.type = "button";
   button.textContent = "Analyze repository";
-  button.onclick = () => {
+  button.addEventListener("click", () => {
     input.value = candidate.fullName;
     void run(candidate.fullName);
-  };
+  });
 
   article.append(label, heading, description, evidence, signals, button);
   return article;
@@ -92,7 +94,9 @@ function candidateEvidence(candidate) {
   const parts = [];
   if (candidate.language) parts.push(candidate.language);
   if (candidate.lastActivityAt)
-    parts.push(`last repository activity ${new Date(candidate.lastActivityAt).toLocaleDateString()}`);
+    parts.push(
+      `last repository activity ${new Date(candidate.lastActivityAt).toLocaleDateString()}`,
+    );
   parts.push(
     `${candidate.openItemCount} open GitHub ${candidate.openItemCount === 1 ? "item" : "items"} (issues and pull requests combined)`,
   );
