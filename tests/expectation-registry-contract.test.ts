@@ -7,6 +7,7 @@ import {
   dotNetAssignabilityFindings,
   typeScriptAssignabilityFindings,
 } from "../src/expectation-analysis-detector.ts";
+import type { DetectorContext } from "../src/expectation-package-context.ts";
 import type { RawFinding } from "../src/expectation-detector-types.ts";
 import { expectationDescriptors, expectationRegistry } from "../src/expectation-detectors.ts";
 import {
@@ -55,6 +56,25 @@ function fixture(): string {
   writeFileSync(join(root, "bun.lock"), "");
   writeFileSync(join(root, "src", "service.ts"), "export const service = true;\n");
   return root;
+}
+
+function detectorBatches(context: DetectorContext): RawFinding[][] {
+  return [
+    missingBenchmarkEvidenceFindings(context),
+    dotNetAssignabilityFindings(context),
+    missingJavaScriptTestFindings(context),
+    missingAggregateCheckFindings(context),
+    missingCliWiringFindings(context),
+    missingTestCapabilityFindings(context),
+    missingRequiredCapabilityFindings(context),
+    missingCargoTargetPathFindings(context),
+    missingRustTestFindings(context),
+    sourceDebtMarkerFindings(context),
+    sourceUnimplementedStubFindings(context),
+    missingTypeScriptConfigFindings(context),
+    missingTestFindings(context),
+    typeScriptAssignabilityFindings(context),
+  ];
 }
 
 describe("expectation detector registry contract", () => {
@@ -173,24 +193,11 @@ describe("expectation detector registry contract", () => {
     expect(v2).not.toBe(v1);
     expect(duplicateValues(["a", "b", "a"])).toEqual(["a"]);
 
-    const context = createDetectorContext(fixture());
-    const batches: RawFinding[][] = [
-      missingBenchmarkEvidenceFindings(context),
-      dotNetAssignabilityFindings(context),
-      missingJavaScriptTestFindings(context),
-      missingAggregateCheckFindings(context),
-      missingCliWiringFindings(context),
-      missingTestCapabilityFindings(context),
-      missingRequiredCapabilityFindings(context),
-      missingCargoTargetPathFindings(context),
-      missingRustTestFindings(context),
-      sourceDebtMarkerFindings(context),
-      sourceUnimplementedStubFindings(context),
-      missingTypeScriptConfigFindings(context),
-      missingTestFindings(context),
-      typeScriptAssignabilityFindings(context),
-    ];
+    const root = fixture();
+    const batches = detectorBatches(createDetectorContext(root));
+    const repeatedBatches = detectorBatches(createDetectorContext(root));
 
+    expect(repeatedBatches).toEqual(batches);
     expect(batches.map((batch) => batch.length)).toEqual([
       0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0,
     ]);
