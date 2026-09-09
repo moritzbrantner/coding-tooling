@@ -1,0 +1,46 @@
+name: Dogfood remote CI validation evidence
+
+on:
+  push:
+    branches: [feat/remote-validation-evidence-v1]
+    paths:
+      - ".github/workflows/dogfood-remote-validation-evidence.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dogfood:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Assert coding-tooling validation evidence
+        shell: bash
+        run: |
+          cat > .dogfood-validation-evidence.mjs <<'EOF'
+          import { analysisJson } from "./site/github-analysis.js";
+
+          const result = await analysisJson("moritzbrantner/coding-tooling");
+          console.log(JSON.stringify({
+            status: result.summary.status,
+            validationEvidence: result.validationEvidence,
+            ciFindings: result.findings.filter((finding) => finding.id.startsWith("REMOTE-CI-")),
+          }, null, 2));
+
+          if (result.validationEvidence.status !== "satisfied") {
+            throw new Error(`Expected satisfied validation evidence, got ${result.validationEvidence.status}`);
+          }
+          if (!result.validationEvidence.validatingWorkflowPaths.includes(".github/workflows/validate.yml")) {
+            throw new Error("coding-tooling Validate workflow was not recognized as validation evidence");
+          }
+          if (result.findings.some((finding) => finding.id === "REMOTE-CI-001" || finding.id === "REMOTE-CI-002")) {
+            throw new Error("coding-tooling still has a missing/unproven validation finding");
+          }
+          EOF
+          bun .dogfood-validation-evidence.mjs
+          rm .dogfood-validation-evidence.mjs
