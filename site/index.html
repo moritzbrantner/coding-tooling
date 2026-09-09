@@ -74,7 +74,9 @@
         <p id="next-work-repository" class="muted"></p>
         <p class="muted">
           Ranking uses item recency plus a modest preference for in-flight pull requests and
-          ready-for-review work. It does not infer roadmap priority, dependencies, or CI health.
+          ready-for-review work. The two highest-ranked pull requests get bounded observed CI
+          evidence; CI does not affect ranking, and required-check status, roadmap priority, and
+          dependencies are not inferred.
         </p>
         <p id="next-work-status" class="status" role="status"></p>
         <div id="next-work-candidates" class="stack"></div>
