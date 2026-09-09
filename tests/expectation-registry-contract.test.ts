@@ -99,6 +99,56 @@ describe("expectation detector registry contract", () => {
     );
   });
 
+  test("publishes bounded evidence claims without inventing confidence", () => {
+    const registry = expectationRegistry();
+
+    expect(
+      registry.every(
+        (entry) =>
+          entry.evidenceContract.oracle.length > 0 &&
+          entry.evidenceContract.independenceKey.length > 0 &&
+          entry.evidenceContract.proves.length > 0 &&
+          entry.evidenceContract.limitations.length > 0,
+      ),
+    ).toBeTrue();
+
+    const typescriptAssignability = registry.find(
+      (entry) => entry.id === "typescript-type-assignability",
+    );
+    expect(typescriptAssignability?.evidenceContract).toMatchObject({
+      basis: "semantic",
+      oracle: "typescript-compiler",
+      independenceKey: "typescript-compiler",
+    });
+
+    const dotNetAssignability = registry.find(
+      (entry) => entry.id === "dotnet-type-assignability",
+    );
+    expect(dotNetAssignability?.evidenceContract).toMatchObject({
+      basis: "semantic",
+      oracle: "dotnet-roslyn",
+      independenceKey: "dotnet-roslyn",
+    });
+
+    const testReachabilityKeys = registry
+      .filter((entry) =>
+        ["javascript-source-test", "rust-source-test", "typescript-source-test"].includes(
+          entry.id,
+        ),
+      )
+      .map((entry) => entry.evidenceContract.independenceKey);
+    expect(testReachabilityKeys).toEqual([
+      "static-test-reachability",
+      "static-test-reachability",
+      "static-test-reachability",
+    ]);
+
+    const sourceScanKeys = registry
+      .filter((entry) => ["source-debt-marker", "source-unimplemented-stub"].includes(entry.id))
+      .map((entry) => entry.evidenceContract.independenceKey);
+    expect(sourceScanKeys).toEqual(["source-text-scan", "source-text-scan"]);
+  });
+
   test("versions semantic IDs and keeps detector output deterministic", () => {
     const v1 = semanticFindingId(
       "typescript-source-test",
