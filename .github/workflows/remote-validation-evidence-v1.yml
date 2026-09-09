@@ -1,0 +1,689 @@
+name: Implement remote validation evidence
+
+on:
+  push:
+    branches: [feat/remote-validation-evidence-v1]
+    paths:
+      - ".github/workflows/remote-validation-evidence-v1.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  implement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: feat/remote-validation-evidence-v1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Implement validation evidence
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"{label} anchor not found")
+              return text.replace(old, new, 1)
+
+          evidence_path = Path("site/evidence-model.js")
+          evidence = evidence_path.read_text()
+          evidence += r'''
+
+          export function remoteValidationOutcome(input) {
+            const workflowPaths = [...new Set(input.workflowPaths ?? [])].toSorted();
+            const externalCiPaths = [...new Set(input.externalCiPaths ?? [])].toSorted();
+            const declaredCommands = [...new Set(input.declaredCommands ?? [])]
+              .filter(Boolean)
+              .toSorted();
+            const loaded = new Map(
+              (input.workflows ?? [])
+                .filter((workflow) => workflow?.path && typeof workflow.content === "string")
+                .map((workflow) => [workflow.path, workflow.content]),
+            );
+            const workflowEvidence = workflowPaths
+              .filter((path) => loaded.has(path))
+              .map((path) => analyzeWorkflowValidation({
+                path,
+                content: loaded.get(path),
+                defaultBranch: input.defaultBranch,
+                declaredCommands,
+                localActionIsCodingTooling: Boolean(input.localActionIsCodingTooling),
+              }));
+            const validatingWorkflowPaths = workflowEvidence
+              .filter((workflow) => workflow.status === "satisfied")
+              .map((workflow) => workflow.path)
+              .toSorted();
+            const base = {
+              automation: workflowPaths.length || externalCiPaths.length ? "present" : "absent",
+              githubWorkflowPaths: workflowPaths,
+              externalCiPaths,
+              examinedWorkflowPaths: [...loaded.keys()].toSorted(),
+              validatingWorkflowPaths,
+              workflowEvidence,
+            };
+            if (validatingWorkflowPaths.length > 0)
+              return { ...base, status: "satisfied", provider: "github-actions", reason: "validation-workflow-evidenced" };
+            const missingWorkflowContent = workflowPaths.some((path) => !loaded.has(path));
+            if (input.workflowFetchTruncated || missingWorkflowContent)
+              return { ...base, status: "incomplete", provider: "github-actions", reason: "workflow-content-incomplete" };
+            if (externalCiPaths.length > 0)
+              return {
+                ...base,
+                status: "unsupported",
+                provider: workflowPaths.length ? "mixed" : "external",
+                reason: "external-ci-validation-not-evaluated",
+              };
+            if (workflowPaths.length > 0)
+              return {
+                ...base,
+                status: "finding",
+                provider: "github-actions",
+                reason: "automation-without-validation-evidence",
+              };
+            return { ...base, status: "finding", provider: "none", reason: "no-ci-config" };
+          }
+
+          function analyzeWorkflowValidation(input) {
+            const relevantTrigger = workflowHasRelevantTrigger(input.content, input.defaultBranch);
+            const matchedCommands = input.declaredCommands.filter((command) =>
+              workflowRunsCommand(input.content, command),
+            );
+            const codingToolingAction = workflowUsesCodingToolingAction(
+              input.content,
+              input.localActionIsCodingTooling,
+            );
+            const validationInvocation = matchedCommands.length > 0 || codingToolingAction;
+            return {
+              path: input.path,
+              status: relevantTrigger && validationInvocation ? "satisfied" : "finding",
+              relevantTrigger,
+              validationInvocation,
+              matchedCommands,
+              codingToolingAction,
+            };
+          }
+
+          function workflowHasRelevantTrigger(content, defaultBranch) {
+            const lines = normalizedYamlLines(content);
+            const onIndex = lines.findIndex((line) => /^on\s*:/.test(line.text));
+            if (onIndex === -1) return false;
+            const first = lines[onIndex];
+            const inline = first.text.replace(/^on\s*:\s*/, "");
+            if (inline) {
+              if (/\bpull_request(?:_target)?\b/.test(inline)) return true;
+              if (/\bpush\b/.test(inline)) return true;
+              return false;
+            }
+            const block = [];
+            for (let index = onIndex + 1; index < lines.length; index += 1) {
+              const line = lines[index];
+              if (line.indent <= first.indent && /^[A-Za-z0-9_."'-]+\s*:/.test(line.text)) break;
+              block.push(line);
+            }
+            if (block.some((line) => /^pull_request(?:_target)?\s*:/.test(line.text))) return true;
+            const pushIndex = block.findIndex((line) => /^push\s*:/.test(line.text));
+            if (pushIndex === -1) return false;
+            const push = block[pushIndex];
+            const pushInline = push.text.replace(/^push\s*:\s*/, "");
+            if (pushInline && pushInline !== "{}") return true;
+            const pushBlock = [];
+            for (let index = pushIndex + 1; index < block.length; index += 1) {
+              const line = block[index];
+              if (line.indent <= push.indent) break;
+              pushBlock.push(line);
+            }
+            const branchesIndex = pushBlock.findIndex((line) => /^branches\s*:/.test(line.text));
+            if (branchesIndex === -1) return !pushBlock.some((line) => /^branches-ignore\s*:/.test(line.text));
+            const branch = pushBlock[branchesIndex];
+            const branchInline = branch.text.replace(/^branches\s*:\s*/, "");
+            if (branchInline)
+              return yamlListValues(branchInline).includes(defaultBranch);
+            for (let index = branchesIndex + 1; index < pushBlock.length; index += 1) {
+              const line = pushBlock[index];
+              if (line.indent <= branch.indent) break;
+              const value = line.text.match(/^-\s*["']?([^"'#]+?)["']?\s*$/)?.[1]?.trim();
+              if (value === defaultBranch) return true;
+            }
+            return false;
+          }
+
+          function workflowRunsCommand(content, command) {
+            const needle = normalizeCommand(command);
+            if (!needle) return false;
+            return String(content)
+              .split(/\r?\n/)
+              .some((line) => normalizeCommand(line.replace(/^\s*(?:run\s*:\s*)?/, "")).includes(needle));
+          }
+
+          function workflowUsesCodingToolingAction(content, localActionIsCodingTooling) {
+            const external = /^\s*-?\s*uses\s*:\s*moritzbrantner\/coding-tooling@[^\s#]+/m.test(content);
+            if (external) return true;
+            return localActionIsCodingTooling && /^\s*-?\s*uses\s*:\s*\.\/?\s*(?:#.*)?$/m.test(content);
+          }
+
+          function normalizedYamlLines(content) {
+            return String(content)
+              .split(/\r?\n/)
+              .map((raw) => {
+                const withoutComment = raw.replace(/\s+#.*$/, "").replace(/\t/g, "  ");
+                return { indent: withoutComment.match(/^\s*/)?.[0].length ?? 0, text: withoutComment.trim() };
+              })
+              .filter((line) => line.text);
+          }
+
+          function yamlListValues(value) {
+            const trimmed = String(value).trim();
+            if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return [];
+            return trimmed
+              .slice(1, -1)
+              .split(",")
+              .map((part) => part.trim().replace(/^["']|["']$/g, ""))
+              .filter(Boolean);
+          }
+
+          function normalizeCommand(value) {
+            return String(value ?? "")
+              .trim()
+              .replace(/\s+/g, " ");
+          }
+          '''
+          evidence_path.write_text(evidence)
+
+          preflight_path = Path("site/preflight.js")
+          preflight = preflight_path.read_text()
+          preflight = replace_once(
+              preflight,
+              '  packageToolchainOutcome,\n  structuralTestOutcome,\n',
+              '  packageToolchainOutcome,\n  remoteValidationOutcome,\n  structuralTestOutcome,\n',
+              "preflight evidence import",
+          )
+          preflight = replace_once(
+              preflight,
+              '''export function selectedRemoteFiles(tree, limit = 24) {
+          ''',
+              '''export function selectedWorkflowFiles(tree, limit = 8) {
+            return tree
+              .filter(
+                (entry) =>
+                  entry.type === "blob" &&
+                  /^\\.github\\/workflows\\/.+\\.ya?ml$/i.test(entry.path) &&
+                  !isIgnoredAnalysisPath(entry.path),
+              )
+              .toSorted((left, right) => left.path.localeCompare(right.path))
+              .slice(0, limit);
+          }
+
+          export function selectedRemoteFiles(tree, limit = 24) {
+          ''',
+              "workflow selector",
+          )
+          preflight = replace_once(
+              preflight,
+              '''  const findings = findingsFor(snapshot, paths, components);
+            const incomplete =
+              snapshot.treeTruncated ||
+              snapshot.manifestFetchTruncated ||
+              snapshot.unreadablePaths.length > 0;
+          ''',
+              '''  const validationEvidence = validationEvidenceFor(snapshot, paths, components);
+            const findings = findingsFor(snapshot, paths, components, validationEvidence);
+            const incomplete =
+              snapshot.treeTruncated ||
+              snapshot.manifestFetchTruncated ||
+              snapshot.unreadablePaths.length > 0 ||
+              validationEvidence.status === "incomplete";
+          ''',
+              "validation evidence analysis",
+          )
+          preflight = replace_once(
+              preflight,
+              '''    technologies,
+              components,
+              findings,
+          ''',
+              '''    technologies,
+              components,
+              validationEvidence,
+              findings,
+          ''',
+              "validation evidence output",
+          )
+          preflight = replace_once(
+              preflight,
+              '''      manifestFetchTruncated: snapshot.manifestFetchTruncated,
+              unreadablePaths: snapshot.unreadablePaths,
+          ''',
+              '''      manifestFetchTruncated: snapshot.manifestFetchTruncated,
+              workflowFetchTruncated: Boolean(snapshot.workflowFetchTruncated),
+              unreadablePaths: snapshot.unreadablePaths,
+          ''',
+              "workflow source metadata",
+          )
+          preflight = replace_once(
+              preflight,
+              'function findingsFor(snapshot, paths, components) {\n',
+              'function findingsFor(snapshot, paths, components, validationEvidence) {\n',
+              "findings signature",
+          )
+          old_ci = '''  if (![...paths].some((path) => path.startsWith(".github/workflows/") && /\\.ya?ml$/.test(path)))
+              add(
+                "REMOTE-CI-001",
+                "high",
+                "No GitHub Actions workflow detected",
+                "No workflow YAML exists under .github/workflows/.",
+                "Add deterministic CI around repository-declared validation capabilities.",
+              );
+          '''
+          new_ci = '''  if (validationEvidence.status === "finding" && validationEvidence.reason === "no-ci-config")
+              add(
+                "REMOTE-CI-001",
+                "high",
+                "No CI configuration detected",
+                "No supported GitHub Actions or external CI configuration was found.",
+                "Add deterministic CI around repository-declared validation capabilities.",
+              );
+            else if (
+              validationEvidence.status === "finding" &&
+              validationEvidence.reason === "automation-without-validation-evidence"
+            )
+              add(
+                "REMOTE-CI-002",
+                "high",
+                "Automation exists without proven validation",
+                `${validationEvidence.githubWorkflowPaths.length} GitHub Actions workflow file(s) exist, but none of the inspected workflows mechanically proves a relevant trigger plus a repository validation invocation.`,
+                "Wire a repository-declared validation capability or coding-tooling action into pull-request or default-branch CI.",
+              );
+            else if (validationEvidence.status === "incomplete")
+              add(
+                "REMOTE-CI-003",
+                "medium",
+                "Remote CI validation evidence is incomplete",
+                "Not every discovered GitHub Actions workflow could be inspected within the remote evidence boundary.",
+                "Use local or hosted repository evidence before deciding whether validation is absent.",
+              );
+          '''
+          preflight = replace_once(preflight, old_ci, new_ci, "CI finding replacement")
+
+          helper_marker = 'function componentOwnedPaths(paths, components, component, predicate) {\n'
+          helper = r'''function validationEvidenceFor(snapshot, paths, components) {
+            const workflowPaths = [...paths]
+              .filter((path) => /^\.github\/workflows\/.+\.ya?ml$/i.test(path))
+              .toSorted();
+            const externalCiPaths = [...paths].filter(isExternalCiPath).toSorted();
+            const declaredCommands = components
+              .flatMap((component) => Object.values(component.capabilities ?? {}))
+              .filter(Array.isArray)
+              .map((command) => command.join(" "));
+            const workflows = workflowPaths
+              .filter((path) => typeof snapshot.files[path] === "string")
+              .map((path) => ({ path, content: snapshot.files[path] }));
+            return remoteValidationOutcome({
+              workflowPaths,
+              workflows,
+              externalCiPaths,
+              workflowFetchTruncated: Boolean(snapshot.workflowFetchTruncated),
+              defaultBranch: snapshot.repository.defaultBranch,
+              declaredCommands,
+              localActionIsCodingTooling: isCodingToolingAction(snapshot.files["action.yml"]),
+            });
+          }
+
+          function isExternalCiPath(path) {
+            return [
+              ".circleci/config.yml",
+              ".circleci/config.yaml",
+              ".gitlab-ci.yml",
+              ".gitlab-ci.yaml",
+              ".travis.yml",
+              "Jenkinsfile",
+              "azure-pipelines.yml",
+              "azure-pipelines.yaml",
+              ".buildkite/pipeline.yml",
+              ".buildkite/pipeline.yaml",
+            ].includes(path);
+          }
+
+          function isCodingToolingAction(content) {
+            if (typeof content !== "string") return false;
+            return /Run coding tooling/i.test(content) && /src\/cli\.ts/.test(content) && /\.coding-tooling\.json/.test(content);
+          }
+
+          '''
+          preflight = replace_once(preflight, helper_marker, helper + helper_marker, "validation helper")
+          preflight_path.write_text(preflight)
+
+          github_path = Path("site/github-analysis.js")
+          github = github_path.read_text()
+          github = replace_once(
+              github,
+              'import { analyzeSnapshot, parseRepositoryReference, selectedRemoteFiles } from "./preflight.js";\n',
+              '''import {
+            analyzeSnapshot,
+            parseRepositoryReference,
+            selectedRemoteFiles,
+            selectedWorkflowFiles,
+          } from "./preflight.js";
+          ''',
+              "github selector import",
+          )
+          github = replace_once(
+              github,
+              '''  const selected = selectedRemoteFiles(entries);
+            const eligible = selectedRemoteFiles(entries, entries.length);
+          ''',
+              '''  const selectedBase = selectedRemoteFiles(entries);
+            const selectedWorkflows = selectedWorkflowFiles(entries);
+            const rootAction = entries.find(
+              (entry) => entry.type === "blob" && ["action.yml", "action.yaml"].includes(entry.path),
+            );
+            const selected = [
+              ...selectedBase,
+              ...selectedWorkflows,
+              ...(rootAction && !selectedBase.some((entry) => entry.path === rootAction.path)
+                ? [rootAction]
+                : []),
+            ];
+            const eligible = selectedRemoteFiles(entries, entries.length);
+            const eligibleWorkflows = selectedWorkflowFiles(entries, entries.length);
+          ''',
+              "github workflow selection",
+          )
+          github = replace_once(
+              github,
+              '''  const packageCount = eligible.filter((entry) => entry.path.endsWith("package.json")).length;
+            const selectedPackages = selected.filter((entry) => entry.path.endsWith("package.json")).length;
+          ''',
+              '''  const packageCount = eligible.filter((entry) => entry.path.endsWith("package.json")).length;
+            const selectedPackages = selectedBase.filter((entry) => entry.path.endsWith("package.json")).length;
+            const workflowFetchTruncated = selectedWorkflows.length < eligibleWorkflows.length;
+          ''',
+              "workflow truncation",
+          )
+          github = replace_once(
+              github,
+              '''    manifestFetchTruncated: selectedPackages < packageCount,
+              unreadablePaths: unreadablePaths.toSorted(),
+          ''',
+              '''    manifestFetchTruncated: selectedPackages < packageCount,
+              workflowFetchTruncated,
+              unreadablePaths: unreadablePaths.toSorted(),
+          ''',
+              "snapshot workflow truncation",
+          )
+          github_path.write_text(github)
+
+          test_path = Path("tests/site-preflight.test.js")
+          tests = test_path.read_text()
+          tests = replace_once(
+              tests,
+              '''  selectedRemoteFiles,
+          ''',
+              '''  selectedRemoteFiles,
+            selectedWorkflowFiles,
+          ''',
+              "test selector import",
+          )
+          tests = replace_once(
+              tests,
+              '''  test("returns a ready result for a repository with structural foundation evidence", () => {
+          ''',
+              '''  test("selects GitHub workflow evidence separately from the manifest budget", () => {
+            const tree = [
+              blob("package.json", "1"),
+              blob(".github/workflows/pages.yml", "2"),
+              blob(".github/workflows/validate.yml", "3"),
+            ];
+            expect(selectedRemoteFiles(tree).map((entry) => entry.path)).toEqual(["package.json"]);
+            expect(selectedWorkflowFiles(tree).map((entry) => entry.path)).toEqual([
+              ".github/workflows/pages.yml",
+              ".github/workflows/validate.yml",
+            ]);
+          });
+
+            test("returns a ready result for a repository with structural foundation evidence", () => {
+          ''',
+              "workflow selector test",
+          )
+          # Ensure the existing ready fixtures have mechanically valid workflow content.
+          tests = tests.replace(
+              '          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),\n          ".node-version": "24.20.0\\n",',
+              '          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),\n          ".node-version": "24.20.0\\n",\n          ".github/workflows/validate.yml": validatingWorkflow(),',
+              1,
+          )
+          # Bun-ready fixture.
+          anchor = '          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),\n          "fixtures/app/package.json": JSON.stringify({ name: "ignored-fixture" }),'
+          replacement = '          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),\n          ".github/workflows/validate.yml": validatingWorkflow(),\n          "fixtures/app/package.json": JSON.stringify({ name: "ignored-fixture" }),'
+          tests = replace_once(tests, anchor, replacement, "bun ready workflow fixture")
+          # Non-exact pin fixture: preserve only the env finding.
+          anchor = '          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),\n        },\n      }),\n    );\n    expect(analysis.findings.map((finding) => finding.id)).toEqual(["REMOTE-ENV-005"]);'
+          replacement = '          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),\n          ".github/workflows/validate.yml": validatingWorkflow(),\n        },\n      }),\n    );\n    expect(analysis.findings.map((finding) => finding.id)).toEqual(["REMOTE-ENV-005"]);'
+          tests = replace_once(tests, anchor, replacement, "non-exact workflow fixture")
+          # Sibling component fixture: provide workflow content so CI evidence is not the subject.
+          anchor = '          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),\n        },\n      }),\n    );\n    const packageA = analysis.components.find'
+          replacement = '          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),\n          ".github/workflows/validate.yml": validatingWorkflow(),\n        },\n      }),\n    );\n    const packageA = analysis.components.find'
+          tests = replace_once(tests, anchor, replacement, "sibling workflow fixture")
+
+          marker = '  test("marks truncated or bounded GitHub evidence incomplete", () => {\n'
+          ci_tests = '''  test("does not treat deployment-only automation as validation", () => {
+            const analysis = analyzeSnapshot(
+              repository({
+                tree: [
+                  blob("package.json", "1"),
+                  blob(".coding-tooling.json", "2"),
+                  blob("AGENTS.md", "3"),
+                  blob("renovate.json", "4"),
+                  blob(".github/workflows/pages.yml", "5"),
+                ],
+                files: {
+                  "package.json": JSON.stringify({
+                    name: "fixture",
+                    packageManager: "bun@1.4.0",
+                    scripts: { test: "test" },
+                  }),
+                  ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+                  ".github/workflows/pages.yml": `name: Validate\non:\n  pull_request:\njobs:\n  deploy:\n    steps:\n      - uses: actions/deploy-pages@0123456789012345678901234567890123456789\n`,
+                },
+              }),
+            );
+            expect(analysis.validationEvidence).toEqual(
+              expect.objectContaining({
+                status: "finding",
+                reason: "automation-without-validation-evidence",
+              }),
+            );
+            expect(analysis.findings.map((finding) => finding.id)).toContain("REMOTE-CI-002");
+          });
+
+          test("represents external CI as unsupported rather than missing validation", () => {
+            const analysis = analyzeSnapshot(
+              repository({
+                tree: [blob(".gitlab-ci.yml", "1")],
+                files: {},
+              }),
+            );
+            expect(analysis.validationEvidence).toEqual(
+              expect.objectContaining({
+                status: "unsupported",
+                provider: "external",
+              }),
+            );
+            expect(analysis.findings.map((finding) => finding.id)).not.toContain("REMOTE-CI-001");
+            expect(analysis.findings.map((finding) => finding.id)).not.toContain("REMOTE-CI-002");
+          });
+
+          '''
+          tests = replace_once(tests, marker, ci_tests + marker, "CI evidence integration tests")
+          tests = replace_once(
+              tests,
+              '''    manifestFetchTruncated: false,
+              unreadablePaths: [],
+          ''',
+              '''    manifestFetchTruncated: false,
+              workflowFetchTruncated: false,
+              unreadablePaths: [],
+          ''',
+              "snapshot fixture workflow completeness",
+          )
+          helper_marker = 'function githubRepositoryMetadata() {\n'
+          helper = '''function validatingWorkflow() {
+            return `name: Anything\non:\n  pull_request:\njobs:\n  verify:\n    steps:\n      - run: bun run typecheck\n`;
+          }
+
+          '''
+          tests = replace_once(tests, helper_marker, helper + helper_marker, "validating workflow helper")
+          test_path.write_text(tests)
+
+          pure_test = Path("tests/remote-validation-evidence.test.js")
+          pure_test.write_text(r'''import { describe, expect, test } from "bun:test";
+
+          import { remoteValidationOutcome } from "../site/evidence-model.js";
+
+          describe("remote validation evidence", () => {
+            test("proves validation from a relevant trigger plus a declared command", () => {
+              const result = remoteValidationOutcome({
+                workflowPaths: [".github/workflows/anything.yml"],
+                workflows: [
+                  {
+                    path: ".github/workflows/anything.yml",
+                    content: `name: Release\non:\n  pull_request:\njobs:\n  verify:\n    steps:\n      - run: bun run typecheck\n`,
+                  },
+                ],
+                externalCiPaths: [],
+                workflowFetchTruncated: false,
+                defaultBranch: "main",
+                declaredCommands: ["bun run typecheck"],
+              });
+              expect(result).toEqual(
+                expect.objectContaining({
+                  status: "satisfied",
+                  validatingWorkflowPaths: [".github/workflows/anything.yml"],
+                }),
+              );
+            });
+
+            test("workflow names alone do not prove validation", () => {
+              const result = remoteValidationOutcome({
+                workflowPaths: [".github/workflows/validate.yml"],
+                workflows: [
+                  {
+                    path: ".github/workflows/validate.yml",
+                    content: `name: Validate\non:\n  pull_request:\njobs:\n  verify:\n    steps:\n      - run: echo ok\n`,
+                  },
+                ],
+                externalCiPaths: [],
+                workflowFetchTruncated: false,
+                defaultBranch: "main",
+                declaredCommands: ["bun run typecheck"],
+              });
+              expect(result.status).toBe("finding");
+              expect(result.reason).toBe("automation-without-validation-evidence");
+            });
+
+            test("deployment-only workflows do not prove validation", () => {
+              const result = remoteValidationOutcome({
+                workflowPaths: [".github/workflows/pages.yml"],
+                workflows: [
+                  {
+                    path: ".github/workflows/pages.yml",
+                    content: `on:\n  push:\n    branches: [main]\njobs:\n  deploy:\n    steps:\n      - uses: actions/deploy-pages@0123456789012345678901234567890123456789\n`,
+                  },
+                ],
+                externalCiPaths: [],
+                workflowFetchTruncated: false,
+                defaultBranch: "main",
+                declaredCommands: ["bun run test"],
+              });
+              expect(result.status).toBe("finding");
+            });
+
+            test("external CI remains explicit and unsupported", () => {
+              const result = remoteValidationOutcome({
+                workflowPaths: [],
+                workflows: [],
+                externalCiPaths: [".gitlab-ci.yml"],
+                workflowFetchTruncated: false,
+                defaultBranch: "main",
+                declaredCommands: [],
+              });
+              expect(result).toEqual(
+                expect.objectContaining({
+                  status: "unsupported",
+                  provider: "external",
+                  reason: "external-ci-validation-not-evaluated",
+                }),
+              );
+            });
+
+            test("mixed external and unproven GitHub automation stays unsupported", () => {
+              const result = remoteValidationOutcome({
+                workflowPaths: [".github/workflows/release.yml"],
+                workflows: [
+                  {
+                    path: ".github/workflows/release.yml",
+                    content: `on:\n  push:\n    branches: [main]\njobs:\n  release:\n    steps:\n      - run: echo release\n`,
+                  },
+                ],
+                externalCiPaths: [".circleci/config.yml"],
+                workflowFetchTruncated: false,
+                defaultBranch: "main",
+                declaredCommands: ["bun run test"],
+              });
+              expect(result).toEqual(expect.objectContaining({ status: "unsupported", provider: "mixed" }));
+            });
+
+            test("bounded workflow content is incomplete rather than negative evidence", () => {
+              const result = remoteValidationOutcome({
+                workflowPaths: [
+                  ".github/workflows/a.yml",
+                  ".github/workflows/b.yml",
+                ],
+                workflows: [
+                  {
+                    path: ".github/workflows/a.yml",
+                    content: `on:\n  push:\n    branches: [main]\njobs:\n  release:\n    steps:\n      - run: echo release\n`,
+                  },
+                ],
+                externalCiPaths: [],
+                workflowFetchTruncated: true,
+                defaultBranch: "main",
+                declaredCommands: ["bun run test"],
+              });
+              expect(result.status).toBe("incomplete");
+            });
+          });
+          ''')
+
+          docs_path = Path("docs/github-pages-analysis.md")
+          docs = docs_path.read_text()
+          docs += '''
+
+          ## Remote CI validation evidence
+
+          Remote preflight distinguishes automation presence from mechanically evidenced validation. GitHub Actions workflow names do not count as validation by themselves. A workflow satisfies the v1 signal only when its inspected YAML text shows a pull-request or default-branch trigger and also invokes a repository validation command discovered from component capabilities or the coding-tooling Action seam.
+
+          Deployment/release-only workflows therefore remain automation without proven validation. Supported external CI configuration is reported as `unsupported`/external rather than as missing CI because Pages does not execute or interpret those providers. If the bounded GitHub workflow evidence cannot be inspected completely, validation evidence is `incomplete`, never satisfied or absent.
+
+          This check is structural and non-executing. Hosted check conclusions, branch protection, and whether CI actually passed remain separate evidence.
+          '''
+          docs_path.write_text(docs)
+          PY
+          bunx oxfmt site/evidence-model.js site/preflight.js site/github-analysis.js tests/site-preflight.test.js tests/remote-validation-evidence.test.js docs/github-pages-analysis.md
+          bunx oxlint site/evidence-model.js site/preflight.js site/github-analysis.js tests/site-preflight.test.js tests/remote-validation-evidence.test.js
+          bun test tests/remote-validation-evidence.test.js tests/site-preflight.test.js tests/site-change-aware.test.js tests/site-remote-command.test.js
+      - name: Commit product changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/evidence-model.js site/preflight.js site/github-analysis.js tests/site-preflight.test.js tests/remote-validation-evidence.test.js docs/github-pages-analysis.md
+          git commit -m "Add conservative remote CI validation evidence"
+          git push origin HEAD:feat/remote-validation-evidence-v1
