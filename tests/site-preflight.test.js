@@ -188,11 +188,13 @@ describe("GitHub Pages repository preflight", () => {
   });
 
   test("scopes structural test evidence to sibling components", () => {
-    const manifest = (name) => ({
-      name,
-      packageManager: "bun@1.4.0",
-      scripts: { "format:check": "fmt", lint: "lint", typecheck: "tsc", test: "test" },
-    });
+    function manifest(name) {
+      return {
+        name,
+        packageManager: "bun@1.4.0",
+        scripts: { "format:check": "fmt", lint: "lint", typecheck: "tsc", test: "test" },
+      };
+    }
     const analysis = analyzeSnapshot(
       repository({
         tree: [
