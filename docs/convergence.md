@@ -1,6 +1,6 @@
 # Deterministic convergence
 
-`coding-tooling converge` repeatedly applies only remediation that is already mechanically proven safe, then stops at a fixed point and returns any remaining work as an explicit agent handoff.
+`coding-tooling converge` repeatedly applies only remediation that is already mechanically proven safe, normalizes the resulting code to a deterministic local fixed point, and returns any remaining semantic work as an explicit agent handoff.
 
 It is not an autonomous implementation loop. It does not decide what feature should exist, invent business behavior, suppress findings, accept baselines, overwrite collisions, or ask an LLM to repair code.
 
@@ -11,7 +11,9 @@ findings
   -> remediation candidates
   -> deterministic scaffolds only
   -> findings again
-  -> repeat while the finding state changes
+  -> repeat while mechanical work remains
+  -> deterministic normalization
+  -> findings again
   -> strict validation
   -> converged or agent handoff
 ```
@@ -25,15 +27,17 @@ coding-tooling converge --verify-tier full --json
 coding-tooling converge --no-verify --json
 ```
 
-The default verification tier is `fast` and is executed in strict mode after deterministic mutation reaches a fixed point. Validation remains separate from the convergence result: a repository can reach a structural fixed point and still fail formatting, linting, typechecking, tests, or build validation.
+The normalization phase is always local and precedes verification. It uses only closed mutation adapters and accepts the result only when a complete second normalization pass is a content no-op. See `docs/normalization.md`.
+
+The default verification tier is `fast` and is executed in strict mode after deterministic scaffolding and normalization reach a fixed point. Validation remains separate from mutation: unsupported normalization surfaces, non-fixable lint findings, type errors, failing tests, and build failures are still reported by the normal validation path rather than being guessed into edits.
 
 ## Result states
 
-- `converged` — no active findings remain in the selected debt scope.
-- `partial` — no more deterministic scaffolds are available, but findings remain for an agent or human to resolve.
-- `blocked` — a deterministic scaffold failed, the finding state stopped making progress, a previous state reappeared, or the bounded round limit was reached.
+- `converged` — no active findings remain in the selected debt scope after normalization.
+- `partial` — no more deterministic scaffolds are available, normalization is stable, but findings remain for an agent or human to resolve.
+- `blocked` — a deterministic scaffold failed, normalization failed or was non-idempotent, the finding state stopped making progress, a previous state reappeared, or the bounded scaffold-round limit was reached.
 
-`partial` is a successful deterministic fixed point, not a claim that implementation is complete. The `handoff` field contains the remaining remediation candidates with stable finding IDs, subjects, related files, and verification commands.
+`partial` is a successful deterministic fixed point, not a claim that implementation is complete. The `handoff` field contains the remaining remediation candidates with stable finding IDs, subjects, related files, and verification commands. The `normalizations` field records each normalization fixed-point attempt performed during the convergence run.
 
 ## Convergence properties
 
@@ -41,10 +45,11 @@ The design borrows the useful fixed-point ideas often associated with convergent
 
 - finding identities are stable and regenerated from repository state;
 - generator/scaffold application is idempotent and collision-safe;
-- mutation order is deterministic;
-- every round is re-observed from current repository state rather than replayed from stale plans;
+- normalization order is deterministic and its second pass must be a no-op;
+- every mechanical phase is re-observed from current repository state rather than replayed from stale plans;
+- normalization may expose new deterministic scaffold work, in which case convergence re-enters the scaffold phase;
 - repeated finding-state fingerprints detect oscillation;
-- a round that changes no finding state fails closed;
+- a scaffold round that changes no finding state fails closed;
 - generated application files immediately become ordinary user-owned repository code.
 
 The system does not require generator operations to commute. When two deterministic mutations conflict, the collision is evidence that the state cannot be merged mechanically and convergence stops.
@@ -73,11 +78,13 @@ generator materializes declared structure
   -> findings expose the exact marker/file/line
   -> converge returns partial + agent handoff
   -> agent implements semantics and removes the marker
-  -> formatter/linter/typechecker/tests provide deterministic verification
-  -> converge is rerun against the new state
+  -> normalization canonicalizes safe mechanical output
+  -> findings are regenerated
+  -> formatter/linter/typechecker/tests/build verify the normalized state
+  -> fixed point or another explicit handoff
 ```
 
-The existing Bun missing-test scaffold now follows this model. It may create the mechanical test file and a `test.todo`, but it also writes a deterministic structured marker instructing the agent to replace the placeholder with meaningful assertions. The original structural missing-test finding disappears; the semantic work-marker finding remains until the test is actually implemented.
+The existing Bun missing-test scaffold follows this model. It may create the mechanical test file and a `test.todo`, but it also writes a deterministic structured marker instructing the agent to replace the placeholder with meaningful assertions. The original structural missing-test finding disappears; the semantic work-marker finding remains until the test is actually implemented.
 
 The marker is not generator ownership metadata. Once generated, the file belongs to the repository and may be edited normally. Convergence observes current evidence; it never tries to synchronize application source back to a newer template.
 
