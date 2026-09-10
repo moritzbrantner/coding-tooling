@@ -156,7 +156,7 @@ test("stops at a deterministic fixed point and returns remaining work as an agen
     handoff: [
       {
         kind: "review",
-        findingIds: ["CT-DDDDDDDDDDDD"],
+        findingIds: ["CT-DDDDDDDDDD"],
         relatedFiles: ["src/feature.generated.ts"],
       },
     ],
@@ -225,4 +225,73 @@ test("keeps convergence state separate from deterministic validation outcome", (
   expect(result.status).toBe("failed");
   expect(result.data).toMatchObject({ result: "converged", finalFindingIds: [] });
   expect(result.diagnostics[0]?.code).toBe("validation-failed");
+});
+
+test("returns converged when the final allowed mutation round reaches an empty fixed point", () => {
+  const current = finding("CT-222222222222", "src/final.ts", {
+    kind: "create-file",
+    path: "tests/final.test.ts",
+    content: "final\n",
+  });
+  let state = 0;
+  const dependencies: ConvergenceDependencies = {
+    findings: () => findingsEnvelope(state === 0 ? [current] : []),
+    scaffold: () => {
+      state = 1;
+      return scaffoldEnvelope();
+    },
+    verify: () => verificationEnvelope(),
+  };
+
+  const result = convergeRepository("/repo", { maxRounds: 1 }, dependencies);
+
+  expect(result.status).toBe("passed");
+  expect(result.data).toMatchObject({
+    result: "converged",
+    finalFindingIds: [],
+  });
+  expect(result.data.rounds).toHaveLength(1);
+});
+
+test("returns partial when the final allowed mutation round leaves only agent-owned work", () => {
+  const scaffolded = finding("CT-333333333333", "src/final-feature.ts", {
+    kind: "create-file",
+    path: "src/final-feature.generated.ts",
+    content: "// TODO: implement behavior\n",
+  });
+  const handoff = finding("CT-444444444444", "src/final-feature.generated.ts", undefined, {
+    expectationId: "source-debt-marker",
+    severity: "info",
+    requirement: {
+      kind: "signal",
+      key: "resolve-debt-marker",
+      description: "resolve generated implementation marker",
+    },
+    message: "generated implementation marker remains",
+  });
+  let state = 0;
+  const dependencies: ConvergenceDependencies = {
+    findings: () => findingsEnvelope(state === 0 ? [scaffolded] : [handoff]),
+    scaffold: () => {
+      state = 1;
+      return scaffoldEnvelope();
+    },
+    verify: () => verificationEnvelope(),
+  };
+
+  const result = convergeRepository("/repo", { maxRounds: 1 }, dependencies);
+
+  expect(result.status).toBe("passed");
+  expect(result.data).toMatchObject({
+    result: "partial",
+    finalFindingIds: ["CT-444444444444"],
+    handoff: [
+      {
+        kind: "review",
+        findingIds: ["CT-444444444444"],
+        relatedFiles: ["src/final-feature.generated.ts"],
+      },
+    ],
+  });
+  expect(result.data.rounds).toHaveLength(1);
 });
