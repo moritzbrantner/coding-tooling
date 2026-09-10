@@ -112,6 +112,21 @@ describe("remote execution evidence", () => {
     expect(evidence.failClosed.status).toBe("finding");
   });
 
+  test("keeps matrix lists outside step evidence", () => {
+    const path = ".github/workflows/validate.yml";
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: validation(path, ["npm test"]),
+      workflows: [
+        {
+          path,
+          content: `on: [pull_request]\njobs:\n  validate:\n    strategy:\n      matrix:\n        os:\n          - ubuntu-latest\n          - windows-latest\n    steps:\n      - name: Tests\n        run: npm test\n        continue-on-error: true\n`,
+        },
+      ],
+    });
+
+    expect(evidence.failClosed.status).toBe("finding");
+  });
+
   test("accepts ordinary validation failure propagation", () => {
     const path = ".github/workflows/validate.yml";
     const evidence = remoteExecutionEvidence({
