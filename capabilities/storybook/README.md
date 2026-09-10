@@ -1,15 +1,15 @@
 # Storybook capabilities
 
-Stable names:
+Stable executable names:
 
-- \`storybook:build\` — produce a static, non-interactive Storybook build.
-- \`test:storybook\` — run the repository's complete Storybook gate, including accessibility when declared.
+- `storybook:check` — run the repository-declared Storybook validation gate.
+- `test:visual` — run deterministic visual-regression or visual-contract checks when the repository declares them separately.
 
-Recognized declared scripts are listed in \`../catalog.json\`. The tool does not map the interactive \`storybook\` development script to a passing validation capability.
+The tool does not map the interactive `storybook` development script or a build script to a passing validation capability by inference. Repositories with a differently named authoritative Storybook command can map it explicitly through `capabilityCommands` without introducing another semantic capability name.
 
-Expected failure artifacts:
+Expected failure artifacts may include:
 
-- \`storybook-static\`
-- \`.generated/storybook\`
+- `storybook-static`
+- `.generated/storybook`
 
 Generated output must not be committed unless the repository explicitly treats it as a published artifact.
