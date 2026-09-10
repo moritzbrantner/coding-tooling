@@ -8,6 +8,7 @@ export type CommandResult = {
   stdout: string;
   stderr: string;
   error?: string;
+  signal?: string;
 };
 
 export function runCommand(
@@ -22,13 +23,20 @@ export function runCommand(
     stdio: inherit ? "inherit" : "pipe",
     shell: false,
   });
+  const signal = result.signal ?? undefined;
+  const error =
+    result.error?.message ?? (signal ? `Process terminated by signal ${signal}` : undefined);
 
   return {
     command: [command, ...args],
-    status: result.status ?? (result.error ? 127 : 0),
+    // A successfully completed synchronous child always has a numeric exit status.
+    // Null means it did not complete normally (for example, it was terminated by
+    // a signal). Never translate that absence into a successful validation result.
+    status: result.status ?? 127,
     stdout: typeof result.stdout === "string" ? result.stdout : "",
     stderr: typeof result.stderr === "string" ? result.stderr : "",
-    error: result.error?.message,
+    error,
+    signal,
   };
 }
 
@@ -118,7 +126,7 @@ export function findNearestFile(start: string, root: string, names: string[]): s
 
     if (current === boundary) return undefined;
     const parent = dirname(current);
-    if (parent === current || !current.startsWith(boundary)) return undefined;
+    if (parent === current || !parent.startsWith(boundary)) return undefined;
     current = parent;
   }
 }

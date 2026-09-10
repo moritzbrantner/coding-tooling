@@ -72,6 +72,15 @@ describe("Roslyn-backed .NET analysis", () => {
     });
   });
 
+  test("never reports a child process without a normal exit status as success", () => {
+    const result = runCommand(process.execPath, [
+      "-e",
+      "process.kill(process.pid, 'SIGTERM')",
+    ]);
+
+    expect(result.status).not.toBe(0);
+  });
+
   test("reports an unrestored project as unavailable when the SDK exists", () => {
     if (!commandAvailable("dotnet")) return;
     const { root } = project("namespace Fixture; public static class Value {}\n", {

@@ -1,4 +1,5 @@
 import { analysisKpisJson } from "./analysis-kpis.js";
+import { applyExecutionEvidence } from "./execution-evidence.js";
 import { applyHostedMergePolicy } from "./hosted-merge-policy.js";
 import {
   declaredMergeAuthorityEvidence,
@@ -18,13 +19,14 @@ export async function analysisJson(value, options = {}) {
 
   const snapshot = await loadSnapshot(reference, options);
   const structuralAnalysis = analyzeSnapshot(snapshot, options.now ?? new Date());
+  const executionAnalysis = applyExecutionEvidence(structuralAnalysis, snapshot);
   const declaredMergeAuthority = declaredMergeAuthorityFromSnapshot(snapshot);
   const mergeAuthority = mergeAuthorityConsistency(
     declaredMergeAuthority,
     snapshot.repository.governance.defaultBranchProtection,
   );
   const analysis = applyHostedMergePolicy(
-    structuralAnalysis,
+    executionAnalysis,
     declaredMergeAuthority,
     mergeAuthority,
   );
