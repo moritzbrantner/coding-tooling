@@ -128,7 +128,10 @@ function expectedRepositoryToolchains(analysis, snapshot) {
   const rootPackage = analysis.components?.find(
     (component) => component.kind === "package" && component.path === ".",
   );
-  if (rootPackage?.toolchain?.status === "satisfied" && EXACT_VERSION.test(rootPackage.toolchain.version ?? "")) {
+  if (
+    rootPackage?.toolchain?.status === "satisfied" &&
+    EXACT_VERSION.test(rootPackage.toolchain.version ?? "")
+  ) {
     const runtime = rootPackage.toolchain.runtime;
     if (runtime === "node" || runtime === "bun") result[runtime] = rootPackage.toolchain.version;
   }
@@ -150,7 +153,9 @@ function toolchainConsistency(expected, workflows) {
   observations.sort(observationOrder);
   const relevant = observations.filter((item) => typeof expected[item.runtime] === "string");
   const mismatches = relevant
-    .filter((item) => !EXACT_VERSION.test(item.observed) || item.observed !== expected[item.runtime])
+    .filter(
+      (item) => !EXACT_VERSION.test(item.observed) || item.observed !== expected[item.runtime],
+    )
     .map((item) => ({ ...item, expected: expected[item.runtime] }));
   if (mismatches.length > 0) {
     return { status: "finding", expected, observations, mismatches };
@@ -161,7 +166,10 @@ function toolchainConsistency(expected, workflows) {
       expected,
       observations,
       mismatches: [],
-      reason: Object.keys(expected).length === 0 ? "no-exact-repository-toolchain" : "no-literal-workflow-toolchain",
+      reason:
+        Object.keys(expected).length === 0
+          ? "no-exact-repository-toolchain"
+          : "no-literal-workflow-toolchain",
     };
   }
   return { status: "satisfied", expected, observations, mismatches: [] };
@@ -184,11 +192,15 @@ function workflowToolchainObservations(content) {
       if (observed) observations.push({ runtime, observed, source: field[1] });
       continue;
     }
-    const rustAction = line.match(/^uses\s*:\s*dtolnay\/rust-toolchain@([^\s]+)$/i) ??
+    const rustAction =
+      line.match(/^uses\s*:\s*dtolnay\/rust-toolchain@([^\s]+)$/i) ??
       line.match(/^-\s*uses\s*:\s*dtolnay\/rust-toolchain@([^\s]+)$/i);
     if (rustAction) {
       const observed = literalScalar(rustAction[1]);
-      if (observed && (EXACT_VERSION.test(observed) || /^(?:stable|beta|nightly)$/i.test(observed))) {
+      if (
+        observed &&
+        (EXACT_VERSION.test(observed) || /^(?:stable|beta|nightly)$/i.test(observed))
+      ) {
         observations.push({ runtime: "rust", observed, source: "dtolnay/rust-toolchain" });
       }
     }
@@ -229,7 +241,8 @@ function dependencyResolutionEvidence(snapshot, workflows) {
       status: "unsupported",
       observations,
       violations,
-      reason: lockKinds.length === 0 ? "no-supported-root-lockfile" : "no-literal-resolution-command",
+      reason:
+        lockKinds.length === 0 ? "no-supported-root-lockfile" : "no-literal-resolution-command",
     };
   }
   return { status: "satisfied", observations, violations };
@@ -299,7 +312,12 @@ function failClosedValidationEvidence(validationEvidence, workflows) {
   examined.sort((left, right) => left.workflow.localeCompare(right.workflow));
   suppressed.sort((left, right) => left.workflow.localeCompare(right.workflow));
   if (suppressed.length === validating.size && examined.length === validating.size) {
-    return { status: "finding", examined, suppressed, reason: "all-proven-validation-is-fail-open" };
+    return {
+      status: "finding",
+      examined,
+      suppressed,
+      reason: "all-proven-validation-is-fail-open",
+    };
   }
   if (examined.some((item) => item.status === "satisfied")) {
     return { status: "satisfied", examined, suppressed };
@@ -328,8 +346,9 @@ function failClosedWorkflow(workflowEvidence, content) {
     else unsuppressed = true;
   }
   if (unsuppressed) return { status: "satisfied", reason: "validation-fails-closed" };
-  if (mapped && explicitlySuppressed)
+  if (mapped && explicitlySuppressed) {
     return { status: "finding", reason: "validation-step-explicitly-suppresses-failure" };
+  }
   return { status: "unsupported", reason: "validation-step-not-mapped" };
 }
 
@@ -348,33 +367,55 @@ function strengthenValidationEvidence(validationEvidence, failClosed) {
 
 function workflowSteps(content) {
   const lines = String(content).split(/\r?\n/);
-  const starts = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const match = lines[index].match(/^(\s*)-\s+(.*)$/);
-    if (!match) continue;
-    starts.push({ index, indent: match[1].length });
-  }
   const steps = [];
-  for (let position = 0; position < starts.length; position += 1) {
-    const start = starts[position];
-    let end = lines.length;
-    for (let next = position + 1; next < starts.length; next += 1) {
-      if (starts[next].indent === start.indent) {
-        end = starts[next].index;
-        break;
+  for (let sectionIndex = 0; sectionIndex < lines.length; sectionIndex += 1) {
+    const section = lines[sectionIndex].match(/^(\s*)steps\s*:\s*(?:#.*)?$/);
+    if (!section) continue;
+    const sectionIndent = section[1].length;
+    let stepIndent = null;
+    for (let index = sectionIndex + 1; index < lines.length; index += 1) {
+      const raw = lines[index];
+      if (!raw.trim()) continue;
+      const indent = raw.match(/^\s*/)?.[0].length ?? 0;
+      if (indent <= sectionIndent) break;
+      const start = raw.match(/^(\s*)-\s+.+$/);
+      if (!start) continue;
+      if (stepIndent === null) stepIndent = indent;
+      if (indent !== stepIndent) continue;
+
+      let end = lines.length;
+      for (let next = index + 1; next < lines.length; next += 1) {
+        const nextRaw = lines[next];
+        if (!nextRaw.trim()) continue;
+        const nextIndent = nextRaw.match(/^\s*/)?.[0].length ?? 0;
+        if (nextIndent <= sectionIndent) {
+          end = next;
+          break;
+        }
+        if (nextIndent === stepIndent && /^\s*-\s+/.test(nextRaw)) {
+          end = next;
+          break;
+        }
       }
-      if (starts[next].indent < start.indent) break;
-    }
-    const block = lines.slice(start.index, end);
-    const commands = workflowCommands(block.join("\n"));
-    const continueOnError = block.some((raw) =>
-      /^\s*continue-on-error\s*:\s*true\s*(?:#.*)?$/i.test(raw),
-    );
-    const codingToolingAction = block.some((raw) =>
-      /^\s*(?:-\s*)?uses\s*:\s*(?:moritzbrantner\/coding-tooling@[^\s#]+|\.\/?)(?:\s+#.*)?$/i.test(raw),
-    ) && !block.some((raw) => /^\s*operation\s*:\s*(?!run\s*$)[^#]+/i.test(stripYamlComment(raw).trim()));
-    if (commands.length || codingToolingAction) {
-      steps.push({ commands, continueOnError, codingToolingAction });
+
+      const block = lines.slice(index, end);
+      const commands = workflowCommands(block.join("\n"));
+      const continueOnError = block.some((line) =>
+        /^\s*continue-on-error\s*:\s*true\s*(?:#.*)?$/i.test(line),
+      );
+      const codingToolingAction =
+        block.some((line) =>
+          /^\s*(?:-\s*)?uses\s*:\s*(?:moritzbrantner\/coding-tooling@[^\s#]+|\.\/?)(?:\s+#.*)?$/i.test(
+            line,
+          ),
+        ) &&
+        !block.some((line) =>
+          /^operation\s*:\s*(?!run\s*$)[^#]+/i.test(stripYamlComment(line).trim()),
+        );
+      if (commands.length || codingToolingAction) {
+        steps.push({ commands, continueOnError, codingToolingAction });
+      }
+      index = Math.max(index, end - 1);
     }
   }
   return steps;
@@ -385,7 +426,9 @@ function workflowCommands(content) {
   const lines = String(content).split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
     const raw = stripYamlComment(lines[index]);
-    const match = raw.match(/^(\s*)(?:-\s*)?(run|[A-Za-z0-9_-]+_command)\s*:\s*(.*)$/);
+    const match = raw.match(
+      /^(\s*)(?:-\s*)?(run|[A-Za-z0-9_-]+_command)\s*:\s*(.*)$/,
+    );
     if (!match) continue;
     const indent = match[1].length;
     const inline = match[3].trim();
@@ -416,7 +459,10 @@ function literalCommand(value) {
 function literalScalar(value) {
   let result = String(value ?? "").trim();
   if (!result || result.includes("${{")) return null;
-  if ((result.startsWith('"') && result.endsWith('"')) || (result.startsWith("'") && result.endsWith("'"))) {
+  if (
+    (result.startsWith('"') && result.endsWith('"')) ||
+    (result.startsWith("'") && result.endsWith("'"))
+  ) {
     result = result.slice(1, -1).trim();
   }
   return result || null;
