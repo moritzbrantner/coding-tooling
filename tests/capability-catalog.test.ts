@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -22,7 +22,7 @@ type Catalog = {
 };
 
 const catalog = JSON.parse(
-  await Bun.file(new URL("../capabilities/catalog.json", import.meta.url)).text(),
+  readFileSync(new URL("../capabilities/catalog.json", import.meta.url), "utf8"),
 ) as Catalog;
 
 describe("capability catalog", () => {
