@@ -23,8 +23,7 @@ const testPathPattern = /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)/;
 const testFilePattern = /\.(?:test|spec)\.[^.]+$/;
 const storyFilePattern = /\.(?:stories|story)\.[^.]+$/;
 const generatedPathPattern = /(?:^|\/)(?:generated|gen)(?:\/|$)/;
-const debtMarkerPattern =
-  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!\(coding-tooling:)|FIXME)\b/i;
+const debtMarkerPattern = /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!\(coding-tooling:)|FIXME)\b/i;
 const workMarkerPattern =
   /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i;
 const unimplementedPatterns = [
@@ -39,7 +38,8 @@ function sourceFiles(root: string, includeTests: boolean): string[] {
       const local = relativePosix(root, path);
       if (!sourceExtensions.has(extname(local))) return false;
       if (local.endsWith(".d.ts")) return false;
-      if (!includeTests && (testPathPattern.test(local) || testFilePattern.test(local))) return false;
+      if (!includeTests && (testPathPattern.test(local) || testFilePattern.test(local)))
+        return false;
       if (storyFilePattern.test(local) || generatedPathPattern.test(local)) return false;
       return true;
     })

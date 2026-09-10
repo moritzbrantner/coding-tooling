@@ -3,9 +3,7 @@ export function applyHostedMergePolicy(analysis, declaration, consistency) {
   if (!policy) return analysis;
 
   const findings = [...analysis.findings, policy.finding];
-  const highPriorityFindingCount = findings.filter(
-    (finding) => finding.severity === "high",
-  ).length;
+  const highPriorityFindingCount = findings.filter((finding) => finding.severity === "high").length;
   const status = policy.incomplete
     ? "incomplete"
     : analysis.summary.status === "incomplete"

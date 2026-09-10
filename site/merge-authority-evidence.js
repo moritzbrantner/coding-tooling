@@ -71,7 +71,8 @@ export function mergeAuthorityConsistency(declaration, defaultBranchProtection) 
   if (defaultBranchProtection.requiredStatusChecks?.status !== "observed")
     return consistency("unavailable", declaration, defaultBranchProtection, {
       reason:
-        defaultBranchProtection.requiredStatusChecks?.reason ?? "required-status-checks-unavailable",
+        defaultBranchProtection.requiredStatusChecks?.reason ??
+        "required-status-checks-unavailable",
     });
 
   const declared = declaration.requiredChecks;
@@ -80,12 +81,19 @@ export function mergeAuthorityConsistency(declaration, defaultBranchProtection) 
   const declaredSet = new Set(declared);
   const missingDeclaredChecks = declared.filter((check) => !enforcedSet.has(check));
   const additionalEnforcedChecks = enforced.filter((check) => !declaredSet.has(check));
-  return consistency(missingDeclaredChecks.length ? "mismatch" : "aligned", declaration, defaultBranchProtection, {
-    reason: missingDeclaredChecks.length ? "declared-checks-not-enforced" : "declared-checks-enforced",
-    enforcedRequiredChecks: enforced,
-    missingDeclaredChecks,
-    additionalEnforcedChecks,
-  });
+  return consistency(
+    missingDeclaredChecks.length ? "mismatch" : "aligned",
+    declaration,
+    defaultBranchProtection,
+    {
+      reason: missingDeclaredChecks.length
+        ? "declared-checks-not-enforced"
+        : "declared-checks-enforced",
+      enforcedRequiredChecks: enforced,
+      missingDeclaredChecks,
+      additionalEnforcedChecks,
+    },
+  );
 }
 
 function consistency(state, declaration, defaultBranchProtection, overrides = {}) {
@@ -97,9 +105,7 @@ function consistency(state, declaration, defaultBranchProtection, overrides = {}
     missingDeclaredChecks: [],
     additionalEnforcedChecks: [],
     branchProtected:
-      defaultBranchProtection?.status === "observed"
-        ? defaultBranchProtection.protected
-        : null,
+      defaultBranchProtection?.status === "observed" ? defaultBranchProtection.protected : null,
     reason: null,
     ...overrides,
   };

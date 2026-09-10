@@ -4,16 +4,12 @@ import { applyHostedMergePolicy } from "../site/hosted-merge-policy.js";
 
 describe("GitHub Pages hosted merge policy", () => {
   test("turns an opted-in hosted enforcement mismatch into a blocking finding", () => {
-    const result = applyHostedMergePolicy(
-      analysis(),
-      declaration("hosted"),
-      {
-        state: "mismatch",
-        branchProtected: false,
-        missingDeclaredChecks: ["Pages", "Validate"],
-        reason: "default-branch-unprotected",
-      },
-    );
+    const result = applyHostedMergePolicy(analysis(), declaration("hosted"), {
+      state: "mismatch",
+      branchProtected: false,
+      missingDeclaredChecks: ["Pages", "Validate"],
+      reason: "default-branch-unprotected",
+    });
 
     expect(result.summary).toEqual(
       expect.objectContaining({
@@ -32,16 +28,12 @@ describe("GitHub Pages hosted merge policy", () => {
   });
 
   test("fails closed when opted-in hosted enforcement cannot be observed", () => {
-    const result = applyHostedMergePolicy(
-      analysis(),
-      declaration("hosted"),
-      {
-        state: "unavailable",
-        branchProtected: null,
-        missingDeclaredChecks: [],
-        reason: "github-http-403",
-      },
-    );
+    const result = applyHostedMergePolicy(analysis(), declaration("hosted"), {
+      state: "unavailable",
+      branchProtected: null,
+      missingDeclaredChecks: [],
+      reason: "github-http-403",
+    });
 
     expect(result.summary).toEqual(
       expect.objectContaining({
@@ -61,11 +53,10 @@ describe("GitHub Pages hosted merge policy", () => {
   });
 
   test("does not create governance findings without an explicit hosted declaration", () => {
-    const local = applyHostedMergePolicy(
-      analysis(),
-      declaration("local"),
-      { state: "not-applicable", branchProtected: false },
-    );
+    const local = applyHostedMergePolicy(analysis(), declaration("local"), {
+      state: "not-applicable",
+      branchProtected: false,
+    });
     const undeclared = applyHostedMergePolicy(
       analysis(),
       {
@@ -84,17 +75,13 @@ describe("GitHub Pages hosted merge policy", () => {
   });
 
   test("keeps aligned hosted authority clean even with extra enforced checks", () => {
-    const result = applyHostedMergePolicy(
-      analysis(),
-      declaration("hosted"),
-      {
-        state: "aligned",
-        branchProtected: true,
-        missingDeclaredChecks: [],
-        additionalEnforcedChecks: ["Security"],
-        reason: "declared-checks-enforced",
-      },
-    );
+    const result = applyHostedMergePolicy(analysis(), declaration("hosted"), {
+      state: "aligned",
+      branchProtected: true,
+      missingDeclaredChecks: [],
+      additionalEnforcedChecks: ["Security"],
+      reason: "declared-checks-enforced",
+    });
 
     expect(result).toEqual(analysis());
   });
@@ -121,16 +108,12 @@ describe("GitHub Pages hosted merge policy", () => {
 
   test("preserves an existing incomplete status when adding a mismatch", () => {
     const base = analysis({ status: "incomplete" });
-    const result = applyHostedMergePolicy(
-      base,
-      declaration("hosted"),
-      {
-        state: "mismatch",
-        branchProtected: true,
-        missingDeclaredChecks: ["Validate"],
-        reason: "declared-checks-not-enforced",
-      },
-    );
+    const result = applyHostedMergePolicy(base, declaration("hosted"), {
+      state: "mismatch",
+      branchProtected: true,
+      missingDeclaredChecks: ["Validate"],
+      reason: "declared-checks-not-enforced",
+    });
 
     expect(result.summary.status).toBe("incomplete");
     expect(result.summary.highPriorityFindingCount).toBe(1);

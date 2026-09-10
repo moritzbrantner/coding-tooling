@@ -145,9 +145,7 @@ describe("expectation detector registry contract", () => {
       independenceKey: "typescript-compiler",
     });
 
-    const dotNetAssignability = registry.find(
-      (entry) => entry.id === "dotnet-type-assignability",
-    );
+    const dotNetAssignability = registry.find((entry) => entry.id === "dotnet-type-assignability");
     expect(dotNetAssignability?.evidenceContract).toMatchObject({
       basis: "semantic",
       oracle: "dotnet-roslyn",
@@ -156,9 +154,7 @@ describe("expectation detector registry contract", () => {
 
     const testReachabilityKeys = registry
       .filter((entry) =>
-        ["javascript-source-test", "rust-source-test", "typescript-source-test"].includes(
-          entry.id,
-        ),
+        ["javascript-source-test", "rust-source-test", "typescript-source-test"].includes(entry.id),
       )
       .map((entry) => entry.evidenceContract.independenceKey);
     expect(testReachabilityKeys).toEqual([
@@ -171,7 +167,9 @@ describe("expectation detector registry contract", () => {
       .filter((entry) => ["source-debt-marker", "source-unimplemented-stub"].includes(entry.id))
       .map((entry) => entry.evidenceContract.independenceKey);
     expect(sourceScanKeys).toEqual(["source-text-scan", "source-text-scan"]);
-    expect(registry.find((entry) => entry.id === "source-work-marker")?.evidenceContract).toMatchObject({
+    expect(
+      registry.find((entry) => entry.id === "source-work-marker")?.evidenceContract,
+    ).toMatchObject({
       basis: "syntax",
       oracle: "bounded-structured-work-marker-scan",
       independenceKey: "source-work-marker-scan",

@@ -66,9 +66,12 @@ describe("repository gap detectors", () => {
     const root = fixture({ test: "bun test" });
     writeFileSync(
       join(root, "src", "service.ts"),
-      ["/// TODO: document API", "/** FIXME: replace adapter */", "## TODO: python-style docs", ""].join(
-        "\n",
-      ),
+      [
+        "/// TODO: document API",
+        "/** FIXME: replace adapter */",
+        "## TODO: python-style docs",
+        "",
+      ].join("\n"),
     );
 
     const finding = analyzeExpectations(root).findings.find(

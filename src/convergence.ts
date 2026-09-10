@@ -9,10 +9,7 @@ import {
 } from "./expectations.ts";
 import type { ResultEnvelope } from "./model.ts";
 import { normalizeRepository, repositoryContentFingerprint } from "./normalization.ts";
-import {
-  planRemediationCandidates,
-  type RemediationCandidate,
-} from "./remediation-plan.ts";
+import { planRemediationCandidates, type RemediationCandidate } from "./remediation-plan.ts";
 
 export type ConvergenceResult = "converged" | "partial" | "blocked";
 
@@ -74,8 +71,7 @@ function findingsFrom(envelope: ExpectationEnvelope): Finding[] {
 function selectedFindings(findings: Finding[], includeBaseline: boolean): Finding[] {
   return findings
     .filter(
-      (finding) =>
-        finding.disposition === "active" && (includeBaseline || finding.state === "new"),
+      (finding) => finding.disposition === "active" && (includeBaseline || finding.state === "new"),
     )
     .sort((left, right) => left.id.localeCompare(right.id));
 }
@@ -89,10 +85,7 @@ function diagnosticCode(envelope: ExpectationEnvelope, code: string): boolean {
   return envelope.diagnostics.some((diagnostic) => diagnostic.code === code);
 }
 
-function handoffCandidates(
-  findings: Finding[],
-  includeBaseline: boolean,
-): RemediationCandidate[] {
+function handoffCandidates(findings: Finding[], includeBaseline: boolean): RemediationCandidate[] {
   return planRemediationCandidates(findings, { includeBaseline }).filter(
     (candidate) => candidate.kind !== "deterministic-scaffold",
   );
@@ -236,7 +229,12 @@ export function convergeRepository(
   let finalFindings: Finding[] = [];
 
   for (let round = 1; round <= maxRounds; round += 1) {
-    const observed = readSelectedFindings(root, includeBaseline, dependencies, "findings-unavailable");
+    const observed = readSelectedFindings(
+      root,
+      includeBaseline,
+      dependencies,
+      "findings-unavailable",
+    );
     if (!observed.findings) {
       return {
         schemaVersion: 1,

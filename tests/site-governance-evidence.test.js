@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  analysisJson,
-  repositoryGovernanceEvidence,
-} from "../site/github-analysis.js";
+import { analysisJson, repositoryGovernanceEvidence } from "../site/github-analysis.js";
 
 describe("GitHub Pages repository governance evidence", () => {
   test("preserves observed false and absent governance facts distinctly", () => {
@@ -60,10 +57,7 @@ describe("GitHub Pages repository governance evidence", () => {
           protection: {
             required_status_checks: {
               contexts: ["Validate", "Cross-platform / macos-latest"],
-              checks: [
-                { context: "Cross-platform / windows-latest" },
-                { context: "Validate" },
-              ],
+              checks: [{ context: "Cross-platform / windows-latest" }, { context: "Validate" }],
             },
           },
         },
@@ -76,11 +70,7 @@ describe("GitHub Pages repository governance evidence", () => {
       provenance: { source: "default-branch-metadata" },
       requiredStatusChecks: {
         status: "observed",
-        names: [
-          "Cross-platform / macos-latest",
-          "Cross-platform / windows-latest",
-          "Validate",
-        ],
+        names: ["Cross-platform / macos-latest", "Cross-platform / windows-latest", "Validate"],
       },
     });
   });

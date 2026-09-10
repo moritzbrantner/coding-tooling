@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  analysisKpisJson,
-  parsePublicContractSnapshot,
-} from "../site/analysis-kpis.js";
+import { analysisKpisJson, parsePublicContractSnapshot } from "../site/analysis-kpis.js";
 
 const revision = "0123456789abcdef0123456789abcdef01234567";
 
