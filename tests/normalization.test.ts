@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   normalizeRepository,
   planNormalization,
+  repositoryContentFingerprint,
   type Normalizer,
 } from "../src/normalization.ts";
 import type { CommandResult } from "../src/shared.ts";
@@ -62,6 +63,28 @@ test("plans safe package lint fixes before formatter writes", () => {
   ]);
 });
 
+test("requires a package fixer to match the tool used by the check script", () => {
+  const root = fixture();
+  writeJson(join(root, "package.json"), {
+    name: "fixture",
+    scripts: {
+      "format:check": "prettier --check .",
+      "format:write": "oxfmt .",
+      lint: "eslint .",
+      "lint:fix": "oxlint --fix .",
+    },
+  });
+  writeFileSync(join(root, "bun.lock"), "");
+
+  const plan = planNormalization(root);
+
+  expect(plan.normalizers).toEqual([]);
+  expect(plan.unsupported.map((item) => item.capability).sort()).toEqual([
+    "format:check",
+    "lint",
+  ]);
+});
+
 test("uses cargo fmt as a deterministic formatter but does not invent a clippy fixer", () => {
   const root = fixture();
   writeFileSync(
@@ -81,7 +104,10 @@ test("uses cargo fmt as a deterministic formatter but does not invent a clippy f
     }),
   ]);
   expect(plan.unsupported).toEqual([
-    expect.objectContaining({ capability: "lint", command: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"] }),
+    expect.objectContaining({
+      capability: "lint",
+      command: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+    }),
   ]);
 });
 
@@ -140,6 +166,71 @@ test("fails closed when the second normalization pass changes content again", ()
   expect(result.diagnostics[0]?.code).toBe("normalization-not-idempotent");
 });
 
+test("reports first-pass mutations when a later normalization command fails", () => {
+  const root = packageFixture();
+  mkdirSync(join(root, "src"), { recursive: true });
+  const source = join(root, "src", "value.ts");
+  writeFileSync(source, "before\n");
+  let executions = 0;
+
+  const result = normalizeRepository(root, {
+    execute: (_root, normalizer) => {
+      executions += 1;
+      if (executions === 1) {
+        writeFileSync(source, "after-safe-fix\n");
+        return success(normalizer);
+      }
+      return {
+        command: normalizer.command,
+        status: 1,
+        stdout: "",
+        stderr: "formatter failed",
+      };
+    },
+  });
+
+  expect(result.status).toBe("failed");
+  expect(result.data).toMatchObject({
+    result: "blocked",
+    changed: true,
+    idempotent: false,
+  });
+  expect(result.data.currentFingerprint).not.toBe(result.data.beforeFingerprint);
+});
+
+test("reports verification-pass mutations when a later normalization command fails", () => {
+  const root = packageFixture();
+  mkdirSync(join(root, "src"), { recursive: true });
+  const source = join(root, "src", "value.ts");
+  writeFileSync(source, "before\n");
+  let executions = 0;
+
+  const result = normalizeRepository(root, {
+    execute: (_root, normalizer) => {
+      executions += 1;
+      if (executions <= 2) return success(normalizer);
+      if (executions === 3) {
+        writeFileSync(source, "changed-on-verification\n");
+        return success(normalizer);
+      }
+      return {
+        command: normalizer.command,
+        status: 1,
+        stdout: "",
+        stderr: "formatter failed on verification",
+      };
+    },
+  });
+
+  expect(result.status).toBe("failed");
+  expect(result.data).toMatchObject({
+    result: "blocked",
+    changed: true,
+    idempotent: false,
+  });
+  expect(result.data.currentFingerprint).not.toBe(result.data.normalizedFingerprint);
+});
+
 test("fails closed when a known normalization command fails", () => {
   const root = packageFixture();
 
@@ -153,8 +244,24 @@ test("fails closed when a known normalization command fails", () => {
   });
 
   expect(result.status).toBe("failed");
-  expect(result.data).toMatchObject({ result: "blocked", idempotent: false });
+  expect(result.data).toMatchObject({ result: "blocked", changed: false, idempotent: false });
   expect(result.diagnostics[0]?.code).toBe("normalization-command-failed");
+});
+
+test("fingerprints deeply nested repository content without the detector traversal bound", () => {
+  const root = fixture();
+  let directory = root;
+  for (let depth = 0; depth < 20; depth += 1) {
+    directory = join(directory, `level-${depth}`);
+    mkdirSync(directory);
+  }
+  const source = join(directory, "value.ts");
+  writeFileSync(source, "before\n");
+  const before = repositoryContentFingerprint(root);
+
+  writeFileSync(source, "after\n");
+
+  expect(repositoryContentFingerprint(root)).not.toBe(before);
 });
 
 test("reports unsafe or unknown mutation surfaces without executing guessed fixes", () => {
