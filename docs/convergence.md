@@ -35,7 +35,7 @@ The default verification tier is `fast` and is executed in strict mode after det
 
 - `converged` — no active findings remain in the selected debt scope after normalization.
 - `partial` — no more deterministic scaffolds are available, normalization is stable, but findings remain for an agent or human to resolve.
-- `blocked` — a deterministic scaffold failed, normalization failed or was non-idempotent, the finding state stopped making progress, a previous state reappeared, or the bounded scaffold-round limit was reached.
+- `blocked` — a deterministic scaffold failed, normalization failed or was non-idempotent, repository/finding state stopped making progress, a previous state reappeared, or the bounded scaffold-round limit was reached.
 
 `partial` is a successful deterministic fixed point, not a claim that implementation is complete. The `handoff` field contains the remaining remediation candidates with stable finding IDs, subjects, related files, and verification commands. The `normalizations` field records each normalization fixed-point attempt performed during the convergence run.
 
@@ -48,8 +48,8 @@ The design borrows the useful fixed-point ideas often associated with convergent
 - normalization order is deterministic and its second pass must be a no-op;
 - every mechanical phase is re-observed from current repository state rather than replayed from stale plans;
 - normalization may expose new deterministic scaffold work, in which case convergence re-enters the scaffold phase;
-- repeated finding-state fingerprints detect oscillation;
-- a scaffold round that changes no finding state fails closed;
+- repeated fingerprints of repository content plus finding state detect true oscillation without mistaking a legitimate normalized rewrite for a cycle;
+- a scaffold round that changes neither repository content nor finding state fails closed;
 - generated application files immediately become ordinary user-owned repository code.
 
 The system does not require generator operations to commute. When two deterministic mutations conflict, the collision is evidence that the state cannot be merged mechanically and convergence stops.
