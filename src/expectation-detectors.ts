@@ -7,6 +7,7 @@ import {
   missingTestCapabilityFindings,
   sourceDebtMarkerFindings,
   sourceUnimplementedStubFindings,
+  sourceWorkMarkerFindings,
 } from "./expectation-gap-detectors.ts";
 import {
   missingAggregateCheckFindings,
@@ -210,10 +211,10 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "syntax",
       oracle: "bounded-source-text-scan",
       independenceKey: "source-text-scan",
-      proves: "Recognized TODO/FIXME markers are present in inspected production source text.",
+      proves: "Recognized unstructured TODO/FIXME markers are present in inspected production source text.",
       limitations: [
         "Does not prove that a marker represents actionable or current debt.",
-        "Does not understand comments or strings beyond the detector's bounded lexical contract.",
+        "Structured TODO(coding-tooling:...) markers are owned by source-work-marker instead of being double-counted here.",
       ],
     },
     detect: sourceDebtMarkerFindings,
@@ -235,6 +236,25 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       ],
     },
     detect: sourceUnimplementedStubFindings,
+  },
+  {
+    id: "source-work-marker",
+    version: 1,
+    description:
+      "Structured coding-tooling TODO markers expose exact implementation work in source and tests",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    evidenceContract: {
+      basis: "syntax",
+      oracle: "bounded-structured-work-marker-scan",
+      independenceKey: "source-work-marker-scan",
+      proves: "A recognized TODO(coding-tooling:<key>): <instruction> marker exists at the reported source path and line.",
+      limitations: [
+        "Does not prove that the authored instruction is semantically correct or sufficient.",
+        "Recognizes only the deliberately small line-oriented comment syntax; it is not a general annotation language.",
+      ],
+    },
+    detect: sourceWorkMarkerFindings,
   },
   {
     id: "typescript-project-config",

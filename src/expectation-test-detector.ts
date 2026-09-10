@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 
@@ -173,6 +174,11 @@ function verificationForTest(packageInfo: PackageInfo, root: string, target: str
     : [["npm", "run", test.name, "--", localTarget]];
 }
 
+function testWorkMarkerKey(sourceLabel: string): string {
+  const digest = createHash("sha256").update(sourceLabel).digest("hex").slice(0, 12);
+  return `test-${digest}`;
+}
+
 function testScaffold(
   source: string,
   target: string,
@@ -180,12 +186,14 @@ function testScaffold(
 ): FindingScaffold | undefined {
   if (!usesBunTestRunner(packageInfo)) return undefined;
   const sourceLabel = normalizePath(relative(packageInfo.directory, source));
+  const workMarker = testWorkMarkerKey(sourceLabel);
   return {
     kind: "create-file",
     path: target,
     content: `import { describe, test } from "bun:test";
 
 describe(${JSON.stringify(sourceLabel)}, () => {
+  // TODO(coding-tooling:${workMarker}): Replace this scaffold with meaningful deterministic assertions for ${sourceLabel}.
   test.todo("add deterministic coverage");
 });
 `,

@@ -50,6 +50,7 @@ export type ResultOperation =
   | "conventions-check"
   | "conventions-diff"
   | "conventions-update"
+  | "converge"
   | "generate"
   | "pr";
 

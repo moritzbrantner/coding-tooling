@@ -23,24 +23,34 @@ const testPathPattern = /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)/;
 const testFilePattern = /\.(?:test|spec)\.[^.]+$/;
 const storyFilePattern = /\.(?:stories|story)\.[^.]+$/;
 const generatedPathPattern = /(?:^|\/)(?:generated|gen)(?:\/|$)/;
-const debtMarkerPattern = /(?:\/\/|#|\/\*|\*)\s*(?:TODO|FIXME)\b/i;
+const debtMarkerPattern = /(?:\/\/|#|\/\*|\*)\s*(?:TODO(?!\(coding-tooling:)|FIXME)\b/i;
+const workMarkerPattern =
+  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i;
 const unimplementedPatterns = [
   /\b(?:todo|unimplemented)!\s*\(/,
   /\bthrow\s+new\s+NotImplementedException\s*\(/,
   /\bthrow\s+new\s+Error\s*\(\s*["'`]Not implemented\b/i,
 ];
 
-export function productionSourceFiles(root: string): string[] {
+function sourceFiles(root: string, includeTests: boolean): string[] {
   return walkFiles(root, 8)
     .filter((path) => {
       const local = relativePosix(root, path);
       if (!sourceExtensions.has(extname(local))) return false;
       if (local.endsWith(".d.ts")) return false;
-      if (testPathPattern.test(local) || testFilePattern.test(local)) return false;
+      if (!includeTests && (testPathPattern.test(local) || testFilePattern.test(local))) return false;
       if (storyFilePattern.test(local) || generatedPathPattern.test(local)) return false;
       return true;
     })
     .sort();
+}
+
+export function productionSourceFiles(root: string): string[] {
+  return sourceFiles(root, false);
+}
+
+export function workMarkerSourceFiles(root: string): string[] {
+  return sourceFiles(root, true);
 }
 
 function readSource(path: string): string | undefined {
@@ -63,6 +73,26 @@ function markerEvidence(
     count += 1;
   }
   return firstLine === undefined ? undefined : { line: firstLine, count };
+}
+
+type WorkMarker = {
+  key: string;
+  instruction: string;
+  line: number;
+};
+
+function workMarkers(content: string): WorkMarker[] {
+  return content.split(/\r?\n/).flatMap((line, index) => {
+    const match = workMarkerPattern.exec(line);
+    if (!match?.[1] || !match[2]?.trim()) return [];
+    return [
+      {
+        key: match[1].toLowerCase(),
+        instruction: match[2].trim(),
+        line: index + 1,
+      },
+    ];
+  });
 }
 
 function unimplementedEvidence(content: string): { line: number; count: number } | undefined {
@@ -108,6 +138,37 @@ export function sourceDebtMarkerFindings({ root }: DetectorContext): RawFinding[
         verification: [],
       },
     ];
+  });
+}
+
+export function sourceWorkMarkerFindings({ root }: DetectorContext): RawFinding[] {
+  return workMarkerSourceFiles(root).flatMap((path) => {
+    const content = readSource(path);
+    if (content === undefined) return [];
+    const sourcePath = relativePosix(root, path);
+    return workMarkers(content).map((marker) => ({
+      subject: {
+        kind: "file" as const,
+        key: `${sourcePath}#coding-tooling:${marker.key}`,
+        path: sourcePath,
+        description: `Work marker ${marker.key} in ${sourcePath}:${marker.line}`,
+      },
+      requirement: {
+        kind: "signal" as const,
+        key: `resolve-work-marker:${marker.key}`,
+        description: marker.instruction,
+      },
+      message: marker.instruction,
+      evidence: [
+        {
+          kind: "file" as const,
+          path: sourcePath,
+          detail: `TODO(coding-tooling:${marker.key}) on line ${marker.line}: ${marker.instruction}`,
+        },
+      ],
+      relatedFiles: [sourcePath],
+      verification: [],
+    }));
   });
 }
 

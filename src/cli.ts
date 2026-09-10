@@ -8,6 +8,7 @@ import { bootstrapRepository } from "./bootstrap.ts";
 import { conformanceReport } from "./conformance.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
+import { convergeRepository } from "./convergence.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { auditDependencies } from "./dependency-audit.ts";
 import {
@@ -157,6 +158,7 @@ function usage(): never {
   coding-tooling conventions diff [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions update [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]
+  coding-tooling converge [--include-baseline] [--max-rounds <n>] [--verify-tier <name>|--no-verify] [--json]
   coding-tooling generate list [--json]
   coding-tooling generate describe <id> [--json]
   coding-tooling generate plan <id> [--input name=value]... [--target <path>] [--json]
@@ -291,6 +293,22 @@ export function main(argv = process.argv.slice(2)): number {
         profile: stringOption(options, "profile"),
       });
     } else return usage();
+  } else if (command === "converge") {
+    if (positional.length > 0) return usage();
+    const maxRoundsOption = stringOption(options, "max-rounds");
+    const maxRounds = maxRoundsOption === undefined ? undefined : Number(maxRoundsOption);
+    if (
+      maxRounds !== undefined &&
+      (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 100)
+    )
+      return usage();
+    const explicitVerifyTier = stringOption(options, "verify-tier");
+    if (options["no-verify"] && explicitVerifyTier) return usage();
+    result = convergeRepository(root, {
+      includeBaseline: Boolean(options["include-baseline"]),
+      maxRounds,
+      verifyTier: options["no-verify"] ? null : explicitVerifyTier,
+    });
   } else if (command === "generate") {
     const action = positional[0];
     if (!action) return usage();

@@ -2,7 +2,10 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { loadConfig } from "./core.ts";
-import { productionSourceFiles } from "./expectation-gap-detectors.ts";
+import {
+  productionSourceFiles,
+  workMarkerSourceFiles,
+} from "./expectation-gap-detectors.ts";
 import { createDetectorContext, type PackageInfo } from "./expectation-package-context.ts";
 import { explicitCargoTargets } from "./expectation-rust-detector.ts";
 import { rustTestSurfaces } from "./expectation-rust-test-detector.ts";
@@ -115,7 +118,9 @@ function categoryForExpectation(id: string): RepositoryScoreCategory {
     return "correctness";
   }
   if (id.includes("aggregate-check") || id.includes("required-capability")) return "automation";
-  if (id.includes("config") || id.includes("debt")) return "maintainability";
+  if (id.includes("config") || id.includes("debt") || id.includes("work-marker")) {
+    return "maintainability";
+  }
   return "other";
 }
 
@@ -197,6 +202,7 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
     packageInfo.sourceFiles.map((path) => relativePosix(root, path)),
   );
   const productionSources = productionSourceFiles(root).map((path) => relativePosix(root, path));
+  const workMarkerSources = workMarkerSourceFiles(root).map((path) => relativePosix(root, path));
 
   models.set(
     "javascript-source-test",
@@ -213,6 +219,15 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
   models.set(
     "source-unimplemented-stub",
     countSubjects(productionSources, directFindingSubjects(findings, "source-unimplemented-stub")),
+  );
+  models.set(
+    "source-work-marker",
+    countSubjects(
+      workMarkerSources,
+      unresolved(findings, "source-work-marker")
+        .map((finding) => finding.subject.path)
+        .filter((path): path is string => path !== undefined),
+    ),
   );
 
   const testCapabilityPackages = context.packages
