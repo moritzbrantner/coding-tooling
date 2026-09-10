@@ -271,9 +271,28 @@ export function planNormalization(root: string): NormalizationPlan {
   };
 }
 
+function fingerprintFiles(root: string): string[] {
+  const listed = runCommand(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+    root,
+  );
+  if (!listed.error && listed.status === 0) {
+    return [
+      ...new Set(
+        listed.stdout
+          .split("\0")
+          .filter(Boolean)
+          .map((path) => join(root, path)),
+      ),
+    ].sort();
+  }
+  return walkFiles(root, Number.MAX_SAFE_INTEGER).sort();
+}
+
 export function repositoryContentFingerprint(root: string): string {
   const hash = createHash("sha256");
-  for (const path of walkFiles(root, Number.MAX_SAFE_INTEGER).sort()) {
+  for (const path of fingerprintFiles(root)) {
     const local = relativePosix(root, path);
     try {
       const stat = lstatSync(path);
