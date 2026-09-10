@@ -195,6 +195,7 @@ export function convergeRepository(
   const rounds: ConvergenceRound[] = [];
   const seen = new Set<string>();
   let initialFindingIds: string[] = [];
+  let finalFindings: Finding[] = [];
 
   for (let round = 1; round <= maxRounds; round += 1) {
     const beforeEnvelope = dependencies.findings(root);
@@ -297,6 +298,7 @@ export function convergeRepository(
     }
 
     const after = selectedFindings(findingsFrom(afterEnvelope), includeBaseline);
+    finalFindings = after;
     const afterIds = after.map((finding) => finding.id);
     const afterFingerprint = stateFingerprint(after);
     const resolvedFindingIds = difference(beforeIds, afterIds);
@@ -339,8 +341,22 @@ export function convergeRepository(
     }
   }
 
-  const finalEnvelope = dependencies.findings(root);
-  const finalFindings = selectedFindings(findingsFrom(finalEnvelope), includeBaseline);
+  const finalDeterministic = planRemediationCandidates(finalFindings, { includeBaseline }).filter(
+    (candidate) => candidate.kind === "deterministic-scaffold",
+  );
+  if (finalDeterministic.length === 0) {
+    return finish(
+      started,
+      root,
+      finalFindings.length === 0 ? "converged" : "partial",
+      initialFindingIds,
+      finalFindings,
+      rounds,
+      resolvedOptions,
+      dependencies,
+    );
+  }
+
   return blocked(
     started,
     root,
