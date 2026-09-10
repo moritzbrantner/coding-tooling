@@ -119,7 +119,7 @@ export function conformanceReport(
 
   const toolingConfigPresent = existsSync(join(root, configPath));
   let toolingConfig: ToolingConfig = { schemaVersion: 1 };
-  let toolingConfigValid = true;
+  let toolingConfigValid = toolingConfigPresent;
   if (!toolingConfigPresent) {
     findings.push({
       code: "tooling-config-missing",

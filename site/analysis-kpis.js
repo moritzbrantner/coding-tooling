@@ -167,8 +167,15 @@ async function loadVerificationKpis(reference, repository, currentRevision, fetc
     if (resource?.type !== "file" || resource?.encoding !== "base64")
       throw new Error("score-history-not-readable");
     const history = JSON.parse(decodeBase64(resource.content));
-    if (history?.schemaVersion !== "coding-tooling/score-history/v1")
+    const declaredSchema = history?.schemaVersion ?? history?.schema_version;
+    if (declaredSchema !== "coding-tooling/score-history/v1") {
+      if (typeof declaredSchema === "string")
+        return {
+          ...unavailableVerification("foreign-score-history-schema"),
+          foreignSchema: declaredSchema,
+        };
       throw new Error("unsupported-score-history-schema");
+    }
     if (history.repository !== repository.fullName) throw new Error("score-history-repository-mismatch");
     const entries = Array.isArray(history.entries) ? history.entries : [];
     const exact = currentRevision ? entries.find((entry) => entry?.commit === currentRevision) : null;
