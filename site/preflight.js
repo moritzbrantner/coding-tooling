@@ -72,7 +72,8 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
   const paths = new Set(
     snapshot.tree.filter((entry) => entry.type === "blob").map((entry) => entry.path),
   );
-  const components = discoverComponents(snapshot, paths);
+  const config = parseJson(snapshot.files[".coding-tooling.json"]);
+  const components = applyConfiguredCapabilities(discoverComponents(snapshot, paths), config);
   const technologies = [
     ...new Set(components.flatMap((component) => component.technologies)),
   ].toSorted();
@@ -239,6 +240,40 @@ function discoverComponents(snapshot, paths) {
   return components.toSorted(
     (left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name),
   );
+}
+
+function applyConfiguredCapabilities(components, config) {
+  if (config?.schemaVersion !== 1) return components;
+  return components.map((component) => {
+    const configured = configuredCapabilities(config, component);
+    if (Object.keys(configured).length === 0) return component;
+    return {
+      ...component,
+      configuredCapabilities: configured,
+      capabilities: { ...component.capabilities, ...configured },
+    };
+  });
+}
+
+function configuredCapabilities(config, component) {
+  const capabilityCommands = record(config?.capabilityCommands);
+  const byName = record(capabilityCommands[component.name]);
+  const byPath = record(capabilityCommands[component.path]);
+  return Object.fromEntries(
+    Object.entries({ ...byName, ...byPath }).filter(([, command]) => validCommand(command)),
+  );
+}
+
+function validCommand(command) {
+  return (
+    Array.isArray(command) &&
+    command.length > 0 &&
+    command.every((part) => typeof part === "string" && part.length > 0)
+  );
+}
+
+function record(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function findingsFor(snapshot, paths, components, validationEvidence) {
@@ -414,31 +449,57 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
       );
   }
 
-  for (const component of components.filter((item) => item.kind === "package")) {
-    const outcomes = canonicalPackageCapabilityOutcomes(component.evidence);
-    const incomplete = outcomes.filter((outcome) => outcome.status === "incomplete");
-    if (incomplete.length) {
-      add(
-        `REMOTE-CAPABILITY-${stableId(component.path)}`,
-        "medium",
-        `${component.name} capability evidence is incomplete`,
-        `Could not establish canonical script evidence for: ${incomplete.map((outcome) => outcome.capability).join(", ")}.`,
-        "Run local deterministic analysis before treating these capabilities as satisfied.",
-        "coding-tooling inspect --json",
-      );
-      continue;
-    }
-    const missing = outcomes
-      .filter((outcome) => outcome.status === "finding")
-      .map((outcome) => outcome.capability);
+  const declaredRequiredCapabilities =
+    config?.schemaVersion === 1
+      ? Array.isArray(config.requiredCapabilities)
+        ? config.requiredCapabilities.filter((capability) => typeof capability === "string")
+        : []
+      : null;
+  if (declaredRequiredCapabilities !== null) {
+    const available = new Set(
+      components.flatMap((component) =>
+        Object.entries(component.capabilities ?? {})
+          .filter(([, command]) => validCommand(command))
+          .map(([capability]) => capability),
+      ),
+    );
+    const missing = declaredRequiredCapabilities.filter((capability) => !available.has(capability)).toSorted();
     if (missing.length)
       add(
-        `REMOTE-CAPABILITY-${stableId(component.path)}`,
+        "REMOTE-CAPABILITY-REQUIRED",
         "medium",
-        `${component.name} lacks canonical validation scripts`,
-        `Missing: ${missing.join(", ")}.`,
-        "Prefer repository-declared validation scripts over agent-invented commands.",
+        "Required validation capabilities are unavailable",
+        `Missing repository-declared capabilities: ${missing.join(", ")}.`,
+        "Provide the capability through a discovered component command or .coding-tooling.json capabilityCommands.",
+        "coding-tooling conformance --json",
       );
+  } else {
+    for (const component of components.filter((item) => item.kind === "package")) {
+      const outcomes = canonicalPackageCapabilityOutcomes(component.evidence);
+      const incomplete = outcomes.filter((outcome) => outcome.status === "incomplete");
+      if (incomplete.length) {
+        add(
+          `REMOTE-CAPABILITY-${stableId(component.path)}`,
+          "medium",
+          `${component.name} conventional script evidence is incomplete`,
+          `Could not establish conventional package-script evidence for: ${incomplete.map((outcome) => outcome.capability).join(", ")}.`,
+          "Run local deterministic analysis before treating these conventional scripts as present or absent.",
+          "coding-tooling inspect --json",
+        );
+        continue;
+      }
+      const missing = outcomes
+        .filter((outcome) => outcome.status === "finding")
+        .map((outcome) => outcome.capability);
+      if (missing.length)
+        add(
+          `REMOTE-CAPABILITY-${stableId(component.path)}`,
+          "medium",
+          `${component.name} lacks conventional package scripts`,
+          `Conventional package scripts absent: ${missing.join(", ")}.`,
+          "Treat this as package-shape guidance; repository-declared capabilities remain authoritative when configured.",
+        );
+    }
   }
 
   if (!paths.has("AGENTS.md"))
