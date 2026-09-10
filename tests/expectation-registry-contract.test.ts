@@ -110,7 +110,7 @@ describe("expectation detector registry contract", () => {
       ["required-capability-available", 1],
       ["rust-cargo-target-path", 1],
       ["rust-source-test", 1],
-      ["source-debt-marker", 1],
+      ["source-debt-marker", 2],
       ["source-unimplemented-stub", 1],
       ["source-work-marker", 1],
       ["typescript-project-config", 1],
