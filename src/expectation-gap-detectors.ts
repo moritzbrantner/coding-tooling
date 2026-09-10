@@ -23,7 +23,8 @@ const testPathPattern = /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)/;
 const testFilePattern = /\.(?:test|spec)\.[^.]+$/;
 const storyFilePattern = /\.(?:stories|story)\.[^.]+$/;
 const generatedPathPattern = /(?:^|\/)(?:generated|gen)(?:\/|$)/;
-const debtMarkerPattern = /(?:\/\/|#|\/\*|\*)\s*(?:TODO(?!\(coding-tooling:)|FIXME)\b/i;
+const debtMarkerPattern =
+  /^\s*(?:\/\/|#|\/\*|\*)\s*(?:TODO(?!\(coding-tooling:)|FIXME)\b/i;
 const workMarkerPattern =
   /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i;
 const unimplementedPatterns = [
