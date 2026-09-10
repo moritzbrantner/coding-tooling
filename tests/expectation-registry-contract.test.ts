@@ -15,6 +15,7 @@ import {
   missingTestCapabilityFindings,
   sourceDebtMarkerFindings,
   sourceUnimplementedStubFindings,
+  sourceWorkMarkerFindings,
 } from "../src/expectation-gap-detectors.ts";
 import { duplicateValues, semanticFindingId } from "../src/expectation-model.ts";
 import {
@@ -71,6 +72,7 @@ function detectorBatches(context: DetectorContext): RawFinding[][] {
     missingRustTestFindings(context),
     sourceDebtMarkerFindings(context),
     sourceUnimplementedStubFindings(context),
+    sourceWorkMarkerFindings(context),
     missingTypeScriptConfigFindings(context),
     missingTestFindings(context),
     typeScriptAssignabilityFindings(context),
@@ -93,6 +95,7 @@ describe("expectation detector registry contract", () => {
       "rust-source-test",
       "source-debt-marker",
       "source-unimplemented-stub",
+      "source-work-marker",
       "typescript-project-config",
       "typescript-source-test",
       "typescript-type-assignability",
@@ -109,6 +112,7 @@ describe("expectation detector registry contract", () => {
       ["rust-source-test", 1],
       ["source-debt-marker", 1],
       ["source-unimplemented-stub", 1],
+      ["source-work-marker", 1],
       ["typescript-project-config", 1],
       ["typescript-source-test", 2],
       ["typescript-type-assignability", 1],
@@ -167,6 +171,11 @@ describe("expectation detector registry contract", () => {
       .filter((entry) => ["source-debt-marker", "source-unimplemented-stub"].includes(entry.id))
       .map((entry) => entry.evidenceContract.independenceKey);
     expect(sourceScanKeys).toEqual(["source-text-scan", "source-text-scan"]);
+    expect(registry.find((entry) => entry.id === "source-work-marker")?.evidenceContract).toMatchObject({
+      basis: "syntax",
+      oracle: "bounded-structured-work-marker-scan",
+      independenceKey: "source-work-marker-scan",
+    });
   });
 
   test("versions semantic IDs and keeps detector output deterministic", () => {
@@ -199,7 +208,7 @@ describe("expectation detector registry contract", () => {
 
     expect(repeatedBatches).toEqual(batches);
     expect(batches.map((batch) => batch.length)).toEqual([
-      0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0,
+      0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0,
     ]);
   });
 });
