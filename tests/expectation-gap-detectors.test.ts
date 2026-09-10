@@ -62,6 +62,21 @@ describe("repository gap detectors", () => {
     expect(finding?.subject.key).toBe("src/service.ts");
   });
 
+  test("ignores TODO/FIXME text inside code literals and detector patterns", () => {
+    const root = fixture({ test: "bun test" });
+    writeFileSync(
+      join(root, "src", "service.ts"),
+      [
+        'export const label = "// TODO: not a comment";',
+        "export const marker = /(?:\\/\\/|#)\\s*(?:TODO|FIXME)\\b/i;",
+        "export const service = true;",
+        "",
+      ].join("\n"),
+    );
+
+    expect(expectationIds(root)).not.toContain("source-debt-marker");
+  });
+
   test("ignores TODO markers in tests", () => {
     const root = fixture({ test: "bun test" });
     mkdirSync(join(root, "tests"), { recursive: true });
