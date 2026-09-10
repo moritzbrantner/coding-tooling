@@ -203,7 +203,7 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
   },
   {
     id: "source-debt-marker",
-    version: 1,
+    version: 2,
     description: "Production source TODO/FIXME markers are visible as explicit repository debt",
     defaultSeverity: "info",
     policyKind: "advisory",
@@ -211,8 +211,9 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "syntax",
       oracle: "bounded-source-text-scan",
       independenceKey: "source-text-scan",
-      proves: "Recognized unstructured TODO/FIXME markers are present in inspected production source text.",
+      proves: "Recognized standalone TODO/FIXME comment markers are present in inspected production source text.",
       limitations: [
+        "Only standalone comment markers are recognized; inline comments after code are intentionally outside this conservative text-scan contract.",
         "Does not prove that a marker represents actionable or current debt.",
         "Structured TODO(coding-tooling:...) markers are owned by source-work-marker instead of being double-counted here.",
       ],
