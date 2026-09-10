@@ -46,7 +46,9 @@ function findingsEnvelope(items: Finding[]): ExpectationEnvelope {
   };
 }
 
-function normalizationEnvelope(status: ResultStatus = "passed"): ResultEnvelope<Record<string, unknown>> {
+function normalizationEnvelope(
+  status: ResultStatus = "passed",
+): ResultEnvelope<Record<string, unknown>> {
   return {
     schemaVersion: 1,
     operation: "normalize",
@@ -155,8 +157,7 @@ test("re-enters deterministic scaffolding when normalization exposes new mechani
   };
   let state = 0;
   const dependencies: ConvergenceDependencies = {
-    findings: () =>
-      findingsEnvelope(state === 0 ? [] : state === 1 ? [mechanical] : []),
+    findings: () => findingsEnvelope(state === 0 ? [] : state === 1 ? [mechanical] : []),
     scaffold: () => {
       state = 2;
       return {
@@ -172,6 +173,8 @@ test("re-enters deterministic scaffolding when normalization exposes new mechani
       if (state === 0) state = 1;
       return normalizationEnvelope();
     },
+    stateFingerprint: (_root, findings) =>
+      `${state}:${findings.map((item) => item.id).join(",")}`,
     verify: () => verificationEnvelope(),
   };
 
