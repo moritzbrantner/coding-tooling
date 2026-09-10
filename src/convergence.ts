@@ -8,7 +8,7 @@ import {
   type Finding,
 } from "./expectations.ts";
 import type { ResultEnvelope } from "./model.ts";
-import { normalizeRepository } from "./normalization.ts";
+import { normalizeRepository, repositoryContentFingerprint } from "./normalization.ts";
 import {
   planRemediationCandidates,
   type RemediationCandidate,
@@ -37,13 +37,33 @@ export type ConvergenceDependencies = {
   findings: (root: string) => ExpectationEnvelope;
   scaffold: (root: string, findingId: string) => ExpectationEnvelope;
   normalize?: (root: string) => ResultEnvelope<Record<string, unknown>>;
+  stateFingerprint?: (root: string, findings: Finding[]) => string;
   verify: (root: string, tier: string) => ResultEnvelope<Record<string, unknown>>;
 };
+
+function findingState(findings: Finding[]): Array<Record<string, unknown>> {
+  return findings.map((finding) => ({
+    id: finding.id,
+    expectationId: finding.expectationId,
+    severity: finding.severity,
+    state: finding.state,
+    scaffold: finding.scaffold?.path,
+  }));
+}
+
+function repositoryStateFingerprint(root: string, findings: Finding[]): string {
+  return createHash("sha256")
+    .update(repositoryContentFingerprint(root))
+    .update("\0")
+    .update(JSON.stringify(findingState(findings)))
+    .digest("hex");
+}
 
 const defaultDependencies: ConvergenceDependencies = {
   findings: (root) => findingsCommand(root, { includeSuppressed: false }),
   scaffold: scaffoldFinding,
   normalize: normalizeRepository,
+  stateFingerprint: repositoryStateFingerprint,
   verify: (root, tier) => runPlan({ root, tier, strict: true }),
 };
 
@@ -58,17 +78,6 @@ function selectedFindings(findings: Finding[], includeBaseline: boolean): Findin
         finding.disposition === "active" && (includeBaseline || finding.state === "new"),
     )
     .sort((left, right) => left.id.localeCompare(right.id));
-}
-
-function stateFingerprint(findings: Finding[]): string {
-  const state = findings.map((finding) => ({
-    id: finding.id,
-    expectationId: finding.expectationId,
-    severity: finding.severity,
-    state: finding.state,
-    scaffold: finding.scaffold?.path,
-  }));
-  return createHash("sha256").update(JSON.stringify(state)).digest("hex");
 }
 
 function difference(left: readonly string[], right: readonly string[]): string[] {
@@ -130,7 +139,7 @@ function finish(
         deterministicMutationOnly: true,
         baselineDebtRequiresOptIn: true,
         collisionHandling: "fail-closed",
-        cycleDetection: "finding-state-fingerprint",
+        cycleDetection: "repository-content-and-finding-state-fingerprint",
         normalization: "closed-adapters-with-idempotence-proof",
         generatedFilesBecomeUserOwned: true,
       },
@@ -204,6 +213,7 @@ export function convergeRepository(
   const verifyTier = options.verifyTier === undefined ? "fast" : options.verifyTier;
   const resolvedOptions = { includeBaseline, maxRounds, verifyTier };
   const normalize = dependencies.normalize ?? defaultDependencies.normalize!;
+  const stateFingerprint = dependencies.stateFingerprint ?? defaultDependencies.stateFingerprint!;
 
   if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 100) {
     return blocked(
@@ -248,13 +258,13 @@ export function convergeRepository(
     let beforeIds = before.map((finding) => finding.id);
     if (round === 1) initialFindingIds = beforeIds;
 
-    let beforeFingerprint = stateFingerprint(before);
+    let beforeFingerprint = stateFingerprint(root, before);
     if (seen.has(beforeFingerprint)) {
       return blocked(
         started,
         root,
         "convergence-cycle",
-        "Deterministic remediation returned to an already observed finding state",
+        "Deterministic remediation returned to an already observed repository/finding state",
         initialFindingIds,
         before,
         rounds,
@@ -329,13 +339,13 @@ export function convergeRepository(
       }
 
       beforeIds = before.map((finding) => finding.id);
-      beforeFingerprint = stateFingerprint(before);
+      beforeFingerprint = stateFingerprint(root, before);
       if (seen.has(beforeFingerprint)) {
         return blocked(
           started,
           root,
           "convergence-cycle",
-          "Normalization returned to an already observed deterministic finding state",
+          "Normalization returned to an already observed repository/finding state with deterministic work remaining",
           initialFindingIds,
           before,
           rounds,
@@ -402,7 +412,7 @@ export function convergeRepository(
     const after = afterObservation.findings;
     finalFindings = after;
     const afterIds = after.map((finding) => finding.id);
-    const afterFingerprint = stateFingerprint(after);
+    const afterFingerprint = stateFingerprint(root, after);
     const resolvedFindingIds = difference(beforeIds, afterIds);
     const introducedFindingIds = difference(afterIds, beforeIds);
 
@@ -422,7 +432,7 @@ export function convergeRepository(
         started,
         root,
         "convergence-no-progress",
-        "Deterministic remediation completed without changing the finding state",
+        "Deterministic remediation completed without changing repository content or finding state",
         initialFindingIds,
         after,
         rounds,
@@ -435,7 +445,7 @@ export function convergeRepository(
         started,
         root,
         "convergence-cycle",
-        "Deterministic remediation produced an already observed finding state",
+        "Deterministic remediation produced an already observed repository/finding state",
         initialFindingIds,
         after,
         rounds,
