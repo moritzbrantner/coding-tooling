@@ -154,22 +154,19 @@ function defaultAssetsPrerequisite(root: string, projectPath: string): string | 
   }
 
   // Only assert the conventional obj/project.assets.json prerequisite when the
-  // repository gives us no evidence that MSBuild redirects intermediate/project
-  // assets. Imported or directory-level build configuration can legitimately
-  // change that location, so those cases stay delegated to the SDK invocation.
+  // repository gives us no evidence that MSBuild can redirect intermediate/project
+  // assets. Imported or directory-level build configuration stays delegated to
+  // the SDK invocation rather than being interpreted here.
   if (customAssetsPathPattern.test(source) || /<Import\b/i.test(source)) return undefined;
 
   let directory = dirname(projectPath);
   const boundary = resolve(root);
   while (insideRoot(boundary, directory)) {
-    for (const name of ["Directory.Build.props", "Directory.Build.targets"]) {
-      const path = join(directory, name);
-      if (!existsSync(path)) continue;
-      try {
-        if (customAssetsPathPattern.test(readFileSync(path, "utf8"))) return undefined;
-      } catch {
-        return undefined;
-      }
+    if (
+      existsSync(join(directory, "Directory.Build.props")) ||
+      existsSync(join(directory, "Directory.Build.targets"))
+    ) {
+      return undefined;
     }
     if (resolve(directory) === boundary) break;
     const parent = dirname(directory);
