@@ -2,7 +2,10 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
-import { productionSourceFiles } from "./expectation-gap-detectors.ts";
+import {
+  productionSourceFiles,
+  workMarkerSourceFiles,
+} from "./expectation-gap-detectors.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { ExpectationDescriptor } from "./expectation-detector-types.ts";
 import { explicitCargoTargets } from "./expectation-rust-detector.ts";
@@ -34,7 +37,8 @@ type CoverageTarget =
   | "script-source"
   | "rust-explicit-targets"
   | "rust-source-surface"
-  | "production-source";
+  | "production-source"
+  | "work-marker-source";
 
 const coverageTargets: Record<string, CoverageTarget> = {
   "benchmark-evidence": "packages",
@@ -48,6 +52,7 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "rust-source-test": "rust-source-surface",
   "source-debt-marker": "production-source",
   "source-unimplemented-stub": "production-source",
+  "source-work-marker": "work-marker-source",
   "typescript-project-config": "typescript-source",
   "typescript-source-test": "typescript-source",
   "typescript-type-assignability": "typescript-analysis-projects",
@@ -85,6 +90,8 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
       return rustTestSurfaces(root).length;
     case "production-source":
       return productionSourceFiles(root).length;
+    case "work-marker-source":
+      return workMarkerSourceFiles(root).length;
   }
 }
 
