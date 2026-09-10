@@ -49,6 +49,10 @@ export function productionSourceFiles(root: string): string[] {
   return sourceFiles(root, false);
 }
 
+export function workMarkerSourceFiles(root: string): string[] {
+  return sourceFiles(root, true);
+}
+
 function readSource(path: string): string | undefined {
   try {
     return readFileSync(path, "utf8");
@@ -138,7 +142,7 @@ export function sourceDebtMarkerFindings({ root }: DetectorContext): RawFinding[
 }
 
 export function sourceWorkMarkerFindings({ root }: DetectorContext): RawFinding[] {
-  return sourceFiles(root, true).flatMap((path) => {
+  return workMarkerSourceFiles(root).flatMap((path) => {
     const content = readSource(path);
     if (content === undefined) return [];
     const sourcePath = relativePosix(root, path);
