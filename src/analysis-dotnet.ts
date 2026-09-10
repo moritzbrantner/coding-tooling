@@ -1,5 +1,5 @@
-import { realpathSync } from "node:fs";
-import { basename, dirname, isAbsolute, resolve, sep } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 
 import type {
   AnalysisDiagnostic,
@@ -16,6 +16,8 @@ const globalDiagnosticPattern = /^(.*?)\s*:\s+(error|warning)\s+([A-Za-z]+\d+):\
 const projectSuffixPattern = /^(.*?)\s+\[([^\]]+\.csproj)\]$/;
 const unavailablePattern =
   /NETSDK1004|NETSDK1045|project\.assets\.json.*not found|Run a NuGet package restore|specified SDK.*could not be found/i;
+const customAssetsPathPattern =
+  /<(?:ProjectAssetsFile|MSBuildProjectExtensionsPath|BaseIntermediateOutputPath)\b/i;
 
 function severity(value: string): AnalysisDiagnosticSeverity {
   return value === "error" ? "error" : "warning";
@@ -143,10 +145,53 @@ function sdkVersion(): string | undefined {
   return result.stdout.trim() || result.stderr.trim() || undefined;
 }
 
+function defaultAssetsPrerequisite(root: string, projectPath: string): string | undefined {
+  let source: string;
+  try {
+    source = readFileSync(projectPath, "utf8");
+  } catch {
+    return undefined;
+  }
+
+  // Only assert the conventional obj/project.assets.json prerequisite when the
+  // repository gives us no evidence that MSBuild redirects intermediate/project
+  // assets. Imported or directory-level build configuration can legitimately
+  // change that location, so those cases stay delegated to the SDK invocation.
+  if (customAssetsPathPattern.test(source) || /<Import\b/i.test(source)) return undefined;
+
+  let directory = dirname(projectPath);
+  const boundary = resolve(root);
+  while (insideRoot(boundary, directory)) {
+    for (const name of ["Directory.Build.props", "Directory.Build.targets"]) {
+      const path = join(directory, name);
+      if (!existsSync(path)) continue;
+      try {
+        if (customAssetsPathPattern.test(readFileSync(path, "utf8"))) return undefined;
+      } catch {
+        return undefined;
+      }
+    }
+    if (resolve(directory) === boundary) break;
+    const parent = dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+
+  return join(dirname(projectPath), "obj", "project.assets.json");
+}
+
 function projectDiagnostics(
   root: string,
   projectPath: string,
 ): { diagnostics: AnalysisDiagnostic[]; unavailable?: string; failed?: string } {
+  const assetsPath = defaultAssetsPrerequisite(root, projectPath);
+  if (assetsPath && !existsSync(assetsPath)) {
+    return {
+      diagnostics: [],
+      unavailable: `Roslyn analysis requires a restored project: ${relativePosix(root, projectPath)}`,
+    };
+  }
+
   const result = runCommand(
     "dotnet",
     [
