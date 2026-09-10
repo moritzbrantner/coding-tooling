@@ -156,7 +156,7 @@ test("stops at a deterministic fixed point and returns remaining work as an agen
     handoff: [
       {
         kind: "review",
-        findingIds: ["CT-DDDDDDDDDD"],
+        findingIds: ["CT-DDDDDDDDDDDD"],
         relatedFiles: ["src/feature.generated.ts"],
       },
     ],
