@@ -42,7 +42,7 @@ function snapshot(tree, treeTruncated = false) {
 describe("normalized Rust and .NET manifest evidence", () => {
   test("produces equivalent manifest semantics from filesystem and GitHub collectors", () => {
     const root = mkdtempSync(join(tmpdir(), "coding-tooling-project-evidence-"));
-    write(join(root, "rust", "Cargo.toml"), "[package]\nname = \"rust\"\nversion = \"0.1.0\"\n");
+    write(join(root, "rust", "Cargo.toml"), '[package]\nname = "rust"\nversion = "0.1.0"\n');
     write(join(root, "dotnet", "App.csproj"), "<Project />\n");
     write(join(root, "dotnet", "App.sln"), "\n");
 
@@ -78,12 +78,12 @@ describe("normalized Rust and .NET manifest evidence", () => {
       );
       expect(remote).toBeDefined();
       expect(projectManifestSemantics(local)).toEqual(projectManifestSemantics(remote));
-      expect(local.facts.manifests.provenance.every(({ collector }) => collector === "filesystem")).toBe(
-        true,
-      );
-      expect(remote.facts.manifests.provenance.every(({ collector }) => collector === "github")).toBe(
-        true,
-      );
+      expect(
+        local.facts.manifests.provenance.every(({ collector }) => collector === "filesystem"),
+      ).toBe(true);
+      expect(
+        remote.facts.manifests.provenance.every(({ collector }) => collector === "github"),
+      ).toBe(true);
     }
   });
 

@@ -44,7 +44,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "structural",
       oracle: "repository-filesystem-and-capability-discovery",
       independenceKey: "repository-benchmark-structure",
-      proves: "A declared benchmark capability has a conventional benchmark artifact that coding-tooling can discover.",
+      proves:
+        "A declared benchmark capability has a conventional benchmark artifact that coding-tooling can discover.",
       limitations: [
         "Does not prove that the benchmark executes successfully.",
         "Does not prove that the benchmark is representative or measures the intended performance property.",
@@ -62,7 +63,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "semantic",
       oracle: "dotnet-roslyn",
       independenceKey: "dotnet-roslyn",
-      proves: "The pinned .NET build/Roslyn pipeline emitted CS0029 implicit-conversion diagnostics for the analyzed project state.",
+      proves:
+        "The pinned .NET build/Roslyn pipeline emitted CS0029 implicit-conversion diagnostics for the analyzed project state.",
       limitations: [
         "Does not independently confirm diagnostics already emitted by the same Roslyn invocation.",
         "Does not prove runtime correctness or that a particular repair is semantically correct.",
@@ -81,7 +83,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "structural",
       oracle: "javascript-static-test-reachability",
       independenceKey: "static-test-reachability",
-      proves: "A production JavaScript source file has mechanically discoverable matching-test or static test-reachability evidence.",
+      proves:
+        "A production JavaScript source file has mechanically discoverable matching-test or static test-reachability evidence.",
       limitations: [
         "Does not prove that the test asserts useful behavior.",
         "Does not resolve dynamic imports, unresolved aliases, or other relationships the conservative graph deliberately leaves unknown.",
@@ -100,7 +103,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "configuration",
       oracle: "package-manifest",
       independenceKey: "package-manifest",
-      proves: "A package with multiple discovered verification scripts exposes an aggregate check or verify entrypoint.",
+      proves:
+        "A package with multiple discovered verification scripts exposes an aggregate check or verify entrypoint.",
       limitations: [
         "Does not prove that the aggregate command invokes every intended verification step.",
         "Does not prove that any verification command succeeds.",
@@ -118,7 +122,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "structural",
       oracle: "package-manifest-and-filesystem",
       independenceKey: "package-structure",
-      proves: "Declared package CLI wiring resolves to mechanically discoverable source paths and missing wiring is surfaced.",
+      proves:
+        "Declared package CLI wiring resolves to mechanically discoverable source paths and missing wiring is surfaced.",
       limitations: [
         "Does not prove that the CLI starts successfully.",
         "Does not prove command behavior, argument semantics, or packaging correctness beyond the inspected wiring.",
@@ -137,7 +142,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "configuration",
       oracle: "package-manifest-and-source-discovery",
       independenceKey: "package-test-configuration",
-      proves: "A package with discovered production script source exposes a recognized test capability.",
+      proves:
+        "A package with discovered production script source exposes a recognized test capability.",
       limitations: [
         "Does not prove that the configured test command runs or passes.",
         "Does not prove behavioral coverage of the package source.",
@@ -156,7 +162,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "configuration",
       oracle: "coding-tooling-config-and-component-discovery",
       independenceKey: "capability-discovery",
-      proves: "Every explicitly required coding-tooling capability is provided by at least one discovered component command.",
+      proves:
+        "Every explicitly required coding-tooling capability is provided by at least one discovered component command.",
       limitations: [
         "Does not execute the discovered capability command.",
         "Does not prove that the command is authoritative for the semantic capability it advertises.",
@@ -174,7 +181,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "structural",
       oracle: "cargo-manifest-and-filesystem",
       independenceKey: "cargo-target-structure",
-      proves: "Explicit Cargo target path declarations resolve to files in the inspected repository tree.",
+      proves:
+        "Explicit Cargo target path declarations resolve to files in the inspected repository tree.",
       limitations: [
         "Does not prove that the target compiles.",
         "Does not infer implicit Cargo targets that are outside the explicit-path contract.",
@@ -193,7 +201,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "structural",
       oracle: "rust-module-and-test-reachability",
       independenceKey: "static-test-reachability",
-      proves: "Mechanically reachable Rust source has recognized inline or integration-test reachability through the conservative module graph.",
+      proves:
+        "Mechanically reachable Rust source has recognized inline or integration-test reachability through the conservative module graph.",
       limitations: [
         "Does not prove behavioral assertions or runtime coverage.",
         "Conditional modules and ambiguous semantic relationships remain unknown rather than being inferred.",
@@ -211,7 +220,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "syntax",
       oracle: "bounded-source-text-scan",
       independenceKey: "source-text-scan",
-      proves: "Recognized standalone TODO/FIXME comment markers are present in inspected production source text.",
+      proves:
+        "Recognized standalone TODO/FIXME comment markers are present in inspected production source text.",
       limitations: [
         "Only standalone comment markers are recognized; inline comments after code are intentionally outside this conservative text-scan contract.",
         "Does not prove that a marker represents actionable or current debt.",
@@ -230,7 +240,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "syntax",
       oracle: "bounded-source-text-scan",
       independenceKey: "source-text-scan",
-      proves: "Recognized explicit unimplemented runtime-stub patterns are present in inspected production source text.",
+      proves:
+        "Recognized explicit unimplemented runtime-stub patterns are present in inspected production source text.",
       limitations: [
         "Does not prove that all incomplete business logic is detected.",
         "Does not provide independent confirmation from other checks sharing the same source-text-scan oracle.",
@@ -249,7 +260,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "syntax",
       oracle: "bounded-structured-work-marker-scan",
       independenceKey: "source-work-marker-scan",
-      proves: "A recognized TODO(coding-tooling:<key>): <instruction> marker exists at the reported source path and line.",
+      proves:
+        "A recognized TODO(coding-tooling:<key>): <instruction> marker exists at the reported source path and line.",
       limitations: [
         "Does not prove that the authored instruction is semantically correct or sufficient.",
         "Recognizes only the deliberately small line-oriented comment syntax; it is not a general annotation language.",
@@ -267,7 +279,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "structural",
       oracle: "typescript-source-and-filesystem",
       independenceKey: "typescript-project-structure",
-      proves: "A package containing discovered TypeScript production source has a project configuration at the expected package boundary.",
+      proves:
+        "A package containing discovered TypeScript production source has a project configuration at the expected package boundary.",
       limitations: [
         "Does not prove that the TypeScript configuration is semantically correct for the package.",
         "Does not prove that the project typechecks.",
@@ -286,7 +299,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "structural",
       oracle: "typescript-static-test-reachability",
       independenceKey: "static-test-reachability",
-      proves: "A production TypeScript source file has mechanically discoverable matching-test or transitive static test-reachability evidence.",
+      proves:
+        "A production TypeScript source file has mechanically discoverable matching-test or transitive static test-reachability evidence.",
       limitations: [
         "Does not prove that the test asserts useful behavior.",
         "Does not resolve bare imports, unresolved aliases, dynamic imports, or other relationships outside the conservative graph contract.",
@@ -305,7 +319,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "semantic",
       oracle: "typescript-compiler",
       independenceKey: "typescript-compiler",
-      proves: "The pinned TypeScript compiler emitted TS2322 assignment-compatibility diagnostics for the analyzed project state.",
+      proves:
+        "The pinned TypeScript compiler emitted TS2322 assignment-compatibility diagnostics for the analyzed project state.",
       limitations: [
         "Does not independently confirm diagnostics already emitted by the same TypeScript compiler invocation.",
         "Does not prove runtime correctness or that a particular repair is semantically correct.",

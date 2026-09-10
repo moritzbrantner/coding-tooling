@@ -1,14 +1,7 @@
 import { expect, test } from "bun:test";
 
-import {
-  convergeRepository,
-  type ConvergenceDependencies,
-} from "../src/convergence.ts";
-import type {
-  ExpectationEnvelope,
-  Finding,
-  FindingScaffold,
-} from "../src/expectations.ts";
+import { convergeRepository, type ConvergenceDependencies } from "../src/convergence.ts";
+import type { ExpectationEnvelope, Finding, FindingScaffold } from "../src/expectations.ts";
 import type { ResultEnvelope, ResultStatus } from "../src/model.ts";
 
 function finding(
@@ -46,7 +39,10 @@ function finding(
   };
 }
 
-function findingsEnvelope(findings: Finding[], status: ResultStatus = "passed"): ExpectationEnvelope {
+function findingsEnvelope(
+  findings: Finding[],
+  status: ResultStatus = "passed",
+): ExpectationEnvelope {
   return {
     schemaVersion: 1,
     operation: "findings",
@@ -57,10 +53,7 @@ function findingsEnvelope(findings: Finding[], status: ResultStatus = "passed"):
   };
 }
 
-function scaffoldEnvelope(
-  status: ResultStatus = "passed",
-  code?: string,
-): ExpectationEnvelope {
+function scaffoldEnvelope(status: ResultStatus = "passed", code?: string): ExpectationEnvelope {
   return {
     schemaVersion: 1,
     operation: "scaffold",
@@ -71,7 +64,9 @@ function scaffoldEnvelope(
   };
 }
 
-function verificationEnvelope(status: ResultStatus = "passed"): ResultEnvelope<Record<string, unknown>> {
+function verificationEnvelope(
+  status: ResultStatus = "passed",
+): ResultEnvelope<Record<string, unknown>> {
   return {
     schemaVersion: 1,
     operation: "run",
@@ -84,18 +79,27 @@ function verificationEnvelope(status: ResultStatus = "passed"): ResultEnvelope<R
 
 test("applies deterministic scaffolds until the finding state reaches a fixed point", () => {
   const states = [
-    [finding("CT-AAAAAAAAAAAA", "src/first.ts", { kind: "create-file", path: "tests/first.test.ts", content: "first\n" })],
-    [finding("CT-BBBBBBBBBBBB", "src/second.ts", { kind: "create-file", path: "tests/second.test.ts", content: "second\n" })],
+    [
+      finding("CT-AAAAAAAAAAAA", "src/first.ts", {
+        kind: "create-file",
+        path: "tests/first.test.ts",
+        content: "first\n",
+      }),
+    ],
+    [
+      finding("CT-BBBBBBBBBBBB", "src/second.ts", {
+        kind: "create-file",
+        path: "tests/second.test.ts",
+        content: "second\n",
+      }),
+    ],
     [],
   ];
   let state = 0;
   const dependencies: ConvergenceDependencies = {
     findings: () => findingsEnvelope(states[state]!),
     scaffold: (_root, id) => {
-      if (
-        (state === 0 && id === "CT-AAAAAAAAAAAA") ||
-        (state === 1 && id === "CT-BBBBBBBBBBBB")
-      ) {
+      if ((state === 0 && id === "CT-AAAAAAAAAAAA") || (state === 1 && id === "CT-BBBBBBBBBBBB")) {
         state += 1;
         return scaffoldEnvelope();
       }

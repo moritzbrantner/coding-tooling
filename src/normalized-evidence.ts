@@ -52,7 +52,8 @@ export function collectLocalProjectManifestEvidence(root: string): ProjectManife
   const files = walkFiles(root, 4);
   const relativeManifestPaths = files
     .filter(
-      (file) => basename(file) === "Cargo.toml" || file.endsWith(".sln") || file.endsWith(".csproj"),
+      (file) =>
+        basename(file) === "Cargo.toml" || file.endsWith(".sln") || file.endsWith(".csproj"),
     )
     .map((file) => relativePosix(root, file));
 

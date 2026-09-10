@@ -21,12 +21,10 @@ export function applyExecutionEvidence(analysis, snapshot) {
       "This evidence does not execute workflows or prove runtime, dependency, or application correctness.",
     ],
   };
-  const findings = [...analysis.findings, ...executionFindings(executionEvidence)]
-    .toSorted(
-      (left, right) =>
-        FINDING_RANK[left.severity] - FINDING_RANK[right.severity] ||
-        left.id.localeCompare(right.id),
-    );
+  const findings = [...analysis.findings, ...executionFindings(executionEvidence)].toSorted(
+    (left, right) =>
+      FINDING_RANK[left.severity] - FINDING_RANK[right.severity] || left.id.localeCompare(right.id),
+  );
   const highPriorityFindingCount = findings.filter((finding) => finding.severity === "high").length;
   const status =
     analysis.summary.status === "incomplete"
@@ -342,7 +340,8 @@ function failClosedWorkflow(workflowEvidence, content) {
     const actionMatch = workflowEvidence.codingToolingAction && step.codingToolingAction;
     if (!commandMatch && !actionMatch) continue;
     mapped = true;
-    if (step.continueOnError || step.commands.some(obviousShellSuppression)) explicitlySuppressed = true;
+    if (step.continueOnError || step.commands.some(obviousShellSuppression))
+      explicitlySuppressed = true;
     else unsuppressed = true;
   }
   if (unsuppressed) return { status: "satisfied", reason: "validation-fails-closed" };
@@ -426,9 +425,7 @@ function workflowCommands(content) {
   const lines = String(content).split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
     const raw = stripYamlComment(lines[index]);
-    const match = raw.match(
-      /^(\s*)(?:-\s*)?(run|[A-Za-z0-9_-]+_command)\s*:\s*(.*)$/,
-    );
+    const match = raw.match(/^(\s*)(?:-\s*)?(run|[A-Za-z0-9_-]+_command)\s*:\s*(.*)$/);
     if (!match) continue;
     const indent = match[1].length;
     const inline = match[3].trim();
@@ -484,7 +481,9 @@ function stripYamlComment(value) {
 }
 
 function normalizeCommand(value) {
-  return String(value ?? "").trim().replace(/\s+/g, " ");
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function observationOrder(left, right) {

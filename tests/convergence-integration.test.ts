@@ -15,10 +15,7 @@ test("converges a mechanical missing-test gap into explicit agent implementation
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-converge-integration-"));
   roots.push(root);
   mkdirSync(join(root, "src"), { recursive: true });
-  writeFileSync(
-    join(root, "package.json"),
-    '{"name":"fixture","scripts":{"test":"bun test"}}\n',
-  );
+  writeFileSync(join(root, "package.json"), '{"name":"fixture","scripts":{"test":"bun test"}}\n');
   writeFileSync(join(root, "bun.lock"), "");
   writeFileSync(join(root, "tsconfig.json"), "{}\n");
   writeFileSync(join(root, "src", "service.ts"), "export const service = true;\n");

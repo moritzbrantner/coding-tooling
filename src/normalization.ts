@@ -5,13 +5,7 @@ import { basename, join } from "node:path";
 import { applyConventionConfigurations } from "./convention-config.ts";
 import { discoverComponents, loadConfig } from "./core.ts";
 import type { Capability, Component, ResultEnvelope, ResultStatus } from "./model.ts";
-import {
-  readJson,
-  relativePosix,
-  runCommand,
-  walkFiles,
-  type CommandResult,
-} from "./shared.ts";
+import { readJson, relativePosix, runCommand, walkFiles, type CommandResult } from "./shared.ts";
 
 type NormalizationCapability = Extract<Capability, "format:check" | "lint">;
 type NormalizationTool = "cargo-fmt" | "dotnet-format" | "oxfmt" | "oxlint";
@@ -114,7 +108,9 @@ function safeOxlintFixScript(source: string): boolean {
   return !tokens.some((token) => token.startsWith("--fix-") && token !== "--fix");
 }
 
-function packageScriptInvocation(command: string[]): { scriptIndex: number; script: string } | undefined {
+function packageScriptInvocation(
+  command: string[],
+): { scriptIndex: number; script: string } | undefined {
   if (!packageManagers.has(basename(command[0] ?? ""))) return undefined;
   const runIndex = command.indexOf("run");
   if (runIndex < 0) return undefined;
@@ -261,7 +257,8 @@ export function planNormalization(root: string): NormalizationPlan {
     normalizers: [...unique.values()].sort(
       (left, right) =>
         left.path.localeCompare(right.path) ||
-        mutationCapabilities.indexOf(left.capability) - mutationCapabilities.indexOf(right.capability) ||
+        mutationCapabilities.indexOf(left.capability) -
+          mutationCapabilities.indexOf(right.capability) ||
         left.id.localeCompare(right.id),
     ),
     unsupported: unsupported.sort(

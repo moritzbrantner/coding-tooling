@@ -174,7 +174,10 @@ function parseCase(path: string): CalibrationCase {
   try {
     value = JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
-    throw new Error(`${path} is not valid JSON: ${error instanceof Error ? error.message : error}`);
+    throw new Error(
+      `${path} is not valid JSON: ${error instanceof Error ? error.message : error}`,
+      { cause: error },
+    );
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`${path} must contain a calibration object`);

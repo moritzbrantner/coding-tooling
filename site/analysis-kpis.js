@@ -176,9 +176,12 @@ async function loadVerificationKpis(reference, repository, currentRevision, fetc
         };
       throw new Error("unsupported-score-history-schema");
     }
-    if (history.repository !== repository.fullName) throw new Error("score-history-repository-mismatch");
+    if (history.repository !== repository.fullName)
+      throw new Error("score-history-repository-mismatch");
     const entries = Array.isArray(history.entries) ? history.entries : [];
-    const exact = currentRevision ? entries.find((entry) => entry?.commit === currentRevision) : null;
+    const exact = currentRevision
+      ? entries.find((entry) => entry?.commit === currentRevision)
+      : null;
     const latest = exact ?? entries.at(-1) ?? null;
     if (!latest) return unavailableVerification("score-history-empty");
     const freshness = evidenceFreshness(latest.commit, currentRevision);
@@ -204,7 +207,9 @@ async function loadVerificationKpis(reference, repository, currentRevision, fetc
     const statusRecognized = verificationProducerStatuses.has(producerStatus);
     const countsComplete = Object.values(checks).every((value) => value !== null);
     const scoreComplete =
-      producerStatus === "passed" || producerStatus === "failed" ? verificationScore !== null : true;
+      producerStatus === "passed" || producerStatus === "failed"
+        ? verificationScore !== null
+        : true;
     const summaryComplete = statusRecognized && countsComplete && scoreComplete;
     const status =
       freshness !== "current" ||
@@ -255,7 +260,10 @@ async function loadPublicContractKpis(reference, repository, currentRevision, fe
     const resource = request.value;
     if (resource?.type !== "file" || resource?.encoding !== "base64")
       throw new Error("published-public-contract-not-readable");
-    const snapshot = parsePublicContractSnapshot(decodeBase64(resource.content), repository.fullName);
+    const snapshot = parsePublicContractSnapshot(
+      decodeBase64(resource.content),
+      repository.fullName,
+    );
     const freshness = evidenceFreshness(snapshot.repository.revision, currentRevision);
     const producerStatus = snapshot.producer?.status ?? null;
     const producerDiagnostics = Array.isArray(snapshot.producer?.diagnostics)

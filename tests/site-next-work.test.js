@@ -171,9 +171,7 @@ describe("GitHub Pages next-work discovery", () => {
         { statuses: [] },
       ).status,
     ).toBe("incomplete");
-    expect(summarizeCiEvidence({}, { statuses: [{ state: "success" }] }).status).toBe(
-      "incomplete",
-    );
+    expect(summarizeCiEvidence({}, { statuses: [{ state: "success" }] }).status).toBe("incomplete");
     expect(
       summarizeCiEvidence(
         { total_count: 1, check_suites: [{ status: "completed", conclusion: "success" }] },

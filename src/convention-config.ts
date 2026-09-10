@@ -284,7 +284,7 @@ export function composeToolConfiguration(
       result = mergeRequirement(result, fragment.value, "") as Record<string, unknown>;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`${message} while applying ${fragment.rule}`);
+      throw new Error(`${message} while applying ${fragment.rule}`, { cause: error });
     }
   }
   return result;

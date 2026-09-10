@@ -257,7 +257,10 @@ function renderKpis(kpis) {
     ],
     [
       "Public contracts verified",
-      ratioValue(kpis?.publicContracts?.contracts?.verified, kpis?.publicContracts?.contracts?.discovered),
+      ratioValue(
+        kpis?.publicContracts?.contracts?.verified,
+        kpis?.publicContracts?.contracts?.discovered,
+      ),
       kpiState(kpis?.publicContracts),
       "Executed public-contract evidence only; declarations without a passing verifier do not count.",
     ],

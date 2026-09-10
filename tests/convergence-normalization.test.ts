@@ -1,9 +1,6 @@
 import { expect, test } from "bun:test";
 
-import {
-  convergeRepository,
-  type ConvergenceDependencies,
-} from "../src/convergence.ts";
+import { convergeRepository, type ConvergenceDependencies } from "../src/convergence.ts";
 import type { ExpectationEnvelope, Finding } from "../src/expectations.ts";
 import type { ResultEnvelope, ResultStatus } from "../src/model.ts";
 
@@ -173,8 +170,7 @@ test("re-enters deterministic scaffolding when normalization exposes new mechani
       if (state === 0) state = 1;
       return normalizationEnvelope();
     },
-    stateFingerprint: (_root, findings) =>
-      `${state}:${findings.map((item) => item.id).join(",")}`,
+    stateFingerprint: (_root, findings) => `${state}:${findings.map((item) => item.id).join(",")}`,
     verify: () => verificationEnvelope(),
   };
 

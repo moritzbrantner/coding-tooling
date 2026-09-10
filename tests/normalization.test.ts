@@ -79,18 +79,12 @@ test("requires a package fixer to match the tool used by the check script", () =
   const plan = planNormalization(root);
 
   expect(plan.normalizers).toEqual([]);
-  expect(plan.unsupported.map((item) => item.capability).sort()).toEqual([
-    "format:check",
-    "lint",
-  ]);
+  expect(plan.unsupported.map((item) => item.capability).sort()).toEqual(["format:check", "lint"]);
 });
 
 test("uses cargo fmt as a deterministic formatter but does not invent a clippy fixer", () => {
   const root = fixture();
-  writeFileSync(
-    join(root, "Cargo.toml"),
-    '[package]\nname = "fixture"\nversion = "0.1.0"\n',
-  );
+  writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "fixture"\nversion = "0.1.0"\n');
   mkdirSync(join(root, "src"), { recursive: true });
   writeFileSync(join(root, "src", "lib.rs"), "pub fn value()->u8{1}\n");
 

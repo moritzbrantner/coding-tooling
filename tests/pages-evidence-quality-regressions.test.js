@@ -57,15 +57,11 @@ describe("Pages evidence-quality regressions", () => {
     expect(component.configuredCapabilities).toEqual({
       lint: ["bunx", "oxlint@1.80.0", "--format=github"],
     });
-    expect(component.capabilities.lint).toEqual([
-      "bunx",
-      "oxlint@1.80.0",
-      "--format=github",
-    ]);
+    expect(component.capabilities.lint).toEqual(["bunx", "oxlint@1.80.0", "--format=github"]);
     expect(analysis.validationEvidence.status).toBe("satisfied");
-    expect(analysis.findings.filter((finding) => finding.id.startsWith("REMOTE-CAPABILITY"))).toEqual(
-      [],
-    );
+    expect(
+      analysis.findings.filter((finding) => finding.id.startsWith("REMOTE-CAPABILITY")),
+    ).toEqual([]);
   });
 
   test("treats explicitly foreign score history as unrelated evidence", async () => {

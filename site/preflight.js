@@ -463,7 +463,9 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
           .map(([capability]) => capability),
       ),
     );
-    const missing = declaredRequiredCapabilities.filter((capability) => !available.has(capability)).toSorted();
+    const missing = declaredRequiredCapabilities
+      .filter((capability) => !available.has(capability))
+      .toSorted();
     if (missing.length)
       add(
         "REMOTE-CAPABILITY-REQUIRED",

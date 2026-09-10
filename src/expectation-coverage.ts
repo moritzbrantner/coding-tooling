@@ -2,10 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
-import {
-  productionSourceFiles,
-  workMarkerSourceFiles,
-} from "./expectation-gap-detectors.ts";
+import { productionSourceFiles, workMarkerSourceFiles } from "./expectation-gap-detectors.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { ExpectationDescriptor } from "./expectation-detector-types.ts";
 import { explicitCargoTargets } from "./expectation-rust-detector.ts";

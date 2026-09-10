@@ -11,7 +11,10 @@ describe("GitHub Pages merge authority consistency", () => {
     const declaration = declaredMergeAuthorityEvidence({
       merge: { authority: "hosted", requiredChecks: ["Validate", "Pages", "Validate"] },
     });
-    const result = mergeAuthorityConsistency(declaration, protectedBranch(["Pages", "Security", "Validate"]));
+    const result = mergeAuthorityConsistency(
+      declaration,
+      protectedBranch(["Pages", "Security", "Validate"]),
+    );
 
     expect(declaration).toEqual({
       state: "declared",

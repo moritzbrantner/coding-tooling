@@ -15,10 +15,7 @@ test("turns a missing-test scaffold into exact residual implementation work", ()
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-test-handoff-"));
   roots.push(root);
   mkdirSync(join(root, "src"), { recursive: true });
-  writeFileSync(
-    join(root, "package.json"),
-    '{"name":"fixture","scripts":{"test":"bun test"}}\n',
-  );
+  writeFileSync(join(root, "package.json"), '{"name":"fixture","scripts":{"test":"bun test"}}\n');
   writeFileSync(join(root, "bun.lock"), "");
   writeFileSync(join(root, "tsconfig.json"), "{}\n");
   writeFileSync(join(root, "src", "service.ts"), "export const service = true;\n");
@@ -44,7 +41,8 @@ test("turns a missing-test scaffold into exact residual implementation work", ()
         description: expect.stringContaining("tests/service.test.ts:4"),
       }),
       requirement: expect.objectContaining({
-        description: "Replace this scaffold with meaningful deterministic assertions for src/service.ts.",
+        description:
+          "Replace this scaffold with meaningful deterministic assertions for src/service.ts.",
       }),
       relatedFiles: ["tests/service.test.ts"],
     }),

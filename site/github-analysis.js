@@ -180,8 +180,7 @@ async function githubOptionalJson(path, fetchImpl, signal) {
         "X-GitHub-Api-Version": "2022-11-28",
       },
     });
-    if (!response.ok)
-      return { status: "unavailable", reason: `github-http-${response.status}` };
+    if (!response.ok) return { status: "unavailable", reason: `github-http-${response.status}` };
     return { status: "observed", value: await response.json() };
   } catch (error) {
     if (error?.name === "AbortError") throw error;

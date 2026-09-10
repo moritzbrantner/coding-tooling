@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  issueChecklistEvidence,
-  issueChecklistNextStep,
-} from "../site/issue-checklist.js";
+import { issueChecklistEvidence, issueChecklistNextStep } from "../site/issue-checklist.js";
 import { analyzeOpenWork } from "../site/next-work.js";
 
 const now = new Date("2026-09-09T06:00:00.000Z");

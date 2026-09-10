@@ -73,10 +73,7 @@ describe("Roslyn-backed .NET analysis", () => {
   });
 
   test("never reports a child process without a normal exit status as success", () => {
-    const result = runCommand(process.execPath, [
-      "-e",
-      "process.kill(process.pid, 'SIGTERM')",
-    ]);
+    const result = runCommand(process.execPath, ["-e", "process.kill(process.pid, 'SIGTERM')"]);
 
     expect(result.status).not.toBe(0);
   });
