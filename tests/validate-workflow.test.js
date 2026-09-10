@@ -7,12 +7,9 @@ const workflow = readFileSync(
   "utf8",
 );
 
-test("validation does not normalize the checkout before authoritative checks", () => {
-  const validationStep = workflow.indexOf("- name: Validate through the local Action");
-  expect(validationStep).toBeGreaterThan(0);
-
-  const beforeValidation = workflow.slice(0, validationStep);
-  expect(beforeValidation).not.toContain("format:write");
-  expect(beforeValidation).not.toContain("lint:fix");
-  expect(beforeValidation).not.toContain("coding-tooling normalize");
+test("validation observes the committed checkout without normalization", () => {
+  expect(workflow).toContain("- name: Validate through the local Action");
+  expect(workflow).not.toContain("format:write");
+  expect(workflow).not.toContain("lint:fix");
+  expect(workflow).not.toContain("coding-tooling normalize");
 });
