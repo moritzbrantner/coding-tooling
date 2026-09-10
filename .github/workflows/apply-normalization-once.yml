@@ -1,0 +1,30 @@
+name: Apply normalization once
+
+on:
+  push:
+    branches: [fix/nonmutating-validation]
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: fix/nonmutating-validation
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Normalize and commit canonical state
+        run: |
+          bun src/entry.ts normalize --json
+          git rm .github/workflows/apply-normalization-once.yml
+          git add -A
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "chore: normalize repository" || exit 0
+          git push origin HEAD:fix/nonmutating-validation
