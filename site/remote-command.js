@@ -1,3 +1,4 @@
+import { applyExecutionEvidence } from "./execution-evidence.js";
 import { loadSnapshot } from "./github-analysis.js";
 import { analyzeSnapshot, parseRepositoryReference } from "./preflight.js";
 
@@ -112,7 +113,7 @@ export function remoteCommandFromSnapshot(snapshot, argv, now = new Date()) {
       request.key,
     );
 
-  const analysis = analyzeSnapshot(snapshot, now);
+  const analysis = applyExecutionEvidence(analyzeSnapshot(snapshot, now), snapshot);
   const incompleteDiagnostic =
     analysis.summary.status === "incomplete"
       ? [
