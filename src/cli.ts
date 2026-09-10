@@ -20,6 +20,7 @@ import { executeGeneratorCommand } from "./generator-execution.ts";
 import { generatorCommand } from "./generators.ts";
 import { dependencyInstallPlan, prepareDependencies } from "./install-plan.ts";
 import { capabilities, type Capability, type ResultEnvelope } from "./model.ts";
+import { normalizeRepository } from "./normalization.ts";
 import { integratePullRequest, type MergeMethod, type RemoteChecksPolicy } from "./pr.ts";
 import { repositoryRoot } from "./shared.ts";
 import { sourceDependencies } from "./source-deps.ts";
@@ -158,6 +159,7 @@ function usage(): never {
   coding-tooling conventions diff [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions update [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]
+  coding-tooling normalize [--json]
   coding-tooling converge [--include-baseline] [--max-rounds <n>] [--verify-tier <name>|--no-verify] [--json]
   coding-tooling generate list [--json]
   coding-tooling generate describe <id> [--json]
@@ -293,6 +295,9 @@ export function main(argv = process.argv.slice(2)): number {
         profile: stringOption(options, "profile"),
       });
     } else return usage();
+  } else if (command === "normalize") {
+    if (positional.length > 0 || Object.keys(options).some((key) => key !== "json")) return usage();
+    result = normalizeRepository(root);
   } else if (command === "converge") {
     if (positional.length > 0) return usage();
     const maxRoundsOption = stringOption(options, "max-rounds");

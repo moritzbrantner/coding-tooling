@@ -8,6 +8,7 @@ import {
   type Finding,
 } from "./expectations.ts";
 import type { ResultEnvelope } from "./model.ts";
+import { normalizeRepository, repositoryContentFingerprint } from "./normalization.ts";
 import {
   planRemediationCandidates,
   type RemediationCandidate,
@@ -35,12 +36,34 @@ export type ConvergenceOptions = {
 export type ConvergenceDependencies = {
   findings: (root: string) => ExpectationEnvelope;
   scaffold: (root: string, findingId: string) => ExpectationEnvelope;
+  normalize?: (root: string) => ResultEnvelope<Record<string, unknown>>;
+  stateFingerprint?: (root: string, findings: Finding[]) => string;
   verify: (root: string, tier: string) => ResultEnvelope<Record<string, unknown>>;
 };
+
+function findingState(findings: Finding[]): Array<Record<string, unknown>> {
+  return findings.map((finding) => ({
+    id: finding.id,
+    expectationId: finding.expectationId,
+    severity: finding.severity,
+    state: finding.state,
+    scaffold: finding.scaffold?.path,
+  }));
+}
+
+function repositoryStateFingerprint(root: string, findings: Finding[]): string {
+  return createHash("sha256")
+    .update(repositoryContentFingerprint(root))
+    .update("\0")
+    .update(JSON.stringify(findingState(findings)))
+    .digest("hex");
+}
 
 const defaultDependencies: ConvergenceDependencies = {
   findings: (root) => findingsCommand(root, { includeSuppressed: false }),
   scaffold: scaffoldFinding,
+  normalize: normalizeRepository,
+  stateFingerprint: repositoryStateFingerprint,
   verify: (root, tier) => runPlan({ root, tier, strict: true }),
 };
 
@@ -55,17 +78,6 @@ function selectedFindings(findings: Finding[], includeBaseline: boolean): Findin
         finding.disposition === "active" && (includeBaseline || finding.state === "new"),
     )
     .sort((left, right) => left.id.localeCompare(right.id));
-}
-
-function stateFingerprint(findings: Finding[]): string {
-  const state = findings.map((finding) => ({
-    id: finding.id,
-    expectationId: finding.expectationId,
-    severity: finding.severity,
-    state: finding.state,
-    scaffold: finding.scaffold?.path,
-  }));
-  return createHash("sha256").update(JSON.stringify(state)).digest("hex");
 }
 
 function difference(left: readonly string[], right: readonly string[]): string[] {
@@ -93,6 +105,7 @@ function finish(
   initialFindingIds: string[],
   finalFindings: Finding[],
   rounds: ConvergenceRound[],
+  normalizations: ResultEnvelope<Record<string, unknown>>[],
   options: Required<Pick<ConvergenceOptions, "includeBaseline" | "maxRounds">> & {
     verifyTier: string | null;
   },
@@ -119,13 +132,15 @@ function finish(
       initialFindingIds,
       finalFindingIds,
       rounds,
+      normalizations,
       handoff,
       verification,
       policy: {
         deterministicMutationOnly: true,
         baselineDebtRequiresOptIn: true,
         collisionHandling: "fail-closed",
-        cycleDetection: "finding-state-fingerprint",
+        cycleDetection: "repository-content-and-finding-state-fingerprint",
+        normalization: "closed-adapters-with-idempotence-proof",
         generatedFilesBecomeUserOwned: true,
       },
     },
@@ -141,6 +156,7 @@ function blocked(
   initialFindingIds: string[],
   currentFindings: Finding[],
   rounds: ConvergenceRound[],
+  normalizations: ResultEnvelope<Record<string, unknown>>[],
   options: Required<Pick<ConvergenceOptions, "includeBaseline" | "maxRounds">> & {
     verifyTier: string | null;
   },
@@ -161,10 +177,28 @@ function blocked(
       initialFindingIds,
       finalFindingIds: currentFindings.map((finding) => finding.id).sort(),
       rounds,
+      normalizations,
       handoff: handoffCandidates(currentFindings, options.includeBaseline),
       ...extra,
     },
     diagnostics: [{ code: reason, message }],
+  };
+}
+
+function readSelectedFindings(
+  root: string,
+  includeBaseline: boolean,
+  dependencies: ConvergenceDependencies,
+  reason: string,
+): { findings?: Finding[]; envelope: ExpectationEnvelope; reason: string } {
+  const envelope = dependencies.findings(root);
+  return {
+    envelope,
+    reason,
+    findings:
+      envelope.status === "error" || envelope.status === "unavailable"
+        ? undefined
+        : selectedFindings(findingsFrom(envelope), includeBaseline),
   };
 }
 
@@ -178,6 +212,8 @@ export function convergeRepository(
   const maxRounds = options.maxRounds ?? 16;
   const verifyTier = options.verifyTier === undefined ? "fast" : options.verifyTier;
   const resolvedOptions = { includeBaseline, maxRounds, verifyTier };
+  const normalize = dependencies.normalize ?? defaultDependencies.normalize!;
+  const stateFingerprint = dependencies.stateFingerprint ?? defaultDependencies.stateFingerprint!;
 
   if (!Number.isInteger(maxRounds) || maxRounds < 1 || maxRounds > 100) {
     return blocked(
@@ -188,67 +224,136 @@ export function convergeRepository(
       [],
       [],
       [],
+      [],
       resolvedOptions,
     );
   }
 
   const rounds: ConvergenceRound[] = [];
+  const normalizations: ResultEnvelope<Record<string, unknown>>[] = [];
   const seen = new Set<string>();
   let initialFindingIds: string[] = [];
   let finalFindings: Finding[] = [];
 
   for (let round = 1; round <= maxRounds; round += 1) {
-    const beforeEnvelope = dependencies.findings(root);
-    if (beforeEnvelope.status === "error" || beforeEnvelope.status === "unavailable") {
+    const observed = readSelectedFindings(root, includeBaseline, dependencies, "findings-unavailable");
+    if (!observed.findings) {
       return {
         schemaVersion: 1,
         operation: "converge",
-        status: beforeEnvelope.status,
+        status: observed.envelope.status,
         durationMs: Date.now() - started,
         data: {
           root,
           result: "blocked",
-          reason: "findings-unavailable",
+          reason: observed.reason,
           rounds,
+          normalizations,
         },
-        diagnostics: beforeEnvelope.diagnostics,
+        diagnostics: observed.envelope.diagnostics,
       };
     }
 
-    const before = selectedFindings(findingsFrom(beforeEnvelope), includeBaseline);
-    const beforeIds = before.map((finding) => finding.id);
+    let before = observed.findings;
+    let beforeIds = before.map((finding) => finding.id);
     if (round === 1) initialFindingIds = beforeIds;
 
-    const beforeFingerprint = stateFingerprint(before);
+    let beforeFingerprint = stateFingerprint(root, before);
     if (seen.has(beforeFingerprint)) {
       return blocked(
         started,
         root,
         "convergence-cycle",
-        "Deterministic remediation returned to an already observed finding state",
+        "Deterministic remediation returned to an already observed repository/finding state",
         initialFindingIds,
         before,
         rounds,
+        normalizations,
         resolvedOptions,
       );
     }
     seen.add(beforeFingerprint);
 
-    const candidates = planRemediationCandidates(before, { includeBaseline });
-    const deterministic = candidates.filter(
+    let deterministic = planRemediationCandidates(before, { includeBaseline }).filter(
       (candidate) => candidate.kind === "deterministic-scaffold",
     );
+
     if (deterministic.length === 0) {
-      return finish(
-        started,
+      const normalization = normalize(root);
+      normalizations.push(normalization);
+      if (normalization.status !== "passed") {
+        return blocked(
+          started,
+          root,
+          "convergence-normalization-failed",
+          "Deterministic normalization did not reach an idempotent fixed point",
+          initialFindingIds,
+          before,
+          rounds,
+          normalizations,
+          resolvedOptions,
+          { normalization },
+        );
+      }
+
+      const normalizedObservation = readSelectedFindings(
         root,
-        before.length === 0 ? "converged" : "partial",
-        initialFindingIds,
-        before,
-        rounds,
-        resolvedOptions,
+        includeBaseline,
         dependencies,
+        "findings-unavailable-after-normalization",
       );
+      if (!normalizedObservation.findings) {
+        return {
+          schemaVersion: 1,
+          operation: "converge",
+          status: normalizedObservation.envelope.status,
+          durationMs: Date.now() - started,
+          data: {
+            root,
+            result: "blocked",
+            reason: normalizedObservation.reason,
+            rounds,
+            normalizations,
+          },
+          diagnostics: normalizedObservation.envelope.diagnostics,
+        };
+      }
+
+      before = normalizedObservation.findings;
+      finalFindings = before;
+      deterministic = planRemediationCandidates(before, { includeBaseline }).filter(
+        (candidate) => candidate.kind === "deterministic-scaffold",
+      );
+      if (deterministic.length === 0) {
+        return finish(
+          started,
+          root,
+          before.length === 0 ? "converged" : "partial",
+          initialFindingIds,
+          before,
+          rounds,
+          normalizations,
+          resolvedOptions,
+          dependencies,
+        );
+      }
+
+      beforeIds = before.map((finding) => finding.id);
+      beforeFingerprint = stateFingerprint(root, before);
+      if (seen.has(beforeFingerprint)) {
+        return blocked(
+          started,
+          root,
+          "convergence-cycle",
+          "Normalization returned to an already observed repository/finding state with deterministic work remaining",
+          initialFindingIds,
+          before,
+          rounds,
+          normalizations,
+          resolvedOptions,
+        );
+      }
+      seen.add(beforeFingerprint);
     }
 
     const targetedFindingIds = deterministic
@@ -275,32 +380,39 @@ export function convergeRepository(
         initialFindingIds,
         before,
         rounds,
+        normalizations,
         resolvedOptions,
         { findingId, scaffold },
       );
     }
 
-    const afterEnvelope = dependencies.findings(root);
-    if (afterEnvelope.status === "error" || afterEnvelope.status === "unavailable") {
+    const afterObservation = readSelectedFindings(
+      root,
+      includeBaseline,
+      dependencies,
+      "findings-unavailable-after-scaffold",
+    );
+    if (!afterObservation.findings) {
       return {
         schemaVersion: 1,
         operation: "converge",
-        status: afterEnvelope.status,
+        status: afterObservation.envelope.status,
         durationMs: Date.now() - started,
         data: {
           root,
           result: "blocked",
-          reason: "findings-unavailable-after-scaffold",
+          reason: afterObservation.reason,
           rounds,
+          normalizations,
         },
-        diagnostics: afterEnvelope.diagnostics,
+        diagnostics: afterObservation.envelope.diagnostics,
       };
     }
 
-    const after = selectedFindings(findingsFrom(afterEnvelope), includeBaseline);
+    const after = afterObservation.findings;
     finalFindings = after;
     const afterIds = after.map((finding) => finding.id);
-    const afterFingerprint = stateFingerprint(after);
+    const afterFingerprint = stateFingerprint(root, after);
     const resolvedFindingIds = difference(beforeIds, afterIds);
     const introducedFindingIds = difference(afterIds, beforeIds);
 
@@ -320,10 +432,11 @@ export function convergeRepository(
         started,
         root,
         "convergence-no-progress",
-        "Deterministic remediation completed without changing the finding state",
+        "Deterministic remediation completed without changing repository content or finding state",
         initialFindingIds,
         after,
         rounds,
+        normalizations,
         resolvedOptions,
       );
     }
@@ -332,10 +445,11 @@ export function convergeRepository(
         started,
         root,
         "convergence-cycle",
-        "Deterministic remediation produced an already observed finding state",
+        "Deterministic remediation produced an already observed repository/finding state",
         initialFindingIds,
         after,
         rounds,
+        normalizations,
         resolvedOptions,
       );
     }
@@ -345,16 +459,64 @@ export function convergeRepository(
     (candidate) => candidate.kind === "deterministic-scaffold",
   );
   if (finalDeterministic.length === 0) {
-    return finish(
-      started,
+    const normalization = normalize(root);
+    normalizations.push(normalization);
+    if (normalization.status !== "passed") {
+      return blocked(
+        started,
+        root,
+        "convergence-normalization-failed",
+        "Deterministic normalization did not reach an idempotent fixed point",
+        initialFindingIds,
+        finalFindings,
+        rounds,
+        normalizations,
+        resolvedOptions,
+        { normalization },
+      );
+    }
+
+    const normalizedObservation = readSelectedFindings(
       root,
-      finalFindings.length === 0 ? "converged" : "partial",
-      initialFindingIds,
-      finalFindings,
-      rounds,
-      resolvedOptions,
+      includeBaseline,
       dependencies,
+      "findings-unavailable-after-normalization",
     );
+    if (!normalizedObservation.findings) {
+      return {
+        schemaVersion: 1,
+        operation: "converge",
+        status: normalizedObservation.envelope.status,
+        durationMs: Date.now() - started,
+        data: {
+          root,
+          result: "blocked",
+          reason: normalizedObservation.reason,
+          rounds,
+          normalizations,
+        },
+        diagnostics: normalizedObservation.envelope.diagnostics,
+      };
+    }
+
+    const normalized = normalizedObservation.findings;
+    const deterministicAfterNormalization = planRemediationCandidates(normalized, {
+      includeBaseline,
+    }).filter((candidate) => candidate.kind === "deterministic-scaffold");
+    if (deterministicAfterNormalization.length === 0) {
+      return finish(
+        started,
+        root,
+        normalized.length === 0 ? "converged" : "partial",
+        initialFindingIds,
+        normalized,
+        rounds,
+        normalizations,
+        resolvedOptions,
+        dependencies,
+      );
+    }
+    finalFindings = normalized;
   }
 
   return blocked(
@@ -365,6 +527,7 @@ export function convergeRepository(
     initialFindingIds,
     finalFindings,
     rounds,
+    normalizations,
     resolvedOptions,
   );
 }

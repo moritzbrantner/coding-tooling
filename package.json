@@ -11,12 +11,14 @@
     "format:check": "oxfmt --check .",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
     "typecheck": "bun node_modules/typescript/bin/tsc --noEmit",
     "test": "bun test",
     "findings": "bun src/entry.ts findings --json",
     "score": "bun src/entry.ts score --json",
     "analyze": "bun src/entry.ts analyze --json",
     "calibration": "bun src/entry.ts calibration --json",
+    "normalize": "bun src/entry.ts normalize --json",
     "check": "bun run format && bun run lint && bun run typecheck && bun run test"
   },
   "devDependencies": {

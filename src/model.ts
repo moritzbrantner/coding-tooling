@@ -51,6 +51,7 @@ export type ResultOperation =
   | "conventions-diff"
   | "conventions-update"
   | "converge"
+  | "normalize"
   | "generate"
   | "pr";
 

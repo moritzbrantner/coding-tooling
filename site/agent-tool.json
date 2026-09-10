@@ -87,6 +87,8 @@
     "coding-tooling bootstrap plan --json",
     "coding-tooling conformance --json",
     "coding-tooling findings --json",
+    "coding-tooling normalize --json",
+    "coding-tooling converge --json",
     "coding-tooling run --tier fast --strict --report .artifacts/coding-tooling/run.json --json",
     "coding-tooling score --validation-report .artifacts/coding-tooling/run.json --json",
     "coding-tooling plan --tier fast --json"
@@ -100,7 +102,7 @@
     "Change-aware analysis narrows validation by mechanically discovered component ownership but does not infer that a repository-declared tier capability can be skipped; cross-component or incomplete evidence widens scope and fails closed.",
     "The CLI URL surface mirrors only operations derivable safely from repository metadata, the Git tree, bounded text manifests, and public GitHub compare data. Unsupported argv returns status unavailable plus the exact local handoff instead of executing or approximating unsafe operations.",
     "The testing plan can identify structural targets and setup work, but behavioral assertions require reading the source before writing a test; TSX-to-Storybook classification remains a conservative heuristic.",
-    "GitHub Pages cannot execute repository commands; local coding-tooling or repository CI remains authoritative for coverage generation, validation execution, conformance, environment verification, findings that require full-source semantics, scoring, and mutations.",
+    "GitHub Pages cannot execute repository commands; local coding-tooling or repository CI remains authoritative for coverage generation, validation execution, conformance, environment verification, findings that require full-source semantics, scoring, normalization, convergence, and other mutations.",
     "A complete repository progress score requires a fresh local or CI coding-tooling run report; structural-only scoring remains explicitly incomplete.",
     "Score history is a per-commit trend for the versioned scoring profile; scoring-profile expansion can change what 100 means.",
     "The run-json, repository-discovery, affected-json, next-work-discovery, analysis-json, testing-scaffold-plan, and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
