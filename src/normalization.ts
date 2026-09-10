@@ -92,9 +92,20 @@ function safeToolScript(source: string, tool: "oxfmt" | "oxlint"): string[] | un
   return tokens;
 }
 
+function safeOxfmtCheckScript(source: string): boolean {
+  const tokens = safeToolScript(source, "oxfmt");
+  return tokens !== undefined && tokens.includes("--check");
+}
+
 function safeOxfmtWriteScript(source: string): boolean {
   const tokens = safeToolScript(source, "oxfmt");
   return tokens !== undefined && !tokens.includes("--check");
+}
+
+function safeOxlintCheckScript(source: string): boolean {
+  const tokens = safeToolScript(source, "oxlint");
+  if (!tokens) return false;
+  return !tokens.some((token) => token === "--fix" || token.startsWith("--fix-"));
 }
 
 function safeOxlintFixScript(source: string): boolean {
@@ -122,6 +133,14 @@ function packageNormalizer(
   const invocation = packageScriptInvocation(command);
   if (!invocation) return undefined;
   const scripts = packageManifest(root, component).scripts ?? {};
+  const checkSource = scripts[invocation.script];
+  if (typeof checkSource !== "string") return undefined;
+  const compatibleCheck =
+    capability === "format:check"
+      ? safeOxfmtCheckScript(checkSource)
+      : safeOxlintCheckScript(checkSource);
+  if (!compatibleCheck) return undefined;
+
   const candidates =
     capability === "format:check"
       ? ["format:write", "format:fix", "format"]
@@ -204,7 +223,10 @@ function normalizerFor(
   capability: NormalizationCapability,
   command: string[],
 ): Normalizer | undefined {
-  return packageNormalizer(root, component, capability, command) ?? directNormalizer(component, capability, command);
+  return (
+    packageNormalizer(root, component, capability, command) ??
+    directNormalizer(component, capability, command)
+  );
 }
 
 export function planNormalization(root: string): NormalizationPlan {
@@ -251,7 +273,7 @@ export function planNormalization(root: string): NormalizationPlan {
 
 export function repositoryContentFingerprint(root: string): string {
   const hash = createHash("sha256");
-  for (const path of walkFiles(root, 16).sort()) {
+  for (const path of walkFiles(root, Number.MAX_SAFE_INTEGER).sort()) {
     const local = relativePosix(root, path);
     try {
       const stat = lstatSync(path);
@@ -348,6 +370,7 @@ export function normalizeRepository(
     const beforeFingerprint = fingerprint(root);
     const first = runPass(root, 1, plan.normalizers, execute);
     if (first.status !== "passed") {
+      const currentFingerprint = fingerprint(root);
       return {
         schemaVersion: 1,
         operation: "normalize",
@@ -357,12 +380,13 @@ export function normalizeRepository(
           root,
           result: "blocked",
           coverage,
-          changed: false,
+          changed: beforeFingerprint !== currentFingerprint,
           idempotent: false,
           normalizers: plan.normalizers,
           unsupported: plan.unsupported,
           passes: [first],
           beforeFingerprint,
+          currentFingerprint,
         },
         diagnostics: [
           {
@@ -376,6 +400,7 @@ export function normalizeRepository(
     const normalizedFingerprint = fingerprint(root);
     const second = runPass(root, 2, plan.normalizers, execute);
     if (second.status !== "passed") {
+      const currentFingerprint = fingerprint(root);
       return {
         schemaVersion: 1,
         operation: "normalize",
@@ -385,13 +410,14 @@ export function normalizeRepository(
           root,
           result: "blocked",
           coverage,
-          changed: beforeFingerprint !== normalizedFingerprint,
+          changed: beforeFingerprint !== currentFingerprint,
           idempotent: false,
           normalizers: plan.normalizers,
           unsupported: plan.unsupported,
           passes: [first, second],
           beforeFingerprint,
           normalizedFingerprint,
+          currentFingerprint,
         },
         diagnostics: [
           {
@@ -413,7 +439,7 @@ export function normalizeRepository(
           root,
           result: "blocked",
           coverage,
-          changed: beforeFingerprint !== normalizedFingerprint,
+          changed: beforeFingerprint !== verificationFingerprint,
           idempotent: false,
           normalizers: plan.normalizers,
           unsupported: plan.unsupported,
