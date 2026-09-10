@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { discoverComponents } from "../src/core.ts";
+import { capabilities, type Capability as RuntimeCapability } from "../src/model.ts";
 
 type Capability = {
   name: string;
@@ -17,16 +22,36 @@ type Catalog = {
 };
 
 const catalog = JSON.parse(
-  readFileSync(new URL("../capabilities/catalog.json", import.meta.url), "utf8"),
+  await Bun.file(new URL("../capabilities/catalog.json", import.meta.url)).text(),
 ) as Catalog;
 
 describe("capability catalog", () => {
-  test("uses a stable schema version and unique semantic names", () => {
+  test("uses a stable schema version and exactly the shipped runtime capability names", () => {
     expect(catalog.schemaVersion).toBe(1);
     expect(catalog.capabilities.length).toBeGreaterThan(0);
 
     const names = catalog.capabilities.map(({ name }) => name);
     expect(new Set(names).size).toBe(names.length);
+    expect(names).toEqual([...capabilities]);
+  });
+
+  test("declares script candidates that runtime discovery actually recognizes", () => {
+    for (const capability of catalog.capabilities) {
+      for (const candidate of capability.scriptCandidates) {
+        const root = mkdtempSync(join(tmpdir(), "coding-tooling-capability-"));
+        try {
+          writeFileSync(
+            join(root, "package.json"),
+            `${JSON.stringify({ name: "fixture", scripts: { [candidate]: "echo ok" } })}\n`,
+            "utf8",
+          );
+          const component = discoverComponents(root)[0];
+          expect(component?.capabilities[capability.name as RuntimeCapability]).toBeDefined();
+        } finally {
+          rmSync(root, { recursive: true, force: true });
+        }
+      }
+    }
   });
 
   test("declares deterministic script candidates and valid tiers", () => {
@@ -42,7 +67,7 @@ describe("capability catalog", () => {
   test("keeps cross-candidate benchmark comparison outside tooling", () => {
     const byName = new Map(catalog.capabilities.map((capability) => [capability.name, capability]));
 
-    expect(byName.get("audit:lighthouse")?.baselineRequired).toBe(true);
+    expect(byName.get("web:audit")?.baselineRequired).toBe(true);
     expect(byName.get("benchmark")?.baselineRequired).toBe(false);
     expect(byName.has("benchmark:compare")).toBe(false);
   });
