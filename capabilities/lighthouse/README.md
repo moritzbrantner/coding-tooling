@@ -1,8 +1,8 @@
 # Lighthouse capability
 
-Stable name: \`audit:lighthouse\`.
+Stable executable name: `web:audit`.
 
-Compatible declared scripts include Lighthouse CI and Unlighthouse entry points listed in \`../catalog.json\`. The semantic capability requires:
+A repository may provide that capability with a `web:audit` package script or map another deterministic Lighthouse/Unlighthouse command explicitly through `capabilityCommands`. The semantic capability requires:
 
 1. a production-shaped build,
 2. an explicit route set,
@@ -10,6 +10,6 @@ Compatible declared scripts include Lighthouse CI and Unlighthouse entry points 
 4. machine-readable results,
 5. captured runner and browser metadata.
 
-Validate budget documents with \`../../schemas/performance-budget.schema.json\`. The capability is opt-in until a reviewed baseline exists; policy outside this tool promotes it to a blocking gate.
+Validate budget documents with `../../schemas/performance-budget.schema.json`. The capability is opt-in until a reviewed baseline exists; policy outside this tool promotes it to a blocking gate.
 
-Expected artifacts include \`.lighthouseci\` and \`.generated/unlighthouse\`.
+Expected artifacts include `.lighthouseci` and `.generated/unlighthouse`.
