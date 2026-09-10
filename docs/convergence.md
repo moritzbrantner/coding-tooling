@@ -49,19 +49,36 @@ The design borrows the useful fixed-point ideas often associated with convergent
 
 The system does not require generator operations to commute. When two deterministic mutations conflict, the collision is evidence that the state cannot be merged mechanically and convergence stops.
 
-## Generated implementation markers
+## Structured implementation markers
 
-Generators may deliberately create compiling structures that contain ordinary `TODO`/`FIXME` markers. The existing `source-debt-marker` expectation then exposes those markers as residual findings. This creates a useful handoff boundary:
+Generators can leave exact semantic work for an agent with this deliberately small comment syntax:
+
+```text
+TODO(coding-tooling:<stable-key>): <implementation instruction>
+```
+
+For example:
+
+```ts
+// TODO(coding-tooling:create-order-handler): Implement the declared create-order behavior through the repository abstraction.
+```
+
+`source-work-marker` emits one finding per marker. Each finding keeps the marker key, instruction, file, and line instead of grouping every TODO in a file into one vague debt item. Structured markers are recognized in ordinary source and test source. The generic `source-debt-marker` detector deliberately excludes them so they are not double-counted.
+
+This creates the intended handoff boundary:
 
 ```text
 generator materializes declared structure
-  -> findings expose implementation marker
-  -> converge returns partial + exact related file
-  -> agent implements semantics and removes marker
+  -> structured marker names the remaining semantic work
+  -> findings expose the exact marker/file/line
+  -> converge returns partial + agent handoff
+  -> agent implements semantics and removes the marker
   -> formatter/linter/typechecker/tests provide deterministic verification
   -> converge is rerun against the new state
 ```
 
+The existing Bun missing-test scaffold now follows this model. It may create the mechanical test file and a `test.todo`, but it also writes a deterministic structured marker instructing the agent to replace the placeholder with meaningful assertions. The original structural missing-test finding disappears; the semantic work-marker finding remains until the test is actually implemented.
+
 The marker is not generator ownership metadata. Once generated, the file belongs to the repository and may be edited normally. Convergence observes current evidence; it never tries to synchronize application source back to a newer template.
 
-A future refinement can define a structured coding-tooling TODO marker with a stable marker key so multiple generated implementation sites in one file can become separate deterministic work items. That should remain a small syntax contract rather than a general annotation language.
+Marker keys should be deterministic for generator-authored work and stable for the lifetime of that work item. The syntax remains intentionally line-oriented and does not become a general annotation or workflow language.
