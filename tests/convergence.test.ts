@@ -229,14 +229,24 @@ test("treats an absent higher layer as not applicable without blocking later lay
   const dependencies: ConvergenceDependencies = {
     findings: () => findingsEnvelope([]),
     scaffold: () => scaffoldEnvelope(),
-    verify: (_root, tier) =>
-      verificationEnvelope(
+    verify: (_root, tier) => {
+      const verification = verificationEnvelope(
         "passed",
         tier,
         tier === "integration"
           ? { checks: [], missing: [] }
           : { checks: [{ capability: tier }], missing: [] },
-      ),
+      );
+      if (tier === "integration") {
+        verification.diagnostics = [
+          {
+            code: "optional-capability-unavailable",
+            message: "integration is optional and unavailable",
+          },
+        ];
+      }
+      return verification;
+    },
   };
 
   const result = convergeRepository("/repo", { verifyTier: "workflow" }, dependencies);
@@ -247,6 +257,12 @@ test("treats an absent higher layer as not applicable without blocking later lay
     expect.objectContaining({ tier: "fast", applicability: "applicable" }),
     expect.objectContaining({ tier: "integration", applicability: "not-applicable" }),
     expect.objectContaining({ tier: "workflow", applicability: "applicable" }),
+  ]);
+  expect(result.diagnostics).toEqual([
+    {
+      code: "optional-capability-unavailable",
+      message: "integration is optional and unavailable",
+    },
   ]);
 });
 
