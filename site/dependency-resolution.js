@@ -53,13 +53,17 @@ function probeLines(probeValue) {
   const selected = record(probe.selectedVersions);
   const selectedEntries = Object.entries(selected);
   if (selectedEntries.length > 0) {
-    lines.push(`Resolved: ${selectedEntries.map(([name, version]) => `${name}@${version}`).join(", ")}`);
+    lines.push(
+      `Resolved: ${selectedEntries.map(([name, version]) => `${name}@${version}`).join(", ")}`,
+    );
   } else {
     const specs = list(probe.specs).filter((value) => typeof value === "string");
     if (specs.length > 0) lines.push(`Requested: ${specs.join(", ")}`);
   }
   if (text(probe.reason)) lines.push(`Reason: ${probe.reason}`);
-  for (const detail of list(probe.details).filter((value) => typeof value === "string").slice(0, 4)) {
+  for (const detail of list(probe.details)
+    .filter((value) => typeof value === "string")
+    .slice(0, 4)) {
     lines.push(detail);
   }
   return lines;
@@ -72,7 +76,9 @@ function repositoryLines(repositoryStateValue) {
   if (lockfiles.length > 0) lines.push(`Lockfiles: ${lockfiles.join(", ")}`);
   const declared = Object.entries(record(repositoryState.declaredVersions));
   if (declared.length > 0) {
-    lines.push(`Declared locally: ${declared.map(([name, version]) => `${name}@${version}`).join(", ")}`);
+    lines.push(
+      `Declared locally: ${declared.map(([name, version]) => `${name}@${version}`).join(", ")}`,
+    );
   }
   if (text(repositoryState.proves)) lines.push(repositoryState.proves);
   return lines;
@@ -109,7 +115,9 @@ function renderFindings(report) {
     message.textContent = text(finding.message) || "No message supplied.";
     const metadata = document.createElement("p");
     metadata.className = "muted";
-    const pieces = [text(finding.severity), text(finding.packageName), text(finding.mode)].filter(Boolean);
+    const pieces = [text(finding.severity), text(finding.packageName), text(finding.mode)].filter(
+      Boolean,
+    );
     metadata.textContent = pieces.join(" · ");
     article.append(heading, message, metadata);
     const details = list(finding.details).filter((value) => typeof value === "string");
@@ -152,7 +160,8 @@ function renderText(value) {
   } catch (error) {
     results.hidden = true;
     findingsSection.hidden = true;
-    status.textContent = error instanceof Error ? error.message : "Invalid dependency resolution report.";
+    status.textContent =
+      error instanceof Error ? error.message : "Invalid dependency resolution report.";
   }
 }
 
