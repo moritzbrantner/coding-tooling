@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { loadConfig } from "./core.ts";
+import { deploymentRuntimeParitySubjects } from "./expectation-deployment-detector.ts";
 import { productionSourceFiles, workMarkerSourceFiles } from "./expectation-gap-detectors.ts";
 import { createDetectorContext, type PackageInfo } from "./expectation-package-context.ts";
 import { explicitCargoTargets } from "./expectation-rust-detector.ts";
@@ -115,7 +116,13 @@ function categoryForExpectation(id: string): RepositoryScoreCategory {
   ) {
     return "correctness";
   }
-  if (id.includes("aggregate-check") || id.includes("required-capability")) return "automation";
+  if (
+    id.includes("aggregate-check") ||
+    id.includes("deployment") ||
+    id.includes("required-capability")
+  ) {
+    return "automation";
+  }
   if (id.includes("config") || id.includes("debt") || id.includes("work-marker")) {
     return "maintainability";
   }
@@ -275,6 +282,15 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
     countSubjects(
       consumerVerificationPackages,
       directFindingSubjects(findings, "consumer-dependency-resolution-stability"),
+    ),
+  );
+
+  const deploymentWorkflows = deploymentRuntimeParitySubjects(root);
+  models.set(
+    "deployment-runtime-parity",
+    countSubjects(
+      deploymentWorkflows,
+      directFindingSubjects(findings, "deployment-runtime-parity"),
     ),
   );
 
