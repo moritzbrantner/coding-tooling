@@ -27,6 +27,7 @@ export type FindingsCoverage = {
 type CoverageTarget =
   | "repository-config"
   | "packages"
+  | "consumer-verification-packages"
   | "typescript-source"
   | "typescript-analysis-projects"
   | "dotnet-analysis-projects"
@@ -39,6 +40,7 @@ type CoverageTarget =
 
 const coverageTargets: Record<string, CoverageTarget> = {
   "benchmark-evidence": "packages",
+  "consumer-dependency-resolution-stability": "consumer-verification-packages",
   "dotnet-type-assignability": "dotnet-analysis-projects",
   "javascript-source-test": "javascript-source",
   "package-aggregate-check": "packages",
@@ -55,12 +57,25 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "typescript-type-assignability": "typescript-analysis-projects",
 };
 
+function hasConsumerVerificationScript(
+  packageInfo: DetectorContext["packages"][number],
+): boolean {
+  return Object.entries(packageInfo.manifest.scripts ?? {}).some(
+    ([name, command]) =>
+      /consumer|published|package/i.test(name) &&
+      typeof command === "string" &&
+      command.trim().length > 0,
+  );
+}
+
 function detectorSubjects(root: string, context: DetectorContext, target: CoverageTarget): number {
   switch (target) {
     case "repository-config":
       return existsSync(join(root, ".coding-tooling.json")) ? 1 : 0;
     case "packages":
       return context.packages.length;
+    case "consumer-verification-packages":
+      return context.packages.filter(hasConsumerVerificationScript).length;
     case "typescript-source":
       return context.packages.reduce(
         (total, packageInfo) => total + packageInfo.sourceFiles.length,
