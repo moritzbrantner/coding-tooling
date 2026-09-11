@@ -96,11 +96,7 @@ function packageName(manifest: PackageManifest, directory: string): string {
 
 function isContainedPath(root: string, path: string): boolean {
   const relativePath = relative(root, path);
-  return (
-    relativePath !== ".." &&
-    !relativePath.startsWith(`..${sep}`) &&
-    !isAbsolute(relativePath)
-  );
+  return relativePath !== ".." && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath);
 }
 
 function relevantVerificationSources(
@@ -225,9 +221,7 @@ function publishableTargets(root: string): PackageTarget[] {
 function exactLowerBound(range: string): string | undefined {
   const value = range.trim();
   if (value.includes("||") || value.includes(" - ")) return undefined;
-  const match = value.match(
-    /^(?:\^|~|>=\s*)?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\s+<[^\s]+)?$/,
-  );
+  const match = value.match(/^(?:\^|~|>=\s*)?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\s+<[^\s]+)?$/);
   return match?.[1];
 }
 
