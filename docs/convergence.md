@@ -45,7 +45,7 @@ e2e         -> fast, integration, workflow, e2e
 
 `test:integration` is intended for endpoint/component integration. `test:integration:workflow` is the separate extended integration layer for multi-operation or business-workflow behavior that still does not require a browser or full external system surface.
 
-A progressive layer with no planned checks and no required missing capability is recorded as `not-applicable` and does not block promotion. A layer that the repository requires but cannot execute still fails closed. Promotion stops at the first applicable non-passing layer. Custom tier names keep exact-tier behavior rather than being guessed into the built-in ladder.
+A progressive layer with no planned checks and no required missing capability is recorded as `not-applicable` and does not block promotion. A layer that the repository requires but cannot execute still fails closed. Promotion stops at the first applicable non-passing layer. `full` remains a direct aggregate tier for compatibility, and custom tier names also keep exact-tier behavior rather than being guessed into the built-in ladder.
 
 When semantic findings remain after the deterministic fixed point, convergence runs only the cheap first progressive layer and returns the remaining semantic work as a handoff. It does not spend integration or E2E work before source convergence is complete.
 
