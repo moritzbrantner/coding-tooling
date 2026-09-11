@@ -43,7 +43,7 @@ jobs:
 }
 
 describe("deployment runtime parity integration", () => {
-  test("models runtime-sensitive Pages workflows as scored coverage subjects", () => {
+  test("scores an unverified runtime-sensitive Pages artifact as failed evidence", () => {
     const root = fixture();
     const coverage = analyzeFindingsCoverage(
       root,
