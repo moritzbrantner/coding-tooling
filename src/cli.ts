@@ -265,7 +265,7 @@ export function main(argv = process.argv.slice(2)): number {
       result = auditDependencies(root, stringOption(options, "config"), Boolean(options.strict));
     } else if (action === "resolve") {
       result = resolveDependencies(root, {
-        execute: !Boolean(options.static),
+        execute: !options.static,
         strict: Boolean(options.strict),
       });
     } else return usage();
