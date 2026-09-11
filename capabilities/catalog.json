@@ -65,6 +65,15 @@
       "baselineRequired": false
     },
     {
+      "name": "test:integration:workflow",
+      "kind": "test",
+      "tier": "workflow",
+      "scriptCandidates": ["test:integration:workflow"],
+      "defaultArtifacts": [],
+      "optIn": false,
+      "baselineRequired": false
+    },
+    {
       "name": "test:e2e",
       "kind": "test",
       "tier": "system",
