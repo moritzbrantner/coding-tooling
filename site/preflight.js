@@ -7,6 +7,10 @@ import {
   remoteValidationOutcome,
   structuralTestOutcome,
 } from "./evidence-model.js";
+import {
+  resolveWorkspacePackages,
+  workspaceToolchainConflict,
+} from "./workspace-toolchain.js";
 
 const CONTEXT_FILES = new Set([".coding-tooling.json", ".node-version", "rust-toolchain.toml"]);
 const IGNORED_ANALYSIS_SEGMENTS = new Set([
@@ -223,21 +227,26 @@ function discoverComponents(snapshot, paths) {
       },
     });
   }
+
+  const resolvedComponents = resolveWorkspacePackages(
+    components,
+    parseJson(snapshot.files["package.json"]),
+  );
   const evidenceComplete = !(
     snapshot.treeTruncated ||
     snapshot.manifestFetchTruncated ||
     snapshot.unreadablePaths.length > 0
   );
-  for (const component of components) {
+  for (const component of resolvedComponents) {
     component.testEvidence = structuralTestOutcome({
       kind: component.kind,
       complete: evidenceComplete,
-      productionPaths: componentOwnedPaths(paths, components, component, isProductionSource),
-      testPaths: componentOwnedPaths(paths, components, component, isTestPath),
+      productionPaths: componentOwnedPaths(paths, resolvedComponents, component, isProductionSource),
+      testPaths: componentOwnedPaths(paths, resolvedComponents, component, isTestPath),
     });
   }
 
-  return components.toSorted(
+  return resolvedComponents.toSorted(
     (left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name),
   );
 }
@@ -357,8 +366,27 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
       "coding-tooling bootstrap plan --json",
     );
 
+  const workspaceConflict = workspaceToolchainConflict(components);
+  if (workspaceConflict) {
+    const owner = workspaceConflict.root?.identity;
+    const members = workspaceConflict.members
+      .map(
+        (member) =>
+          `${member.path} (${member.identity?.runtime ?? "unknown"}@${member.identity?.version ?? "unknown"})`,
+      )
+      .join(", ");
+    add(
+      "REMOTE-ENV-008",
+      "high",
+      "Workspace package toolchain identities conflict",
+      `package.json establishes ${owner?.runtime ?? "unknown"}@${owner?.version ?? "unknown"} for the declared workspace; conflicting members: ${members}.`,
+      "Keep one canonical workspace toolchain identity; remove redundant member pins or align explicit member identities with the workspace owner.",
+    );
+  }
+
   for (const component of components.filter((item) => item.kind === "package")) {
     const outcome = component.toolchain;
+    if (outcome.reason === "workspace-toolchain-conflict") continue;
     if (outcome.status === "satisfied") continue;
     const suffix = component.path === "." ? "" : `-${stableId(component.path)}`;
     const nestedPrefix = component.path === "." ? "" : `${component.name}: `;
