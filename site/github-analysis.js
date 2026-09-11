@@ -10,11 +10,7 @@ import {
   mapWithConcurrency,
   selectRemoteFilesByByteBudget,
 } from "./remote-acquisition.js";
-import {
-  analyzeSnapshot,
-  parseRepositoryReference,
-  selectedWorkflowFiles,
-} from "./preflight.js";
+import { analyzeSnapshot, parseRepositoryReference, selectedWorkflowFiles } from "./preflight.js";
 
 export async function analysisJson(value, options = {}) {
   const reference = typeof value === "string" ? parseRepositoryReference(value) : value;
@@ -72,10 +68,7 @@ export async function loadSnapshot(reference, options = {}) {
   const entries = (tree.tree ?? []).filter(
     (entry) => entry.path && entry.sha && ["blob", "tree"].includes(entry.type),
   );
-  const manifestAcquisition = selectRemoteFilesByByteBudget(
-    entries,
-    options.manifestByteBudget,
-  );
+  const manifestAcquisition = selectRemoteFilesByByteBudget(entries, options.manifestByteBudget);
   const selectedBase = manifestAcquisition.selected;
   const selectedWorkflows = selectedWorkflowFiles(entries);
   const rootAction = entries.find(

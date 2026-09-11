@@ -12,9 +12,7 @@ export function selectRemoteFilesByByteBudget(
   }
 
   const eligible = selectedRemoteFiles(tree, tree.length);
-  const unknownSize = eligible.find(
-    (entry) => !Number.isSafeInteger(entry.size) || entry.size < 0,
-  );
+  const unknownSize = eligible.find((entry) => !Number.isSafeInteger(entry.size) || entry.size < 0);
   if (unknownSize) {
     return {
       selected: selectedRemoteFiles(tree),
