@@ -12,7 +12,6 @@ export const capabilities = [
   "test:visual",
   "package:check",
   "dependencies:audit",
-  "dependencies:resolve",
   "benchmark",
   "benchmark:smoke",
   "profile:runtime",
