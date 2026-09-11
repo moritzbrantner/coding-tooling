@@ -128,6 +128,7 @@ function recommendedConfig(
   if (hasTypescript) required.add("typecheck");
 
   optional.add("test:integration");
+  optional.add("test:integration:workflow");
   if (hasReact) {
     optional.add("test:e2e:smoke");
     optional.add("test:accessibility");
@@ -143,6 +144,7 @@ function recommendedConfig(
 
   for (const capability of [
     "test:integration",
+    "test:integration:workflow",
     "test:e2e",
     "test:e2e:smoke",
     "test:accessibility",
@@ -166,6 +168,8 @@ function recommendedConfig(
   const full = orderedCapabilities([...required, ...optional]);
   const tiers: Record<string, Capability[]> = { fast, full };
   if (optional.has("test:integration")) tiers.integration = ["test:integration"];
+  if (optional.has("test:integration:workflow"))
+    tiers.workflow = ["test:integration:workflow"];
 
   const e2e = orderedCapabilities(
     ["test:e2e:smoke", "test:e2e", "test:accessibility"].filter((capability) =>
