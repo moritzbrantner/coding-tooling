@@ -60,7 +60,7 @@ export async function mapWithConcurrency(items, concurrency, mapper) {
   }
   if (items.length === 0) return [];
 
-  const results = new Array(items.length);
+  const results = Array.from({ length: items.length });
   let nextIndex = 0;
   async function worker() {
     while (true) {
