@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { discoverComponents, loadConfig } from "./core.ts";
+import { inspectConsumerVerificationForPackage } from "./dependency-resolution.ts";
 import type { RawFinding } from "./expectation-detector-types.ts";
 import type { DetectorContext, PackageManifest } from "./expectation-package-context.ts";
 import type { Capability } from "./model.ts";
@@ -47,6 +48,36 @@ export function missingAggregateCheckFindings({ root, packages }: DetectorContex
     });
   }
   return findings;
+}
+
+export function consumerVerificationDependencyFindings({
+  root,
+  packages,
+}: DetectorContext): RawFinding[] {
+  return packages.flatMap((packageInfo) =>
+    inspectConsumerVerificationForPackage(root, packageInfo.directory).map((finding) => ({
+      subject: {
+        kind: "package" as const,
+        key: packageInfo.path,
+        path: finding.manifestPath,
+        description: `package ${packageInfo.manifest.name ?? packageInfo.path}`,
+      },
+      requirement: {
+        kind: "check" as const,
+        key: "consumer-dependency-resolution-stability",
+        description: "consumer verification that preserves normal peer resolution and deterministic compatibility points",
+        expectedArtifact: finding.manifestPath,
+      },
+      message: finding.message,
+      evidence: finding.relatedFiles.map((path) => ({
+        kind: path === finding.manifestPath ? ("manifest" as const) : ("file" as const),
+        path,
+        detail: finding.code,
+      })),
+      relatedFiles: finding.relatedFiles,
+      verification: [["coding-tooling", "dependencies", "resolve"]],
+    })),
+  );
 }
 
 export function missingTypeScriptConfigFindings({ root, packages }: DetectorContext): RawFinding[] {
