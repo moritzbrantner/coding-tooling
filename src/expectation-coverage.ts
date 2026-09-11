@@ -57,9 +57,7 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "typescript-type-assignability": "typescript-analysis-projects",
 };
 
-function hasConsumerVerificationScript(
-  packageInfo: DetectorContext["packages"][number],
-): boolean {
+function hasConsumerVerificationScript(packageInfo: DetectorContext["packages"][number]): boolean {
   return Object.entries(packageInfo.manifest.scripts ?? {}).some(
     ([name, command]) =>
       /consumer|published|package/i.test(name) &&
