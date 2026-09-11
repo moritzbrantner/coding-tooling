@@ -85,7 +85,7 @@ describe("component-scoped remote validation", () => {
     );
     const memberScoped = analyzeSnapshot(
       workspaceSnapshot(
-        `${pullRequestPrefix}      - working-directory: packages/app\n        run: bun run lint\n`,
+        `${pullRequestPrefix}      - name: Lint app\n        working-directory: packages/app\n        run: bun run lint\n`,
       ),
     );
 
