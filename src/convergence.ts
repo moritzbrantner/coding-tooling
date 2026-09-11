@@ -132,6 +132,7 @@ function verificationTiersThrough(target: string | null, sourceFixedPoint: boole
 function verificationApplicability(
   verification: ResultEnvelope<Record<string, unknown>>,
 ): VerificationApplicability {
+  if (verification.status !== "passed") return "applicable";
   const checks = verification.data.checks;
   const missing = verification.data.missing;
   if (!Array.isArray(checks) || !Array.isArray(missing)) return "applicable";
