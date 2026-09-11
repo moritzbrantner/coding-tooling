@@ -148,4 +148,42 @@ describe("proven workspace toolchain evidence", () => {
       expect.objectContaining({ id: expect.stringMatching(/^REMOTE-ENV-006-/) }),
     ]);
   });
+
+  test("fails closed when a workspace declaration contains an exclusion", () => {
+    const analysis = analyzeSnapshot(
+      snapshot({
+        "package.json": {
+          name: "root",
+          packageManager: "bun@1.4.0",
+          workspaces: ["packages/*", "!packages/private"],
+          scripts: scripts(),
+        },
+        "packages/private/package.json": { name: "private", scripts: scripts() },
+      }),
+    );
+    const member = analysis.components.find((component) => component.path === "packages/private");
+
+    expect(member.workspace).toBeUndefined();
+    expect(member.toolchain.reason).not.toBe("workspace-toolchain-inherited");
+  });
+
+  test("globstar may match zero intermediate directory segments", () => {
+    const analysis = analyzeSnapshot(
+      snapshot({
+        "package.json": {
+          name: "root",
+          packageManager: "bun@1.4.0",
+          workspaces: ["packages/**/app"],
+          scripts: scripts(),
+        },
+        "packages/app/package.json": { name: "app", scripts: scripts() },
+      }),
+    );
+    const app = analysis.components.find((component) => component.path === "packages/app");
+
+    expect(app.workspace).toEqual(
+      expect.objectContaining({ status: "satisfied", pattern: "packages/**/app" }),
+    );
+    expect(app.toolchain.reason).toBe("workspace-toolchain-inherited");
+  });
 });
