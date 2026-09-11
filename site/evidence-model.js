@@ -8,6 +8,7 @@ export const PACKAGE_SCRIPT_CANDIDATES = Object.freeze({
   test: ["test"],
   "test:unit": ["test:unit", "test"],
   "test:integration": ["test:integration"],
+  "test:integration:workflow": ["test:integration:workflow"],
   "test:e2e": ["test:e2e"],
   "test:e2e:smoke": ["test:e2e:smoke"],
   "test:accessibility": ["test:accessibility"],
