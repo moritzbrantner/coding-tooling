@@ -89,7 +89,9 @@ function workspacePatterns(manifest) {
   if (
     declared.some(
       (pattern) =>
-        typeof pattern !== "string" || pattern.trim().length === 0 || pattern.trim().startsWith("!"),
+        typeof pattern !== "string" ||
+        pattern.trim().length === 0 ||
+        pattern.trim().startsWith("!"),
     )
   ) {
     return [];

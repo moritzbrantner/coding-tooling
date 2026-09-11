@@ -579,10 +579,14 @@ function validationEvidenceFor(snapshot, paths, components) {
     .filter((path) => /^\.github\/workflows\/.+\.ya?ml$/i.test(path))
     .toSorted();
   const externalCiPaths = [...paths].filter(isExternalCiPath).toSorted();
-  const declaredCommands = components
-    .flatMap((component) => Object.values(component.capabilities ?? {}))
-    .filter(Array.isArray)
-    .map((command) => command.join(" "));
+  const declaredCommands = components.flatMap((component) =>
+    Object.values(component.capabilities ?? {})
+      .filter(Array.isArray)
+      .map((command) => ({
+        command: command.join(" "),
+        workingDirectory: component.path,
+      })),
+  );
   const workflows = workflowPaths
     .filter((path) => typeof snapshot.files[path] === "string")
     .map((path) => ({ path, content: snapshot.files[path] }));

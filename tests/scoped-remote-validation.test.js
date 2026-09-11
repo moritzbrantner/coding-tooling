@@ -71,9 +71,10 @@ describe("component-scoped remote validation", () => {
   });
 
   test("an explicit cd can prove a nested command without overclaiming the root", () => {
-    const result = validation(`${pullRequestPrefix}      - run: cd packages/app && bun run lint\n`, [
-      { command: "bun run lint", workingDirectory: "packages/app" },
-    ]);
+    const result = validation(
+      `${pullRequestPrefix}      - run: cd packages/app && bun run lint\n`,
+      [{ command: "bun run lint", workingDirectory: "packages/app" }],
+    );
 
     expect(result.status).toBe("satisfied");
   });
