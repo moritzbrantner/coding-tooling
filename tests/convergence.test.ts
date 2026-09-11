@@ -206,13 +206,7 @@ test("stops layered verification at the first failing layer before repository re
     },
     readiness: () => {
       readinessCalls += 1;
-      return {
-        readiness: "trusted-auto-merge",
-        authority: "hosted",
-        requiredChecks: [],
-        blockers: [],
-        diagnostics: [],
-      };
+      return undefined;
     },
   };
 
