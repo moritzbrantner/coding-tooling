@@ -1,4 +1,4 @@
-const SIMPLE_WORKSPACE_PATTERN = /^[A-Za-z0-9_.@/-]*(?:\*\*?|\?)[A-Za-z0-9_.@/*?-]*$/;
+const SIMPLE_WORKSPACE_PATTERN = /^[A-Za-z0-9_.@/*?-]+$/;
 
 export function resolveWorkspacePackages(components, rootManifest) {
   const root = components.find(
@@ -81,14 +81,20 @@ export function workspaceToolchainConflict(components) {
 
 function workspacePatterns(manifest) {
   const value = manifest?.workspaces;
-  const patterns = Array.isArray(value)
+  const declared = Array.isArray(value)
     ? value
     : value && typeof value === "object" && Array.isArray(value.packages)
       ? value.packages
       : [];
-  return patterns
-    .filter((pattern) => typeof pattern === "string" && pattern.length > 0)
-    .map((pattern) => pattern.replace(/^\.\//, "").replace(/\/$/, ""));
+  if (
+    declared.some(
+      (pattern) =>
+        typeof pattern !== "string" || pattern.trim().length === 0 || pattern.trim().startsWith("!"),
+    )
+  ) {
+    return [];
+  }
+  return declared.map((pattern) => pattern.trim().replace(/^\.\//, "").replace(/\/$/, ""));
 }
 
 function workspaceMembership(path, patterns) {
@@ -113,7 +119,10 @@ function workspacePatternMatcher(pattern) {
   let expression = "";
   for (let index = 0; index < pattern.length; index += 1) {
     const character = pattern[index];
-    if (character === "*" && pattern[index + 1] === "*") {
+    if (character === "*" && pattern[index + 1] === "*" && pattern[index + 2] === "/") {
+      expression += "(?:.*/)?";
+      index += 2;
+    } else if (character === "*" && pattern[index + 1] === "*") {
       expression += ".*";
       index += 1;
     } else if (character === "*") {
