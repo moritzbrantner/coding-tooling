@@ -55,7 +55,15 @@ describe("capability catalog", () => {
   });
 
   test("declares deterministic script candidates and valid tiers", () => {
-    const tiers = new Set(["fast", "focused", "integration", "system", "performance", "release"]);
+    const tiers = new Set([
+      "fast",
+      "focused",
+      "integration",
+      "workflow",
+      "system",
+      "performance",
+      "release",
+    ]);
 
     for (const capability of catalog.capabilities) {
       expect(capability.scriptCandidates.length).toBeGreaterThan(0);
@@ -75,6 +83,9 @@ describe("capability catalog", () => {
   test("includes framework-neutral progressive validation capabilities", () => {
     const byName = new Map(catalog.capabilities.map((capability) => [capability.name, capability]));
 
+    expect(byName.get("test:integration:workflow")?.scriptCandidates).toEqual([
+      "test:integration:workflow",
+    ]);
     expect(byName.get("test:e2e:smoke")?.scriptCandidates).toEqual(["test:e2e:smoke"]);
     expect(byName.get("test:accessibility")?.scriptCandidates).toEqual(["test:accessibility"]);
     expect(byName.get("test:visual")?.scriptCandidates).toEqual(["test:visual"]);
