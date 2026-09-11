@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
@@ -95,7 +95,7 @@ describe("dependency resolution evidence", () => {
 
   test("rejects a direct full-consumer install that bypasses peer resolution", () => {
     const root = fixture();
-    const packageJson = JSON.parse(Bun.file(join(root, "package.json")).text() as never);
+    const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     packageJson.scripts = { "test:consumer": "npm install --legacy-peer-deps ./package.tgz" };
     writeFileSync(join(root, "package.json"), JSON.stringify(packageJson));
 
