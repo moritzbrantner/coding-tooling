@@ -83,6 +83,7 @@ describe("open pull-request reconciliation", () => {
             title: "remove scalar offsets",
             baseRefName: "a2-finish-span-consumers",
             headRefName: "a2-remove-scalar-span-fields",
+            isCrossRepository: false,
             isDraft: false,
             mergeable: "MERGEABLE",
             mergeStateStatus: "CLEAN",
@@ -93,6 +94,7 @@ describe("open pull-request reconciliation", () => {
             {
               number: 88,
               headRefName: "a2-finish-span-consumers",
+              isCrossRepository: false,
               mergedAt: "2026-09-10T10:56:09Z",
             },
           ],
@@ -107,7 +109,7 @@ describe("open pull-request reconciliation", () => {
     expect(report.data.summary).toMatchObject({ needsReconciliation: 1 });
   });
 
-  test("accepts an active stack when an open parent pull request owns the child base branch", () => {
+  test("accepts an active stack when a same-repository open parent owns the child base branch", () => {
     const root = fixture();
     const report = openPullRequestReconciliation(root, {
       run: runnerFor([
@@ -116,6 +118,7 @@ describe("open pull-request reconciliation", () => {
           title: "parent",
           baseRefName: "main",
           headRefName: "feature-parent",
+          isCrossRepository: false,
           isDraft: false,
           mergeable: "MERGEABLE",
           mergeStateStatus: "CLEAN",
@@ -125,6 +128,7 @@ describe("open pull-request reconciliation", () => {
           title: "child",
           baseRefName: "feature-parent",
           headRefName: "feature-child",
+          isCrossRepository: false,
           isDraft: false,
           mergeable: "MERGEABLE",
           mergeStateStatus: "CLEAN",
@@ -136,6 +140,45 @@ describe("open pull-request reconciliation", () => {
     expect(report.data.summary).toMatchObject({ clean: 2, needsReconciliation: 0 });
   });
 
+  test("does not let a fork head with the same short branch name impersonate a stack parent", () => {
+    const root = fixture();
+    const report = openPullRequestReconciliation(root, {
+      run: runnerFor([
+        {
+          number: 10,
+          title: "fork feature",
+          baseRefName: "main",
+          headRefName: "feature-parent",
+          isCrossRepository: true,
+          isDraft: false,
+          mergeable: "MERGEABLE",
+          mergeStateStatus: "CLEAN",
+        },
+        {
+          number: 11,
+          title: "child",
+          baseRefName: "feature-parent",
+          headRefName: "feature-child",
+          isCrossRepository: false,
+          isDraft: false,
+          mergeable: "MERGEABLE",
+          mergeStateStatus: "CLEAN",
+        },
+      ]),
+    });
+
+    expect(report.status).toBe("passed");
+    expect(report.data.pullRequests).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          number: 11,
+          state: "refresh-recommended",
+          reasons: ["non-default base feature-parent has no open parent PR"],
+        }),
+      ]),
+    );
+  });
+
   test("keeps a legitimate non-default base advisory when it is not a merged stack parent", () => {
     const root = fixture();
     const report = openPullRequestReconciliation(root, {
@@ -145,11 +188,45 @@ describe("open pull-request reconciliation", () => {
           title: "release candidate",
           baseRefName: "staging",
           headRefName: "release-candidate",
+          isCrossRepository: false,
           isDraft: false,
           mergeable: "MERGEABLE",
           mergeStateStatus: "CLEAN",
         },
       ]),
+    });
+
+    expect(report.status).toBe("passed");
+    expect(report.data.summary).toMatchObject({ refreshRecommended: 1, needsReconciliation: 0 });
+  });
+
+  test("ignores a merged fork head when checking whether a non-default base was an integrated parent", () => {
+    const root = fixture();
+    const report = openPullRequestReconciliation(root, {
+      run: runnerFor(
+        [
+          {
+            number: 13,
+            title: "child",
+            baseRefName: "former-parent",
+            headRefName: "child",
+            isCrossRepository: false,
+            isDraft: false,
+            mergeable: "MERGEABLE",
+            mergeStateStatus: "CLEAN",
+          },
+        ],
+        {
+          "former-parent": [
+            {
+              number: 12,
+              headRefName: "former-parent",
+              isCrossRepository: true,
+              mergedAt: "2026-09-10T10:56:09Z",
+            },
+          ],
+        },
+      ),
     });
 
     expect(report.status).toBe("passed");
@@ -166,6 +243,7 @@ describe("open pull-request reconciliation", () => {
             title: "unknown stack",
             baseRefName: "former-parent",
             headRefName: "child",
+            isCrossRepository: false,
             isDraft: false,
             mergeable: "MERGEABLE",
             mergeStateStatus: "CLEAN",
@@ -183,6 +261,28 @@ describe("open pull-request reconciliation", () => {
     });
   });
 
+  test("fails closed when the open pull-request inventory reaches its completeness cap", () => {
+    const root = fixture();
+    const openPullRequests = Array.from({ length: 101 }, (_, index) => ({
+      number: index + 1,
+      title: `PR ${index + 1}`,
+      baseRefName: "main",
+      headRefName: `feature-${index + 1}`,
+      isCrossRepository: false,
+      isDraft: false,
+      mergeable: "MERGEABLE",
+      mergeStateStatus: "CLEAN",
+    }));
+    const report = openPullRequestReconciliation(root, {
+      run: runnerFor(openPullRequests),
+    });
+
+    expect(report.status).toBe("unavailable");
+    expect(report.diagnostics.map((entry) => entry.code)).toContain(
+      "pr-reconciliation-open-prs-truncated",
+    );
+  });
+
   test("blocks conflicting open branches but treats merely behind branches as refresh advice", () => {
     const root = fixture();
     const conflicting = openPullRequestReconciliation(root, {
@@ -192,6 +292,7 @@ describe("open pull-request reconciliation", () => {
           title: "conflicting",
           baseRefName: "main",
           headRefName: "conflicting-head",
+          isCrossRepository: false,
           isDraft: false,
           mergeable: "CONFLICTING",
           mergeStateStatus: "DIRTY",
@@ -207,6 +308,7 @@ describe("open pull-request reconciliation", () => {
           title: "behind",
           baseRefName: "main",
           headRefName: "behind-head",
+          isCrossRepository: false,
           isDraft: false,
           mergeable: "MERGEABLE",
           mergeStateStatus: "BEHIND",
