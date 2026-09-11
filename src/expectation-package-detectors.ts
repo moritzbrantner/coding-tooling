@@ -65,7 +65,8 @@ export function consumerVerificationDependencyFindings({
       requirement: {
         kind: "check" as const,
         key: "consumer-dependency-resolution-stability",
-        description: "consumer verification that preserves normal peer resolution and deterministic compatibility points",
+        description:
+          "consumer verification that preserves normal peer resolution and deterministic compatibility points",
         expectedArtifact: finding.manifestPath,
       },
       message: finding.message,
