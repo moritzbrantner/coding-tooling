@@ -334,9 +334,17 @@ function failClosedWorkflow(workflowEvidence, content) {
   let unsuppressed = false;
   let explicitlySuppressed = false;
   for (const step of steps) {
-    const commandMatch = (workflowEvidence.matchedCommands ?? []).some((command) =>
-      step.commands.some((candidate) => shellCommandMatches(candidate, command)),
-    );
+    const matchedCommandEvidence = workflowEvidence.matchedCommandEvidence ?? [];
+    const commandMatch =
+      matchedCommandEvidence.length > 0
+        ? matchedCommandEvidence.some(
+            (command) =>
+              step.workingDirectory === command.workingDirectory &&
+              step.commands.some((candidate) => shellCommandMatches(candidate, command.command)),
+          )
+        : (workflowEvidence.matchedCommands ?? []).some((command) =>
+            step.commands.some((candidate) => shellCommandMatches(candidate, command)),
+          );
     const actionMatch = workflowEvidence.codingToolingAction && step.codingToolingAction;
     if (!commandMatch && !actionMatch) continue;
     mapped = true;
@@ -411,13 +419,26 @@ function workflowSteps(content) {
         !block.some((line) =>
           /^operation\s*:\s*(?!run\s*$)[^#]+/i.test(stripYamlComment(line).trim()),
         );
+      const workingDirectory = workflowStepWorkingDirectory(block);
       if (commands.length || codingToolingAction) {
-        steps.push({ commands, continueOnError, codingToolingAction });
+        steps.push({ commands, continueOnError, codingToolingAction, workingDirectory });
       }
       index = Math.max(index, end - 1);
     }
   }
   return steps;
+}
+
+function workflowStepWorkingDirectory(block) {
+  for (const raw of block) {
+    const match = stripYamlComment(raw).match(/^\s*working-directory\s*:\s*(.+)$/);
+    if (!match) continue;
+    const value = literalScalar(match[1]);
+    if (!value) return null;
+    const normalized = value.replace(/^\.\//, "").replace(/\/$/, "");
+    return normalized || ".";
+  }
+  return ".";
 }
 
 function workflowCommands(content) {
