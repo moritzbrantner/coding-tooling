@@ -10,6 +10,7 @@ import {
   sourceWorkMarkerFindings,
 } from "./expectation-gap-detectors.ts";
 import {
+  consumerVerificationDependencyFindings,
   missingAggregateCheckFindings,
   missingCliWiringFindings,
   missingRequiredCapabilityFindings,
@@ -52,6 +53,27 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       ],
     },
     detect: missingBenchmarkEvidenceFindings,
+  },
+  {
+    id: "consumer-dependency-resolution-stability",
+    version: 1,
+    description:
+      "Consumer package verification does not float compatibility points or bypass normal peer resolution",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    evidenceContract: {
+      basis: "syntax",
+      oracle: "consumer-verification-install-spec-scan",
+      independenceKey: "consumer-dependency-resolution-verifier",
+      proves:
+        "Recognized consumer/package verification scripts do not contain floating package specs or direct peer-resolution bypass flags in the inspected install command.",
+      limitations: [
+        "Does not prove that the declared dependency graph is satisfiable; run coding-tooling dependencies resolve for resolver-backed evidence.",
+        "Only mechanically recognized package verification scripts and referenced node/bun script files are inspected.",
+        "Registry availability and current upstream package metadata are outside this static evidence contract.",
+      ],
+    },
+    detect: consumerVerificationDependencyFindings,
   },
   {
     id: "dotnet-type-assignability",
