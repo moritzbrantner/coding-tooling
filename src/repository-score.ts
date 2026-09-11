@@ -110,6 +110,7 @@ function categoryForExpectation(id: string): RepositoryScoreCategory {
     id.includes("assignability") ||
     id.includes("cargo-target") ||
     id.includes("cli-wiring") ||
+    id.includes("dependency-resolution") ||
     id.includes("unimplemented")
   ) {
     return "correctness";
@@ -155,6 +156,15 @@ function packageHasBenchmark(packageInfo: PackageInfo): boolean {
     const command = scripts[name];
     return typeof command === "string" && command.trim().length > 0;
   });
+}
+
+function packageHasConsumerVerification(packageInfo: PackageInfo): boolean {
+  return Object.entries(packageInfo.manifest.scripts ?? {}).some(
+    ([name, command]) =>
+      /consumer|published|package/i.test(name) &&
+      typeof command === "string" &&
+      command.trim().length > 0,
+  );
 }
 
 function packageNeedsAggregateCheck(packageInfo: PackageInfo): boolean {
@@ -255,6 +265,17 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
   models.set(
     "package-aggregate-check",
     countSubjects(aggregatePackages, directFindingSubjects(findings, "package-aggregate-check")),
+  );
+
+  const consumerVerificationPackages = context.packages
+    .filter(packageHasConsumerVerification)
+    .map((packageInfo) => packageInfo.path);
+  models.set(
+    "consumer-dependency-resolution-stability",
+    countSubjects(
+      consumerVerificationPackages,
+      directFindingSubjects(findings, "consumer-dependency-resolution-stability"),
+    ),
   );
 
   const benchmarkPackages = context.packages
