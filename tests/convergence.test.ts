@@ -194,7 +194,7 @@ test("promotes a clean fixed point through the layered verification ladder", () 
   });
 });
 
-test("stops layered verification at the first failing layer before repository readiness", () => {
+test("stops layered verification at a failed empty layer before repository readiness", () => {
   const verifiedTiers: string[] = [];
   let readinessCalls = 0;
   const dependencies: ConvergenceDependencies = {
@@ -202,7 +202,11 @@ test("stops layered verification at the first failing layer before repository re
     scaffold: () => scaffoldEnvelope(),
     verify: (_root, tier) => {
       verifiedTiers.push(tier);
-      return verificationEnvelope(tier === "integration" ? "failed" : "passed", tier);
+      return verificationEnvelope(
+        tier === "integration" ? "failed" : "passed",
+        tier,
+        { checks: [], missing: [] },
+      );
     },
     readiness: () => {
       readinessCalls += 1;
