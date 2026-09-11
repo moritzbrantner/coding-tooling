@@ -125,11 +125,19 @@ const evidenceKinds: readonly PublicContractEvidenceKind[] = [
   "reachability",
 ];
 const evidenceCapabilities: Record<PublicContractEvidenceKind, readonly Capability[]> = {
-  behavioral: ["test", "test:unit", "test:integration", "test:e2e", "test:e2e:smoke"],
+  behavioral: [
+    "test",
+    "test:unit",
+    "test:integration",
+    "test:integration:workflow",
+    "test:e2e",
+    "test:e2e:smoke",
+  ],
   contract: [
     "test",
     "test:unit",
     "test:integration",
+    "test:integration:workflow",
     "test:e2e",
     "test:e2e:smoke",
     "package:check",
@@ -145,6 +153,7 @@ const evidenceCapabilities: Record<PublicContractEvidenceKind, readonly Capabili
     "test",
     "test:unit",
     "test:integration",
+    "test:integration:workflow",
     "test:e2e",
     "test:e2e:smoke",
     "build",
