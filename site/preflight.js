@@ -82,6 +82,7 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
   const findings = findingsFor(snapshot, paths, components, validationEvidence);
   const incomplete =
     snapshot.treeTruncated ||
+    snapshot.revisionUnavailable ||
     snapshot.manifestFetchTruncated ||
     snapshot.unreadablePaths.length > 0 ||
     validationEvidence.status === "incomplete";
@@ -96,7 +97,9 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
       repository: snapshot.repository.fullName,
       defaultBranch: snapshot.repository.defaultBranch,
       treeTruncated: snapshot.treeTruncated,
+      revisionUnavailable: Boolean(snapshot.revisionUnavailable),
       manifestFetchTruncated: snapshot.manifestFetchTruncated,
+      manifestAcquisition: snapshot.manifestAcquisition ?? null,
       workflowFetchTruncated: Boolean(snapshot.workflowFetchTruncated),
       unreadablePaths: snapshot.unreadablePaths,
       analyzedFiles: Object.keys(snapshot.files).length,
@@ -543,6 +546,14 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
       "Keep repository-specific guidance and exceptions in AGENTS.md.",
     );
 
+  if (snapshot.revisionUnavailable)
+    add(
+      "REMOTE-SOURCE-004",
+      "medium",
+      "Exact default-branch revision is unavailable",
+      "Remote preflight could not establish an immutable default-branch revision before loading repository content.",
+      "Treat the remote result as incomplete until exact revision provenance can be observed.",
+    );
   if (snapshot.treeTruncated)
     add(
       "REMOTE-SOURCE-001",

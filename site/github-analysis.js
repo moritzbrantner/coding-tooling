@@ -6,11 +6,11 @@ import {
   mergeAuthorityConsistency,
 } from "./merge-authority-evidence.js";
 import {
-  analyzeSnapshot,
-  parseRepositoryReference,
-  selectedRemoteFiles,
-  selectedWorkflowFiles,
-} from "./preflight.js";
+  DEFAULT_REMOTE_FETCH_CONCURRENCY,
+  mapWithConcurrency,
+  selectRemoteFilesByByteBudget,
+} from "./remote-acquisition.js";
+import { analyzeSnapshot, parseRepositoryReference, selectedWorkflowFiles } from "./preflight.js";
 
 export async function analysisJson(value, options = {}) {
   const reference = typeof value === "string" ? parseRepositoryReference(value) : value;
@@ -47,28 +47,29 @@ export async function loadSnapshot(reference, options = {}) {
     fetchImpl,
     signal,
   );
-  const defaultBranchObservation = shouldInspectDefaultBranch(repository)
-    ? githubOptionalJson(
+  const inspectDefaultBranch = shouldInspectDefaultBranch(repository);
+  const defaultBranch = inspectDefaultBranch
+    ? await githubOptionalJson(
         `/repos/${reference.owner}/${reference.name}/branches/${encodeURIComponent(repository.default_branch)}`,
         fetchImpl,
         signal,
       )
-    : Promise.resolve({
+    : {
         status: "unavailable",
         reason: "repository-governance-metadata-unavailable",
-      });
-  const [tree, defaultBranch] = await Promise.all([
-    githubJson(
-      `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`,
-      fetchImpl,
-      signal,
-    ),
-    defaultBranchObservation,
-  ]);
+      };
+  const revision = defaultBranchRevision(defaultBranch);
+  const treeRef = revision ?? repository.default_branch;
+  const tree = await githubJson(
+    `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(treeRef)}?recursive=1`,
+    fetchImpl,
+    signal,
+  );
   const entries = (tree.tree ?? []).filter(
     (entry) => entry.path && entry.sha && ["blob", "tree"].includes(entry.type),
   );
-  const selectedBase = selectedRemoteFiles(entries);
+  const manifestAcquisition = selectRemoteFilesByByteBudget(entries, options.manifestByteBudget);
+  const selectedBase = manifestAcquisition.selected;
   const selectedWorkflows = selectedWorkflowFiles(entries);
   const rootAction = entries.find(
     (entry) => entry.type === "blob" && ["action.yml", "action.yaml"].includes(entry.path),
@@ -80,18 +81,15 @@ export async function loadSnapshot(reference, options = {}) {
       ? [rootAction]
       : []),
   ];
-  const eligible = selectedRemoteFiles(entries, entries.length);
   const eligibleWorkflows = selectedWorkflowFiles(entries, entries.length);
-  const packageCount = eligible.filter((entry) => entry.path.endsWith("package.json")).length;
-  const selectedPackages = selectedBase.filter((entry) =>
-    entry.path.endsWith("package.json"),
-  ).length;
   const workflowFetchTruncated = selectedWorkflows.length < eligibleWorkflows.length;
   const files = {};
   const unreadablePaths = [];
 
-  await Promise.all(
-    selected.map(async (entry) => {
+  await mapWithConcurrency(
+    selected,
+    options.fetchConcurrency ?? DEFAULT_REMOTE_FETCH_CONCURRENCY,
+    async (entry) => {
       try {
         const blob = await githubJson(
           `/repos/${reference.owner}/${reference.name}/git/blobs/${entry.sha}`,
@@ -104,7 +102,7 @@ export async function loadSnapshot(reference, options = {}) {
         if (error?.name === "AbortError") throw error;
         unreadablePaths.push(entry.path);
       }
-    }),
+    },
   );
 
   return {
@@ -113,7 +111,7 @@ export async function loadSnapshot(reference, options = {}) {
       name: repository.name,
       fullName: repository.full_name,
       defaultBranch: repository.default_branch,
-      revision: defaultBranchRevision(defaultBranch),
+      revision,
       htmlUrl: repository.html_url,
       description: repository.description,
       archived: repository.archived,
@@ -125,7 +123,16 @@ export async function loadSnapshot(reference, options = {}) {
     tree: entries,
     files,
     treeTruncated: Boolean(tree.truncated),
-    manifestFetchTruncated: selectedPackages < packageCount,
+    revisionUnavailable: inspectDefaultBranch && !revision,
+    manifestFetchTruncated: !manifestAcquisition.complete,
+    manifestAcquisition: {
+      byteBudget: manifestAcquisition.byteBudget,
+      selectedBytes: manifestAcquisition.selectedBytes,
+      reason: manifestAcquisition.reason,
+      blockedPath: manifestAcquisition.blockedPath,
+      eligibleCount: manifestAcquisition.eligible.length,
+      selectedCount: manifestAcquisition.selected.length,
+    },
     workflowFetchTruncated,
     unreadablePaths: unreadablePaths.toSorted(),
   };
