@@ -204,7 +204,7 @@ function topLevelEnvironmentKeys(content: string): string[] {
   const keys = new Set<string>();
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]!;
-    if (indentation(line) !== 0 || !/^env:/.test(line)) continue;
+    if (indentation(line) !== 0 || !line.startsWith("env:")) continue;
     for (const key of environmentKeysFromMap(lines, index)) keys.add(key);
   }
   return [...keys].sort();
