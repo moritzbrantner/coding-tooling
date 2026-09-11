@@ -168,8 +168,7 @@ function recommendedConfig(
   const full = orderedCapabilities([...required, ...optional]);
   const tiers: Record<string, Capability[]> = { fast, full };
   if (optional.has("test:integration")) tiers.integration = ["test:integration"];
-  if (optional.has("test:integration:workflow"))
-    tiers.workflow = ["test:integration:workflow"];
+  if (optional.has("test:integration:workflow")) tiers.workflow = ["test:integration:workflow"];
 
   const e2e = orderedCapabilities(
     ["test:e2e:smoke", "test:e2e", "test:accessibility"].filter((capability) =>
