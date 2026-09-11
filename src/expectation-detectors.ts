@@ -2,7 +2,6 @@ import {
   dotNetAssignabilityFindings,
   typeScriptAssignabilityFindings,
 } from "./expectation-analysis-detector.ts";
-import { deploymentRuntimeParityFindings } from "./expectation-deployment-detector.ts";
 import {
   missingBenchmarkEvidenceFindings,
   missingTestCapabilityFindings,
@@ -11,6 +10,7 @@ import {
   sourceWorkMarkerFindings,
 } from "./expectation-gap-detectors.ts";
 import {
+  consumerVerificationDependencyFindings,
   missingAggregateCheckFindings,
   missingCliWiringFindings,
   missingRequiredCapabilityFindings,
@@ -55,25 +55,25 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
     detect: missingBenchmarkEvidenceFindings,
   },
   {
-    id: "deployment-runtime-parity",
+    id: "consumer-dependency-resolution-stability",
     version: 1,
     description:
-      "Runtime-sensitive Pages builds are exercised from the exact produced deployment artifact",
+      "Consumer package verification does not float compatibility points or bypass normal peer resolution",
     defaultSeverity: "warning",
     policyKind: "advisory",
     evidenceContract: {
-      basis: "configuration",
-      oracle: "github-actions-deployment-topology",
-      independenceKey: "deployment-runtime-parity",
+      basis: "syntax",
+      oracle: "consumer-verification-install-spec-scan",
+      independenceKey: "consumer-dependency-resolution-verifier",
       proves:
-        "A Pages workflow with an explicit production-only runtime environment or base-path variant also declares browser/runtime validation that consumes a produced artifact.",
+        "Recognized consumer/package verification scripts do not contain floating package specs or direct peer-resolution bypass flags in the inspected install command.",
       limitations: [
-        "Does not execute the browser/runtime check or prove that deployment succeeds.",
-        "Only recognizes explicit GitHub Actions artifact-consumer and runtime-test wiring; equivalent custom orchestration may remain unsupported.",
-        "Does not require browser validation for Pages workflows without an explicit production-only runtime variant.",
+        "Does not prove that the declared dependency graph is satisfiable; run coding-tooling dependencies resolve for resolver-backed evidence.",
+        "Only mechanically recognized package verification scripts and referenced node/bun script files are inspected.",
+        "Registry availability and current upstream package metadata are outside this static evidence contract.",
       ],
     },
-    detect: deploymentRuntimeParityFindings,
+    detect: consumerVerificationDependencyFindings,
   },
   {
     id: "dotnet-type-assignability",

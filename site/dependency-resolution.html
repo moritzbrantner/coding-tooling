@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Inspect deterministic minimum and fresh clean-consumer dependency resolution evidence produced by coding-tooling."
+    />
+    <title>coding-tooling · dependency resolution</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <a href="./">coding-tooling</a>
+      <span><a href="./score/">score history</a> · dependency resolution / schema v1</span>
+    </header>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">Distribution contract evidence</p>
+        <h1>Dependency resolution.<br />Three states, no guesswork.</h1>
+        <p class="lede">
+          Compare the repository's locked development state with deterministic minimum-peer and
+          current fresh-range consumer resolution. Runtime compatibility is shown only when the
+          report was produced by the real package-manager resolver.
+        </p>
+        <p class="muted">
+          Generate evidence with
+          <code>coding-tooling dependencies resolve --json &gt; dependency-resolution.json</code>,
+          then open or paste the report below. Registry-unavailable evidence remains unavailable; it
+          is never rendered as green.
+        </p>
+        <div class="input-row">
+          <input id="report-file" type="file" accept="application/json,.json" />
+          <button id="render-report" type="button">Render pasted JSON</button>
+        </div>
+        <label for="report-json">Dependency resolution JSON</label>
+        <textarea id="report-json" rows="10" spellcheck="false"></textarea>
+        <p id="status" class="status" role="status">No resolver-backed report loaded.</p>
+      </section>
+
+      <section id="results" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">Resolver evidence</p>
+          <h2>Consumer compatibility states</h2>
+        </div>
+        <div class="table-scroll">
+          <table class="evidence-table">
+            <thead>
+              <tr>
+                <th scope="col">Package</th>
+                <th scope="col">Repository state</th>
+                <th scope="col">Minimum peer point</th>
+                <th scope="col">Fresh range resolution</th>
+              </tr>
+            </thead>
+            <tbody id="packages"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="findings-section" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">Actionable evidence</p>
+          <h2>Dependency findings</h2>
+        </div>
+        <div id="findings" class="stack"></div>
+      </section>
+
+      <section class="boundary">
+        <h2>Boundary</h2>
+        <p>
+          This page renders evidence; it does not run npm in the browser. Static repository
+          inspection can identify unstable consumer-verification code, while minimum and fresh
+          resolution states are authoritative only when produced by
+          <code>coding-tooling dependencies resolve</code>. A lockfile is development evidence, not
+          proof that a new consumer can resolve the declared ranges.
+        </p>
+      </section>
+    </main>
+    <footer>
+      <span>Resolver evidence, not inferred compatibility.</span>
+      <span>Unavailable is not passing.</span>
+    </footer>
+    <script type="module" src="./dependency-resolution.js"></script>
+  </body>
+</html>

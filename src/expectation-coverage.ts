@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
-import { deploymentRuntimeParitySubjects } from "./expectation-deployment-detector.ts";
 import { productionSourceFiles, workMarkerSourceFiles } from "./expectation-gap-detectors.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { ExpectationDescriptor } from "./expectation-detector-types.ts";
@@ -28,7 +27,7 @@ export type FindingsCoverage = {
 type CoverageTarget =
   | "repository-config"
   | "packages"
-  | "deployment-workflows"
+  | "consumer-verification-packages"
   | "typescript-source"
   | "typescript-analysis-projects"
   | "dotnet-analysis-projects"
@@ -41,7 +40,7 @@ type CoverageTarget =
 
 const coverageTargets: Record<string, CoverageTarget> = {
   "benchmark-evidence": "packages",
-  "deployment-runtime-parity": "deployment-workflows",
+  "consumer-dependency-resolution-stability": "consumer-verification-packages",
   "dotnet-type-assignability": "dotnet-analysis-projects",
   "javascript-source-test": "javascript-source",
   "package-aggregate-check": "packages",
@@ -58,14 +57,23 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "typescript-type-assignability": "typescript-analysis-projects",
 };
 
+function hasConsumerVerificationScript(packageInfo: DetectorContext["packages"][number]): boolean {
+  return Object.entries(packageInfo.manifest.scripts ?? {}).some(
+    ([name, command]) =>
+      /consumer|published|package/i.test(name) &&
+      typeof command === "string" &&
+      command.trim().length > 0,
+  );
+}
+
 function detectorSubjects(root: string, context: DetectorContext, target: CoverageTarget): number {
   switch (target) {
     case "repository-config":
       return existsSync(join(root, ".coding-tooling.json")) ? 1 : 0;
     case "packages":
       return context.packages.length;
-    case "deployment-workflows":
-      return deploymentRuntimeParitySubjects(root).length;
+    case "consumer-verification-packages":
+      return context.packages.filter(hasConsumerVerificationScript).length;
     case "typescript-source":
       return context.packages.reduce(
         (total, packageInfo) => total + packageInfo.sourceFiles.length,

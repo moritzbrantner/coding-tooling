@@ -41,6 +41,16 @@ describe("composite action contract", () => {
     expect(source).toContain('bun "${{ github.action_path }}/src/cli.ts" "${args[@]}"');
   });
 
+  test("exposes resolver-backed dependency evidence without pre-installing the repository graph", () => {
+    const source = actionSource();
+
+    expect(source).toContain("dependency-resolution");
+    expect(source).toContain('"$INPUT_OPERATION" == "dependency-resolution"');
+    expect(source).toContain("dependency_args=(dependencies resolve --json)");
+    expect(source).toContain("dependency_args+=(--strict)");
+    expect(source).not.toContain("inputs.operation == 'dependency-resolution'");
+  });
+
   test("exposes read-only foundation audit capture", () => {
     const source = actionSource();
 

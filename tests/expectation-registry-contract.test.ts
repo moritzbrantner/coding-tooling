@@ -19,6 +19,7 @@ import {
 } from "../src/expectation-gap-detectors.ts";
 import { duplicateValues, semanticFindingId } from "../src/expectation-model.ts";
 import {
+  consumerVerificationDependencyFindings,
   missingAggregateCheckFindings,
   missingCliWiringFindings,
   missingRequiredCapabilityFindings,
@@ -62,6 +63,7 @@ function fixture(): string {
 function detectorBatches(context: DetectorContext): RawFinding[][] {
   return [
     missingBenchmarkEvidenceFindings(context),
+    consumerVerificationDependencyFindings(context),
     dotNetAssignabilityFindings(context),
     missingJavaScriptTestFindings(context),
     missingAggregateCheckFindings(context),
@@ -85,7 +87,7 @@ describe("expectation detector registry contract", () => {
 
     expect(registry.map((entry) => entry.id)).toEqual([
       "benchmark-evidence",
-      "deployment-runtime-parity",
+      "consumer-dependency-resolution-stability",
       "dotnet-type-assignability",
       "javascript-source-test",
       "package-aggregate-check",
@@ -103,7 +105,7 @@ describe("expectation detector registry contract", () => {
     ]);
     expect(registry.map((entry) => [entry.id, entry.version])).toEqual([
       ["benchmark-evidence", 1],
-      ["deployment-runtime-parity", 1],
+      ["consumer-dependency-resolution-stability", 1],
       ["dotnet-type-assignability", 1],
       ["javascript-source-test", 1],
       ["package-aggregate-check", 1],
@@ -137,6 +139,15 @@ describe("expectation detector registry contract", () => {
           entry.evidenceContract.limitations.length > 0,
       ),
     ).toBeTrue();
+
+    const dependencyResolution = registry.find(
+      (entry) => entry.id === "consumer-dependency-resolution-stability",
+    );
+    expect(dependencyResolution?.evidenceContract).toMatchObject({
+      basis: "syntax",
+      oracle: "consumer-verification-install-spec-scan",
+      independenceKey: "consumer-dependency-resolution-verifier",
+    });
 
     const typescriptAssignability = registry.find(
       (entry) => entry.id === "typescript-type-assignability",
@@ -208,7 +219,7 @@ describe("expectation detector registry contract", () => {
 
     expect(repeatedBatches).toEqual(batches);
     expect(batches.map((batch) => batch.length)).toEqual([
-      0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0,
+      0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0,
     ]);
   });
 });

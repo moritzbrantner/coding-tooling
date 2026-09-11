@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { loadConfig } from "./core.ts";
-import { deploymentRuntimeParitySubjects } from "./expectation-deployment-detector.ts";
 import { productionSourceFiles, workMarkerSourceFiles } from "./expectation-gap-detectors.ts";
 import { createDetectorContext, type PackageInfo } from "./expectation-package-context.ts";
 import { explicitCargoTargets } from "./expectation-rust-detector.ts";
@@ -111,17 +110,12 @@ function categoryForExpectation(id: string): RepositoryScoreCategory {
     id.includes("assignability") ||
     id.includes("cargo-target") ||
     id.includes("cli-wiring") ||
+    id.includes("dependency-resolution") ||
     id.includes("unimplemented")
   ) {
     return "correctness";
   }
-  if (
-    id.includes("aggregate-check") ||
-    id.includes("deployment") ||
-    id.includes("required-capability")
-  ) {
-    return "automation";
-  }
+  if (id.includes("aggregate-check") || id.includes("required-capability")) return "automation";
   if (id.includes("config") || id.includes("debt") || id.includes("work-marker")) {
     return "maintainability";
   }
@@ -162,6 +156,15 @@ function packageHasBenchmark(packageInfo: PackageInfo): boolean {
     const command = scripts[name];
     return typeof command === "string" && command.trim().length > 0;
   });
+}
+
+function packageHasConsumerVerification(packageInfo: PackageInfo): boolean {
+  return Object.entries(packageInfo.manifest.scripts ?? {}).some(
+    ([name, command]) =>
+      /consumer|published|package/i.test(name) &&
+      typeof command === "string" &&
+      command.trim().length > 0,
+  );
 }
 
 function packageNeedsAggregateCheck(packageInfo: PackageInfo): boolean {
@@ -264,21 +267,23 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
     countSubjects(aggregatePackages, directFindingSubjects(findings, "package-aggregate-check")),
   );
 
+  const consumerVerificationPackages = context.packages
+    .filter(packageHasConsumerVerification)
+    .map((packageInfo) => packageInfo.path);
+  models.set(
+    "consumer-dependency-resolution-stability",
+    countSubjects(
+      consumerVerificationPackages,
+      directFindingSubjects(findings, "consumer-dependency-resolution-stability"),
+    ),
+  );
+
   const benchmarkPackages = context.packages
     .filter(packageHasBenchmark)
     .map((packageInfo) => packageInfo.path);
   models.set(
     "benchmark-evidence",
     countSubjects(benchmarkPackages, directFindingSubjects(findings, "benchmark-evidence")),
-  );
-
-  const deploymentWorkflows = deploymentRuntimeParitySubjects(root);
-  models.set(
-    "deployment-runtime-parity",
-    countSubjects(
-      deploymentWorkflows,
-      directFindingSubjects(findings, "deployment-runtime-parity"),
-    ),
   );
 
   const cliPackages = context.packages
