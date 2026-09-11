@@ -1,0 +1,44 @@
+name: Apply final convergence lint fix
+
+on:
+  push:
+    branches:
+      - feat/stronger-repository-convergence
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          ref: feat/stronger-repository-convergence
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Replace lint-only regex
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("src/expectation-deployment-detector.ts")
+          content = path.read_text()
+          old = 'if (indentation(line) !== 0 || !/^env:/.test(line)) continue;'
+          new = 'if (indentation(line) !== 0 || !line.startsWith("env:")) continue;'
+          if old not in content:
+              raise SystemExit("lint target not found")
+          path.write_text(content.replace(old, new, 1))
+          PY
+      - run: bunx oxfmt .
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun test tests/deployment-runtime-parity.test.ts tests/site-preflight.test.js tests/open-pr-reconciliation.test.ts
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/expectation-deployment-detector.ts
+          git commit -m 'Fix deployment parity lint contract'
+          git push origin HEAD:feat/stronger-repository-convergence
