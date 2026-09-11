@@ -4,6 +4,8 @@ import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { readRepositoryMetadata } from "./repository-metadata.ts";
 import { type CommandResult, runCommand } from "./shared.ts";
 
+const OPEN_PULL_REQUEST_LIMIT = 101;
+
 type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
 
 type RepositoryInfo = {
@@ -18,6 +20,7 @@ type PullRequestInfo = {
   url?: unknown;
   baseRefName?: unknown;
   headRefName?: unknown;
+  isCrossRepository?: unknown;
   isDraft?: unknown;
   mergeable?: unknown;
   mergeStateStatus?: unknown;
@@ -104,7 +107,7 @@ function mergedParentForBase(
       "--limit",
       "1",
       "--json",
-      "number,headRefName,mergedAt",
+      "number,headRefName,isCrossRepository,mergedAt",
     ],
     root,
   );
@@ -125,7 +128,9 @@ function mergedParentForBase(
     available: true,
     pullRequest: pullRequests.find(
       (entry) =>
-        stringValue(entry.headRefName) === baseBranch && Boolean(stringValue(entry.mergedAt)),
+        entry.isCrossRepository !== true &&
+        stringValue(entry.headRefName) === baseBranch &&
+        Boolean(stringValue(entry.mergedAt)),
     ),
   };
 }
@@ -172,9 +177,9 @@ export function openPullRequestReconciliation(
       "--state",
       "open",
       "--limit",
-      "100",
+      String(OPEN_PULL_REQUEST_LIMIT),
       "--json",
-      "number,title,url,baseRefName,headRefName,isDraft,mergeable,mergeStateStatus,updatedAt",
+      "number,title,url,baseRefName,headRefName,isCrossRepository,isDraft,mergeable,mergeStateStatus,updatedAt",
     ],
     root,
   );
@@ -190,6 +195,14 @@ export function openPullRequestReconciliation(
       },
     ]);
   }
+  if (rawPullRequests.length >= OPEN_PULL_REQUEST_LIMIT) {
+    return unavailable(started, root, [
+      {
+        code: "pr-reconciliation-open-prs-truncated",
+        message: `Open pull-request inventory reached the fail-closed limit of ${OPEN_PULL_REQUEST_LIMIT}; convergence requires a complete graph`,
+      },
+    ]);
+  }
 
   const parsed = rawPullRequests
     .filter((entry): entry is PullRequestInfo => Boolean(entry) && typeof entry === "object")
@@ -199,6 +212,7 @@ export function openPullRequestReconciliation(
       url: stringValue(entry.url) || null,
       baseBranch: stringValue(entry.baseRefName),
       headBranch: stringValue(entry.headRefName),
+      crossRepository: entry.isCrossRepository === true,
       draft: entry.isDraft === true,
       mergeable: stringValue(entry.mergeable).toUpperCase(),
       mergeStateStatus: stringValue(entry.mergeStateStatus).toUpperCase(),
@@ -210,7 +224,9 @@ export function openPullRequestReconciliation(
     )
     .sort((left, right) => left.number - right.number);
 
-  const openHeadBranches = new Set(parsed.map((entry) => entry.headBranch));
+  const openHeadBranches = new Set(
+    parsed.filter((entry) => !entry.crossRepository).map((entry) => entry.headBranch),
+  );
   const mergedParentByBase = new Map<string, MergedParentLookup>();
   const diagnostics: Diagnostic[] = [];
   const pullRequests: OpenPullRequestReconciliationEntry[] = parsed.map((entry) => {
