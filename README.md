@@ -143,6 +143,7 @@ build
 test
 test:unit
 test:integration
+test:integration:workflow
 test:e2e
 test:e2e:smoke
 test:accessibility
@@ -159,6 +160,7 @@ web:audit
 template:smoke
 ```
 
+- `test:integration:workflow` verifies multi-operation or business-workflow integration without requiring the browser/full-system boundary of E2E.
 - `test:e2e:smoke` checks a deliberately small end-to-end suite for critical paths; it is separate from a full `test:e2e` suite.
 - `test:accessibility` runs deterministic automated accessibility checks. It does not replace manual accessibility review.
 - `test:visual` runs deterministic visual-regression or visual-contract checks.
