@@ -82,7 +82,6 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
   const findings = findingsFor(snapshot, paths, components, validationEvidence);
   const incomplete =
     snapshot.treeTruncated ||
-    snapshot.revisionUnavailable ||
     snapshot.manifestFetchTruncated ||
     snapshot.unreadablePaths.length > 0 ||
     validationEvidence.status === "incomplete";
@@ -97,9 +96,7 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
       repository: snapshot.repository.fullName,
       defaultBranch: snapshot.repository.defaultBranch,
       treeTruncated: snapshot.treeTruncated,
-      revisionUnavailable: Boolean(snapshot.revisionUnavailable),
       manifestFetchTruncated: snapshot.manifestFetchTruncated,
-      manifestAcquisition: snapshot.manifestAcquisition ?? null,
       workflowFetchTruncated: Boolean(snapshot.workflowFetchTruncated),
       unreadablePaths: snapshot.unreadablePaths,
       analyzedFiles: Object.keys(snapshot.files).length,
@@ -290,6 +287,77 @@ function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+const PAGES_DEPLOYMENT_PATTERN =
+  /(?:actions\/upload-pages-artifact|actions\/deploy-pages|deploy-pages\.ya?ml|pages:\s*write)/i;
+const EXACT_ARTIFACT_CONSUMER_PATTERN =
+  /(?:prebuilt_artifact_(?:run_id|name|digest|source_sha|key|identity_digest|destination)|actions\/download-artifact)/i;
+const RUNTIME_VERIFICATION_PATTERN =
+  /(?:playwright|e2e_command|test:e2e|browser(?:[-:_ ]?smoke)?|vite\s+preview|next\s+start)/i;
+const BUILD_INVOCATION_PATTERN =
+  /(?:\b(?:vite|next|nuxt|astro|vitepress|react-scripts|webpack)\b[^\n]*\bbuild\b|\b(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?build(?::[A-Za-z0-9:_-]+)?\b)/i;
+const PRODUCTION_ENVIRONMENT_PATTERN =
+  /\b((?:VITE|NEXT_PUBLIC|NUXT_PUBLIC|PUBLIC|REACT_APP)_[A-Z0-9_]+)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s\\]+)/g;
+const BASE_PATH_PATTERN = /(?:^|\s)--base(?:\s+|=)(?:"[^"]+"|'[^']+'|[^\s\\]+)/g;
+
+function commandBlocks(content) {
+  const lines = content.split(/\r?\n/);
+  const blocks = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const match = line.match(/^(\s*)(?:-\s+)?(?:run|build_command):\s*(.*)$/);
+    if (!match) continue;
+    const indent = match[1].length;
+    const inline = match[2].trim();
+    if (inline && inline !== "|" && inline !== ">") {
+      blocks.push(inline);
+      continue;
+    }
+
+    const block = [];
+    for (index += 1; index < lines.length; index += 1) {
+      const next = lines[index];
+      if (!next.trim()) {
+        block.push("");
+        continue;
+      }
+      const nextIndent = next.match(/^\s*/)[0].length;
+      if (nextIndent <= indent) {
+        index -= 1;
+        break;
+      }
+      block.push(next.trim());
+    }
+    blocks.push(block.join("\n"));
+  }
+  return blocks;
+}
+
+function deploymentRuntimeParityGaps(snapshot) {
+  return Object.entries(snapshot.files)
+    .filter(([path]) => /^\.github\/workflows\/.+\.ya?ml$/i.test(path))
+    .flatMap(([path, source]) => {
+      if (typeof source !== "string" || !PAGES_DEPLOYMENT_PATTERN.test(source)) return [];
+      const signals = new Set();
+      for (const command of commandBlocks(source)) {
+        if (!BUILD_INVOCATION_PATTERN.test(command)) continue;
+        for (const match of command.matchAll(PRODUCTION_ENVIRONMENT_PATTERN)) {
+          if (match[1]) signals.add(`production environment ${match[1]}`);
+        }
+        for (const match of command.matchAll(BASE_PATH_PATTERN)) {
+          signals.add(`production ${match[0].trim()}`);
+        }
+      }
+      if (signals.size === 0) return [];
+      if (
+        EXACT_ARTIFACT_CONSUMER_PATTERN.test(source) &&
+        RUNTIME_VERIFICATION_PATTERN.test(source)
+      ) {
+        return [];
+      }
+      return [{ path, signals: [...signals].toSorted() }];
+    });
+}
+
 function findingsFor(snapshot, paths, components, validationEvidence) {
   const findings = [];
   const add = (id, severity, title, evidence, recommendation, command) =>
@@ -347,6 +415,15 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
       "Remote CI validation evidence is incomplete",
       "Not every discovered GitHub Actions workflow could be inspected within the remote evidence boundary.",
       "Use local or hosted repository evidence before deciding whether validation is absent.",
+    );
+
+  for (const gap of deploymentRuntimeParityGaps(snapshot))
+    add(
+      `REMOTE-DEPLOY-${stableId(gap.path)}`,
+      "medium",
+      "Pages runtime variant is not verified from the deploy artifact",
+      `${gap.path} contains ${gap.signals.join(", ")} without browser/runtime validation consuming the produced artifact.`,
+      "Validate the exact produced Pages artifact under its production runtime/base-path conditions before deployment.",
     );
 
   const renovate = [...paths].some((path) =>
@@ -546,14 +623,6 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
       "Keep repository-specific guidance and exceptions in AGENTS.md.",
     );
 
-  if (snapshot.revisionUnavailable)
-    add(
-      "REMOTE-SOURCE-004",
-      "medium",
-      "Exact default-branch revision is unavailable",
-      "Remote preflight could not establish an immutable default-branch revision before loading repository content.",
-      "Treat the remote result as incomplete until exact revision provenance can be observed.",
-    );
   if (snapshot.treeTruncated)
     add(
       "REMOTE-SOURCE-001",

@@ -2,6 +2,7 @@ import {
   dotNetAssignabilityFindings,
   typeScriptAssignabilityFindings,
 } from "./expectation-analysis-detector.ts";
+import { deploymentRuntimeParityFindings } from "./expectation-deployment-detector.ts";
 import {
   missingBenchmarkEvidenceFindings,
   missingTestCapabilityFindings,
@@ -52,6 +53,27 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       ],
     },
     detect: missingBenchmarkEvidenceFindings,
+  },
+  {
+    id: "deployment-runtime-parity",
+    version: 1,
+    description:
+      "Runtime-sensitive Pages builds are exercised from the exact produced deployment artifact",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    evidenceContract: {
+      basis: "configuration",
+      oracle: "github-actions-deployment-topology",
+      independenceKey: "deployment-runtime-parity",
+      proves:
+        "A Pages workflow with an explicit production-only runtime environment or base-path variant also declares browser/runtime validation that consumes a produced artifact.",
+      limitations: [
+        "Does not execute the browser/runtime check or prove that deployment succeeds.",
+        "Only recognizes explicit GitHub Actions artifact-consumer and runtime-test wiring; equivalent custom orchestration may remain unsupported.",
+        "Does not require browser validation for Pages workflows without an explicit production-only runtime variant.",
+      ],
+    },
+    detect: deploymentRuntimeParityFindings,
   },
   {
     id: "dotnet-type-assignability",

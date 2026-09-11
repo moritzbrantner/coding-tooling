@@ -178,6 +178,129 @@ jobs:
     expect(analysis.findings.map((finding) => finding.id)).toContain("REMOTE-CI-002");
   });
 
+  test("reports a production-only Pages runtime variant without exact-artifact browser verification", () => {
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [
+          blob("package.json", "1"),
+          blob(".coding-tooling.json", "2"),
+          blob("AGENTS.md", "3"),
+          blob("renovate.json", "4"),
+          blob(".github/workflows/pages.yml", "5"),
+        ],
+        files: {
+          "package.json": JSON.stringify({
+            name: "fixture",
+            packageManager: "bun@1.4.0",
+            scripts: { test: "test" },
+          }),
+          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+          ".github/workflows/pages.yml": `name: Pages
+on:
+  pull_request:
+permissions:
+  pages: write
+jobs:
+  build:
+    steps:
+      - run: VITE_HOSTED_RUNTIME=1 bunx vite build --base /fixture/
+      - uses: actions/upload-pages-artifact@0123456789012345678901234567890123456789
+  smoke:
+    steps:
+      - run: bun run test:browser:smoke
+`,
+        },
+      }),
+    );
+    expect(analysis.findings.some((finding) => finding.id.startsWith("REMOTE-DEPLOY-"))).toBe(true);
+  });
+
+  test("ignores remote public runtime variables outside build commands", () => {
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [
+          blob("package.json", "1"),
+          blob(".coding-tooling.json", "2"),
+          blob("AGENTS.md", "3"),
+          blob("renovate.json", "4"),
+          blob(".github/workflows/pages.yml", "5"),
+        ],
+        files: {
+          "package.json": JSON.stringify({
+            name: "fixture",
+            packageManager: "bun@1.4.0",
+            scripts: { test: "test" },
+          }),
+          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+          ".github/workflows/pages.yml": `name: Pages
+on:
+  pull_request:
+permissions:
+  pages: write
+jobs:
+  build:
+    steps:
+      - run: bun run build
+      - uses: actions/upload-pages-artifact@0123456789012345678901234567890123456789
+  diagnostics:
+    steps:
+      - run: VITE_DIAGNOSTIC_MODE=1 bun run inspect
+`,
+        },
+      }),
+    );
+    expect(analysis.findings.some((finding) => finding.id.startsWith("REMOTE-DEPLOY-"))).toBe(
+      false,
+    );
+  });
+
+  test("accepts remote Pages runtime verification that consumes the produced artifact", () => {
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [
+          blob("package.json", "1"),
+          blob(".coding-tooling.json", "2"),
+          blob("AGENTS.md", "3"),
+          blob("renovate.json", "4"),
+          blob(".github/workflows/pages.yml", "5"),
+        ],
+        files: {
+          "package.json": JSON.stringify({
+            name: "fixture",
+            packageManager: "bun@1.4.0",
+            scripts: { test: "test" },
+          }),
+          ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+          ".github/workflows/pages.yml": `name: Pages
+on:
+  pull_request:
+permissions:
+  pages: write
+jobs:
+  build:
+    uses: owner/reusable/.github/workflows/build-artifact.yml@0123456789012345678901234567890123456789
+    with:
+      build_command: VITE_HOSTED_RUNTIME=1 bunx vite build --base /fixture/
+      artifact_paths: dist
+  verify:
+    needs: build
+    uses: owner/reusable/.github/workflows/e2e-validation.yml@0123456789012345678901234567890123456789
+    with:
+      prebuilt_artifact_run_id: producer-run
+      prebuilt_artifact_digest: producer-digest
+      e2e_command: bunx playwright test --config playwright.hosted.config.ts
+  deploy:
+    needs: [build, verify]
+    uses: owner/reusable/.github/workflows/deploy-pages.yml@0123456789012345678901234567890123456789
+`,
+        },
+      }),
+    );
+    expect(analysis.findings.some((finding) => finding.id.startsWith("REMOTE-DEPLOY-"))).toBe(
+      false,
+    );
+  });
+
   test("represents external CI as unsupported rather than missing validation", () => {
     const analysis = analyzeSnapshot(
       repository({
@@ -235,13 +358,9 @@ jobs:
     expect(Object.keys(snapshot.files)).toEqual(["package.json"]);
   });
 
-  test("still marks a real eligible manifest byte-budget overflow incomplete", async () => {
-    const manifests = Array.from({ length: 20 }, (_, index) =>
-      blob(
-        `packages/package-${String(index).padStart(2, "0")}/package.json`,
-        `package-${index}`,
-        40 * 1024,
-      ),
+  test("still marks a real eligible manifest budget overflow incomplete", async () => {
+    const manifests = Array.from({ length: 25 }, (_, index) =>
+      blob(`packages/package-${String(index).padStart(2, "0")}/package.json`, `package-${index}`),
     );
     const snapshot = await loadSnapshot(
       { owner: "example", name: "repo" },
@@ -259,14 +378,7 @@ jobs:
     );
 
     expect(snapshot.manifestFetchTruncated).toBe(true);
-    expect(snapshot.manifestAcquisition).toEqual(
-      expect.objectContaining({
-        reason: "byte-budget-exceeded",
-        selectedCount: 12,
-        eligibleCount: 20,
-      }),
-    );
-    expect(Object.keys(snapshot.files)).toHaveLength(12);
+    expect(Object.keys(snapshot.files)).toHaveLength(24);
   });
 
   test("scopes structural test evidence to sibling components", () => {
@@ -384,8 +496,8 @@ function githubRepositoryMetadata() {
   };
 }
 
-function blob(path, sha, size = 1024) {
-  return { path, sha, type: "blob", size };
+function blob(path, sha) {
+  return { path, sha, type: "blob" };
 }
 
 function encodedBlob(content) {

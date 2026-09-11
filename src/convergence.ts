@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 import { runPlan } from "./core.ts";
 import {
@@ -7,8 +9,10 @@ import {
   type ExpectationEnvelope,
   type Finding,
 } from "./expectations.ts";
-import type { ResultEnvelope } from "./model.ts";
+import { repositoryMergeReadiness, type RepositoryMergeReadiness } from "./merge-readiness.ts";
+import type { Diagnostic, ResultEnvelope } from "./model.ts";
 import { normalizeRepository, repositoryContentFingerprint } from "./normalization.ts";
+import { openPullRequestReconciliation } from "./open-pr-reconciliation.ts";
 import { planRemediationCandidates, type RemediationCandidate } from "./remediation-plan.ts";
 
 export type ConvergenceResult = "converged" | "partial" | "blocked";
@@ -36,6 +40,8 @@ export type ConvergenceDependencies = {
   normalize?: (root: string) => ResultEnvelope<Record<string, unknown>>;
   stateFingerprint?: (root: string, findings: Finding[]) => string;
   verify: (root: string, tier: string) => ResultEnvelope<Record<string, unknown>>;
+  readiness?: (root: string) => RepositoryMergeReadiness | undefined;
+  reconcilePullRequests?: (root: string) => ResultEnvelope<Record<string, unknown>> | undefined;
 };
 
 function findingState(findings: Finding[]): Array<Record<string, unknown>> {
@@ -56,12 +62,19 @@ function repositoryStateFingerprint(root: string, findings: Finding[]): string {
     .digest("hex");
 }
 
+function hasGitMetadata(root: string): boolean {
+  return existsSync(join(root, ".git"));
+}
+
 const defaultDependencies: ConvergenceDependencies = {
   findings: (root) => findingsCommand(root, { includeSuppressed: false }),
   scaffold: scaffoldFinding,
   normalize: normalizeRepository,
   stateFingerprint: repositoryStateFingerprint,
   verify: (root, tier) => runPlan({ root, tier, strict: true }),
+  readiness: (root) => (hasGitMetadata(root) ? repositoryMergeReadiness(root) : undefined),
+  reconcilePullRequests: (root) =>
+    hasGitMetadata(root) ? openPullRequestReconciliation(root) : undefined,
 };
 
 function findingsFrom(envelope: ExpectationEnvelope): Finding[] {
@@ -91,6 +104,11 @@ function handoffCandidates(findings: Finding[], includeBaseline: boolean): Remed
   );
 }
 
+function readinessAllowsConvergence(readiness: RepositoryMergeReadiness): boolean {
+  if (readiness.readiness === "trusted-auto-merge") return true;
+  return readiness.readiness === "local-gated" && readiness.blockers.length === 0;
+}
+
 function finish(
   started: number,
   root: string,
@@ -110,6 +128,38 @@ function finish(
   const status = verification ? verification.status : "passed";
   const finalFindingIds = finalFindings.map((finding) => finding.id).sort();
   const handoff = handoffCandidates(finalFindings, options.includeBaseline);
+  const repositoryReadiness = result === "converged" ? dependencies.readiness?.(root) : undefined;
+  const pullRequestReconciliation =
+    result === "converged" ? dependencies.reconcilePullRequests?.(root) : undefined;
+  const convergenceBlockers: Diagnostic[] = [];
+
+  if (repositoryReadiness && !readinessAllowsConvergence(repositoryReadiness)) {
+    convergenceBlockers.push(
+      ...(repositoryReadiness.blockers.length > 0
+        ? repositoryReadiness.blockers
+        : [
+            {
+              code: "convergence-repository-readiness-incomplete",
+              message: `Repository readiness is ${repositoryReadiness.readiness}`,
+            },
+          ]),
+    );
+  }
+  if (pullRequestReconciliation && pullRequestReconciliation.status !== "passed") {
+    convergenceBlockers.push(
+      ...(pullRequestReconciliation.diagnostics.length > 0
+        ? pullRequestReconciliation.diagnostics
+        : [
+            {
+              code: "convergence-pr-reconciliation-incomplete",
+              message: `Open pull-request reconciliation is ${pullRequestReconciliation.status}`,
+            },
+          ]),
+    );
+  }
+
+  const resolvedResult =
+    result === "converged" && convergenceBlockers.length > 0 ? "partial" : result;
 
   return {
     schemaVersion: 1,
@@ -118,7 +168,7 @@ function finish(
     durationMs: Date.now() - started,
     data: {
       root,
-      result,
+      result: resolvedResult,
       includeBaseline: options.includeBaseline,
       maxRounds: options.maxRounds,
       verifyTier: options.verifyTier,
@@ -128,6 +178,9 @@ function finish(
       normalizations,
       handoff,
       verification,
+      repositoryReadiness,
+      pullRequestReconciliation,
+      convergenceBlockers,
       policy: {
         deterministicMutationOnly: true,
         baselineDebtRequiresOptIn: true,
@@ -135,6 +188,7 @@ function finish(
         cycleDetection: "repository-content-and-finding-state-fingerprint",
         normalization: "closed-adapters-with-idempotence-proof",
         generatedFilesBecomeUserOwned: true,
+        repositoryStateGate: "readiness-and-open-pr-reconciliation",
       },
     },
     diagnostics: verification?.diagnostics ?? [],

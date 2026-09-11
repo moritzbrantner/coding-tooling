@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
+import { deploymentRuntimeParitySubjects } from "./expectation-deployment-detector.ts";
 import { productionSourceFiles, workMarkerSourceFiles } from "./expectation-gap-detectors.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { ExpectationDescriptor } from "./expectation-detector-types.ts";
@@ -27,6 +28,7 @@ export type FindingsCoverage = {
 type CoverageTarget =
   | "repository-config"
   | "packages"
+  | "deployment-workflows"
   | "typescript-source"
   | "typescript-analysis-projects"
   | "dotnet-analysis-projects"
@@ -39,6 +41,7 @@ type CoverageTarget =
 
 const coverageTargets: Record<string, CoverageTarget> = {
   "benchmark-evidence": "packages",
+  "deployment-runtime-parity": "deployment-workflows",
   "dotnet-type-assignability": "dotnet-analysis-projects",
   "javascript-source-test": "javascript-source",
   "package-aggregate-check": "packages",
@@ -61,6 +64,8 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
       return existsSync(join(root, ".coding-tooling.json")) ? 1 : 0;
     case "packages":
       return context.packages.length;
+    case "deployment-workflows":
+      return deploymentRuntimeParitySubjects(root).length;
     case "typescript-source":
       return context.packages.reduce(
         (total, packageInfo) => total + packageInfo.sourceFiles.length,
