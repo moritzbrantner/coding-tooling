@@ -1,0 +1,297 @@
+from pathlib import Path
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    file = Path(path)
+    text = file.read_text()
+    if old in text:
+        file.write_text(text.replace(old, new, 1))
+        return
+    if new in text:
+        return
+    raise SystemExit(f"expected patch context missing in {path}")
+
+
+replace_once(
+    "site/preflight.js",
+    '''  const declaredCommands = components
+    .flatMap((component) => Object.values(component.capabilities ?? {}))
+    .filter(Array.isArray)
+    .map((command) => command.join(" "));
+''',
+    '''  const declaredCommands = components.flatMap((component) =>
+    Object.values(component.capabilities ?? {})
+      .filter(Array.isArray)
+      .map((command) => ({
+        command: command.join(" "),
+        workingDirectory: component.path,
+      })),
+  );
+''',
+)
+
+replace_once(
+    "site/evidence-model.js",
+    '''  const declaredCommands = [...new Set(input.declaredCommands ?? [])].filter(Boolean).toSorted();
+''',
+    '''  const declaredCommands = normalizeDeclaredCommands(input.declaredCommands);
+''',
+)
+
+replace_once(
+    "site/evidence-model.js",
+    '''function analyzeWorkflowValidation(input) {
+  const relevantTrigger = workflowHasRelevantTrigger(input.content, input.defaultBranch);
+  const matchedCommands = input.declaredCommands.filter((command) =>
+    workflowRunsCommand(input.content, command),
+  );
+  const codingToolingAction = workflowUsesCodingToolingAction(
+    input.content,
+    input.localActionIsCodingTooling,
+  );
+  const validationInvocation = matchedCommands.length > 0 || codingToolingAction;
+  return {
+    path: input.path,
+    status: relevantTrigger && validationInvocation ? "satisfied" : "finding",
+    relevantTrigger,
+    validationInvocation,
+    matchedCommands,
+    codingToolingAction,
+  };
+}
+''',
+    '''function normalizeDeclaredCommands(values) {
+  const commands = [];
+  const seen = new Set();
+  for (const value of values ?? []) {
+    const command = normalizeCommand(typeof value === "string" ? value : value?.command);
+    const workingDirectory = normalizeWorkingDirectory(
+      typeof value === "string" ? "." : value?.workingDirectory,
+    );
+    if (!command || workingDirectory === null) continue;
+    const key = `${workingDirectory}\\0${command}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    commands.push({ command, workingDirectory });
+  }
+  return commands.toSorted(
+    (left, right) =>
+      left.workingDirectory.localeCompare(right.workingDirectory) ||
+      left.command.localeCompare(right.command),
+  );
+}
+
+function analyzeWorkflowValidation(input) {
+  const relevantTrigger = workflowHasRelevantTrigger(input.content, input.defaultBranch);
+  const matchedCommandEvidence = input.declaredCommands.filter((command) =>
+    workflowRunsCommand(input.content, command),
+  );
+  const matchedCommands = [
+    ...new Set(matchedCommandEvidence.map((command) => command.command)),
+  ].toSorted();
+  const codingToolingAction = workflowUsesCodingToolingAction(
+    input.content,
+    input.localActionIsCodingTooling,
+  );
+  const validationInvocation = matchedCommandEvidence.length > 0 || codingToolingAction;
+  return {
+    path: input.path,
+    status: relevantTrigger && validationInvocation ? "satisfied" : "finding",
+    relevantTrigger,
+    validationInvocation,
+    matchedCommands,
+    matchedCommandEvidence,
+    codingToolingAction,
+  };
+}
+''',
+)
+
+replace_once(
+    "site/evidence-model.js",
+    '''function workflowRunsCommand(content, command) {
+  const needle = normalizeCommand(command);
+  if (!needle) return false;
+  const lines = String(content).split(/\\r?\\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index];
+    const match = raw.match(/^(\\s*)-?\\s*run\\s*:\\s*(.*)$/);
+    if (!match) continue;
+    const indent = match[1].length;
+    const inline = match[2].trim();
+    if (inline && !new Set(["|", ">", "|-", ">-", "|+", ">+"]).has(inline)) {
+      if (shellCommandMatches(inline, needle)) return true;
+      continue;
+    }
+    for (let blockIndex = index + 1; blockIndex < lines.length; blockIndex += 1) {
+      const blockRaw = lines[blockIndex];
+      if (!blockRaw.trim()) continue;
+      const blockIndent = blockRaw.match(/^\\s*/)?.[0].length ?? 0;
+      if (blockIndent <= indent) break;
+      const shellLine = blockRaw.trim();
+      if (shellLine.startsWith("#")) continue;
+      if (shellCommandMatches(shellLine, needle)) return true;
+    }
+  }
+  return false;
+}
+''',
+    '''function workflowRunsCommand(content, declaredCommand) {
+  const needle = normalizeCommand(declaredCommand?.command ?? declaredCommand);
+  const requiredWorkingDirectory = normalizeWorkingDirectory(
+    declaredCommand?.workingDirectory ?? ".",
+  );
+  if (!needle || requiredWorkingDirectory === null) return false;
+  const lines = String(content).split(/\\r?\\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index];
+    const match = raw.match(/^(\\s*)-?\\s*run\\s*:\\s*(.*)$/);
+    if (!match) continue;
+    const indent = match[1].length;
+    const workingDirectory = workflowRunWorkingDirectory(lines, index, indent);
+    const inline = match[2].trim();
+    if (inline && !new Set(["|", ">", "|-", ">-", "|+", ">+"]).has(inline)) {
+      if (
+        shellCommandMatchesInDirectory(
+          inline,
+          needle,
+          workingDirectory,
+          requiredWorkingDirectory,
+        )
+      )
+        return true;
+      continue;
+    }
+    for (let blockIndex = index + 1; blockIndex < lines.length; blockIndex += 1) {
+      const blockRaw = lines[blockIndex];
+      if (!blockRaw.trim()) continue;
+      const blockIndent = blockRaw.match(/^\\s*/)?.[0].length ?? 0;
+      if (blockIndent <= indent) break;
+      const shellLine = blockRaw.trim();
+      if (shellLine.startsWith("#")) continue;
+      if (
+        shellCommandMatchesInDirectory(
+          shellLine,
+          needle,
+          workingDirectory,
+          requiredWorkingDirectory,
+        )
+      )
+        return true;
+    }
+  }
+  return false;
+}
+
+function workflowRunWorkingDirectory(lines, runIndex, runIndent) {
+  let stepStart = runIndex;
+  let stepIndent = runIndent;
+  if (!/^(\\s*)-\\s*run\\s*:/.test(lines[runIndex])) {
+    for (let index = runIndex - 1; index >= 0; index -= 1) {
+      const raw = lines[index];
+      if (!raw.trim()) continue;
+      const indent = raw.match(/^\\s*/)?.[0].length ?? 0;
+      if (/^\\s*-\\s+/.test(raw) && indent < runIndent) {
+        stepStart = index;
+        stepIndent = indent;
+        break;
+      }
+      if (indent < runIndent) break;
+    }
+  }
+
+  let end = lines.length;
+  for (let index = stepStart + 1; index < lines.length; index += 1) {
+    const raw = lines[index];
+    if (!raw.trim()) continue;
+    const indent = raw.match(/^\\s*/)?.[0].length ?? 0;
+    if (indent < stepIndent || (indent === stepIndent && /^\\s*-\\s+/.test(raw))) {
+      end = index;
+      break;
+    }
+  }
+
+  for (const raw of lines.slice(stepStart, end)) {
+    const match = raw.match(/^\\s*working-directory\\s*:\\s*(.+)$/);
+    if (!match) continue;
+    return normalizeWorkingDirectory(match[1]);
+  }
+  return ".";
+}
+
+function shellCommandMatchesInDirectory(value, command, workingDirectory, requiredDirectory) {
+  if (workingDirectory === requiredDirectory && shellCommandMatches(value, command)) return true;
+  if (workingDirectory !== "." || requiredDirectory === ".") return false;
+  const normalized = normalizeCommand(value);
+  const prefix = `cd ${requiredDirectory} && `;
+  return normalized.startsWith(prefix) && shellCommandMatches(normalized.slice(prefix.length), command);
+}
+
+function normalizeWorkingDirectory(value) {
+  let directory = String(value ?? ".").trim();
+  if (!directory || directory === ".") return ".";
+  if (directory.includes("${{")) return null;
+  if (
+    (directory.startsWith('"') && directory.endsWith('"')) ||
+    (directory.startsWith("'") && directory.endsWith("'"))
+  ) {
+    directory = directory.slice(1, -1).trim();
+  }
+  directory = directory.replace(/^\\.\\//, "").replace(/\\/$/, "");
+  return directory || ".";
+}
+''',
+)
+
+replace_once(
+    "site/execution-evidence.js",
+    '''    const commandMatch = (workflowEvidence.matchedCommands ?? []).some((command) =>
+      step.commands.some((candidate) => shellCommandMatches(candidate, command)),
+    );
+''',
+    '''    const matchedCommandEvidence = workflowEvidence.matchedCommandEvidence ?? [];
+    const commandMatch =
+      matchedCommandEvidence.length > 0
+        ? matchedCommandEvidence.some(
+            (command) =>
+              step.workingDirectory === command.workingDirectory &&
+              step.commands.some((candidate) => shellCommandMatches(candidate, command.command)),
+          )
+        : (workflowEvidence.matchedCommands ?? []).some((command) =>
+            step.commands.some((candidate) => shellCommandMatches(candidate, command)),
+          );
+''',
+)
+
+replace_once(
+    "site/execution-evidence.js",
+    '''      if (commands.length || codingToolingAction) {
+        steps.push({ commands, continueOnError, codingToolingAction });
+      }
+''',
+    '''      const workingDirectory = workflowStepWorkingDirectory(block);
+      if (commands.length || codingToolingAction) {
+        steps.push({ commands, continueOnError, codingToolingAction, workingDirectory });
+      }
+''',
+)
+
+replace_once(
+    "site/execution-evidence.js",
+    '''function workflowCommands(content) {
+''',
+    '''function workflowStepWorkingDirectory(block) {
+  for (const raw of block) {
+    const match = stripYamlComment(raw).match(/^\\s*working-directory\\s*:\\s*(.+)$/);
+    if (!match) continue;
+    const value = literalScalar(match[1]);
+    if (!value) return null;
+    const normalized = value.replace(/^\\.\\//, "").replace(/\\/$/, "");
+    return normalized || ".";
+  }
+  return ".";
+}
+
+function workflowCommands(content) {
+''',
+)
