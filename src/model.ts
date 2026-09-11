@@ -53,7 +53,8 @@ export type ResultOperation =
   | "converge"
   | "normalize"
   | "generate"
-  | "pr";
+  | "pr"
+  | "pr-reconciliation";
 
 export type Diagnostic = {
   code?: string;

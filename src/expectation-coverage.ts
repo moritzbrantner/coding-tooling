@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
+import { deploymentRuntimeParitySubjects } from "./expectation-deployment-detector.ts";
 import { productionSourceFiles, workMarkerSourceFiles } from "./expectation-gap-detectors.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { ExpectationDescriptor } from "./expectation-detector-types.ts";
@@ -28,6 +29,7 @@ type CoverageTarget =
   | "repository-config"
   | "packages"
   | "consumer-verification-packages"
+  | "deployment-workflows"
   | "typescript-source"
   | "typescript-analysis-projects"
   | "dotnet-analysis-projects"
@@ -41,6 +43,7 @@ type CoverageTarget =
 const coverageTargets: Record<string, CoverageTarget> = {
   "benchmark-evidence": "packages",
   "consumer-dependency-resolution-stability": "consumer-verification-packages",
+  "deployment-runtime-parity": "deployment-workflows",
   "dotnet-type-assignability": "dotnet-analysis-projects",
   "javascript-source-test": "javascript-source",
   "package-aggregate-check": "packages",
@@ -74,6 +77,8 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
       return context.packages.length;
     case "consumer-verification-packages":
       return context.packages.filter(hasConsumerVerificationScript).length;
+    case "deployment-workflows":
+      return deploymentRuntimeParitySubjects(root).length;
     case "typescript-source":
       return context.packages.reduce(
         (total, packageInfo) => total + packageInfo.sourceFiles.length,

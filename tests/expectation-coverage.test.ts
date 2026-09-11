@@ -85,6 +85,32 @@ describe("findings analysis coverage", () => {
     });
   });
 
+  test("reports deployment runtime parity as applied when a runtime-sensitive Pages workflow is inspected", () => {
+    const root = fixture();
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    writeFileSync(
+      join(root, ".github", "workflows", "pages.yml"),
+      `env: { VITE_HOSTED_RUNTIME: "1" }
+permissions:
+  pages: write
+jobs:
+  build:
+    steps:
+      - run: bunx vite build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+`,
+    );
+
+    const result = coverage(root);
+
+    expect(detector(result, "deployment-runtime-parity")).toMatchObject({
+      status: "applied",
+      subjects: 1,
+    });
+  });
+
   test("reports unavailable .NET semantic analysis with a discovered project subject", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });

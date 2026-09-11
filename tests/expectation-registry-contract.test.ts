@@ -88,6 +88,7 @@ describe("expectation detector registry contract", () => {
     expect(registry.map((entry) => entry.id)).toEqual([
       "benchmark-evidence",
       "consumer-dependency-resolution-stability",
+      "deployment-runtime-parity",
       "dotnet-type-assignability",
       "javascript-source-test",
       "package-aggregate-check",
@@ -106,6 +107,7 @@ describe("expectation detector registry contract", () => {
     expect(registry.map((entry) => [entry.id, entry.version])).toEqual([
       ["benchmark-evidence", 1],
       ["consumer-dependency-resolution-stability", 1],
+      ["deployment-runtime-parity", 1],
       ["dotnet-type-assignability", 1],
       ["javascript-source-test", 1],
       ["package-aggregate-check", 1],
