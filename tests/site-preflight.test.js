@@ -358,9 +358,13 @@ jobs:
     expect(Object.keys(snapshot.files)).toEqual(["package.json"]);
   });
 
-  test("still marks a real eligible manifest budget overflow incomplete", async () => {
-    const manifests = Array.from({ length: 25 }, (_, index) =>
-      blob(`packages/package-${String(index).padStart(2, "0")}/package.json`, `package-${index}`),
+  test("still marks a real eligible manifest byte-budget overflow incomplete", async () => {
+    const manifests = Array.from({ length: 20 }, (_, index) =>
+      blob(
+        `packages/package-${String(index).padStart(2, "0")}/package.json`,
+        `package-${index}`,
+        40 * 1024,
+      ),
     );
     const snapshot = await loadSnapshot(
       { owner: "example", name: "repo" },
@@ -378,7 +382,14 @@ jobs:
     );
 
     expect(snapshot.manifestFetchTruncated).toBe(true);
-    expect(Object.keys(snapshot.files)).toHaveLength(24);
+    expect(snapshot.manifestAcquisition).toEqual(
+      expect.objectContaining({
+        reason: "byte-budget-exceeded",
+        selectedCount: 12,
+        eligibleCount: 20,
+      }),
+    );
+    expect(Object.keys(snapshot.files)).toHaveLength(12);
   });
 
   test("scopes structural test evidence to sibling components", () => {
@@ -496,8 +507,8 @@ function githubRepositoryMetadata() {
   };
 }
 
-function blob(path, sha) {
-  return { path, sha, type: "blob" };
+function blob(path, sha, size = 1024) {
+  return { path, sha, type: "blob", size };
 }
 
 function encodedBlob(content) {
