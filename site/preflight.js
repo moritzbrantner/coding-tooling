@@ -7,10 +7,7 @@ import {
   remoteValidationOutcome,
   structuralTestOutcome,
 } from "./evidence-model.js";
-import {
-  resolveWorkspacePackages,
-  workspaceToolchainConflict,
-} from "./workspace-toolchain.js";
+import { resolveWorkspacePackages, workspaceToolchainConflict } from "./workspace-toolchain.js";
 
 const CONTEXT_FILES = new Set([".coding-tooling.json", ".node-version", "rust-toolchain.toml"]);
 const IGNORED_ANALYSIS_SEGMENTS = new Set([
@@ -241,7 +238,12 @@ function discoverComponents(snapshot, paths) {
     component.testEvidence = structuralTestOutcome({
       kind: component.kind,
       complete: evidenceComplete,
-      productionPaths: componentOwnedPaths(paths, resolvedComponents, component, isProductionSource),
+      productionPaths: componentOwnedPaths(
+        paths,
+        resolvedComponents,
+        component,
+        isProductionSource,
+      ),
       testPaths: componentOwnedPaths(paths, resolvedComponents, component, isTestPath),
     });
   }

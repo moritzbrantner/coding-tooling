@@ -1,7 +1,9 @@
 const SIMPLE_WORKSPACE_PATTERN = /^[A-Za-z0-9_.@/-]*(?:\*\*?|\?)[A-Za-z0-9_.@/*?-]*$/;
 
 export function resolveWorkspacePackages(components, rootManifest) {
-  const root = components.find((component) => component.kind === "package" && component.path === ".");
+  const root = components.find(
+    (component) => component.kind === "package" && component.path === ".",
+  );
   const patterns = workspacePatterns(rootManifest);
   if (!root || patterns.length === 0) return components;
 
@@ -28,7 +30,9 @@ export function resolveWorkspacePackages(components, rootManifest) {
           reason: "workspace-toolchain-conflict",
           workspaceOwnerPath: root.path,
           workspaceIdentity: toolchainIdentity(root.toolchain),
-          provenance: [...new Set([...(root.toolchain.provenance ?? []), ...(local.provenance ?? [])])],
+          provenance: [
+            ...new Set([...(root.toolchain.provenance ?? []), ...(local.provenance ?? [])]),
+          ],
         },
       };
     }
@@ -55,12 +59,15 @@ export function workspaceToolchainConflict(components) {
   const conflicting = components
     .filter(
       (component) =>
-        component.kind === "package" && component.toolchain?.reason === "workspace-toolchain-conflict",
+        component.kind === "package" &&
+        component.toolchain?.reason === "workspace-toolchain-conflict",
     )
     .toSorted((left, right) => left.path.localeCompare(right.path));
   if (conflicting.length === 0) return null;
 
-  const root = components.find((component) => component.kind === "package" && component.path === ".");
+  const root = components.find(
+    (component) => component.kind === "package" && component.path === ".",
+  );
   return {
     root: root ? { path: root.path, identity: toolchainIdentity(root.toolchain) } : null,
     members: conflicting.map((component) => ({

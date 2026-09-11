@@ -99,9 +99,7 @@ describe("proven workspace toolchain evidence", () => {
       }),
     );
 
-    expect(environmentFindings(analysis).map((finding) => finding.id)).toEqual([
-      "REMOTE-ENV-008",
-    ]);
+    expect(environmentFindings(analysis).map((finding) => finding.id)).toEqual(["REMOTE-ENV-008"]);
     expect(environmentFindings(analysis)[0].evidence).toContain("packages/a");
     expect(environmentFindings(analysis)[0].evidence).toContain("packages/b");
     expect(
