@@ -178,7 +178,9 @@ function finish(
     }
   }
 
-  const verificationDiagnostics = verifications.flatMap(({ result: attempted }) => attempted.diagnostics);
+  const verificationDiagnostics = verifications.flatMap(
+    ({ result: attempted }) => attempted.diagnostics,
+  );
   const status = verificationPassed ? "passed" : (verification?.status ?? "failed");
   const finalFindingIds = finalFindings.map((finding) => finding.id).sort();
   const handoff = handoffCandidates(finalFindings, options.includeBaseline);
