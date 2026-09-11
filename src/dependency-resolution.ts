@@ -1,5 +1,5 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 import type { ResultEnvelope } from "./model.ts";
@@ -94,10 +94,23 @@ function packageName(manifest: PackageManifest, directory: string): string {
   return manifest.name ?? basename(directory);
 }
 
-function relevantVerificationSources(directory: string, manifest: PackageManifest): Array<{
+function isContainedPath(root: string, path: string): boolean {
+  const relativePath = relative(root, path);
+  return (
+    relativePath !== ".." &&
+    !relativePath.startsWith(`..${sep}`) &&
+    !isAbsolute(relativePath)
+  );
+}
+
+function relevantVerificationSources(
+  directory: string,
+  manifest: PackageManifest,
+): Array<{
   path: string;
   text: string;
 }> {
+  const packageRoot = resolve(directory);
   const sources: Array<{ path: string; text: string }> = [];
   for (const [name, command] of Object.entries(manifest.scripts ?? {})) {
     if (!verificationScriptPattern.test(name)) continue;
@@ -106,8 +119,8 @@ function relevantVerificationSources(directory: string, manifest: PackageManifes
     sourceReferencePattern.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = sourceReferencePattern.exec(command)) !== null) {
-      const path = resolve(directory, match[1]!);
-      if (!path.startsWith(resolve(directory)) || !existsSync(path)) continue;
+      const path = resolve(packageRoot, match[1]!);
+      if (!isContainedPath(packageRoot, path) || !existsSync(path)) continue;
       try {
         sources.push({ path: relativePosix(directory, path), text: readFileSync(path, "utf8") });
       } catch {
@@ -157,7 +170,10 @@ export function inspectConsumerVerificationForPackage(
       code: "consumer-verification-floats-dependencies",
       packageName: packageName(manifest, directory),
       manifestPath: relativePosix(root, manifestPath),
-      relatedFiles: unique([relativePosix(root, manifestPath), ...floatingFiles.map((path) => relativePosix(root, join(directory, path)))]).sort(),
+      relatedFiles: unique([
+        relativePosix(root, manifestPath),
+        ...floatingFiles.map((path) => relativePosix(root, join(directory, path))),
+      ]).sort(),
       remediation: "fix-verifier",
       message: `consumer verification installs floating dependency specs (${unique(floatingSpecs).sort().join(", ")}); derive deterministic exact versions from the declared compatibility contract instead`,
     });
@@ -169,9 +185,13 @@ export function inspectConsumerVerificationForPackage(
       code: "consumer-verification-bypasses-peer-resolution",
       packageName: packageName(manifest, directory),
       manifestPath: relativePosix(root, manifestPath),
-      relatedFiles: unique([relativePosix(root, manifestPath), ...bypassFiles.map((path) => relativePosix(root, join(directory, path)))]).sort(),
+      relatedFiles: unique([
+        relativePosix(root, manifestPath),
+        ...bypassFiles.map((path) => relativePosix(root, join(directory, path))),
+      ]).sort(),
       remediation: "fix-verifier",
-      message: "consumer verification directly invokes npm install with --force or --legacy-peer-deps, so it cannot prove the declared peer contract resolves normally",
+      message:
+        "consumer verification directly invokes npm install with --force or --legacy-peer-deps, so it cannot prove the declared peer contract resolves normally",
     });
   }
 
@@ -191,7 +211,11 @@ function publishableTargets(root: string): PackageTarget[] {
     .sort()
     .flatMap((manifestPath) => {
       const manifest = readJson<PackageManifest>(manifestPath);
-      if (!manifest || manifest.private === true || Object.keys(manifest.peerDependencies ?? {}).length === 0) {
+      if (
+        !manifest ||
+        manifest.private === true ||
+        Object.keys(manifest.peerDependencies ?? {}).length === 0
+      ) {
         return [];
       }
       return [{ directory: dirname(manifestPath), manifestPath, manifest }];
@@ -201,13 +225,16 @@ function publishableTargets(root: string): PackageTarget[] {
 function exactLowerBound(range: string): string | undefined {
   const value = range.trim();
   if (value.includes("||") || value.includes(" - ")) return undefined;
-  const match = value.match(/^(?:\^|~|>=\s*)?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\s+<[^\s]+)?$/);
+  const match = value.match(
+    /^(?:\^|~|>=\s*)?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\s+<[^\s]+)?$/,
+  );
   return match?.[1];
 }
 
-function dependencySpecs(manifest: PackageManifest, mode: "minimum" | "fresh"):
-  | { specs: string[] }
-  | { unavailable: string } {
+function dependencySpecs(
+  manifest: PackageManifest,
+  mode: "minimum" | "fresh",
+): { specs: string[] } | { unavailable: string } {
   const entries = Object.entries(manifest.peerDependencies ?? {}).sort(([left], [right]) =>
     left.localeCompare(right),
   );
@@ -224,24 +251,38 @@ function dependencySpecs(manifest: PackageManifest, mode: "minimum" | "fresh"):
   return { specs };
 }
 
-function classifyFailure(result: CommandResult): { status: "failed" | "unavailable"; reason: string; details: string[] } {
+function classifyFailure(result: CommandResult): {
+  status: "failed" | "unavailable";
+  reason: string;
+  details: string[];
+} {
   const text = `${result.stdout}\n${result.stderr}\n${result.error ?? ""}`;
   const details = text
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => /ERESOLVE|Could not resolve dependency|Found:|peer .+ from |ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|fetch failed/i.test(line))
+    .filter((line) =>
+      /ERESOLVE|Could not resolve dependency|Found:|peer .+ from |ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|fetch failed/i.test(
+        line,
+      ),
+    )
     .slice(0, 12);
   if (/ERESOLVE|unable to resolve dependency tree|Could not resolve dependency/i.test(text)) {
     return { status: "failed", reason: "peer-resolution-conflict", details };
   }
-  if (/ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|network request|fetch failed|registry.*unavailable/i.test(text)) {
+  if (
+    /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ETIMEDOUT|network request|fetch failed|registry.*unavailable/i.test(
+      text,
+    )
+  ) {
     return { status: "unavailable", reason: "registry-unavailable", details };
   }
   return { status: "failed", reason: "resolver-command-failed", details };
 }
 
 function selectedVersions(tempRoot: string, peerNames: string[]): Record<string, string> {
-  const lock = readJson<{ packages?: Record<string, { version?: string }> }>(join(tempRoot, "package-lock.json"));
+  const lock = readJson<{ packages?: Record<string, { version?: string }> }>(
+    join(tempRoot, "package-lock.json"),
+  );
   if (!lock?.packages) return {};
   const result: Record<string, string> = {};
   for (const name of peerNames) {
@@ -273,7 +314,11 @@ function runProbe(
   try {
     writeFileSync(
       join(tempRoot, "package.json"),
-      JSON.stringify({ private: true, name: `coding-tooling-${mode}-consumer`, version: "0.0.0" }, null, 2),
+      JSON.stringify(
+        { private: true, name: `coding-tooling-${mode}-consumer`, version: "0.0.0" },
+        null,
+        2,
+      ),
       "utf8",
     );
     const result = runner(
@@ -294,7 +339,10 @@ function runProbe(
         mode,
         status: "passed",
         specs: resolution.specs,
-        selectedVersions: selectedVersions(tempRoot, Object.keys(target.manifest.peerDependencies ?? {})),
+        selectedVersions: selectedVersions(
+          tempRoot,
+          Object.keys(target.manifest.peerDependencies ?? {}),
+        ),
         exitCode: 0,
         details: [],
       };
@@ -317,13 +365,18 @@ function runProbe(
 function lockfilesFor(root: string, directory: string): string[] {
   const names = ["bun.lock", "bun.lockb", "package-lock.json", "pnpm-lock.yaml", "yarn.lock"];
   return unique(
-    names.flatMap((name) => [join(directory, name), join(root, name)]).filter((path) => existsSync(path)),
+    names
+      .flatMap((name) => [join(directory, name), join(root, name)])
+      .filter((path) => existsSync(path)),
   )
     .map((path) => relativePosix(root, path))
     .sort();
 }
 
-function repositoryState(root: string, target: PackageTarget): PackageResolutionReport["repositoryState"] {
+function repositoryState(
+  root: string,
+  target: PackageTarget,
+): PackageResolutionReport["repositoryState"] {
   const lockfiles = lockfilesFor(root, target.directory);
   const declared = { ...target.manifest.dependencies, ...target.manifest.devDependencies };
   const declaredVersions = Object.fromEntries(
@@ -358,7 +411,8 @@ function runtimeFindings(report: PackageResolutionReport): DependencyResolutionF
       mode: "minimum",
       details: report.minimum.details,
       remediation: "fix-peer-contract",
-      message: "the declared peer dependency contract cannot be installed even at its deterministic minimum compatibility point",
+      message:
+        "the declared peer dependency contract cannot be installed even at its deterministic minimum compatibility point",
     });
   }
 
@@ -374,7 +428,8 @@ function runtimeFindings(report: PackageResolutionReport): DependencyResolutionF
       mode: "fresh",
       details: report.fresh.details,
       remediation: "inspect-resolution",
-      message: "a clean consumer using the declared ranges now resolves to a mutually incompatible peer dependency graph",
+      message:
+        "a clean consumer using the declared ranges now resolves to a mutually incompatible peer dependency graph",
     });
   }
 
@@ -386,7 +441,8 @@ function runtimeFindings(report: PackageResolutionReport): DependencyResolutionF
       mode: "fresh",
       details: report.fresh.details,
       remediation: "inspect-resolution",
-      message: "the repository has a locked development graph while fresh consumer resolution fails; local green checks are not proof of the published consumer contract",
+      message:
+        "the repository has a locked development graph while fresh consumer resolution fails; local green checks are not proof of the published consumer contract",
     });
   }
 
@@ -554,9 +610,11 @@ export function resolveDependencies(
 
   const errors = findings.filter((finding) => finding.severity === "error").length;
   const warnings = findings.filter((finding) => finding.severity === "warning").length;
-  const runtimeUnavailable = execute && reports.some((report) =>
-    [report.minimum, report.fresh].some((probe) => probe.status === "unavailable"),
-  );
+  const runtimeUnavailable =
+    execute &&
+    reports.some((report) =>
+      [report.minimum, report.fresh].some((probe) => probe.status === "unavailable"),
+    );
   const status =
     errors > 0 || (strict && warnings > 0)
       ? "failed"
@@ -579,9 +637,11 @@ export function resolveDependencies(
       warnings,
       strict,
       proofBoundary: {
-        repositoryState: "Observes manifest and lockfile state only; it is not fresh-consumer proof.",
+        repositoryState:
+          "Observes manifest and lockfile state only; it is not fresh-consumer proof.",
         minimum: "Uses exact conservative lower bounds derived from declared peer ranges.",
-        fresh: "Uses the real npm resolver against current registry state and declared peer ranges.",
+        fresh:
+          "Uses the real npm resolver against current registry state and declared peer ranges.",
       },
     },
     diagnostics: findings.map((finding) => ({
