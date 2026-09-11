@@ -161,7 +161,7 @@ test("stops at a deterministic fixed point and returns remaining work as an agen
   expect(result.data).toMatchObject({
     result: "partial",
     sourceFixedPoint: false,
-    finalFindingIds: ["CT-DDDDDDDDDD"],
+    finalFindingIds: ["CT-DDDDDDDDDDDD"],
     handoff: [
       {
         kind: "review",
