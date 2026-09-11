@@ -46,7 +46,7 @@ jobs:
     );
   });
 
-  test("accepts browser validation that consumes the exact produced artifact", () => {
+  test("accepts runtime validation and deployment that consume the same produced artifact", () => {
     const root = fixture(`
 permissions:
   pages: write
@@ -60,15 +60,115 @@ jobs:
     needs: build
     uses: owner/reusable/.github/workflows/e2e-validation.yml@0123456789012345678901234567890123456789
     with:
-      prebuilt_artifact_run_id: producer-run
-      prebuilt_artifact_digest: producer-digest
+      prebuilt_artifact_run_id: needs.build.outputs.producer_run_id
+      prebuilt_artifact_digest: needs.build.outputs.artifact_digest
       e2e_command: bunx playwright test --config playwright.hosted.config.ts
   deploy:
     needs: [build, verify-hosted]
     uses: owner/reusable/.github/workflows/deploy-pages.yml@0123456789012345678901234567890123456789
+    with:
+      prebuilt_artifact_run_id: needs.build.outputs.producer_run_id
+      prebuilt_artifact_digest: needs.build.outputs.artifact_digest
 `);
 
     expect(deploymentRuntimeParityFindings(createDetectorContext(root))).toEqual([]);
+  });
+
+  test("does not correlate artifact consumption and runtime testing across unrelated jobs", () => {
+    const root = fixture(`
+permissions:
+  pages: write
+jobs:
+  build:
+    uses: owner/reusable/.github/workflows/build-artifact.yml@0123456789012345678901234567890123456789
+    with:
+      build_command: VITE_HOSTED_RUNTIME=1 bunx vite build --base /fixture/
+      artifact_paths: dist
+  unrelated-download:
+    needs: build
+    steps:
+      - uses: actions/download-artifact@0123456789012345678901234567890123456789
+        with:
+          run-id: needs.build.outputs.producer_run_id
+  browser:
+    needs: build
+    steps:
+      - run: bunx playwright test
+  deploy:
+    needs: [build, browser]
+    uses: owner/reusable/.github/workflows/deploy-pages.yml@0123456789012345678901234567890123456789
+    with:
+      prebuilt_artifact_run_id: needs.build.outputs.producer_run_id
+      prebuilt_artifact_digest: needs.build.outputs.artifact_digest
+`);
+
+    expect(deploymentRuntimeParityFindings(createDetectorContext(root))).toHaveLength(1);
+  });
+
+  test("recognizes workflow-level Actions env maps for a production build", () => {
+    const root = fixture(`
+env: { VITE_HOSTED_RUNTIME: "1" }
+permissions:
+  pages: write
+jobs:
+  build:
+    steps:
+      - run: bunx vite build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+`);
+
+    const findings = deploymentRuntimeParityFindings(createDetectorContext(root));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.evidence.map((entry) => entry.detail)).toContain(
+      "production environment VITE_HOSTED_RUNTIME",
+    );
+  });
+
+  test("recognizes job-level Actions env maps for a production build", () => {
+    const root = fixture(`
+permissions:
+  pages: write
+jobs:
+  build:
+    env:
+      NEXT_PUBLIC_HOSTED_RUNTIME: "1"
+    steps:
+      - run: bunx next build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+`);
+
+    const findings = deploymentRuntimeParityFindings(createDetectorContext(root));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.evidence.map((entry) => entry.detail)).toContain(
+      "production environment NEXT_PUBLIC_HOSTED_RUNTIME",
+    );
+  });
+
+  test("recognizes step-level Actions env maps for a production build", () => {
+    const root = fixture(`
+permissions:
+  pages: write
+jobs:
+  build:
+    steps:
+      - name: Build hosted site
+        env:
+          NUXT_PUBLIC_HOSTED_RUNTIME: "1"
+        run: bunx nuxt build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+`);
+
+    const findings = deploymentRuntimeParityFindings(createDetectorContext(root));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.evidence.map((entry) => entry.detail)).toContain(
+      "production environment NUXT_PUBLIC_HOSTED_RUNTIME",
+    );
   });
 
   test("does not demand browser parity for a Pages workflow without a runtime-specific build variant", () => {
