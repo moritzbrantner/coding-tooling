@@ -105,7 +105,7 @@ jobs:
     expect(deploymentRuntimeParityFindings(createDetectorContext(root))).toHaveLength(1);
   });
 
-  test("recognizes workflow-level Actions env maps for a production build", () => {
+  test("recognizes workflow-level Actions inline env maps for a production build", () => {
     const root = fixture(`
 env: { VITE_HOSTED_RUNTIME: "1" }
 permissions:
@@ -126,7 +126,29 @@ jobs:
     );
   });
 
-  test("recognizes job-level Actions env maps for a production build", () => {
+  test("recognizes workflow-level Actions block env maps for a production build", () => {
+    const root = fixture(`
+env:
+  VITE_HOSTED_RUNTIME: "1"
+permissions:
+  pages: write
+jobs:
+  build:
+    steps:
+      - run: bunx vite build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+`);
+
+    const findings = deploymentRuntimeParityFindings(createDetectorContext(root));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.evidence.map((entry) => entry.detail)).toContain(
+      "production environment VITE_HOSTED_RUNTIME",
+    );
+  });
+
+  test("recognizes job-level Actions block env maps for a production build", () => {
     const root = fixture(`
 permissions:
   pages: write
@@ -148,7 +170,28 @@ jobs:
     );
   });
 
-  test("recognizes step-level Actions env maps for a production build", () => {
+  test("recognizes job-level Actions inline env maps for a production build", () => {
+    const root = fixture(`
+permissions:
+  pages: write
+jobs:
+  build:
+    env: { NEXT_PUBLIC_HOSTED_RUNTIME: "1" }
+    steps:
+      - run: bunx next build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+`);
+
+    const findings = deploymentRuntimeParityFindings(createDetectorContext(root));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.evidence.map((entry) => entry.detail)).toContain(
+      "production environment NEXT_PUBLIC_HOSTED_RUNTIME",
+    );
+  });
+
+  test("recognizes step-level Actions block env maps for a production build", () => {
     const root = fixture(`
 permissions:
   pages: write
@@ -158,6 +201,28 @@ jobs:
       - name: Build hosted site
         env:
           NUXT_PUBLIC_HOSTED_RUNTIME: "1"
+        run: bunx nuxt build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+`);
+
+    const findings = deploymentRuntimeParityFindings(createDetectorContext(root));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.evidence.map((entry) => entry.detail)).toContain(
+      "production environment NUXT_PUBLIC_HOSTED_RUNTIME",
+    );
+  });
+
+  test("recognizes step-level Actions inline env maps for a production build", () => {
+    const root = fixture(`
+permissions:
+  pages: write
+jobs:
+  build:
+    steps:
+      - name: Build hosted site
+        env: { NUXT_PUBLIC_HOSTED_RUNTIME: "1" }
         run: bunx nuxt build
       - uses: actions/upload-pages-artifact@v4
         with:
