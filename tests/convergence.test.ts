@@ -66,13 +66,15 @@ function scaffoldEnvelope(status: ResultStatus = "passed", code?: string): Expec
 
 function verificationEnvelope(
   status: ResultStatus = "passed",
+  tier = "fast",
+  data: Record<string, unknown> = {},
 ): ResultEnvelope<Record<string, unknown>> {
   return {
     schemaVersion: 1,
     operation: "run",
     status,
     durationMs: 0,
-    data: { tier: "fast" },
+    data: { tier, ...data },
     diagnostics: status === "passed" ? [] : [{ code: "validation-failed", message: status }],
   };
 }
@@ -105,7 +107,7 @@ test("applies deterministic scaffolds until the finding state reaches a fixed po
       }
       return scaffoldEnvelope("unavailable", "finding-not-found");
     },
-    verify: () => verificationEnvelope(),
+    verify: (_root, tier) => verificationEnvelope("passed", tier),
   };
 
   const result = convergeRepository("/repo", {}, dependencies);
@@ -113,9 +115,11 @@ test("applies deterministic scaffolds until the finding state reaches a fixed po
   expect(result.status).toBe("passed");
   expect(result.data).toMatchObject({
     result: "converged",
+    sourceFixedPoint: true,
     initialFindingIds: ["CT-AAAAAAAAAAAA"],
     finalFindingIds: [],
     verifyTier: "fast",
+    requestedVerificationTiers: ["fast"],
   });
   expect(result.data.rounds).toHaveLength(2);
 });
@@ -146,7 +150,7 @@ test("stops at a deterministic fixed point and returns remaining work as an agen
     },
     verify: (_root, tier) => {
       verifiedTier = tier;
-      return verificationEnvelope();
+      return verificationEnvelope("passed", tier);
     },
   };
 
@@ -156,6 +160,7 @@ test("stops at a deterministic fixed point and returns remaining work as an agen
   expect(verifiedTier).toBe("fast");
   expect(result.data).toMatchObject({
     result: "partial",
+    sourceFixedPoint: false,
     finalFindingIds: ["CT-DDDDDDDDDDDD"],
     handoff: [
       {
@@ -165,6 +170,114 @@ test("stops at a deterministic fixed point and returns remaining work as an agen
       },
     ],
   });
+});
+
+test("promotes a clean fixed point through the layered verification ladder", () => {
+  const verifiedTiers: string[] = [];
+  const dependencies: ConvergenceDependencies = {
+    findings: () => findingsEnvelope([]),
+    scaffold: () => scaffoldEnvelope(),
+    verify: (_root, tier) => {
+      verifiedTiers.push(tier);
+      return verificationEnvelope("passed", tier);
+    },
+  };
+
+  const result = convergeRepository("/repo", { verifyTier: "e2e" }, dependencies);
+
+  expect(result.status).toBe("passed");
+  expect(verifiedTiers).toEqual(["fast", "integration", "workflow", "e2e"]);
+  expect(result.data).toMatchObject({
+    result: "converged",
+    sourceFixedPoint: true,
+    requestedVerificationTiers: ["fast", "integration", "workflow", "e2e"],
+  });
+});
+
+test("stops layered verification at the first failing layer before repository readiness", () => {
+  const verifiedTiers: string[] = [];
+  let readinessCalls = 0;
+  const dependencies: ConvergenceDependencies = {
+    findings: () => findingsEnvelope([]),
+    scaffold: () => scaffoldEnvelope(),
+    verify: (_root, tier) => {
+      verifiedTiers.push(tier);
+      return verificationEnvelope(tier === "integration" ? "failed" : "passed", tier);
+    },
+    readiness: () => {
+      readinessCalls += 1;
+      return {
+        readiness: "trusted-auto-merge",
+        authority: "hosted",
+        requiredChecks: [],
+        blockers: [],
+        diagnostics: [],
+      };
+    },
+  };
+
+  const result = convergeRepository("/repo", { verifyTier: "e2e" }, dependencies);
+
+  expect(result.status).toBe("failed");
+  expect(verifiedTiers).toEqual(["fast", "integration"]);
+  expect(readinessCalls).toBe(0);
+  expect(result.data).toMatchObject({
+    result: "partial",
+    sourceFixedPoint: true,
+    convergenceBlockers: [{ code: "convergence-verification-incomplete" }],
+  });
+});
+
+test("treats an absent higher layer as not applicable without blocking later layers", () => {
+  const dependencies: ConvergenceDependencies = {
+    findings: () => findingsEnvelope([]),
+    scaffold: () => scaffoldEnvelope(),
+    verify: (_root, tier) =>
+      verificationEnvelope(
+        "passed",
+        tier,
+        tier === "integration"
+          ? { checks: [], missing: [] }
+          : { checks: [{ capability: tier }], missing: [] },
+      ),
+  };
+
+  const result = convergeRepository("/repo", { verifyTier: "workflow" }, dependencies);
+
+  expect(result.status).toBe("passed");
+  expect(result.data.result).toBe("converged");
+  expect(result.data.verifications).toEqual([
+    expect.objectContaining({ tier: "fast", applicability: "applicable" }),
+    expect.objectContaining({ tier: "integration", applicability: "not-applicable" }),
+    expect.objectContaining({ tier: "workflow", applicability: "applicable" }),
+  ]);
+});
+
+test("does not promote beyond fast while semantic handoff work remains", () => {
+  const handoff = finding("CT-121212121212", "src/semantic.ts", undefined, {
+    expectationId: "source-debt-marker",
+    severity: "info",
+    requirement: {
+      kind: "signal",
+      key: "resolve-debt-marker",
+      description: "resolve semantic work",
+    },
+  });
+  const verifiedTiers: string[] = [];
+  const dependencies: ConvergenceDependencies = {
+    findings: () => findingsEnvelope([handoff]),
+    scaffold: () => scaffoldEnvelope(),
+    verify: (_root, tier) => {
+      verifiedTiers.push(tier);
+      return verificationEnvelope("passed", tier);
+    },
+  };
+
+  const result = convergeRepository("/repo", { verifyTier: "e2e" }, dependencies);
+
+  expect(result.status).toBe("passed");
+  expect(result.data.result).toBe("partial");
+  expect(verifiedTiers).toEqual(["fast"]);
 });
 
 test("detects oscillation instead of replaying deterministic scaffolds forever", () => {
@@ -217,7 +330,7 @@ test("fails closed when a scaffold cannot be applied safely", () => {
   });
 });
 
-test("keeps convergence state separate from deterministic validation outcome", () => {
+test("keeps a clean source fixed point distinct from failed verification", () => {
   const dependencies: ConvergenceDependencies = {
     findings: () => findingsEnvelope([]),
     scaffold: () => scaffoldEnvelope(),
@@ -227,7 +340,12 @@ test("keeps convergence state separate from deterministic validation outcome", (
   const result = convergeRepository("/repo", {}, dependencies);
 
   expect(result.status).toBe("failed");
-  expect(result.data).toMatchObject({ result: "converged", finalFindingIds: [] });
+  expect(result.data).toMatchObject({
+    result: "partial",
+    sourceFixedPoint: true,
+    finalFindingIds: [],
+    convergenceBlockers: [{ code: "convergence-verification-incomplete" }],
+  });
   expect(result.diagnostics[0]?.code).toBe("validation-failed");
 });
 
