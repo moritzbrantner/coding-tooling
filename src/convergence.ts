@@ -44,6 +44,16 @@ export type ConvergenceDependencies = {
   reconcilePullRequests?: (root: string) => ResultEnvelope<Record<string, unknown>> | undefined;
 };
 
+const progressiveVerificationTiers = ["fast", "integration", "workflow", "e2e"] as const;
+
+type VerificationApplicability = "applicable" | "not-applicable";
+
+type ConvergenceVerification = {
+  tier: string;
+  applicability: VerificationApplicability;
+  result: ResultEnvelope<Record<string, unknown>>;
+};
+
 function findingState(findings: Finding[]): Array<Record<string, unknown>> {
   return findings.map((finding) => ({
     id: finding.id,
@@ -109,6 +119,33 @@ function readinessAllowsConvergence(readiness: RepositoryMergeReadiness): boolea
   return readiness.readiness === "local-gated" && readiness.blockers.length === 0;
 }
 
+function verificationTiersThrough(target: string | null, sourceFixedPoint: boolean): string[] {
+  if (!target) return [];
+  const index = progressiveVerificationTiers.indexOf(
+    target as (typeof progressiveVerificationTiers)[number],
+  );
+  if (index < 0) return [target];
+  const tiers = progressiveVerificationTiers.slice(0, index + 1);
+  return sourceFixedPoint ? [...tiers] : tiers.slice(0, 1);
+}
+
+function verificationApplicability(
+  verification: ResultEnvelope<Record<string, unknown>>,
+): VerificationApplicability {
+  const checks = verification.data.checks;
+  const missing = verification.data.missing;
+  if (!Array.isArray(checks) || !Array.isArray(missing)) return "applicable";
+  if (checks.length > 0) return "applicable";
+  const requiredMissing = missing.some(
+    (item) =>
+      typeof item === "object" &&
+      item !== null &&
+      "optional" in item &&
+      (item as { optional?: unknown }).optional === false,
+  );
+  return requiredMissing ? "applicable" : "not-applicable";
+}
+
 function finish(
   started: number,
   root: string,
@@ -122,17 +159,39 @@ function finish(
   },
   dependencies: ConvergenceDependencies,
 ): ResultEnvelope<Record<string, unknown>> {
-  const verification = options.verifyTier
-    ? dependencies.verify(root, options.verifyTier)
-    : undefined;
-  const status = verification ? verification.status : "passed";
+  const sourceFixedPoint = result === "converged";
+  const requestedVerificationTiers = verificationTiersThrough(options.verifyTier, sourceFixedPoint);
+  const verifications: ConvergenceVerification[] = [];
+  let verification: ResultEnvelope<Record<string, unknown>> | undefined;
+  let verificationPassed = true;
+
+  for (const tier of requestedVerificationTiers) {
+    const current = dependencies.verify(root, tier);
+    const applicability = verificationApplicability(current);
+    verifications.push({ tier, applicability, result: current });
+    verification = current;
+    if (applicability === "not-applicable") continue;
+    if (current.status !== "passed") {
+      verificationPassed = false;
+      break;
+    }
+  }
+
+  const status = verificationPassed ? "passed" : (verification?.status ?? "failed");
   const finalFindingIds = finalFindings.map((finding) => finding.id).sort();
   const handoff = handoffCandidates(finalFindings, options.includeBaseline);
-  const repositoryReadiness = result === "converged" ? dependencies.readiness?.(root) : undefined;
+  const repositoryReadiness =
+    sourceFixedPoint && verificationPassed ? dependencies.readiness?.(root) : undefined;
   const pullRequestReconciliation =
-    result === "converged" ? dependencies.reconcilePullRequests?.(root) : undefined;
+    sourceFixedPoint && verificationPassed ? dependencies.reconcilePullRequests?.(root) : undefined;
   const convergenceBlockers: Diagnostic[] = [];
 
+  if (sourceFixedPoint && !verificationPassed) {
+    convergenceBlockers.push({
+      code: "convergence-verification-incomplete",
+      message: `Verification promotion stopped at ${verifications.at(-1)?.tier ?? options.verifyTier ?? "unknown"}`,
+    });
+  }
   if (repositoryReadiness && !readinessAllowsConvergence(repositoryReadiness)) {
     convergenceBlockers.push(
       ...(repositoryReadiness.blockers.length > 0
@@ -169,15 +228,18 @@ function finish(
     data: {
       root,
       result: resolvedResult,
+      sourceFixedPoint,
       includeBaseline: options.includeBaseline,
       maxRounds: options.maxRounds,
       verifyTier: options.verifyTier,
+      requestedVerificationTiers,
       initialFindingIds,
       finalFindingIds,
       rounds,
       normalizations,
       handoff,
       verification,
+      verifications,
       repositoryReadiness,
       pullRequestReconciliation,
       convergenceBlockers,
@@ -188,10 +250,11 @@ function finish(
         cycleDetection: "repository-content-and-finding-state-fingerprint",
         normalization: "closed-adapters-with-idempotence-proof",
         generatedFilesBecomeUserOwned: true,
-        repositoryStateGate: "readiness-and-open-pr-reconciliation",
+        verificationPromotion: "fast-integration-workflow-e2e",
+        repositoryStateGate: "after-required-verification",
       },
     },
-    diagnostics: verification?.diagnostics ?? [],
+    diagnostics: verificationPassed ? [] : (verification?.diagnostics ?? convergenceBlockers),
   };
 }
 
