@@ -292,72 +292,126 @@ function record(value) {
 
 const PAGES_DEPLOYMENT_PATTERN =
   /(?:actions\/upload-pages-artifact|actions\/deploy-pages|deploy-pages\.ya?ml|pages:\s*write)/i;
+const ARTIFACT_PRODUCER_PATTERN =
+  /(?:actions\/upload-pages-artifact|build-artifact\.ya?ml|artifact_paths\s*:)/i;
 const EXACT_ARTIFACT_CONSUMER_PATTERN =
   /(?:prebuilt_artifact_(?:run_id|name|digest|source_sha|key|identity_digest|destination)|actions\/download-artifact)/i;
+const DEPLOYMENT_JOB_PATTERN = /(?:actions\/deploy-pages|deploy-pages\.ya?ml)/i;
 const RUNTIME_VERIFICATION_PATTERN =
   /(?:playwright|e2e_command|test:e2e|browser(?:[-:_ ]?smoke)?|vite\s+preview|next\s+start)/i;
 const BUILD_INVOCATION_PATTERN =
   /(?:\b(?:vite|next|nuxt|astro|vitepress|react-scripts|webpack)\b[^\n]*\bbuild\b|\b(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?build(?::[A-Za-z0-9:_-]+)?\b)/i;
 const PRODUCTION_ENVIRONMENT_PATTERN =
   /\b((?:VITE|NEXT_PUBLIC|NUXT_PUBLIC|PUBLIC|REACT_APP)_[A-Z0-9_]+)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s\\]+)/g;
+const PUBLIC_ENVIRONMENT_KEY_PATTERN =
+  /\b((?:VITE|NEXT_PUBLIC|NUXT_PUBLIC|PUBLIC|REACT_APP)_[A-Z0-9_]+)\s*:/g;
 const BASE_PATH_PATTERN = /(?:^|\s)--base(?:\s+|=)(?:"[^"]+"|'[^']+'|[^\s\\]+)/g;
 
-function commandBlocks(content) {
-  const lines = content.split(/\r?\n/);
-  const blocks = [];
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
-    const match = line.match(/^(\s*)(?:-\s+)?(?:run|build_command):\s*(.*)$/);
-    if (!match) continue;
-    const indent = match[1].length;
-    const inline = match[2].trim();
-    if (inline && inline !== "|" && inline !== ">") {
-      blocks.push(inline);
-      continue;
-    }
+function indentation(line) {
+  return line.match(/^\s*/)[0].length;
+}
 
-    const block = [];
-    for (index += 1; index < lines.length; index += 1) {
-      const next = lines[index];
-      if (!next.trim()) {
-        block.push("");
-        continue;
-      }
-      const nextIndent = next.match(/^\s*/)[0].length;
-      if (nextIndent <= indent) {
-        index -= 1;
-        break;
-      }
-      block.push(next.trim());
-    }
-    blocks.push(block.join("\n"));
+function workflowJobs(source) {
+  const lines = source.split(/\r?\n/);
+  const jobsIndex = lines.findIndex((line) => /^\s*jobs:\s*(?:#.*)?$/.test(line));
+  if (jobsIndex < 0) return [];
+  const jobsIndent = indentation(lines[jobsIndex]);
+  const starts = [];
+  for (let index = jobsIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line.trim()) continue;
+    if (indentation(line) <= jobsIndent) break;
+    const match = line.match(/^(\s*)([A-Za-z0-9_.-]+):\s*(?:#.*)?$/);
+    if (!match) continue;
+    if (starts.length === 0 || match[1].length === starts[0].indent)
+      starts.push({ index, indent: match[1].length, key: match[2] });
   }
-  return blocks;
+  return starts.map((entry, position) => {
+    const end = starts[position + 1]?.index ?? lines.length;
+    const jobSource = lines.slice(entry.index, end).join("\n");
+    const inlineNeeds = jobSource.match(/^\s*needs:\s*\[([^\]]+)\]/m)?.[1];
+    const scalarNeeds = jobSource.match(/^\s*needs:\s*([A-Za-z0-9_.-]+)\s*$/m)?.[1];
+    const needs = new Set(
+      inlineNeeds
+        ? inlineNeeds.split(",").map((value) => value.trim().replace(/^['"]|['"]$/g, ""))
+        : scalarNeeds
+          ? [scalarNeeds]
+          : [...jobSource.matchAll(/^\s*-\s+([A-Za-z0-9_.-]+)\s*$/gm)].map((match) => match[1]),
+    );
+    return { key: entry.key, source: jobSource, needs };
+  });
+}
+
+function workflowEnvKeys(source) {
+  const prefix = source.split(/^jobs:\s*$/m)[0] ?? "";
+  return [...prefix.matchAll(PUBLIC_ENVIRONMENT_KEY_PATTERN)].map((match) => match[1]);
+}
+
+function runtimeSignals(job, inheritedEnvKeys) {
+  if (!BUILD_INVOCATION_PATTERN.test(job.source)) return [];
+  const signals = new Set(inheritedEnvKeys.map((key) => `production environment ${key}`));
+  for (const match of job.source.matchAll(PRODUCTION_ENVIRONMENT_PATTERN))
+    if (match[1]) signals.add(`production environment ${match[1]}`);
+  for (const match of job.source.matchAll(PUBLIC_ENVIRONMENT_KEY_PATTERN))
+    if (match[1]) signals.add(`production environment ${match[1]}`);
+  for (const match of job.source.matchAll(BASE_PATH_PATTERN))
+    signals.add(`production ${match[0].trim()}`);
+  return [...signals].toSorted();
+}
+
+function producerJobs(source) {
+  const inherited = workflowEnvKeys(source);
+  return workflowJobs(source).flatMap((job) => {
+    if (!ARTIFACT_PRODUCER_PATTERN.test(job.source)) return [];
+    const signals = runtimeSignals(job, inherited);
+    return signals.length > 0 ? [{ job, signals }] : [];
+  });
+}
+
+function referencesProducer(source, producerKey) {
+  return source.includes(`needs.${producerKey}.outputs.`);
+}
+
+function consumesProducer(job, producerKey) {
+  return (
+    job.needs.has(producerKey) &&
+    EXACT_ARTIFACT_CONSUMER_PATTERN.test(job.source) &&
+    referencesProducer(job.source, producerKey)
+  );
+}
+
+function hasExactArtifactRuntimeVerification(source) {
+  const jobs = workflowJobs(source);
+  return producerJobs(source).some(({ job: producer }) => {
+    const verifiers = jobs.filter(
+      (job) =>
+        job.key !== producer.key &&
+        RUNTIME_VERIFICATION_PATTERN.test(job.source) &&
+        consumesProducer(job, producer.key),
+    );
+    return verifiers.some((verifier) =>
+      jobs.some(
+        (deploy) =>
+          deploy.key !== producer.key &&
+          deploy.key !== verifier.key &&
+          DEPLOYMENT_JOB_PATTERN.test(deploy.source) &&
+          deploy.needs.has(verifier.key) &&
+          consumesProducer(deploy, producer.key),
+      ),
+    );
+  });
 }
 
 function deploymentRuntimeParityGaps(snapshot) {
   return Object.entries(snapshot.files)
-    .filter(([path]) => /^\.github\/workflows\/.+\.ya?ml$/i.test(path))
-    .flatMap(([path, source]) => {
+    .filter(([filePath]) => /^\.github\/workflows\/.+\.ya?ml$/i.test(filePath))
+    .flatMap(([filePath, source]) => {
       if (typeof source !== "string" || !PAGES_DEPLOYMENT_PATTERN.test(source)) return [];
-      const signals = new Set();
-      for (const command of commandBlocks(source)) {
-        if (!BUILD_INVOCATION_PATTERN.test(command)) continue;
-        for (const match of command.matchAll(PRODUCTION_ENVIRONMENT_PATTERN)) {
-          if (match[1]) signals.add(`production environment ${match[1]}`);
-        }
-        for (const match of command.matchAll(BASE_PATH_PATTERN)) {
-          signals.add(`production ${match[0].trim()}`);
-        }
-      }
-      if (signals.size === 0) return [];
-      if (
-        EXACT_ARTIFACT_CONSUMER_PATTERN.test(source) &&
-        RUNTIME_VERIFICATION_PATTERN.test(source)
-      ) {
-        return [];
-      }
-      return [{ path, signals: [...signals].toSorted() }];
+      const signals = [
+        ...new Set(producerJobs(source).flatMap((entry) => entry.signals)),
+      ].toSorted();
+      if (signals.length === 0 || hasExactArtifactRuntimeVerification(source)) return [];
+      return [{ path: filePath, signals }];
     });
 }
 
@@ -425,7 +479,7 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
       `REMOTE-DEPLOY-${stableId(gap.path)}`,
       "medium",
       "Pages runtime variant is not verified from the deploy artifact",
-      `${gap.path} contains ${gap.signals.join(", ")} without browser/runtime validation consuming the produced artifact.`,
+      `${gap.path} contains ${gap.signals.join(", ")} without a proven producer → runtime-verifier → deploy chain for that artifact.`,
       "Validate the exact produced Pages artifact under its production runtime/base-path conditions before deployment.",
     );
 
