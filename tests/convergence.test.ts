@@ -161,7 +161,7 @@ test("stops at a deterministic fixed point and returns remaining work as an agen
   expect(result.data).toMatchObject({
     result: "partial",
     sourceFixedPoint: false,
-    finalFindingIds: ["CT-DDDDDDDDDDDD"],
+    finalFindingIds: ["CT-DDDDDDDDDD"],
     handoff: [
       {
         kind: "review",
@@ -202,11 +202,10 @@ test("stops layered verification at a failed empty layer before repository readi
     scaffold: () => scaffoldEnvelope(),
     verify: (_root, tier) => {
       verifiedTiers.push(tier);
-      return verificationEnvelope(
-        tier === "integration" ? "failed" : "passed",
-        tier,
-        { checks: [], missing: [] },
-      );
+      return verificationEnvelope(tier === "integration" ? "failed" : "passed", tier, {
+        checks: [],
+        missing: [],
+      });
     },
     readiness: () => {
       readinessCalls += 1;
