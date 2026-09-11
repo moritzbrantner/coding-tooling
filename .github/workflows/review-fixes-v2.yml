@@ -1,0 +1,259 @@
+name: Validate remote convergence review fixes
+
+on:
+  push:
+    branches:
+      - feat/stronger-repository-convergence
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          ref: feat/stronger-repository-convergence
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Update remote parity analyzer
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("site/preflight.js")
+          content = path.read_text()
+          start = content.index("const PAGES_DEPLOYMENT_PATTERN =")
+          end = content.index("function findingsFor(snapshot, paths, components, validationEvidence) {")
+          helper = r'''const PAGES_DEPLOYMENT_PATTERN =
+            /(?:actions\/upload-pages-artifact|actions\/deploy-pages|deploy-pages\.ya?ml|pages:\s*write)/i;
+          const ARTIFACT_PRODUCER_PATTERN =
+            /(?:actions\/upload-pages-artifact|build-artifact\.ya?ml|artifact_paths\s*:)/i;
+          const EXACT_ARTIFACT_CONSUMER_PATTERN =
+            /(?:prebuilt_artifact_(?:run_id|name|digest|source_sha|key|identity_digest|destination)|actions\/download-artifact)/i;
+          const DEPLOYMENT_JOB_PATTERN = /(?:actions\/deploy-pages|deploy-pages\.ya?ml)/i;
+          const RUNTIME_VERIFICATION_PATTERN =
+            /(?:playwright|e2e_command|test:e2e|browser(?:[-:_ ]?smoke)?|vite\s+preview|next\s+start)/i;
+          const BUILD_INVOCATION_PATTERN =
+            /(?:\b(?:vite|next|nuxt|astro|vitepress|react-scripts|webpack)\b[^\n]*\bbuild\b|\b(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?build(?::[A-Za-z0-9:_-]+)?\b)/i;
+          const PRODUCTION_ENVIRONMENT_PATTERN =
+            /\b((?:VITE|NEXT_PUBLIC|NUXT_PUBLIC|PUBLIC|REACT_APP)_[A-Z0-9_]+)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s\\]+)/g;
+          const PUBLIC_ENVIRONMENT_KEY_PATTERN =
+            /\b((?:VITE|NEXT_PUBLIC|NUXT_PUBLIC|PUBLIC|REACT_APP)_[A-Z0-9_]+)\s*:/g;
+          const BASE_PATH_PATTERN = /(?:^|\s)--base(?:\s+|=)(?:"[^"]+"|'[^']+'|[^\s\\]+)/g;
+
+          function indentation(line) {
+            return line.match(/^\s*/)[0].length;
+          }
+
+          function workflowJobs(source) {
+            const lines = source.split(/\r?\n/);
+            const jobsIndex = lines.findIndex((line) => /^\s*jobs:\s*(?:#.*)?$/.test(line));
+            if (jobsIndex < 0) return [];
+            const jobsIndent = indentation(lines[jobsIndex]);
+            const starts = [];
+            for (let index = jobsIndex + 1; index < lines.length; index += 1) {
+              const line = lines[index];
+              if (!line.trim()) continue;
+              if (indentation(line) <= jobsIndent) break;
+              const match = line.match(/^(\s*)([A-Za-z0-9_.-]+):\s*(?:#.*)?$/);
+              if (!match) continue;
+              if (starts.length === 0 || match[1].length === starts[0].indent)
+                starts.push({ index, indent: match[1].length, key: match[2] });
+            }
+            return starts.map((entry, position) => {
+              const end = starts[position + 1]?.index ?? lines.length;
+              const jobSource = lines.slice(entry.index, end).join("\n");
+              const inlineNeeds = jobSource.match(/^\s*needs:\s*\[([^\]]+)\]/m)?.[1];
+              const scalarNeeds = jobSource.match(/^\s*needs:\s*([A-Za-z0-9_.-]+)\s*$/m)?.[1];
+              const needs = new Set(
+                inlineNeeds
+                  ? inlineNeeds.split(",").map((value) => value.trim().replace(/^['"]|['"]$/g, ""))
+                  : scalarNeeds
+                    ? [scalarNeeds]
+                    : [...jobSource.matchAll(/^\s*-\s+([A-Za-z0-9_.-]+)\s*$/gm)].map((match) => match[1]),
+              );
+              return { key: entry.key, source: jobSource, needs };
+            });
+          }
+
+          function workflowEnvKeys(source) {
+            const prefix = source.split(/^jobs:\s*$/m)[0] ?? "";
+            return [...prefix.matchAll(PUBLIC_ENVIRONMENT_KEY_PATTERN)].map((match) => match[1]);
+          }
+
+          function runtimeSignals(job, inheritedEnvKeys) {
+            if (!BUILD_INVOCATION_PATTERN.test(job.source)) return [];
+            const signals = new Set(inheritedEnvKeys.map((key) => `production environment ${key}`));
+            for (const match of job.source.matchAll(PRODUCTION_ENVIRONMENT_PATTERN))
+              if (match[1]) signals.add(`production environment ${match[1]}`);
+            for (const match of job.source.matchAll(PUBLIC_ENVIRONMENT_KEY_PATTERN))
+              if (match[1]) signals.add(`production environment ${match[1]}`);
+            for (const match of job.source.matchAll(BASE_PATH_PATTERN))
+              signals.add(`production ${match[0].trim()}`);
+            return [...signals].toSorted();
+          }
+
+          function producerJobs(source) {
+            const inherited = workflowEnvKeys(source);
+            return workflowJobs(source).flatMap((job) => {
+              if (!ARTIFACT_PRODUCER_PATTERN.test(job.source)) return [];
+              const signals = runtimeSignals(job, inherited);
+              return signals.length > 0 ? [{ job, signals }] : [];
+            });
+          }
+
+          function referencesProducer(source, producerKey) {
+            return source.includes(`needs.${producerKey}.outputs.`);
+          }
+
+          function consumesProducer(job, producerKey) {
+            return (
+              job.needs.has(producerKey) &&
+              EXACT_ARTIFACT_CONSUMER_PATTERN.test(job.source) &&
+              referencesProducer(job.source, producerKey)
+            );
+          }
+
+          function hasExactArtifactRuntimeVerification(source) {
+            const jobs = workflowJobs(source);
+            return producerJobs(source).some(({ job: producer }) => {
+              const verifiers = jobs.filter(
+                (job) =>
+                  job.key !== producer.key &&
+                  RUNTIME_VERIFICATION_PATTERN.test(job.source) &&
+                  consumesProducer(job, producer.key),
+              );
+              return verifiers.some((verifier) =>
+                jobs.some(
+                  (deploy) =>
+                    deploy.key !== producer.key &&
+                    deploy.key !== verifier.key &&
+                    DEPLOYMENT_JOB_PATTERN.test(deploy.source) &&
+                    deploy.needs.has(verifier.key) &&
+                    consumesProducer(deploy, producer.key),
+                ),
+              );
+            });
+          }
+
+          function deploymentRuntimeParityGaps(snapshot) {
+            return Object.entries(snapshot.files)
+              .filter(([filePath]) => /^\.github\/workflows\/.+\.ya?ml$/i.test(filePath))
+              .flatMap(([filePath, source]) => {
+                if (typeof source !== "string" || !PAGES_DEPLOYMENT_PATTERN.test(source)) return [];
+                const signals = [...new Set(producerJobs(source).flatMap((entry) => entry.signals))].toSorted();
+                if (signals.length === 0 || hasExactArtifactRuntimeVerification(source)) return [];
+                return [{ path: filePath, signals }];
+              });
+          }
+
+          '''
+          content = content[:start] + helper + content[end:]
+          content = content.replace(
+            '`${gap.path} contains ${gap.signals.join(", ")} without browser/runtime validation consuming the produced artifact.`,',
+            '`${gap.path} contains ${gap.signals.join(", ")} without a proven producer → runtime-verifier → deploy chain for that artifact.`,',
+          )
+          path.write_text(content)
+
+          tests = Path("tests/site-preflight.test.js")
+          text = tests.read_text()
+          text = text.replace(
+            "prebuilt_artifact_run_id: producer-run\n      prebuilt_artifact_digest: producer-digest",
+            "prebuilt_artifact_run_id: needs.build.outputs.producer_run_id\n      prebuilt_artifact_digest: needs.build.outputs.artifact_digest",
+            1,
+          )
+          text = text.replace(
+            "    uses: owner/reusable/.github/workflows/deploy-pages.yml@0123456789012345678901234567890123456789\n`,",
+            "    uses: owner/reusable/.github/workflows/deploy-pages.yml@0123456789012345678901234567890123456789\n    with:\n      prebuilt_artifact_run_id: needs.build.outputs.producer_run_id\n      prebuilt_artifact_digest: needs.build.outputs.artifact_digest\n`,",
+            1,
+          )
+          marker = '  test("ignores remote public runtime variables outside build commands", () => {\n'
+          additions = r'''
+            test("does not correlate remote artifact use and runtime testing across unrelated jobs", () => {
+              const analysis = analyzeSnapshot(
+                repository({
+                  tree: [blob("package.json", "1"), blob(".coding-tooling.json", "2"), blob("AGENTS.md", "3"), blob("renovate.json", "4"), blob(".github/workflows/pages.yml", "5")],
+                  files: {
+                    "package.json": JSON.stringify({ name: "fixture", packageManager: "bun@1.4.0", scripts: { test: "test" } }),
+                    ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+                    ".github/workflows/pages.yml": `name: Pages
+          on:
+            pull_request:
+          permissions:
+            pages: write
+          jobs:
+            build:
+              uses: owner/reusable/.github/workflows/build-artifact.yml@0123456789012345678901234567890123456789
+              with:
+                build_command: VITE_HOSTED_RUNTIME=1 bunx vite build --base /fixture/
+                artifact_paths: dist
+            artifact-reader:
+              needs: build
+              steps:
+                - uses: actions/download-artifact@0123456789012345678901234567890123456789
+                  with:
+                    run-id: needs.build.outputs.producer_run_id
+            browser:
+              needs: build
+              steps:
+                - run: bunx playwright test
+            deploy:
+              needs: [build, browser]
+              uses: owner/reusable/.github/workflows/deploy-pages.yml@0123456789012345678901234567890123456789
+              with:
+                prebuilt_artifact_run_id: needs.build.outputs.producer_run_id
+                prebuilt_artifact_digest: needs.build.outputs.artifact_digest
+          `,
+                  },
+                }),
+              );
+              expect(analysis.findings.some((finding) => finding.id.startsWith("REMOTE-DEPLOY-"))).toBe(true);
+            });
+
+            test("recognizes remote Actions env maps on production builds", () => {
+              const analysis = analyzeSnapshot(
+                repository({
+                  tree: [blob("package.json", "1"), blob(".coding-tooling.json", "2"), blob("AGENTS.md", "3"), blob("renovate.json", "4"), blob(".github/workflows/pages.yml", "5")],
+                  files: {
+                    "package.json": JSON.stringify({ name: "fixture", packageManager: "bun@1.4.0", scripts: { test: "test" } }),
+                    ".coding-tooling.json": JSON.stringify({ schemaVersion: 1 }),
+                    ".github/workflows/pages.yml": `name: Pages
+          on:
+            pull_request:
+          permissions:
+            pages: write
+          jobs:
+            build:
+              env:
+                VITE_HOSTED_RUNTIME: "1"
+              steps:
+                - run: bunx vite build
+                - uses: actions/upload-pages-artifact@0123456789012345678901234567890123456789
+          `,
+                  },
+                }),
+              );
+              const finding = analysis.findings.find((entry) => entry.id.startsWith("REMOTE-DEPLOY-"));
+              expect(finding?.evidence).toContain("production environment VITE_HOSTED_RUNTIME");
+            });
+
+          '''
+          if "does not correlate remote artifact use" not in text:
+            text = text.replace(marker, additions + marker, 1)
+          tests.write_text(text)
+          PY
+      - run: bunx oxfmt .
+      - run: bun run typecheck
+      - run: bun test tests/deployment-runtime-parity.test.ts tests/deployment-runtime-parity-integration.test.ts tests/open-pr-reconciliation.test.ts tests/site-preflight.test.js tests/expectation-registry-contract.test.ts tests/remote-snapshot-acquisition.test.js
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add site/preflight.js tests/site-preflight.test.js src/expectation-deployment-detector.ts tests/deployment-runtime-parity.test.ts src/open-pr-reconciliation.ts tests/open-pr-reconciliation.test.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Address convergence review findings'
+          git push origin HEAD:feat/stronger-repository-convergence
