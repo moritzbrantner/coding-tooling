@@ -3,17 +3,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-import {
-  inspectConsumerVerification,
-  resolveDependencies,
-} from "../src/dependency-resolution.ts";
+import { inspectConsumerVerification, resolveDependencies } from "../src/dependency-resolution.ts";
 import type { CommandResult } from "../src/shared.ts";
 
-function fixture(options: {
-  verifier?: string;
-  lockfile?: boolean;
-  peers?: Record<string, string>;
-} = {}): string {
+function fixture(
+  options: {
+    verifier?: string;
+    lockfile?: boolean;
+    peers?: Record<string, string>;
+  } = {},
+): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-dependency-resolution-"));
   mkdirSync(join(root, "scripts"), { recursive: true });
   writeFileSync(
@@ -39,7 +38,8 @@ function fixture(options: {
       2,
     ),
   );
-  if (options.verifier) writeFileSync(join(root, "scripts", "verify-consumer.mjs"), options.verifier);
+  if (options.verifier)
+    writeFileSync(join(root, "scripts", "verify-consumer.mjs"), options.verifier);
   if (options.lockfile) writeFileSync(join(root, "bun.lock"), "lockfileVersion = 1\n");
   return root;
 }
@@ -127,7 +127,9 @@ describe("dependency resolution evidence", () => {
     expect(output.status).toBe("failed");
     expect(codes).toContain("fresh-peer-resolution-drift");
     expect(codes).toContain("locked-development-graph-masks-consumer-failure");
-    const report = (output.data.packages as Array<{ minimum: { status: string }; fresh: { status: string } }>)[0]!;
+    const report = (
+      output.data.packages as Array<{ minimum: { status: string }; fresh: { status: string } }>
+    )[0]!;
     expect(report.minimum.status).toBe("passed");
     expect(report.fresh.status).toBe("failed");
   });
