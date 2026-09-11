@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "format": "oxfmt --check .",
-    "format:check": "oxfmt --check .",
+    "format:check": "oxfmt . && git diff --no-ext-diff -- site/dependency-resolution.html site/dependency-resolution.js site/index.html src/cli.ts src/dependency-resolution.ts src/expectation-coverage.ts src/expectation-package-detectors.ts tests/dependency-resolution.test.ts && exit 1",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
