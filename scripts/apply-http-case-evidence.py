@@ -1,0 +1,238 @@
+from pathlib import Path
+
+path = Path("src/public-contract.ts")
+text = path.read_text()
+if "case?: PublicContractCaseReference;" in text:
+    raise SystemExit(0)
+
+
+def replace_once(old: str, new: str) -> None:
+    global text
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"expected one patch anchor, found {count}: {old[:80]!r}")
+    text = text.replace(old, new, 1)
+
+
+replace_once(
+    'import { readJson, relativePosix, runCommand, walkFiles } from "./shared.ts";\n',
+    'import {\n'
+    '  resolvePublicContractCaseEvidence,\n'
+    '  validatePublicContractCaseReference,\n'
+    '  type PublicContractCaseEvidence,\n'
+    '  type PublicContractCaseExecution,\n'
+    '  type PublicContractCaseReference,\n'
+    '} from "./public-contract-case-evidence.ts";\n'
+    'import { readJson, relativePosix, runCommand, walkFiles } from "./shared.ts";\n'
+    'import {\n'
+    '  prepareTestCaseEvidenceRun,\n'
+    '  readTestCaseEvidence,\n'
+    '  withTestCaseEvidenceEnvironment,\n'
+    '} from "./test-case-evidence.ts";\n',
+)
+
+replace_once(
+    'export type PublicContractVerification = {\n'
+    '  id: string;\n'
+    '  surface: string;\n'
+    '  kind: PublicContractEvidenceKind;\n'
+    '  capability: Capability;\n'
+    '  component?: string;\n'
+    '  reason?: string;\n'
+    '};',
+    'export type PublicContractVerification = {\n'
+    '  id: string;\n'
+    '  surface: string;\n'
+    '  kind: PublicContractEvidenceKind;\n'
+    '  capability: Capability;\n'
+    '  component?: string;\n'
+    '  case?: PublicContractCaseReference;\n'
+    '  reason?: string;\n'
+    '};',
+)
+
+replace_once(
+    'export type PublicContractEvidence = PublicContractVerification & {\n'
+    '  component: string;\n'
+    '  outcome: ResultStatus;\n'
+    '};',
+    'export type PublicContractEvidence = PublicContractVerification & {\n'
+    '  component: string;\n'
+    '  capabilityOutcome: ResultStatus;\n'
+    '  outcome: ResultStatus;\n'
+    '  caseEvidence?: PublicContractCaseEvidence;\n'
+    '};',
+)
+
+replace_once(
+    '  const surfaceIds = new Set(surfaces.map((surface) => surface.id));\n'
+    '  const ids = new Set<string>();',
+    '  const surfaceById = new Map(surfaces.map((surface) => [surface.id, surface]));\n'
+    '  const ids = new Set<string>();',
+)
+
+replace_once(
+    '    if (!surfaceIds.has(verification.surface))\n'
+    '      throw new Error(`Unknown public contract surface: ${verification.surface}`);',
+    '    const surface = surfaceById.get(verification.surface);\n'
+    '    if (!surface)\n'
+    '      throw new Error(`Unknown public contract surface: ${verification.surface}`);',
+)
+
+replace_once(
+    '    if (!evidenceCapabilities[verification.kind].includes(verification.capability)) {\n'
+    '      throw new Error(\n'
+    '        `Public contract evidence kind \'${verification.kind}\' cannot use capability \'${verification.capability}\'`,\n'
+    '      );\n'
+    '    }\n'
+    '  }\n'
+    '}',
+    '    if (!evidenceCapabilities[verification.kind].includes(verification.capability)) {\n'
+    '      throw new Error(\n'
+    '        `Public contract evidence kind \'${verification.kind}\' cannot use capability \'${verification.capability}\'`,\n'
+    '      );\n'
+    '    }\n'
+    '    if (verification.case) {\n'
+    '      if (surface.kind !== "http-operation")\n'
+    '        throw new Error("Public contract case evidence is only supported for HTTP operations");\n'
+    '      if (!verification.capability.startsWith("test"))\n'
+    '        throw new Error("Public contract HTTP case evidence requires a test capability");\n'
+    '      validatePublicContractCaseReference(verification.case);\n'
+    '    }\n'
+    '  }\n'
+    '}',
+)
+
+old_execution = '''    const bySurface = new Map<string, PublicContractEvidence[]>();
+    const executions = new Map<string, ResultStatus>();
+
+    if (options.execute !== false) {
+      for (const verification of verifications) {
+        const surface = surfaces.find((candidate) => candidate.id === verification.surface)!;
+        const component = verification.component ?? surface.component;
+        const key = `${component}\\u0000${verification.capability}`;
+        if (!executions.has(key))
+          executions.set(key, check(root, verification.capability, component).status);
+        const evidence: PublicContractEvidence = {
+          ...verification,
+          component,
+          outcome: executions.get(key)!,
+        };
+        bySurface.set(verification.surface, [
+          ...(bySurface.get(verification.surface) ?? []),
+          evidence,
+        ]);
+      }
+    } else {
+      for (const verification of verifications) {
+        const surface = surfaces.find((candidate) => candidate.id === verification.surface)!;
+        const component = verification.component ?? surface.component;
+        bySurface.set(verification.surface, [
+          ...(bySurface.get(verification.surface) ?? []),
+          { ...verification, component, outcome: "unavailable" },
+        ]);
+      }
+    }
+'''
+new_execution = '''    const currentRevision = revision(root);
+    const bySurface = new Map<string, PublicContractEvidence[]>();
+    const executions = new Map<string, PublicContractCaseExecution>();
+    const caseEvidenceExecutions = new Set<string>();
+    for (const verification of verifications) {
+      const surface = surfaces.find((candidate) => candidate.id === verification.surface)!;
+      const component = verification.component ?? surface.component;
+      const key = `${component}\\u0000${verification.capability}`;
+      if (
+        surface.kind === "http-operation" &&
+        strongEvidence.has(verification.kind) &&
+        verification.case
+      )
+        caseEvidenceExecutions.add(key);
+    }
+
+    for (const verification of verifications) {
+      const surface = surfaces.find((candidate) => candidate.id === verification.surface)!;
+      const component = verification.component ?? surface.component;
+      const key = `${component}\\u0000${verification.capability}`;
+      if (!executions.has(key)) {
+        if (options.execute === false) {
+          executions.set(key, { capabilityOutcome: "unavailable" });
+        } else if (currentRevision && caseEvidenceExecutions.has(key)) {
+          const prepared = prepareTestCaseEvidenceRun(
+            root,
+            currentRevision,
+            verification.capability,
+            component,
+          );
+          const capabilityOutcome = withTestCaseEvidenceEnvironment(prepared.environment, () =>
+            check(root, verification.capability, component).status,
+          );
+          executions.set(key, {
+            capabilityOutcome,
+            prepared,
+            evidence: readTestCaseEvidence(prepared),
+          });
+        } else {
+          executions.set(key, {
+            capabilityOutcome: check(root, verification.capability, component).status,
+          });
+        }
+      }
+
+      const execution = executions.get(key)!;
+      let outcome = execution.capabilityOutcome;
+      let caseEvidence: PublicContractCaseEvidence | undefined;
+      if (surface.kind === "http-operation" && strongEvidence.has(verification.kind)) {
+        if (!verification.capability.startsWith("test")) {
+          outcome = "unavailable";
+          caseEvidence = {
+            outcome: "missing",
+            reason: "http-case-evidence-requires-test-capability",
+          };
+        } else if (!currentRevision) {
+          outcome = "unavailable";
+          caseEvidence = {
+            id: verification.case?.id,
+            behavior: verification.case?.behavior,
+            outcome: "missing",
+            reason: "repository-revision-unavailable",
+          };
+        } else {
+          const resolved = resolvePublicContractCaseEvidence(verification.case, execution);
+          outcome = resolved.outcome;
+          caseEvidence = resolved.caseEvidence;
+        }
+      }
+      const evidence: PublicContractEvidence = {
+        ...verification,
+        component,
+        capabilityOutcome: execution.capabilityOutcome,
+        outcome,
+        ...(caseEvidence ? { caseEvidence } : {}),
+      };
+      bySurface.set(verification.surface, [
+        ...(bySurface.get(verification.surface) ?? []),
+        evidence,
+      ]);
+    }
+'''
+replace_once(old_execution, new_execution)
+
+replace_once(
+    '    const diagnostics: Diagnostic[] = [];\n'
+    '    if (results.length === 0) {',
+    '    const diagnostics: Diagnostic[] = [];\n'
+    '    const missingHttpCaseDeclarations = results\n'
+    '      .filter((surface) => surface.kind === "http-operation")\n'
+    '      .flatMap((surface) => surface.evidence)\n'
+    '      .filter((item) => item.caseEvidence?.reason === "http-case-declaration-missing").length;\n'
+    '    if (missingHttpCaseDeclarations > 0) {\n'
+    '      diagnostics.push({\n'
+    '        code: "public-contract-http-case-evidence-missing",\n'
+    '        message: `${missingHttpCaseDeclarations} HTTP verification mappings rely on broad capability evidence without an exact behavioral case declaration.`,\n'
+    '      });\n'
+    '    }\n'
+    '    if (results.length === 0) {',
+)
+
+path.write_text(text)
