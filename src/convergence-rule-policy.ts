@@ -52,7 +52,7 @@ export function normalizerRuleId(tool: string): string {
   }
 }
 
-export function validateConvergenceRuleConfig(
+function validateConvergenceRuleConfigShape(
   config: ToolingConfig,
   configuredPath = ".coding-tooling.json",
 ): void {
@@ -92,16 +92,28 @@ function assertKnownStaticConvergenceRuleIds(config: ToolingConfig): void {
   );
 }
 
-function readConvergenceRuleConfig(root: string): ToolingConfig {
+export function validateConvergenceRuleConfig(
+  config: ToolingConfig,
+  configuredPath = ".coding-tooling.json",
+): void {
+  validateConvergenceRuleConfigShape(config, configuredPath);
+  assertKnownStaticConvergenceRuleIds(config);
+}
+
+function readConvergenceRuleConfig(root: string, validateKnownRules = true): ToolingConfig {
   const path = join(root, ".coding-tooling.json");
   if (!existsSync(path)) return { schemaVersion: 1 };
   const config = readJson<ToolingConfig>(path);
   if (!config || config.schemaVersion !== 1) {
     throw new Error(".coding-tooling.json must use schemaVersion 1");
   }
-  validateConvergenceRuleConfig(config);
-  assertKnownStaticConvergenceRuleIds(config);
+  if (validateKnownRules) validateConvergenceRuleConfig(config);
+  else validateConvergenceRuleConfigShape(config);
   return config;
+}
+
+export function validateConvergenceRulePolicy(root: string): void {
+  readConvergenceRuleConfig(root);
 }
 
 export function configuredConvergenceRuleIds(
@@ -127,6 +139,11 @@ export function assertKnownConvergenceRuleIds(
 
 export function convergenceRuleMode(root: string, id: string): ConvergenceRuleMode {
   const config = readConvergenceRuleConfig(root);
+  return config.convergence?.rules?.[id] ?? "apply";
+}
+
+export function convergenceRuleModeForPlanning(root: string, id: string): ConvergenceRuleMode {
+  const config = readConvergenceRuleConfig(root, false);
   return config.convergence?.rules?.[id] ?? "apply";
 }
 
@@ -158,7 +175,6 @@ export function setConvergenceRuleMode(
     },
   };
   validateConvergenceRuleConfig(next);
-  assertKnownStaticConvergenceRuleIds(next);
   writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
   return {
     changed: previousMode !== mode || config.convergence?.rules?.[id] !== mode,
