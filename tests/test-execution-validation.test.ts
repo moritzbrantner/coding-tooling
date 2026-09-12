@@ -7,7 +7,10 @@ import { runPlan } from "../src/core.ts";
 
 const roots: string[] = [];
 
-function repository(testSource: string): string {
+function repository(
+  testSource: string,
+  testScript = "bun test tests/unit.test.ts",
+): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-test-validation-"));
   roots.push(root);
   mkdirSync(join(root, "tests"), { recursive: true });
@@ -15,7 +18,7 @@ function repository(testSource: string): string {
     join(root, "package.json"),
     `${JSON.stringify({
       name: "fixture",
-      scripts: { "test:unit": "bun test tests/unit.test.ts" },
+      scripts: { "test:unit": testScript },
     })}\n`,
   );
   writeFileSync(join(root, "bun.lock"), "");
@@ -79,5 +82,25 @@ describe("test execution validation", () => {
       },
     });
     expect(result.diagnostics).toEqual([]);
+  });
+
+  test("does not replace a native runner process failure with a zero-test diagnostic", () => {
+    const root = repository(
+      `import { test } from "bun:test";\ntest("unused", () => {});\n`,
+      "bun test tests/missing.test.ts",
+    );
+    const result = runPlan({ root, tier: "probe", strict: true });
+    const completed = (result.data.results as Array<Record<string, unknown>>)[0];
+
+    expect(result.status).toBe("failed");
+    expect(completed).toMatchObject({
+      capability: "test:unit",
+      status: "failed",
+      processStatus: "failed",
+      failureReason: undefined,
+    });
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "test-zero-executed-cases" }),
+    );
   });
 });
