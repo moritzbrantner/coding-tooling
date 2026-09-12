@@ -13,7 +13,8 @@ type Match = {
 };
 
 const focusedPattern = /^\s*(test|it|describe)\.only\s*\(/;
-const disabledPattern = /^\s*(test|it|describe)\.(skip|todo)\s*\(/;
+const skippedPattern = /^\s*(test|it|describe)\.skip\s*\(/;
+const todoPattern = /^\s*(test|it)\.todo\s*\(/;
 
 function matches(content: string): Match[] {
   const result: Match[] = [];
@@ -23,10 +24,13 @@ function matches(content: string): Match[] {
       result.push({ state: "focused", api: `${focused[1]}.only`, line: index + 1 });
       continue;
     }
-    const disabled = disabledPattern.exec(line);
-    if (disabled) {
-      result.push({ state: "disabled", api: `${disabled[1]}.${disabled[2]}`, line: index + 1 });
+    const skipped = skippedPattern.exec(line);
+    if (skipped) {
+      result.push({ state: "disabled", api: `${skipped[1]}.skip`, line: index + 1 });
+      continue;
     }
+    const todo = todoPattern.exec(line);
+    if (todo) result.push({ state: "disabled", api: `${todo[1]}.todo`, line: index + 1 });
   }
   return result;
 }
