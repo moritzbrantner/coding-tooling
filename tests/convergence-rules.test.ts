@@ -160,10 +160,10 @@ test("unknown scaffold policy fails closed at direct mutation", () => {
 
   const result = scaffoldFinding(root, finding.id);
 
-  expect(result.status).toBe("failed");
+  expect(result.status).toBe("error");
   expect(result.diagnostics).toContainEqual(
     expect.objectContaining({
-      code: "invalid-convergence-rule-policy",
+      code: "scaffold-failed",
       message: expect.stringContaining("scaffold.typscript-source-test"),
     }),
   );
@@ -184,8 +184,14 @@ test("invalid scaffold policy stays machine-readable in planning and convergence
   );
 
   const convergence = convergeRepository(root, { verifyTier: null });
-  expect(convergence.status).toBe("failed");
-  expect(convergence.data.reason).toBe("convergence-scaffold-failed");
+  expect(convergence.status).toBe("error");
+  expect(convergence.data.reason).toBe("findings-unavailable");
+  expect(convergence.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "invalid-expectations",
+      message: expect.stringContaining("scaffold.typscript-source-test"),
+    }),
+  );
   expect(existsSync(join(root, "tests", "service.test.ts"))).toBeFalse();
 });
 
