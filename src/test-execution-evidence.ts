@@ -136,9 +136,7 @@ function evidence(
 }
 
 function outputLines(text: string): string[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+  return text.split(/\r?\n/).map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
 }
 
 function bunEvidence(text: string, script: string | null): TestExecutionEvidence {
@@ -155,12 +153,7 @@ function bunEvidence(text: string, script: string | null): TestExecutionEvidence
     /^\s*(?:no tests found!?|0 tests?\b|ran 0 tests?\b)/i.test(line),
   );
   if (noTests) {
-    return evidence(
-      "bun",
-      script,
-      { passed: 0, failed: 0, skipped, todo },
-      "bun-summary",
-    );
+    return evidence("bun", script, { passed: 0, failed: 0, skipped, todo }, "bun-summary");
   }
 
   return evidence(
