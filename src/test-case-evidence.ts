@@ -46,7 +46,11 @@ export type TestCaseEvidenceReadResult =
       cases: Map<string, TestCaseOutcome>;
     }
   | {
-      status: "missing" | "invalid";
+      status: "missing";
+      reason: string;
+    }
+  | {
+      status: "invalid";
       reason: string;
     };
 
