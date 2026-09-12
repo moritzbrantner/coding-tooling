@@ -37,7 +37,6 @@ type CommandRecord = {
 type DependencySection = "dependencies" | "devDependencies" | "optionalDependencies";
 type ConventionExecutableName = "oxlint" | "oxlint-tsgolint";
 type ConventionExecutableStatus = "missing" | "adopted" | "invalid";
-type ConventionAdapterStatus = "applied" | "unresolved";
 
 type ConventionExecutableDeclaration = {
   path: string;
@@ -50,16 +49,6 @@ type ConventionExecutableRequirement = {
   rules: string[];
   status: ConventionExecutableStatus;
   declarations: ConventionExecutableDeclaration[];
-};
-
-type ConventionAdapterBinding = {
-  rule: string;
-  module: string;
-  tool: "oxlint" | "oxfmt";
-  capability: Capability;
-  component: string;
-  path: string;
-  status: ConventionAdapterStatus;
 };
 
 type PackageManifest = {
@@ -118,17 +107,13 @@ function commandsEqual(left: string[] | undefined, right: string[] | undefined):
   );
 }
 
-function conventionAdapterBindings(
+function conventionAdapterEvidence(
   root: string,
   config: ToolingConfig | undefined,
-): {
-  activeRules: Set<string>;
-  diagnostics: Diagnostic[];
-  bindings: ConventionAdapterBinding[];
-} {
+): { activeRules: Set<string>; diagnostics: Diagnostic[] } {
   const configurations = loadInstalledConventionConfigurations(root);
   if (configurations.length === 0) {
-    return { activeRules: new Set(), diagnostics: [], bindings: [] };
+    return { activeRules: new Set(), diagnostics: [] };
   }
 
   const configured = configuredConventionComponents(root, config);
@@ -144,13 +129,11 @@ function conventionAdapterBindings(
           message: error instanceof Error ? error.message : String(error),
         },
       ],
-      bindings: [],
     };
   }
 
   const activeRules = new Set<string>();
   const diagnostics: Diagnostic[] = [];
-  const bindings: ConventionAdapterBinding[] = [];
   for (const configuration of configurations) {
     for (let index = 0; index < configured.length; index += 1) {
       const source = configured[index]!;
@@ -161,41 +144,28 @@ function conventionAdapterBindings(
         continue;
       }
       const original = source.capabilities[configuration.capability];
-      if (!original) continue;
-      const effective = applied[index]?.capabilities[configuration.capability];
-      const status: ConventionAdapterStatus = commandsEqual(original, effective)
-        ? "unresolved"
-        : "applied";
-      bindings.push({
-        rule: configuration.rule,
-        module: configuration.module,
-        tool: configuration.tool,
-        capability: configuration.capability,
-        component: source.name,
-        path: source.path,
-        status,
-      });
-      if (status === "applied") {
-        if (configuration.tool === "oxlint") activeRules.add(configuration.rule);
+      if (!original) {
+        diagnostics.push({
+          code: "foundation-convention-adapter-unresolved",
+          message: `${configuration.rule} installs ${configuration.tool} configuration for ${configuration.capability}, but ${source.name} has no selected ${configuration.capability} command`,
+          path: source.path,
+        });
         continue;
       }
-      diagnostics.push({
-        code: "foundation-convention-adapter-unresolved",
-        message: `${configuration.rule} installs ${configuration.tool} configuration for ${configuration.capability}, but ${source.name} selects a command that the ${configuration.tool} adapter cannot compose`,
-        path: source.path,
-      });
+      const effective = applied[index]?.capabilities[configuration.capability];
+      if (commandsEqual(original, effective)) {
+        diagnostics.push({
+          code: "foundation-convention-adapter-unresolved",
+          message: `${configuration.rule} installs ${configuration.tool} configuration for ${configuration.capability}, but ${source.name} selects a command that the ${configuration.tool} adapter cannot compose`,
+          path: source.path,
+        });
+        continue;
+      }
+      if (configuration.tool === "oxlint") activeRules.add(configuration.rule);
     }
   }
 
-  bindings.sort(
-    (left, right) =>
-      left.path.localeCompare(right.path) ||
-      left.component.localeCompare(right.component) ||
-      left.capability.localeCompare(right.capability) ||
-      left.tool.localeCompare(right.tool) ||
-      left.rule.localeCompare(right.rule),
-  );
-  return { activeRules, diagnostics, bindings };
+  return { activeRules, diagnostics };
 }
 
 function environmentAudit(root: string): FoundationComponent {
@@ -464,9 +434,8 @@ function conventionExecutableAudit(
   status: ConventionExecutableStatus;
   diagnostics: Diagnostic[];
   requiredExecutables: ConventionExecutableRequirement[];
-  adapterBindings: ConventionAdapterBinding[];
 } {
-  const adapterEvidence = conventionAdapterBindings(root, config);
+  const adapterEvidence = conventionAdapterEvidence(root, config);
   const requiredByRule = conventionExecutableRequirements(root, adapterEvidence.activeRules);
   const required = new Set(requiredByRule.keys());
   if (required.size === 0) {
@@ -474,7 +443,6 @@ function conventionExecutableAudit(
       status: adapterEvidence.diagnostics.length > 0 ? "invalid" : "adopted",
       diagnostics: adapterEvidence.diagnostics,
       requiredExecutables: [],
-      adapterBindings: adapterEvidence.bindings,
     };
   }
 
@@ -525,7 +493,6 @@ function conventionExecutableAudit(
     status,
     diagnostics,
     requiredExecutables,
-    adapterBindings: adapterEvidence.bindings,
   };
 }
 

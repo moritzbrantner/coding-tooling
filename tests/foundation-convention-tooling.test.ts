@@ -17,21 +17,20 @@ function hash(content: string): string {
 
 function repository(
   devDependencies?: Record<string, string>,
-  lintScript = "bunx oxlint@1.81.0 .",
+  lintScript: string | null = "bunx oxlint@1.81.0 .",
+  configureLint = true,
 ): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-foundation-convention-tooling-"));
   writeJson(join(root, "package.json"), {
     name: "rect-like-fixture",
     packageManager: "bun@1.4.0",
-    scripts: {
-      lint: lintScript,
-    },
+    scripts: lintScript ? { lint: lintScript } : {},
     ...(devDependencies ? { devDependencies } : {}),
   });
   writeFileSync(join(root, "bun.lock"), "fixture\n");
   writeFileSync(join(root, "tsconfig.json"), "{}\n");
   installEnvironment(root);
-  installTooling(root);
+  installTooling(root, configureLint);
   installTypeScriptConventions(root);
   installRenovate(root);
   return root;
@@ -49,16 +48,20 @@ function installEnvironment(root: string): void {
   );
 }
 
-function installTooling(root: string): void {
+function installTooling(root: string, configureLint: boolean): void {
   writeJson(join(root, ".coding-tooling.json"), {
     schemaVersion: 1,
     profile: "repository-foundation-v1",
-    requiredCapabilities: ["lint"],
-    capabilityCommands: {
-      ".": {
-        lint: ["bun", "run", "lint"],
-      },
-    },
+    requiredCapabilities: configureLint ? ["lint"] : [],
+    ...(configureLint
+      ? {
+          capabilityCommands: {
+            ".": {
+              lint: ["bun", "run", "lint"],
+            },
+          },
+        }
+      : {}),
   });
 }
 
@@ -186,15 +189,6 @@ type ExecutableTooling = {
     rules: string[];
     declarations: Array<{ path: string; section: string; version: string }>;
   }>;
-  adapterBindings: Array<{
-    rule: string;
-    module: string;
-    tool: string;
-    capability: string;
-    component: string;
-    path: string;
-    status: string;
-  }>;
 };
 
 function executableTooling(result: ReturnType<typeof foundationAudit>): ExecutableTooling {
@@ -307,31 +301,28 @@ describe("foundation convention executable tooling", () => {
     expect(result.status).toBe("failed");
     expect(tooling.status).toBe("invalid");
     expect(tooling.requiredExecutables).toEqual([]);
-    expect(tooling.adapterBindings).toEqual([
-      {
-        rule: "TS-003",
-        module: "typescript",
-        tool: "oxlint",
-        capability: "lint",
-        component: "rect-like-fixture",
-        path: ".",
-        status: "unresolved",
-      },
-      {
-        rule: "TS-005",
-        module: "typescript",
-        tool: "oxlint",
-        capability: "lint",
-        component: "rect-like-fixture",
-        path: ".",
-        status: "unresolved",
-      },
-    ]);
     expect(
       result.diagnostics.filter((item) => item.code === "foundation-convention-adapter-unresolved"),
     ).toHaveLength(2);
     expect(
       result.diagnostics.filter((item) => item.code === "foundation-convention-tool-missing"),
+    ).toHaveLength(0);
+  });
+
+  test("fails closed when an applicable convention has no selected capability command", () => {
+    const result = foundationAudit(repository(undefined, null, false));
+    const tooling = executableTooling(result);
+
+    expect(result.status).toBe("failed");
+    expect(tooling.status).toBe("invalid");
+    expect(tooling.requiredExecutables).toEqual([]);
+    expect(
+      result.diagnostics.filter((item) => item.code === "foundation-convention-adapter-unresolved"),
+    ).toHaveLength(2);
+    expect(
+      result.diagnostics.filter(
+        (item) => item.code === "foundation-required-capability-unresolved",
+      ),
     ).toHaveLength(0);
   });
 });
