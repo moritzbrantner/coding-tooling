@@ -5,6 +5,7 @@ import type { RawFinding } from "./expectation-detector-types.ts";
 import { relativePosix } from "./shared.ts";
 
 type TestState = "focused" | "disabled";
+type ScanState = "code" | "line-comment" | "block-comment" | "single" | "double" | "template";
 
 type Match = {
   state: TestState;
@@ -16,9 +17,99 @@ const focusedPattern = /^\s*(test|it|describe)\.only\s*\(/;
 const skippedPattern = /^\s*(test|it|describe)\.skip\s*\(/;
 const todoPattern = /^\s*(test|it)\.todo\s*\(/;
 
+function maskCommentsAndStrings(content: string): string {
+  let state: ScanState = "code";
+  let escaped = false;
+  let result = "";
+
+  for (let index = 0; index < content.length; index += 1) {
+    const character = content[index]!;
+    const next = content[index + 1];
+
+    if (state === "line-comment") {
+      if (character === "\n") {
+        state = "code";
+        result += character;
+      } else {
+        result += " ";
+      }
+      continue;
+    }
+
+    if (state === "block-comment") {
+      if (character === "*" && next === "/") {
+        result += "  ";
+        state = "code";
+        index += 1;
+      } else {
+        result += character === "\n" ? "\n" : " ";
+      }
+      continue;
+    }
+
+    if (state !== "code") {
+      if (character === "\n") {
+        result += "\n";
+        escaped = false;
+        continue;
+      }
+      result += " ";
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (character === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (
+        (state === "single" && character === "'") ||
+        (state === "double" && character === '"') ||
+        (state === "template" && character === "`")
+      ) {
+        state = "code";
+      }
+      continue;
+    }
+
+    if (character === "/" && next === "/") {
+      result += "  ";
+      state = "line-comment";
+      index += 1;
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      result += "  ";
+      state = "block-comment";
+      index += 1;
+      continue;
+    }
+    if (character === "'") {
+      result += " ";
+      state = "single";
+      continue;
+    }
+    if (character === '"') {
+      result += " ";
+      state = "double";
+      continue;
+    }
+    if (character === "`") {
+      result += " ";
+      state = "template";
+      continue;
+    }
+
+    result += character;
+  }
+
+  return result;
+}
+
 function matches(content: string): Match[] {
   const result: Match[] = [];
-  for (const [index, line] of content.split(/\r?\n/).entries()) {
+  const masked = maskCommentsAndStrings(content);
+  for (const [index, line] of masked.split(/\r?\n/).entries()) {
     const focused = focusedPattern.exec(line);
     if (focused) {
       result.push({ state: "focused", api: `${focused[1]}.only`, line: index + 1 });
