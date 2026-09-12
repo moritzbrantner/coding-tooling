@@ -35,6 +35,15 @@ jobs:
           --revision "$GITHUB_SHA"
           --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           --output "$RUNNER_TEMP/test-coverage.json"
+      - name: Build normalized coverage detail
+        run: >-
+          bun scripts/build-test-coverage-detail-snapshot.js
+          --input coverage/lcov.info
+          --format lcov
+          --repository "$GITHUB_REPOSITORY"
+          --revision "$GITHUB_SHA"
+          --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          --output "$RUNNER_TEMP/test-coverage-detail.json"
       - name: Generate public-contract verification report
         id: contract-verification
         continue-on-error: true
@@ -53,6 +62,7 @@ jobs:
       - name: Publish observation branch
         env:
           COVERAGE_SNAPSHOT_PATH: ${{ runner.temp }}/test-coverage.json
+          COVERAGE_DETAIL_PATH: ${{ runner.temp }}/test-coverage-detail.json
           CONTRACT_SNAPSHOT_PATH: ${{ runner.temp }}/public-contract.json
         run: |
           set -euo pipefail
@@ -69,8 +79,12 @@ jobs:
 
           mkdir -p .coding-tooling
           cp "$COVERAGE_SNAPSHOT_PATH" .coding-tooling/test-coverage.json
+          cp "$COVERAGE_DETAIL_PATH" .coding-tooling/test-coverage-detail.json
           cp "$CONTRACT_SNAPSHOT_PATH" .coding-tooling/public-contract.json
-          git add .coding-tooling/test-coverage.json .coding-tooling/public-contract.json
+          git add \
+            .coding-tooling/test-coverage.json \
+            .coding-tooling/test-coverage-detail.json \
+            .coding-tooling/public-contract.json
           git commit -m "Publish coding-tooling observations for ${GITHUB_SHA}"
           git push origin HEAD:coding-tooling-observations
       - name: Preserve public-contract verification failure
