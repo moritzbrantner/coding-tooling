@@ -103,7 +103,10 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
         0,
       );
     case "package-test-files":
-      return context.packages.reduce((total, packageInfo) => total + packageInfo.testFiles.length, 0);
+      return context.packages.reduce(
+        (total, packageInfo) => total + packageInfo.testFiles.length,
+        0,
+      );
     case "rust-explicit-targets":
       return explicitCargoTargets(root).length;
     case "rust-source-surface":
