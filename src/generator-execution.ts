@@ -1,4 +1,8 @@
-import { convergenceRuleMode } from "./convergence-rule-policy.ts";
+import {
+  convergenceRuleMode,
+  refactorRuleId,
+  type ConvergenceRuleMode,
+} from "./convergence-rule-policy.ts";
 import { applyGeneratorPlan, type GeneratorApplyOptions } from "./generator-apply.ts";
 import { generatorCommand, type GeneratorPlan } from "./generators.ts";
 import {
@@ -12,6 +16,22 @@ export type GeneratorExecutionOptions = GeneratorApplyOptions & {
   checkCapability?: CapabilityChecker;
 };
 
+type AppliedConvergenceRule = {
+  id: string;
+  mode: ConvergenceRuleMode;
+};
+
+function executionRules(root: string, id: string, plan: GeneratorPlan): AppliedConvergenceRule[] {
+  const ids = new Set<string>([`generator.${id}`]);
+  for (const operation of plan.operations) {
+    const ruleId = refactorRuleId(operation.kind);
+    if (ruleId) ids.add(ruleId);
+  }
+  return [...ids]
+    .sort()
+    .map((ruleId) => ({ id: ruleId, mode: convergenceRuleMode(root, ruleId) }));
+}
+
 export function executeGeneratorCommand(
   root: string,
   id: string,
@@ -24,8 +44,9 @@ export function executeGeneratorCommand(
   if (planned.status !== "passed") return planned;
 
   const plan = planned.data.plan as GeneratorPlan;
-  const rule = { id: `generator.${id}`, mode: convergenceRuleMode(root, `generator.${id}`) };
-  if (rule.mode !== "apply") {
+  const rules = executionRules(root, id, plan);
+  const withheldRules = rules.filter((rule) => rule.mode !== "apply");
+  if (withheldRules.length > 0) {
     return {
       schemaVersion: 1,
       operation: "generate",
@@ -33,13 +54,14 @@ export function executeGeneratorCommand(
       durationMs: Date.now() - started,
       data: {
         result: "rule-withheld",
-        rule,
+        rules,
+        withheldRules,
         plan,
       },
       diagnostics: [
         {
           code: "convergence-rule-withheld",
-          message: `${rule.id} is configured as ${rule.mode}; generation planning is available but mutation is withheld`,
+          message: `${withheldRules.map((rule) => `${rule.id}=${rule.mode}`).join(", ")} withholds mutation; deterministic generation planning remains available`,
         },
       ],
     };
@@ -54,7 +76,7 @@ export function executeGeneratorCommand(
       durationMs: Date.now() - started,
       data: {
         result: "prerequisite-failed",
-        rule,
+        rules,
         plan,
         prerequisites,
       },
@@ -71,7 +93,7 @@ export function executeGeneratorCommand(
       durationMs: Date.now() - started,
       data: {
         result: generation.result,
-        rule,
+        rules,
         plan,
         prerequisites,
         generation,
@@ -89,7 +111,7 @@ export function executeGeneratorCommand(
     durationMs: Date.now() - started,
     data: {
       result: verified ? "generated-and-verified" : "generated-but-unverified",
-      rule,
+      rules,
       plan,
       prerequisites,
       generation,
