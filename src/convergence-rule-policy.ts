@@ -9,6 +9,15 @@ export type ConvergenceRuleMode = (typeof convergenceRuleModes)[number];
 
 export type ConvergenceRuleNamespace = "generator" | "scaffold" | "refactor" | "normalizer";
 
+export const builtInScaffoldRuleIds = ["scaffold.typescript-source-test"] as const;
+export const builtInRefactorRuleIds = ["refactor.typescript-barrel-export"] as const;
+export const builtInNormalizerRuleIds = [
+  "normalizer.oxfmt",
+  "normalizer.oxlint-safe-fix",
+  "normalizer.rustfmt",
+  "normalizer.dotnet-format",
+] as const;
+
 const convergenceRuleIdPattern = /^(generator|scaffold|refactor|normalizer)\.[a-z0-9][a-z0-9._-]*$/;
 
 export function convergenceRuleId(kind: ConvergenceRuleNamespace, id: string): string {
@@ -22,7 +31,7 @@ export function scaffoldRuleId(expectationId: string): string {
 export function refactorRuleId(operation: string): string | undefined {
   switch (operation) {
     case "typescript-barrel-export":
-      return "refactor.typescript-barrel-export";
+      return builtInRefactorRuleIds[0];
     default:
       return undefined;
   }
@@ -31,13 +40,13 @@ export function refactorRuleId(operation: string): string | undefined {
 export function normalizerRuleId(tool: string): string {
   switch (tool) {
     case "oxfmt":
-      return "normalizer.oxfmt";
+      return builtInNormalizerRuleIds[0];
     case "oxlint":
-      return "normalizer.oxlint-safe-fix";
+      return builtInNormalizerRuleIds[1];
     case "cargo-fmt":
-      return "normalizer.rustfmt";
+      return builtInNormalizerRuleIds[2];
     case "dotnet-format":
-      return "normalizer.dotnet-format";
+      return builtInNormalizerRuleIds[3];
     default:
       return convergenceRuleId("normalizer", tool);
   }
@@ -62,14 +71,42 @@ export function validateConvergenceRuleConfig(
   }
 }
 
-export function convergenceRuleMode(root: string, id: string): ConvergenceRuleMode {
+function readConvergenceRuleConfig(root: string): ToolingConfig {
   const path = join(root, ".coding-tooling.json");
-  if (!existsSync(path)) return "apply";
+  if (!existsSync(path)) return { schemaVersion: 1 };
   const config = readJson<ToolingConfig>(path);
   if (!config || config.schemaVersion !== 1) {
     throw new Error(".coding-tooling.json must use schemaVersion 1");
   }
   validateConvergenceRuleConfig(config);
+  return config;
+}
+
+export function configuredConvergenceRuleIds(
+  root: string,
+  namespace?: ConvergenceRuleNamespace,
+): string[] {
+  const ids = Object.keys(readConvergenceRuleConfig(root).convergence?.rules ?? {});
+  return ids
+    .filter((id) => namespace === undefined || id.startsWith(`${namespace}.`))
+    .sort();
+}
+
+export function assertKnownConvergenceRuleIds(
+  root: string,
+  namespace: ConvergenceRuleNamespace,
+  knownRuleIds: Iterable<string>,
+): void {
+  const known = new Set(knownRuleIds);
+  const unknown = configuredConvergenceRuleIds(root, namespace).filter((id) => !known.has(id));
+  if (unknown.length === 0) return;
+  throw new Error(
+    `Unknown configured convergence ${namespace} rule ${unknown.length === 1 ? "id" : "ids"}: ${unknown.join(", ")}`,
+  );
+}
+
+export function convergenceRuleMode(root: string, id: string): ConvergenceRuleMode {
+  const config = readConvergenceRuleConfig(root);
   return config.convergence?.rules?.[id] ?? "apply";
 }
 
@@ -83,12 +120,7 @@ export function setConvergenceRuleMode(
     throw new Error(`Invalid convergence rule mode: ${mode}`);
 
   const path = join(root, ".coding-tooling.json");
-  const config: ToolingConfig | undefined = existsSync(path)
-    ? readJson<ToolingConfig>(path)
-    : { schemaVersion: 1 };
-  if (!config || config.schemaVersion !== 1)
-    throw new Error(".coding-tooling.json must use schemaVersion 1");
-  validateConvergenceRuleConfig(config);
+  const config = readConvergenceRuleConfig(root);
 
   const previousMode = config.convergence?.rules?.[id] ?? "apply";
   if (previousMode === mode && config.convergence?.rules?.[id] === mode) {
