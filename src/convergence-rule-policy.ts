@@ -67,7 +67,9 @@ export function setConvergenceRuleMode(
   if (!convergenceRuleModes.includes(mode)) throw new Error(`Invalid convergence rule mode: ${mode}`);
 
   const path = join(root, ".coding-tooling.json");
-  const config = existsSync(path) ? readJson<ToolingConfig>(path) : { schemaVersion: 1 as const };
+  const config: ToolingConfig | undefined = existsSync(path)
+    ? readJson<ToolingConfig>(path)
+    : { schemaVersion: 1 };
   if (!config || config.schemaVersion !== 1) throw new Error(".coding-tooling.json must use schemaVersion 1");
   validateConvergenceRuleConfig(config);
 
