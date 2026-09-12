@@ -1,0 +1,164 @@
+name: Apply convergence rule registry patch
+
+on:
+  push:
+    branches:
+      - feat/convergence-rule-registry
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          ref: feat/convergence-rule-registry
+      - name: Apply focused source edits
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def edit(path, old, new, count=None):
+              file = Path(path)
+              text = file.read_text()
+              if old not in text:
+                  raise SystemExit(f"missing patch anchor in {path}: {old[:80]!r}")
+              text = text.replace(old, new, -1 if count is None else count)
+              file.write_text(text)
+
+          edit(
+              "src/core.ts",
+              'import { applyConventionConfigurations } from "./convention-config.ts";\n',
+              'import { applyConventionConfigurations } from "./convention-config.ts";\nimport { validateConvergenceRuleConfig } from "./convergence-rule-policy.ts";\n',
+              1,
+          )
+          edit(
+              "src/core.ts",
+              '  if (!value || value.schemaVersion !== 1)\n    throw new Error(`${configuredPath} must use schemaVersion 1`);\n',
+              '  if (!value || value.schemaVersion !== 1)\n    throw new Error(`${configuredPath} must use schemaVersion 1`);\n  validateConvergenceRuleConfig(value, configuredPath);\n',
+              1,
+          )
+
+          edit(
+              "src/normalization.ts",
+              'import { applyConventionConfigurations } from "./convention-config.ts";\nimport { discoverComponents, loadConfig } from "./core.ts";\n',
+              'import { applyConventionConfigurations } from "./convention-config.ts";\nimport {\n  convergenceRuleMode,\n  normalizerRuleId,\n  type ConvergenceRuleMode,\n} from "./convergence-rule-policy.ts";\nimport { discoverComponents, loadConfig } from "./core.ts";\n',
+              1,
+          )
+          edit(
+              "src/normalization.ts",
+              'export type Normalizer = {\n  id: string;\n',
+              'export type Normalizer = {\n  id: string;\n  ruleId: string;\n  mode: ConvergenceRuleMode;\n',
+              1,
+          )
+          edit(
+              "src/normalization.ts",
+              '): Normalizer | undefined {',
+              '): Omit<Normalizer, "ruleId" | "mode"> | undefined {',
+          )
+          edit(
+              "src/normalization.ts",
+              '      const normalizer = normalizerFor(root, component, capability, command);\n      if (normalizer) normalizers.push(normalizer);\n      else {\n',
+              '      const normalizer = normalizerFor(root, component, capability, command);\n      if (normalizer) {\n        const ruleId = normalizerRuleId(normalizer.tool);\n        normalizers.push({\n          ...normalizer,\n          ruleId,\n          mode: convergenceRuleMode(root, ruleId),\n        });\n      } else {\n',
+              1,
+          )
+          edit(
+              "src/normalization.ts",
+              '    const plan = planNormalization(root);\n    const execute = dependencies.execute ?? defaultExecute;\n',
+              '    const plan = planNormalization(root);\n    const appliedNormalizers = plan.normalizers.filter((normalizer) => normalizer.mode === "apply");\n    const withheldNormalizers = plan.normalizers.filter((normalizer) => normalizer.mode !== "apply");\n    const execute = dependencies.execute ?? defaultExecute;\n',
+              1,
+          )
+          edit(
+              "src/normalization.ts",
+              '    if (plan.normalizers.length === 0) {\n',
+              '    if (appliedNormalizers.length === 0) {\n',
+              1,
+          )
+          edit("src/normalization.ts", '          normalizers: [],\n', '          normalizers: plan.normalizers,\n', 1)
+          edit(
+              "src/normalization.ts",
+              '          normalizers: plan.normalizers,\n          unsupported: plan.unsupported,\n',
+              '          normalizers: plan.normalizers,\n          appliedNormalizers,\n          withheldNormalizers,\n          unsupported: plan.unsupported,\n',
+          )
+          edit(
+              "src/normalization.ts",
+              '    const first = runPass(root, 1, plan.normalizers, execute);\n',
+              '    const first = runPass(root, 1, appliedNormalizers, execute);\n',
+              1,
+          )
+          edit(
+              "src/normalization.ts",
+              '    const second = runPass(root, 2, plan.normalizers, execute);\n',
+              '    const second = runPass(root, 2, appliedNormalizers, execute);\n',
+              1,
+          )
+
+          edit(
+              "src/convergence.ts",
+              'function handoffCandidates(findings: Finding[], includeBaseline: boolean): RemediationCandidate[] {\n  return planRemediationCandidates(findings, { includeBaseline }).filter(\n',
+              'function handoffCandidates(\n  root: string,\n  findings: Finding[],\n  includeBaseline: boolean,\n): RemediationCandidate[] {\n  return planRemediationCandidates(findings, { includeBaseline, root }).filter(\n',
+              1,
+          )
+          edit(
+              "src/convergence.ts",
+              '  const handoff = handoffCandidates(finalFindings, options.includeBaseline);\n',
+              '  const handoff = handoffCandidates(root, finalFindings, options.includeBaseline);\n',
+              1,
+          )
+          edit(
+              "src/convergence.ts",
+              '      handoff: handoffCandidates(currentFindings, options.includeBaseline),\n',
+              '      handoff: handoffCandidates(root, currentFindings, options.includeBaseline),\n',
+              1,
+          )
+          edit(
+              "src/convergence.ts",
+              'planRemediationCandidates(before, { includeBaseline })',
+              'planRemediationCandidates(before, { includeBaseline, root })',
+          )
+          edit(
+              "src/convergence.ts",
+              'planRemediationCandidates(finalFindings, { includeBaseline })',
+              'planRemediationCandidates(finalFindings, { includeBaseline, root })',
+              1,
+          )
+          edit(
+              "src/convergence.ts",
+              '    const deterministicAfterNormalization = planRemediationCandidates(normalized, {\n      includeBaseline,\n    }).filter((candidate) => candidate.kind === "deterministic-scaffold");\n',
+              '    const deterministicAfterNormalization = planRemediationCandidates(normalized, {\n      includeBaseline,\n      root,\n    }).filter((candidate) => candidate.kind === "deterministic-scaffold");\n',
+              1,
+          )
+
+          edit(
+              "src/cli.ts",
+              'import { convergeRepository } from "./convergence.ts";\n',
+              'import { convergeRepository } from "./convergence.ts";\nimport { convergenceRuleModes, type ConvergenceRuleMode } from "./convergence-rule-policy.ts";\nimport { convergenceRulesCommand } from "./convergence-rules.ts";\n',
+              1,
+          )
+          edit(
+              "src/cli.ts",
+              '  coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]\n  coding-tooling normalize [--json]\n',
+              '  coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]\n  coding-tooling convergence rules list [--json]\n  coding-tooling convergence rules describe <id> [--json]\n  coding-tooling convergence rules set <id> <disabled|suggest|apply> [--json]\n  coding-tooling convergence rules <enable|disable|suggest> <id> [--json]\n  coding-tooling normalize [--json]\n',
+              1,
+          )
+          edit(
+              "src/cli.ts",
+              '  } else if (command === "normalize") {\n',
+              '''  } else if (command === "convergence") {\n    if (positional[0] !== "rules" || Object.keys(options).some((key) => key !== "json"))\n      return usage();\n    const action = positional[1] ?? "list";\n    if (action === "list") {\n      if (positional.length !== 2 && positional.length !== 1) return usage();\n      result = convergenceRulesCommand(root, "list");\n    } else if (action === "describe") {\n      if (positional.length !== 3 || !positional[2]) return usage();\n      result = convergenceRulesCommand(root, "describe", positional[2]);\n    } else if (action === "set") {\n      const id = positional[2];\n      const mode = positional[3] as ConvergenceRuleMode | undefined;\n      if (!id || !mode || positional.length !== 4 || !convergenceRuleModes.includes(mode))\n        return usage();\n      result = convergenceRulesCommand(root, "set", id, mode);\n    } else if (action === "enable" || action === "disable" || action === "suggest") {\n      const id = positional[2];\n      if (!id || positional.length !== 3) return usage();\n      const mode: ConvergenceRuleMode =\n        action === "enable" ? "apply" : action === "disable" ? "disabled" : "suggest";\n      result = convergenceRulesCommand(root, "set", id, mode);\n    } else return usage();\n  } else if (command === "normalize") {\n''',
+              1,
+          )
+      - name: Commit focused source edits
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/core.ts src/normalization.ts src/convergence.ts src/cli.ts
+          git commit -m "Wire convergence rule modes into execution"
+          git push origin HEAD:feat/convergence-rule-registry
