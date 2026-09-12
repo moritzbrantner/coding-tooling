@@ -588,7 +588,7 @@ export function publicContractCommand(
     ];
     const report: PublicContractReport = {
       schemaVersion: 1,
-      revision: revision(root),
+      revision: currentRevision,
       enforcement,
       manifestPath,
       summary: {
