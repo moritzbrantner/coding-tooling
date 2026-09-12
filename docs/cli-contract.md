@@ -31,6 +31,7 @@ build
 test
 test:unit
 test:integration
+test:integration:workflow
 test:e2e
 test:e2e:smoke
 test:accessibility
@@ -49,6 +50,7 @@ template:smoke
 
 A capability name describes semantics, not an ecosystem command. The implementation maps it to a repository-declared or mechanically safe command.
 
+- `test:integration:workflow` verifies multi-operation or business-workflow integration without requiring the browser/full-system boundary of E2E.
 - `test:e2e:smoke` is a deliberately small end-to-end critical-path suite, distinct from `test:e2e`.
 - `test:accessibility` is deterministic automated accessibility validation; manual review remains separate.
 - `test:visual` is deterministic visual-regression or visual-contract validation.

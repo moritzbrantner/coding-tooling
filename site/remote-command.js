@@ -10,6 +10,7 @@ const capabilities = [
   "test",
   "test:unit",
   "test:integration",
+  "test:integration:workflow",
   "test:e2e",
   "test:e2e:smoke",
   "test:accessibility",
@@ -29,8 +30,18 @@ const capabilities = [
 const defaultTiers = {
   fast: ["format:check", "lint", "typecheck", "test:unit", "build"],
   integration: ["test:integration"],
+  workflow: ["test:integration:workflow"],
   e2e: ["test:e2e"],
-  full: ["format:check", "lint", "typecheck", "test:unit", "test:integration", "test:e2e", "build"],
+  full: [
+    "format:check",
+    "lint",
+    "typecheck",
+    "test:unit",
+    "test:integration",
+    "test:integration:workflow",
+    "test:e2e",
+    "build",
+  ],
 };
 
 const supportedCommands = new Set([

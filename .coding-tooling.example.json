@@ -3,7 +3,12 @@
   "profile": "typescript-react",
   "tiers": {
     "fast": ["format:check", "lint", "typecheck", "test:unit", "build"],
-    "standard": ["test:integration", "test:e2e:smoke", "test:accessibility"],
+    "standard": [
+      "test:integration",
+      "test:integration:workflow",
+      "test:e2e:smoke",
+      "test:accessibility"
+    ],
     "deep": ["test:e2e", "test:visual", "dependencies:audit", "benchmark:smoke"],
     "performance": ["benchmark"],
     "release": ["package:check"]
@@ -12,6 +17,7 @@
   "conventionRefs": ["AGENT-001", "AGENT-007", "TEST-002"],
   "optionalCapabilities": [
     "test:integration",
+    "test:integration:workflow",
     "test:e2e:smoke",
     "test:accessibility",
     "test:e2e",
