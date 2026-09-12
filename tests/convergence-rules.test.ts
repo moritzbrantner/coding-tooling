@@ -5,8 +5,10 @@ import { join } from "node:path";
 
 import { convergeRepository } from "../src/convergence.ts";
 import { convergenceRulesCommand } from "../src/convergence-rules.ts";
+import { findingsCommand, scaffoldFinding, type Finding } from "../src/expectations.ts";
 import { executeGeneratorCommand } from "../src/generator-execution.ts";
 import { normalizeRepository, planNormalization } from "../src/normalization.ts";
+import { remediationPlanCommand } from "../src/remediation-plan.ts";
 
 const roots: string[] = [];
 
@@ -38,6 +40,12 @@ function configure(root: string, rules: Record<string, "disabled" | "suggest" | 
     join(root, ".coding-tooling.json"),
     `${JSON.stringify({ schemaVersion: 1, convergence: { rules } }, null, 2)}\n`,
   );
+}
+
+function missingTestFinding(root: string): Finding {
+  const result = findingsCommand(root, { includeSuppressed: false });
+  const findings = result.data.findings as Finding[];
+  return findings.find((finding) => finding.expectationId === "typescript-source-test")!;
 }
 
 function localGenerator(root: string): void {
@@ -143,6 +151,42 @@ test("rule listing reports unknown configured generator ids", () => {
       message: expect.stringContaining("generator.sampl"),
     }),
   );
+});
+
+test("unknown scaffold policy fails closed at direct mutation", () => {
+  const root = fixture();
+  const finding = missingTestFinding(root);
+  configure(root, { "scaffold.typscript-source-test": "disabled" });
+
+  const result = scaffoldFinding(root, finding.id);
+
+  expect(result.status).toBe("failed");
+  expect(result.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "invalid-convergence-rule-policy",
+      message: expect.stringContaining("scaffold.typscript-source-test"),
+    }),
+  );
+  expect(existsSync(join(root, "tests", "service.test.ts"))).toBeFalse();
+});
+
+test("invalid scaffold policy stays machine-readable in planning and convergence", () => {
+  const root = fixture();
+  configure(root, { "scaffold.typscript-source-test": "disabled" });
+
+  const remediation = remediationPlanCommand(root);
+  expect(remediation.status).toBe("error");
+  expect(remediation.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "invalid-convergence-rule-policy",
+      message: expect.stringContaining("scaffold.typscript-source-test"),
+    }),
+  );
+
+  const convergence = convergeRepository(root, { verifyTier: null });
+  expect(convergence.status).toBe("failed");
+  expect(convergence.data.reason).toBe("convergence-scaffold-failed");
+  expect(existsSync(join(root, "tests", "service.test.ts"))).toBeFalse();
 });
 
 test("disabling a scaffold keeps the finding but prevents convergence from mutating", () => {
