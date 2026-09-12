@@ -7,10 +7,7 @@ import { runPlan } from "../src/core.ts";
 
 const roots: string[] = [];
 
-function repository(
-  testSource: string,
-  testScript = "bun test tests/unit.test.ts",
-): string {
+function repository(testSource: string, testScript = "bun test tests/unit.test.ts"): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-test-validation-"));
   roots.push(root);
   mkdirSync(join(root, "tests"), { recursive: true });
@@ -40,7 +37,9 @@ afterEach(() => {
 
 describe("test execution validation", () => {
   test("fails a passing native runner process that executes zero behavioral cases", () => {
-    const root = repository(`import { test } from "bun:test";\ntest.skip("not executed", () => {});\n`);
+    const root = repository(
+      `import { test } from "bun:test";\ntest.skip("not executed", () => {});\n`,
+    );
     const result = runPlan({ root, tier: "probe", strict: true });
     const completed = (result.data.results as Array<Record<string, unknown>>)[0];
 
@@ -65,7 +64,9 @@ describe("test execution validation", () => {
   });
 
   test("passes when the native runner reports an executed behavioral case", () => {
-    const root = repository(`import { expect, test } from "bun:test";\ntest("executed", () => expect(1 + 1).toBe(2));\n`);
+    const root = repository(
+      `import { expect, test } from "bun:test";\ntest("executed", () => expect(1 + 1).toBe(2));\n`,
+    );
     const result = runPlan({ root, tier: "probe", strict: true });
     const completed = (result.data.results as Array<Record<string, unknown>>)[0];
 

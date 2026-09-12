@@ -84,7 +84,9 @@ test("normal", () => {});
   });
 
   test("still recognizes active calls after an inline block comment", () => {
-    const root = repository(`import { test } from "bun:test";\n/* reviewed */ test.only("focused", () => {});\n`);
+    const root = repository(
+      `import { test } from "bun:test";\n/* reviewed */ test.only("focused", () => {});\n`,
+    );
 
     expect(findings(root, "test-focused-case")).toHaveLength(1);
   });

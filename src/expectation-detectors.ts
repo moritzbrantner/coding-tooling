@@ -327,7 +327,8 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       basis: "syntax",
       oracle: "bounded-test-case-state-scan",
       independenceKey: "test-case-state-scan",
-      proves: "A recognized test/it/describe .skip or test/it .todo call is present in a discovered test file.",
+      proves:
+        "A recognized test/it/describe .skip or test/it .todo call is present in a discovered test file.",
       limitations: [
         "Does not prove whether the disabled case is intentionally deferred or obsolete.",
         "Only line-oriented direct test/it/describe calls are recognized; aliases and computed APIs remain unsupported.",
