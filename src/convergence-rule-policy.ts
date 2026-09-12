@@ -159,6 +159,8 @@ export function setConvergenceRuleMode(
       },
     },
   };
+  validateConvergenceRuleConfig(next);
+  assertKnownStaticConvergenceRuleIds(next);
   writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
   return {
     changed: previousMode !== mode || config.convergence?.rules?.[id] !== mode,
