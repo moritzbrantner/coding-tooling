@@ -61,10 +61,18 @@ test.todo("unfinished case");
     ]);
   });
 
-  test("does not infer disabled state from comments, aliases, or unsupported describe.todo", () => {
+  test("ignores comments, strings, aliases, and unsupported describe.todo", () => {
     const root = repository(`import { describe, test } from "bun:test";
 
-// test.only("commented", () => {});
+// test.only("line commented", () => {});
+/*
+test.only("block commented", () => {});
+test.skip("also block commented", () => {});
+*/
+const text = \`
+test.only("template text", () => {});
+test.todo("template text", () => {});
+\`;
 const focused = test.only;
 focused("aliased", () => {});
 describe.todo("unsupported shape", () => {});
@@ -73,6 +81,12 @@ test("normal", () => {});
 
     expect(findings(root, "test-focused-case")).toEqual([]);
     expect(findings(root, "test-disabled-case")).toEqual([]);
+  });
+
+  test("still recognizes active calls after an inline block comment", () => {
+    const root = repository(`import { test } from "bun:test";\n/* reviewed */ test.only("focused", () => {});\n`);
+
+    expect(findings(root, "test-focused-case")).toHaveLength(1);
   });
 
   test("reports detector coverage against discovered test files", () => {
