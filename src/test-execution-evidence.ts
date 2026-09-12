@@ -135,30 +135,48 @@ function evidence(
   };
 }
 
+function outputLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+}
+
 function bunEvidence(text: string, script: string | null): TestExecutionEvidence {
-  if (/\b(?:no tests found|0 tests?)\b/i.test(text)) {
+  const passed = count(text, /\b(\d+)\s+pass\b/g);
+  const failed = count(text, /\b(\d+)\s+fail\b/g);
+  const skipped = count(text, /\b(\d+)\s+skip\b/g);
+  const todo = count(text, /\b(\d+)\s+todo\b/g);
+
+  if (passed !== null || failed !== null) {
+    return evidence("bun", script, { passed, failed, skipped, todo }, "bun-summary");
+  }
+
+  const noTests = outputLines(text).some((line) =>
+    /^\s*(?:no tests found!?|0 tests?\b|ran 0 tests?\b)/i.test(line),
+  );
+  if (noTests) {
     return evidence(
       "bun",
       script,
-      { passed: 0, failed: 0, skipped: count(text, /\b(\d+)\s+skip\b/g), todo: count(text, /\b(\d+)\s+todo\b/g) },
+      { passed: 0, failed: 0, skipped, todo },
       "bun-summary",
     );
   }
+
   return evidence(
     "bun",
     script,
-    {
-      passed: count(text, /\b(\d+)\s+pass\b/g),
-      failed: count(text, /\b(\d+)\s+fail\b/g),
-      skipped: count(text, /\b(\d+)\s+skip\b/g),
-      todo: count(text, /\b(\d+)\s+todo\b/g),
-    },
-    "bun-summary",
+    { passed: null, failed: null, skipped, todo },
+    "bun-summary-unavailable",
   );
 }
 
 function vitestEvidence(text: string, script: string | null): TestExecutionEvidence {
-  if (/no test files found/i.test(text) || /Tests\s+no tests/i.test(text)) {
+  const lines = outputLines(text);
+  if (
+    lines.some((line) => /^\s*no test files found\b/i.test(line)) ||
+    lines.some((line) => /^\s*Tests\s+no tests\b/i.test(line))
+  ) {
     return evidence(
       "vitest",
       script,
@@ -166,10 +184,7 @@ function vitestEvidence(text: string, script: string | null): TestExecutionEvide
       "vitest-summary",
     );
   }
-  const testsLine = text
-    .split(/\r?\n/)
-    .filter((line) => /^\s*Tests\s+/i.test(line))
-    .at(-1);
+  const testsLine = lines.filter((line) => /^\s*Tests\s+/i.test(line)).at(-1);
   if (!testsLine) {
     return evidence(
       "vitest",
@@ -178,14 +193,34 @@ function vitestEvidence(text: string, script: string | null): TestExecutionEvide
       "vitest-summary-unavailable",
     );
   }
+
+  const passed = count(testsLine, /\b(\d+)\s+passed\b/g);
+  const failed = count(testsLine, /\b(\d+)\s+failed\b/g);
+  const skipped = count(testsLine, /\b(\d+)\s+skipped\b/g);
+  const todo = count(testsLine, /\b(\d+)\s+todo\b/g);
+  const recognizedSummary =
+    passed !== null ||
+    failed !== null ||
+    skipped !== null ||
+    todo !== null ||
+    /\(\d+\)\s*$/.test(testsLine);
+  if (!recognizedSummary) {
+    return evidence(
+      "vitest",
+      script,
+      { passed: null, failed: null, skipped: null, todo: null },
+      "vitest-summary-unavailable",
+    );
+  }
+
   return evidence(
     "vitest",
     script,
     {
-      passed: count(testsLine, /\b(\d+)\s+passed\b/g),
-      failed: count(testsLine, /\b(\d+)\s+failed\b/g),
-      skipped: count(testsLine, /\b(\d+)\s+skipped\b/g),
-      todo: count(testsLine, /\b(\d+)\s+todo\b/g),
+      passed: passed ?? 0,
+      failed: failed ?? 0,
+      skipped,
+      todo,
     },
     "vitest-summary",
   );
