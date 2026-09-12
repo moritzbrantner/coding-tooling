@@ -259,6 +259,35 @@ function appliesTo(component: Component, technologies?: string[]): boolean {
   );
 }
 
+export function conventionEnforcementExecutableRequirements(
+  root: string,
+  components: Component[],
+): Map<"oxlint" | "oxlint-tsgolint", Set<string>> {
+  const requirements = new Map<"oxlint" | "oxlint-tsgolint", Set<string>>();
+  const add = (name: "oxlint" | "oxlint-tsgolint", ruleId: string) => {
+    const rules = requirements.get(name) ?? new Set<string>();
+    rules.add(ruleId);
+    requirements.set(name, rules);
+  };
+
+  for (const item of loadEnforcements(root)) {
+    const enforcement = item.enforcement;
+    if (
+      enforcement.kind !== "oxlint" ||
+      !components.some((component) => appliesTo(component, enforcement.technologies))
+    ) {
+      continue;
+    }
+    add("oxlint", item.ruleId);
+    const options = enforcement.config.options;
+    if (isRecord(options) && options.typeAware === true) {
+      add("oxlint-tsgolint", item.ruleId);
+    }
+  }
+
+  return requirements;
+}
+
 function executable(root: string, componentRoot: string, name: string): string | undefined {
   for (const directory of [componentRoot, root]) {
     const unix = join(directory, "node_modules", ".bin", name);
