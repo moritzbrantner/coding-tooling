@@ -52,6 +52,7 @@ export type ResultOperation =
   | "conventions-diff"
   | "conventions-update"
   | "converge"
+  | "convergence-rules"
   | "normalize"
   | "generate"
   | "pr"
@@ -88,6 +89,9 @@ export type ToolingConfig = {
   optionalCapabilities?: Capability[];
   capabilityCommands?: Record<string, Partial<Record<Capability, string[]>>>;
   conventionRefs?: string[];
+  convergence?: {
+    rules?: Record<string, "disabled" | "suggest" | "apply">;
+  };
   contracts?: {
     enforcement?: "observe" | "protect-new" | "strict";
     manifest?: string;

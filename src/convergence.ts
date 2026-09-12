@@ -108,8 +108,12 @@ function diagnosticCode(envelope: ExpectationEnvelope, code: string): boolean {
   return envelope.diagnostics.some((diagnostic) => diagnostic.code === code);
 }
 
-function handoffCandidates(findings: Finding[], includeBaseline: boolean): RemediationCandidate[] {
-  return planRemediationCandidates(findings, { includeBaseline }).filter(
+function handoffCandidates(
+  root: string,
+  findings: Finding[],
+  includeBaseline: boolean,
+): RemediationCandidate[] {
+  return planRemediationCandidates(findings, { includeBaseline, root }).filter(
     (candidate) => candidate.kind !== "deterministic-scaffold",
   );
 }
@@ -183,7 +187,7 @@ function finish(
   );
   const status = verificationPassed ? "passed" : (verification?.status ?? "failed");
   const finalFindingIds = finalFindings.map((finding) => finding.id).sort();
-  const handoff = handoffCandidates(finalFindings, options.includeBaseline);
+  const handoff = handoffCandidates(root, finalFindings, options.includeBaseline);
   const repositoryReadiness =
     sourceFixedPoint && verificationPassed ? dependencies.readiness?.(root) : undefined;
   const pullRequestReconciliation =
@@ -292,7 +296,7 @@ function blocked(
       finalFindingIds: currentFindings.map((finding) => finding.id).sort(),
       rounds,
       normalizations,
-      handoff: handoffCandidates(currentFindings, options.includeBaseline),
+      handoff: handoffCandidates(root, currentFindings, options.includeBaseline),
       ...extra,
     },
     diagnostics: [{ code: reason, message }],
@@ -393,7 +397,7 @@ export function convergeRepository(
     }
     seen.add(beforeFingerprint);
 
-    let deterministic = planRemediationCandidates(before, { includeBaseline }).filter(
+    let deterministic = planRemediationCandidates(before, { includeBaseline, root }).filter(
       (candidate) => candidate.kind === "deterministic-scaffold",
     );
 
@@ -440,7 +444,7 @@ export function convergeRepository(
 
       before = normalizedObservation.findings;
       finalFindings = before;
-      deterministic = planRemediationCandidates(before, { includeBaseline }).filter(
+      deterministic = planRemediationCandidates(before, { includeBaseline, root }).filter(
         (candidate) => candidate.kind === "deterministic-scaffold",
       );
       if (deterministic.length === 0) {
@@ -574,9 +578,10 @@ export function convergeRepository(
     }
   }
 
-  const finalDeterministic = planRemediationCandidates(finalFindings, { includeBaseline }).filter(
-    (candidate) => candidate.kind === "deterministic-scaffold",
-  );
+  const finalDeterministic = planRemediationCandidates(finalFindings, {
+    includeBaseline,
+    root,
+  }).filter((candidate) => candidate.kind === "deterministic-scaffold");
   if (finalDeterministic.length === 0) {
     const normalization = normalize(root);
     normalizations.push(normalization);
@@ -621,6 +626,7 @@ export function convergeRepository(
     const normalized = normalizedObservation.findings;
     const deterministicAfterNormalization = planRemediationCandidates(normalized, {
       includeBaseline,
+      root,
     }).filter((candidate) => candidate.kind === "deterministic-scaffold");
     if (deterministicAfterNormalization.length === 0) {
       return finish(

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 import { applyConventionConfigurations } from "./convention-config.ts";
+import { validateConvergenceRuleConfig } from "./convergence-rule-policy.ts";
 import { conventionRequiredCapabilities, runConventionChecks } from "./convention-enforcement.ts";
 import {
   capabilities,
@@ -64,6 +65,7 @@ export function loadConfig(root: string, configuredPath = ".coding-tooling.json"
   const value = readJson<ToolingConfig>(path);
   if (!value || value.schemaVersion !== 1)
     throw new Error(`${configuredPath} must use schemaVersion 1`);
+  validateConvergenceRuleConfig(value, configuredPath);
   for (const values of Object.values(value.tiers ?? {})) validateCapabilities(values);
   validateCapabilities(value.requiredCapabilities ?? []);
   validateCapabilities(value.optionalCapabilities ?? []);
