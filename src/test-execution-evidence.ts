@@ -38,7 +38,7 @@ export type TestExecutionInput = {
   stderr: string;
 };
 
-const ansiEscapePattern = new RegExp("\\x1b\\[[0-9;]*m", "g");
+const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
 function testCapability(capability: Capability): boolean {
   return capability === "test" || capability.startsWith("test:");
