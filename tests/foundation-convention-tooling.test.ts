@@ -19,6 +19,7 @@ function repository(
   devDependencies?: Record<string, string>,
   lintScript: string | null = "bunx oxlint@1.81.0 .",
   configureLint = true,
+  includeTs005Configuration = true,
 ): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-foundation-convention-tooling-"));
   writeJson(join(root, "package.json"), {
@@ -31,7 +32,7 @@ function repository(
   writeFileSync(join(root, "tsconfig.json"), "{}\n");
   installEnvironment(root);
   installTooling(root, configureLint);
-  installTypeScriptConventions(root);
+  installTypeScriptConventions(root, includeTs005Configuration);
   installRenovate(root);
   return root;
 }
@@ -65,7 +66,7 @@ function installTooling(root: string, configureLint: boolean): void {
   });
 }
 
-function installTypeScriptConventions(root: string): void {
+function installTypeScriptConventions(root: string, includeTs005Configuration: boolean): void {
   writeJson(join(root, "conventions.json"), {
     schemaVersion: 1,
     registry: "coding-agent-conventions",
@@ -83,13 +84,17 @@ function installTypeScriptConventions(root: string): void {
           capability: "lint",
           module: "typescript",
         },
-        {
-          rule: "TS-005",
-          path: "modules/typescript/technologies/typescript/TS-005.oxlint.json",
-          tool: "oxlint",
-          capability: "lint",
-          module: "typescript",
-        },
+        ...(includeTs005Configuration
+          ? [
+              {
+                rule: "TS-005",
+                path: "modules/typescript/technologies/typescript/TS-005.oxlint.json",
+                tool: "oxlint",
+                capability: "lint",
+                module: "typescript",
+              },
+            ]
+          : []),
       ],
     },
     null,
@@ -154,7 +159,9 @@ function installTypeScriptConventions(root: string): void {
       null,
       2,
     )}\n`,
-    "modules/typescript/technologies/typescript/TS-005.oxlint.json": ts005Config,
+    ...(includeTs005Configuration
+      ? { "modules/typescript/technologies/typescript/TS-005.oxlint.json": ts005Config }
+      : {}),
   };
 
   for (const [relativePath, content] of Object.entries(files)) {
@@ -300,7 +307,10 @@ describe("foundation convention executable tooling", () => {
 
     expect(result.status).toBe("failed");
     expect(tooling.status).toBe("invalid");
-    expect(tooling.requiredExecutables).toEqual([]);
+    expect(tooling.requiredExecutables.map((item) => [item.name, item.status])).toEqual([
+      ["oxlint", "adopted"],
+      ["oxlint-tsgolint", "adopted"],
+    ]);
     expect(
       result.diagnostics.filter((item) => item.code === "foundation-convention-adapter-unresolved"),
     ).toHaveLength(2);
@@ -315,7 +325,10 @@ describe("foundation convention executable tooling", () => {
 
     expect(result.status).toBe("failed");
     expect(tooling.status).toBe("invalid");
-    expect(tooling.requiredExecutables).toEqual([]);
+    expect(tooling.requiredExecutables.map((item) => [item.name, item.status])).toEqual([
+      ["oxlint", "missing"],
+      ["oxlint-tsgolint", "missing"],
+    ]);
     expect(
       result.diagnostics.filter((item) => item.code === "foundation-convention-adapter-unresolved"),
     ).toHaveLength(2);
@@ -324,5 +337,45 @@ describe("foundation convention executable tooling", () => {
         (item) => item.code === "foundation-required-capability-unresolved",
       ),
     ).toHaveLength(0);
+  });
+
+  test("requires type-aware tooling for enforcement-only installed rules", () => {
+    const result = foundationAudit(
+      repository(
+        {
+          oxlint: "1.81.0",
+        },
+        "bunx oxlint@1.81.0 .",
+        true,
+        false,
+      ),
+    );
+    const tooling = executableTooling(result);
+
+    expect(result.status).toBe("failed");
+    expect(tooling.status).toBe("missing");
+    expect(tooling.requiredExecutables).toEqual([
+      {
+        name: "oxlint",
+        status: "adopted",
+        rules: ["TS-003", "TS-005"],
+        declarations: [
+          {
+            path: "package.json",
+            section: "devDependencies",
+            version: "1.81.0",
+          },
+        ],
+      },
+      {
+        name: "oxlint-tsgolint",
+        status: "missing",
+        rules: ["TS-005"],
+        declarations: [],
+      },
+    ]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "foundation-convention-tool-missing" }),
+    );
   });
 });

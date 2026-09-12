@@ -5,6 +5,7 @@ import {
   applyConventionConfigurations,
   loadInstalledConventionConfigurations,
 } from "./convention-config.ts";
+import { conventionEnforcementExecutableRequirements } from "./convention-enforcement.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { discoverComponents, loadConfig } from "./core.ts";
 import type {
@@ -16,7 +17,7 @@ import type {
   ToolingConfig,
 } from "./model.ts";
 import { RENOVATE_PRESET, renovateFoundationRecommendation } from "./renovate.ts";
-import { readJson, relativePosix, repositoryRoot, walkFiles } from "./shared.ts";
+import { readJson, relativePosix, repositoryRoot } from "./shared.ts";
 
 export type FoundationComponentStatus = "missing" | "adopted" | "invalid" | "unsupported";
 
@@ -35,7 +36,7 @@ type CommandRecord = {
 };
 
 type DependencySection = "dependencies" | "devDependencies" | "optionalDependencies";
-type ConventionExecutableName = "oxlint" | "oxlint-tsgolint";
+type ConventionExecutableName = "oxfmt" | "oxlint" | "oxlint-tsgolint";
 type ConventionExecutableStatus = "missing" | "adopted" | "invalid";
 
 type ConventionExecutableDeclaration = {
@@ -110,10 +111,10 @@ function commandsEqual(left: string[] | undefined, right: string[] | undefined):
 function conventionAdapterEvidence(
   root: string,
   config: ToolingConfig | undefined,
-): { activeRules: Set<string>; diagnostics: Diagnostic[] } {
+): { requirements: Map<ConventionExecutableName, Set<string>>; diagnostics: Diagnostic[] } {
   const configurations = loadInstalledConventionConfigurations(root);
   if (configurations.length === 0) {
-    return { activeRules: new Set(), diagnostics: [] };
+    return { requirements: new Map(), diagnostics: [] };
   }
 
   const configured = configuredConventionComponents(root, config);
@@ -122,7 +123,7 @@ function conventionAdapterEvidence(
     applied = applyConventionConfigurations(root, configured);
   } catch (error) {
     return {
-      activeRules: new Set(),
+      requirements: new Map(),
       diagnostics: [
         {
           code: "foundation-convention-adapter-invalid",
@@ -132,7 +133,7 @@ function conventionAdapterEvidence(
     };
   }
 
-  const activeRules = new Set<string>();
+  const requirements = new Map<ConventionExecutableName, Set<string>>();
   const diagnostics: Diagnostic[] = [];
   for (const configuration of configurations) {
     for (let index = 0; index < configured.length; index += 1) {
@@ -161,11 +162,11 @@ function conventionAdapterEvidence(
         });
         continue;
       }
-      if (configuration.tool === "oxlint") activeRules.add(configuration.rule);
+      addConventionExecutableRequirement(requirements, configuration.tool, configuration.rule);
     }
   }
 
-  return { activeRules, diagnostics };
+  return { requirements, diagnostics };
 }
 
 function environmentAudit(root: string): FoundationComponent {
@@ -322,35 +323,6 @@ function addConventionExecutableRequirement(
   requirements.set(name, rules);
 }
 
-function conventionExecutableRequirements(
-  root: string,
-  activeRules: ReadonlySet<string>,
-): Map<ConventionExecutableName, Set<string>> {
-  const requirements = new Map<ConventionExecutableName, Set<string>>();
-  const installRoot = join(root, ".conventions", "modules");
-  if (!existsSync(installRoot)) return requirements;
-
-  for (const path of walkFiles(installRoot, 20).filter((file) => file.endsWith(".json"))) {
-    const value = readJson<unknown>(path);
-    if (!isRecord(value) || !isRecord(value.enforcement) || value.enforcement.kind !== "oxlint") {
-      continue;
-    }
-    const rule =
-      typeof value.ruleId === "string"
-        ? value.ruleId
-        : relativePosix(join(root, ".conventions"), path);
-    if (!activeRules.has(rule)) continue;
-    addConventionExecutableRequirement(requirements, "oxlint", rule);
-
-    const config = value.enforcement.config;
-    if (isRecord(config) && isRecord(config.options) && config.options.typeAware === true) {
-      addConventionExecutableRequirement(requirements, "oxlint-tsgolint", rule);
-    }
-  }
-
-  return requirements;
-}
-
 function conventionPackageManifests(root: string): string[] {
   const paths = new Set<string>();
   const rootManifest = join(root, "package.json");
@@ -436,7 +408,16 @@ function conventionExecutableAudit(
   requiredExecutables: ConventionExecutableRequirement[];
 } {
   const adapterEvidence = conventionAdapterEvidence(root, config);
-  const requiredByRule = conventionExecutableRequirements(root, adapterEvidence.activeRules);
+  const requiredByRule = new Map<ConventionExecutableName, Set<string>>();
+  for (const [name, rules] of conventionEnforcementExecutableRequirements(
+    root,
+    discoverComponents(root),
+  )) {
+    for (const rule of rules) addConventionExecutableRequirement(requiredByRule, name, rule);
+  }
+  for (const [name, rules] of adapterEvidence.requirements) {
+    for (const rule of rules) addConventionExecutableRequirement(requiredByRule, name, rule);
+  }
   const required = new Set(requiredByRule.keys());
   if (required.size === 0) {
     return {
