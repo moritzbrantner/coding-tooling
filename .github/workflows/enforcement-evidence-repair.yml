@@ -27,7 +27,9 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Apply repair
-        run: python3 .github/enforcement-evidence-repair.py
+        run: |
+          python3 .github/enforcement-evidence-repair.py
+          sed -i 's/, walkFiles//' src/foundation-audit.ts
 
       - name: Format and validate repair
         run: |
