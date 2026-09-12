@@ -21,9 +21,26 @@ type Catalog = {
   capabilities: Capability[];
 };
 
+type CatalogSchema = {
+  properties?: {
+    capabilities?: {
+      items?: {
+        properties?: {
+          tier?: {
+            enum?: string[];
+          };
+        };
+      };
+    };
+  };
+};
+
 const catalog = JSON.parse(
   readFileSync(new URL("../capabilities/catalog.json", import.meta.url), "utf8"),
 ) as Catalog;
+const catalogSchema = JSON.parse(
+  readFileSync(new URL("../schemas/capability-catalog.schema.json", import.meta.url), "utf8"),
+) as CatalogSchema;
 
 describe("capability catalog", () => {
   test("uses a stable schema version and exactly the shipped runtime capability names", () => {
@@ -54,21 +71,16 @@ describe("capability catalog", () => {
     }
   });
 
-  test("declares deterministic script candidates and valid tiers", () => {
-    const tiers = new Set([
-      "fast",
-      "focused",
-      "integration",
-      "workflow",
-      "system",
-      "performance",
-      "release",
-    ]);
+  test("declares deterministic script candidates and schema-valid tiers", () => {
+    const schemaTiers = new Set(
+      catalogSchema.properties?.capabilities?.items?.properties?.tier?.enum ?? [],
+    );
+    expect(schemaTiers.size).toBeGreaterThan(0);
 
     for (const capability of catalog.capabilities) {
       expect(capability.scriptCandidates.length).toBeGreaterThan(0);
       expect(new Set(capability.scriptCandidates).size).toBe(capability.scriptCandidates.length);
-      expect(tiers.has(capability.tier)).toBe(true);
+      expect(schemaTiers.has(capability.tier)).toBe(true);
     }
   });
 
