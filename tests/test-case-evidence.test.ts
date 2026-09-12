@@ -2,10 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import {
-  prepareTestCaseEvidenceRun,
-  readTestCaseEvidence,
-} from "../src/test-case-evidence.ts";
+import { prepareTestCaseEvidenceRun, readTestCaseEvidence } from "../src/test-case-evidence.ts";
 
 const roots: string[] = [];
 

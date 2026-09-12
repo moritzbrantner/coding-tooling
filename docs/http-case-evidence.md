@@ -54,9 +54,7 @@ A runner adapter or repository test harness writes schema version 1 JSON to the 
   "revision": "<exact supplied revision>",
   "capability": "test:integration",
   "component": ".",
-  "cases": [
-    { "id": "posts-create-success", "outcome": "passed" }
-  ]
+  "cases": [{ "id": "posts-create-success", "outcome": "passed" }]
 }
 ```
 
