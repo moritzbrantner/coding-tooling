@@ -46,11 +46,30 @@ describe("native test execution evidence", () => {
       cwd: root,
       capability: "test:unit",
       command: ["bun", "test"],
-      stdout: "0 tests\n0 pass\n0 fail",
+      stdout: "0 tests",
       stderr: "",
     });
 
     expect(result).toMatchObject({ status: "available", runner: "bun", executedCases: 0 });
+  });
+
+  test("prefers Bun pass/fail summary counts over no-test text in test output", () => {
+    const root = repository();
+    const result = collectTestExecutionEvidence({
+      cwd: root,
+      capability: "test:unit",
+      command: ["bun", "test"],
+      stdout: "(pass) 0 tests is only a test name\n1 pass\n0 fail\nRan 1 test across 1 file.",
+      stderr: "",
+    });
+
+    expect(result).toMatchObject({
+      status: "available",
+      runner: "bun",
+      executedCases: 1,
+      passedCases: 1,
+      failedCases: 0,
+    });
   });
 
   test("parses Vitest summaries without counting skipped cases as executed", () => {
@@ -68,6 +87,26 @@ describe("native test execution evidence", () => {
       runner: "vitest",
       executedCases: 3,
       passedCases: 3,
+      skippedCases: 2,
+    });
+  });
+
+  test("records disabled-only Vitest summaries as zero executed cases", () => {
+    const root = repository();
+    const result = collectTestExecutionEvidence({
+      cwd: root,
+      capability: "test:unit",
+      command: ["vitest", "run"],
+      stdout: " Test Files  1 skipped (1)\n      Tests  2 skipped (2)",
+      stderr: "",
+    });
+
+    expect(result).toMatchObject({
+      status: "available",
+      runner: "vitest",
+      executedCases: 0,
+      passedCases: 0,
+      failedCases: 0,
       skippedCases: 2,
     });
   });
