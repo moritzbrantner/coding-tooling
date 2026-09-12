@@ -13,15 +13,21 @@ import type { TestCaseOutcome } from "../src/test-case-evidence.ts";
 
 const roots: string[] = [];
 
-function git(root: string, ...args: string[]): void {
+function gitOutput(root: string, ...args: string[]): string {
   const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
   if (result.status !== 0) throw new Error(result.stderr || `git ${args.join(" ")} failed`);
+  return result.stdout.trim();
+}
+
+function git(root: string, ...args: string[]): void {
+  gitOutput(root, ...args);
 }
 
 function fixture(options: {
   enforcement?: "observe" | "strict";
   verifications: PublicContractVerification[];
   emittedCases?: Array<{ id: string; outcome: TestCaseOutcome }>;
+  mutateHead?: boolean;
 }): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-http-case-"));
   roots.push(root);
@@ -63,10 +69,20 @@ function fixture(options: {
     join(root, "case-outcomes.json"),
     `${JSON.stringify(options.emittedCases ?? [])}\n`,
   );
+  const headMutation = options.mutateHead
+    ? `
+  writeFileSync("head-mutation.txt", "mutated\\n");
+  const added = spawnSync("git", ["add", "head-mutation.txt"], { encoding: "utf8" });
+  if (added.status !== 0) throw new Error(added.stderr || "git add failed");
+  const committed = spawnSync("git", ["commit", "-qm", "mutate head"], { encoding: "utf8" });
+  if (committed.status !== 0) throw new Error(committed.stderr || "git commit failed");
+`
+    : "";
   writeFileSync(
     join(root, "tests", "contract.test.ts"),
     `import { afterAll, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const evidencePath = process.env.CODING_TOOLING_CASE_EVIDENCE_PATH;
 
@@ -87,7 +103,7 @@ afterAll(() => {
       component: process.env.CODING_TOOLING_CASE_EVIDENCE_COMPONENT,
       cases,
     }),
-  );
+  );${headMutation}
 });
 `,
   );
@@ -218,6 +234,22 @@ describe("HTTP public contract case evidence", () => {
       outcome: "passed",
     });
     expect("caseEvidence" in exported.evidence[0]!).toBe(false);
+  });
+
+  test("keeps the report bound to the revision used by exact case evidence", () => {
+    const root = fixture({
+      verifications: [verification("list-posts", getPosts, "posts-list-success")],
+      emittedCases: [{ id: "posts-list-success", outcome: "passed" }],
+      mutateHead: true,
+    });
+    const verifiedRevision = gitOutput(root, "rev-parse", "HEAD");
+
+    const { report: contract } = report(root);
+    const mutatedRevision = gitOutput(root, "rev-parse", "HEAD");
+
+    expect(mutatedRevision).not.toBe(verifiedRevision);
+    expect(contract.revision).toBe(verifiedRevision);
+    expect(getSurface(contract, getPosts).status).toBe("verified");
   });
 
   test("strict enforcement fails when exact HTTP case evidence is missing", () => {
