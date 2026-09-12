@@ -24,6 +24,7 @@ type AppliedConvergenceRule = {
 function executionRules(root: string, id: string, plan: GeneratorPlan): AppliedConvergenceRule[] {
   const ids = new Set<string>([`generator.${id}`]);
   for (const operation of plan.operations) {
+    ids.add(`generator.${operation.generator}`);
     const ruleId = refactorRuleId(operation.kind);
     if (ruleId) ids.add(ruleId);
   }
@@ -42,7 +43,28 @@ export function executeGeneratorCommand(
   if (planned.status !== "passed") return planned;
 
   const plan = planned.data.plan as GeneratorPlan;
-  const rules = executionRules(root, id, plan);
+  let rules: AppliedConvergenceRule[];
+  try {
+    rules = executionRules(root, id, plan);
+  } catch (error) {
+    return {
+      schemaVersion: 1,
+      operation: "generate",
+      status: "error",
+      durationMs: Date.now() - started,
+      data: {
+        result: "invalid-convergence-rule-policy",
+        plan,
+      },
+      diagnostics: [
+        {
+          code: "invalid-convergence-rule-policy",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  }
+
   const withheldRules = rules.filter((rule) => rule.mode !== "apply");
   if (withheldRules.length > 0) {
     return {
