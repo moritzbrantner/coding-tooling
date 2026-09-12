@@ -338,11 +338,7 @@ function executePlannedCheck(root: string, planned: PlannedCheck) {
 }
 
 function testExecutionDiagnostics(completed: ReturnType<typeof executePlannedCheck>): Diagnostic[] {
-  if (
-    completed.testExecution?.status !== "available" ||
-    completed.testExecution.executedCases !== 0
-  )
-    return [];
+  if (completed.failureReason !== "zero-tests-executed") return [];
   return [
     {
       code: "test-zero-executed-cases",
