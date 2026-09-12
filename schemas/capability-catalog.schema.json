@@ -25,7 +25,15 @@
             "enum": ["static", "build", "test", "audit", "benchmark", "package"]
           },
           "tier": {
-            "enum": ["fast", "focused", "integration", "system", "performance", "release"]
+            "enum": [
+              "fast",
+              "focused",
+              "integration",
+              "workflow",
+              "system",
+              "performance",
+              "release"
+            ]
           },
           "scriptCandidates": {
             "type": "array",
