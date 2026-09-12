@@ -7,17 +7,26 @@ import { readJson } from "./shared.ts";
 export const convergenceRuleModes = ["disabled", "suggest", "apply"] as const;
 export type ConvergenceRuleMode = (typeof convergenceRuleModes)[number];
 
-const convergenceRuleIdPattern = /^(generator|scaffold|normalizer)\.[a-z0-9][a-z0-9._-]*$/;
+export type ConvergenceRuleNamespace = "generator" | "scaffold" | "refactor" | "normalizer";
 
-export function convergenceRuleId(
-  kind: "generator" | "scaffold" | "normalizer",
-  id: string,
-): string {
+const convergenceRuleIdPattern =
+  /^(generator|scaffold|refactor|normalizer)\.[a-z0-9][a-z0-9._-]*$/;
+
+export function convergenceRuleId(kind: ConvergenceRuleNamespace, id: string): string {
   return `${kind}.${id}`;
 }
 
 export function scaffoldRuleId(expectationId: string): string {
   return convergenceRuleId("scaffold", expectationId);
+}
+
+export function refactorRuleId(operation: string): string | undefined {
+  switch (operation) {
+    case "typescript-barrel-export":
+      return "refactor.typescript-barrel-export";
+    default:
+      return undefined;
+  }
 }
 
 export function normalizerRuleId(tool: string): string {
