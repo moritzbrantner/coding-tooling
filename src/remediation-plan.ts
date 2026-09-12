@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 
+import {
+  convergenceRuleMode,
+  scaffoldRuleId,
+  type ConvergenceRuleMode,
+} from "./convergence-rule-policy.ts";
 import type { Finding, FindingSeverity } from "./expectation-model.ts";
 import { findingsCommand } from "./expectations.ts";
 import type { ResultStatus } from "./model.ts";
@@ -18,6 +23,7 @@ export type RemediationCandidate = {
   relatedFiles: string[];
   verification: string[][];
   scaffolds: Array<{ findingId: string; path: string; command: string[] }>;
+  convergenceRules: Array<{ id: string; mode: ConvergenceRuleMode }>;
   requiresAgent: boolean;
   suggestedBranch: string;
 };
@@ -61,13 +67,31 @@ function uniqueCommands(commands: string[][]): string[][] {
     .map(([, command]) => command);
 }
 
-function candidateFor(findings: Finding[]): RemediationCandidate {
+function candidateFor(findings: Finding[], root?: string): RemediationCandidate {
   const ordered = [...findings].sort((left, right) => left.id.localeCompare(right.id));
   const ids = ordered.map((finding) => finding.id);
   const id = candidateId(ids);
   const allScaffoldable = ordered.every((finding) => finding.scaffold !== undefined);
+  const convergenceRules = [
+    ...new Map(
+      ordered
+        .filter((finding) => finding.scaffold !== undefined)
+        .map((finding) => {
+          const ruleId = scaffoldRuleId(finding.expectationId);
+          return [
+            ruleId,
+            {
+              id: ruleId,
+              mode: root ? convergenceRuleMode(root, ruleId) : ("apply" as const),
+            },
+          ] as const;
+        }),
+    ).values(),
+  ].sort((left, right) => left.id.localeCompare(right.id));
+  const automaticScaffoldable =
+    allScaffoldable && convergenceRules.every((rule) => rule.mode === "apply");
   const nonInfo = ordered.some((finding) => finding.severity !== "info");
-  const kind: RemediationCandidateKind = allScaffoldable
+  const kind: RemediationCandidateKind = automaticScaffoldable
     ? "deterministic-scaffold"
     : nonInfo
       ? "implementation"
@@ -116,14 +140,15 @@ function candidateFor(findings: Finding[]): RemediationCandidate {
     relatedFiles,
     verification,
     scaffolds,
-    requiresAgent: !allScaffoldable,
+    convergenceRules,
+    requiresAgent: !automaticScaffoldable,
     suggestedBranch: `remediate/${branchToken(subject.key)}-${id.slice(-6).toLowerCase()}`,
   };
 }
 
 export function planRemediationCandidates(
   findings: Finding[],
-  options: { includeBaseline?: boolean } = {},
+  options: { includeBaseline?: boolean; root?: string } = {},
 ): RemediationCandidate[] {
   const selected = findings.filter(
     (finding) =>
@@ -137,7 +162,7 @@ export function planRemediationCandidates(
     bySubject.set(finding.subject.key, current);
   }
   return [...bySubject.values()]
-    .map(candidateFor)
+    .map((grouped) => candidateFor(grouped, options.root))
     .sort(
       (left, right) =>
         left.priority - right.priority ||
@@ -166,7 +191,7 @@ export function remediationPlanCommand(
   const sourceFindings = Array.isArray(findings.data.findings)
     ? (findings.data.findings as Finding[])
     : [];
-  const candidates = planRemediationCandidates(sourceFindings, options);
+  const candidates = planRemediationCandidates(sourceFindings, { ...options, root });
   return {
     schemaVersion: 1,
     operation: "remediation-plan",
@@ -183,6 +208,7 @@ export function remediationPlanCommand(
         automaticIssueCreation: false,
         defaultFindingState: "new",
         grouping: "subject",
+        convergenceRuleModes: "disabled-suggest-apply",
       },
     },
     diagnostics: [],
