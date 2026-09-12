@@ -11,7 +11,7 @@ coding-tooling contract discover --json
 coding-tooling contract verify --report .artifacts/coding-tooling/public-contract.json --json
 ```
 
-`discover` does not execute verifier capabilities. `verify` executes each unique `(component, capability)` verifier at most once and reuses that result for every surface mapped to it.
+`discover` does not execute verifier capabilities. `verify` executes each unique `(component, capability)` verifier at most once and reuses that execution result for every surface mapped to it. For HTTP operations, the passing capability is only broad execution evidence: strong verification additionally requires an exact behavioral case reported by that invocation.
 
 ## Discovery
 
@@ -42,6 +42,10 @@ Repositories may commit `.coding-tooling.contracts.json`:
       "surface": "http-operation:POST:%2Fsearch",
       "kind": "behavioral",
       "capability": "test:integration",
+      "case": {
+        "id": "search-post-success",
+        "behavior": "success"
+      },
       "reason": "The integration suite calls POST /search and asserts the response contract."
     }
   ]
@@ -49,6 +53,8 @@ Repositories may commit `.coding-tooling.contracts.json`:
 ```
 
 Evidence points to semantic capabilities rather than framework commands. `coding-tooling` resolves the capability through the repository's existing component model and `.coding-tooling.json` configuration.
+
+For HTTP operations, strong evidence must also identify the exact repository-owned behavioral case that the current test invocation reports. This prevents one green integration suite from implicitly verifying every endpoint mapped to it. The exact-run artifact protocol, supported behavior dimensions, and evidence limitations are documented in [HTTP behavioral case evidence](./http-case-evidence.md).
 
 Evidence kinds are:
 
