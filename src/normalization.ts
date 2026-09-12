@@ -3,6 +3,11 @@ import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import { applyConventionConfigurations } from "./convention-config.ts";
+import {
+  convergenceRuleMode,
+  normalizerRuleId,
+  type ConvergenceRuleMode,
+} from "./convergence-rule-policy.ts";
 import { discoverComponents, loadConfig } from "./core.ts";
 import type { Capability, Component, ResultEnvelope, ResultStatus } from "./model.ts";
 import { readJson, relativePosix, runCommand, walkFiles, type CommandResult } from "./shared.ts";
@@ -16,6 +21,8 @@ type PackageManifest = {
 
 export type Normalizer = {
   id: string;
+  ruleId: string;
+  mode: ConvergenceRuleMode;
   component: string;
   path: string;
   capability: NormalizationCapability;
@@ -124,7 +131,7 @@ function packageNormalizer(
   component: Component,
   capability: NormalizationCapability,
   command: string[],
-): Normalizer | undefined {
+): Omit<Normalizer, "ruleId" | "mode"> | undefined {
   if (component.kind !== "package") return undefined;
   const invocation = packageScriptInvocation(command);
   if (!invocation) return undefined;
@@ -170,7 +177,7 @@ function directNormalizer(
   component: Component,
   capability: NormalizationCapability,
   command: string[],
-): Normalizer | undefined {
+): Omit<Normalizer, "ruleId" | "mode"> | undefined {
   const executable = basename(command[0] ?? "");
   let tool: NormalizationTool | undefined;
   let mutation: string[] | undefined;
@@ -218,7 +225,7 @@ function normalizerFor(
   component: Component,
   capability: NormalizationCapability,
   command: string[],
-): Normalizer | undefined {
+): Omit<Normalizer, "ruleId" | "mode"> | undefined {
   return (
     packageNormalizer(root, component, capability, command) ??
     directNormalizer(component, capability, command)
@@ -234,8 +241,14 @@ export function planNormalization(root: string): NormalizationPlan {
       const command = component.capabilities[capability];
       if (!command) continue;
       const normalizer = normalizerFor(root, component, capability, command);
-      if (normalizer) normalizers.push(normalizer);
-      else {
+      if (normalizer) {
+        const ruleId = normalizerRuleId(normalizer.tool);
+        normalizers.push({
+          ...normalizer,
+          ruleId,
+          mode: convergenceRuleMode(root, ruleId),
+        });
+      } else {
         unsupported.push({
           component: component.name,
           path: component.path,
@@ -352,6 +365,8 @@ export function normalizeRepository(
   const started = Date.now();
   try {
     const plan = planNormalization(root);
+    const appliedNormalizers = plan.normalizers.filter((normalizer) => normalizer.mode === "apply");
+    const withheldNormalizers = plan.normalizers.filter((normalizer) => normalizer.mode !== "apply");
     const execute = dependencies.execute ?? defaultExecute;
     const fingerprint = dependencies.fingerprint ?? repositoryContentFingerprint;
     const coverage =
@@ -363,7 +378,7 @@ export function normalizeRepository(
           ? "complete"
           : "partial";
 
-    if (plan.normalizers.length === 0) {
+    if (appliedNormalizers.length === 0) {
       return {
         schemaVersion: 1,
         operation: "normalize",
@@ -375,7 +390,9 @@ export function normalizeRepository(
           coverage,
           changed: false,
           idempotent: true,
-          normalizers: [],
+          normalizers: plan.normalizers,
+          appliedNormalizers,
+          withheldNormalizers,
           unsupported: plan.unsupported,
           passes: [],
         },
@@ -384,7 +401,7 @@ export function normalizeRepository(
     }
 
     const beforeFingerprint = fingerprint(root);
-    const first = runPass(root, 1, plan.normalizers, execute);
+    const first = runPass(root, 1, appliedNormalizers, execute);
     if (first.status !== "passed") {
       const currentFingerprint = fingerprint(root);
       return {
@@ -399,6 +416,8 @@ export function normalizeRepository(
           changed: beforeFingerprint !== currentFingerprint,
           idempotent: false,
           normalizers: plan.normalizers,
+          appliedNormalizers,
+          withheldNormalizers,
           unsupported: plan.unsupported,
           passes: [first],
           beforeFingerprint,
@@ -414,7 +433,7 @@ export function normalizeRepository(
     }
 
     const normalizedFingerprint = fingerprint(root);
-    const second = runPass(root, 2, plan.normalizers, execute);
+    const second = runPass(root, 2, appliedNormalizers, execute);
     if (second.status !== "passed") {
       const currentFingerprint = fingerprint(root);
       return {
@@ -429,6 +448,8 @@ export function normalizeRepository(
           changed: beforeFingerprint !== currentFingerprint,
           idempotent: false,
           normalizers: plan.normalizers,
+          appliedNormalizers,
+          withheldNormalizers,
           unsupported: plan.unsupported,
           passes: [first, second],
           beforeFingerprint,
@@ -458,6 +479,8 @@ export function normalizeRepository(
           changed: beforeFingerprint !== verificationFingerprint,
           idempotent: false,
           normalizers: plan.normalizers,
+          appliedNormalizers,
+          withheldNormalizers,
           unsupported: plan.unsupported,
           passes: [first, second],
           beforeFingerprint,

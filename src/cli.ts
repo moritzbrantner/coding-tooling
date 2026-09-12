@@ -9,6 +9,8 @@ import { conformanceReport } from "./conformance.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { resolveConventions } from "./conventions.ts";
 import { convergeRepository } from "./convergence.ts";
+import { convergenceRuleModes, type ConvergenceRuleMode } from "./convergence-rule-policy.ts";
+import { convergenceRulesCommand } from "./convergence-rules.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { auditDependencies } from "./dependency-audit.ts";
 import { resolveDependencies } from "./dependency-resolution.ts";
@@ -161,6 +163,10 @@ function usage(): never {
   coding-tooling conventions diff [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions update [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]
+  coding-tooling convergence rules list [--json]
+  coding-tooling convergence rules describe <id> [--json]
+  coding-tooling convergence rules set <id> <disabled|suggest|apply> [--json]
+  coding-tooling convergence rules <enable|disable|suggest> <id> [--json]
   coding-tooling normalize [--json]
   coding-tooling converge [--include-baseline] [--max-rounds <n>] [--verify-tier <name>|--no-verify] [--json]
   coding-tooling generate list [--json]
@@ -303,6 +309,29 @@ export function main(argv = process.argv.slice(2)): number {
         registryPath: stringOption(options, "registry"),
         profile: stringOption(options, "profile"),
       });
+    } else return usage();
+  } else if (command === "convergence") {
+    if (positional[0] !== "rules" || Object.keys(options).some((key) => key !== "json"))
+      return usage();
+    const action = positional[1] ?? "list";
+    if (action === "list") {
+      if (positional.length !== 2 && positional.length !== 1) return usage();
+      result = convergenceRulesCommand(root, "list");
+    } else if (action === "describe") {
+      if (positional.length !== 3 || !positional[2]) return usage();
+      result = convergenceRulesCommand(root, "describe", positional[2]);
+    } else if (action === "set") {
+      const id = positional[2];
+      const mode = positional[3] as ConvergenceRuleMode | undefined;
+      if (!id || !mode || positional.length !== 4 || !convergenceRuleModes.includes(mode))
+        return usage();
+      result = convergenceRulesCommand(root, "set", id, mode);
+    } else if (action === "enable" || action === "disable" || action === "suggest") {
+      const id = positional[2];
+      if (!id || positional.length !== 3) return usage();
+      const mode: ConvergenceRuleMode =
+        action === "enable" ? "apply" : action === "disable" ? "disabled" : "suggest";
+      result = convergenceRulesCommand(root, "set", id, mode);
     } else return usage();
   } else if (command === "normalize") {
     if (positional.length > 0 || Object.keys(options).some((key) => key !== "json")) return usage();
