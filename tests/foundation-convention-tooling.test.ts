@@ -15,19 +15,22 @@ function hash(content: string): string {
   return createHash("sha256").update(content).digest("hex");
 }
 
-function repository(devDependencies?: Record<string, string>): string {
+function repository(
+  devDependencies?: Record<string, string>,
+  lintScript: string | null = "bunx oxlint@1.81.0 .",
+  configureLint = true,
+): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-foundation-convention-tooling-"));
   writeJson(join(root, "package.json"), {
     name: "rect-like-fixture",
     packageManager: "bun@1.4.0",
-    scripts: {
-      lint: "bunx --bun oxlint@1.81.0 .",
-    },
+    scripts: lintScript ? { lint: lintScript } : {},
     ...(devDependencies ? { devDependencies } : {}),
   });
   writeFileSync(join(root, "bun.lock"), "fixture\n");
+  writeFileSync(join(root, "tsconfig.json"), "{}\n");
   installEnvironment(root);
-  installTooling(root);
+  installTooling(root, configureLint);
   installTypeScriptConventions(root);
   installRenovate(root);
   return root;
@@ -45,16 +48,20 @@ function installEnvironment(root: string): void {
   );
 }
 
-function installTooling(root: string): void {
+function installTooling(root: string, configureLint: boolean): void {
   writeJson(join(root, ".coding-tooling.json"), {
     schemaVersion: 1,
     profile: "repository-foundation-v1",
-    requiredCapabilities: ["lint"],
-    capabilityCommands: {
-      ".": {
-        lint: ["bun", "run", "lint"],
-      },
-    },
+    requiredCapabilities: configureLint ? ["lint"] : [],
+    ...(configureLint
+      ? {
+          capabilityCommands: {
+            ".": {
+              lint: ["bun", "run", "lint"],
+            },
+          },
+        }
+      : {}),
   });
 }
 
@@ -65,8 +72,50 @@ function installTypeScriptConventions(root: string): void {
     modules: ["typescript"],
   });
 
+  const configurationManifest = `${JSON.stringify(
+    {
+      schemaVersion: 1,
+      configurations: [
+        {
+          rule: "TS-003",
+          path: "modules/typescript/technologies/typescript/TS-003.oxlint.json",
+          tool: "oxlint",
+          capability: "lint",
+          module: "typescript",
+        },
+        {
+          rule: "TS-005",
+          path: "modules/typescript/technologies/typescript/TS-005.oxlint.json",
+          tool: "oxlint",
+          capability: "lint",
+          module: "typescript",
+        },
+      ],
+    },
+    null,
+    2,
+  )}\n`;
+  const ts003Config = `${JSON.stringify(
+    {
+      rules: {
+        "typescript/consistent-type-definitions": ["error", "type"],
+      },
+    },
+    null,
+    2,
+  )}\n`;
+  const ts005Config = `${JSON.stringify(
+    {
+      rules: {
+        "typescript/switch-exhaustiveness-check": "error",
+      },
+    },
+    null,
+    2,
+  )}\n`;
   const files: Record<string, string> = {
     "index.md": "# Installed conventions\n",
+    "configurations.json": configurationManifest,
     "modules/typescript/technologies/typescript/TS-003.json": `${JSON.stringify(
       {
         schemaVersion: 1,
@@ -84,6 +133,7 @@ function installTypeScriptConventions(root: string): void {
       null,
       2,
     )}\n`,
+    "modules/typescript/technologies/typescript/TS-003.oxlint.json": ts003Config,
     "modules/typescript/technologies/typescript/TS-005.json": `${JSON.stringify(
       {
         schemaVersion: 1,
@@ -104,6 +154,7 @@ function installTypeScriptConventions(root: string): void {
       null,
       2,
     )}\n`,
+    "modules/typescript/technologies/typescript/TS-005.oxlint.json": ts005Config,
   };
 
   for (const [relativePath, content] of Object.entries(files)) {
@@ -233,5 +284,45 @@ describe("foundation convention executable tooling", () => {
         path: "package.json",
       }),
     );
+  });
+
+  test("fails closed when the selected lint capability cannot consume installed Oxlint rules", () => {
+    const result = foundationAudit(
+      repository(
+        {
+          oxlint: "1.81.0",
+          "oxlint-tsgolint": "7.0.2001",
+        },
+        "eslint . --max-warnings 0",
+      ),
+    );
+    const tooling = executableTooling(result);
+
+    expect(result.status).toBe("failed");
+    expect(tooling.status).toBe("invalid");
+    expect(tooling.requiredExecutables).toEqual([]);
+    expect(
+      result.diagnostics.filter((item) => item.code === "foundation-convention-adapter-unresolved"),
+    ).toHaveLength(2);
+    expect(
+      result.diagnostics.filter((item) => item.code === "foundation-convention-tool-missing"),
+    ).toHaveLength(0);
+  });
+
+  test("fails closed when an applicable convention has no selected capability command", () => {
+    const result = foundationAudit(repository(undefined, null, false));
+    const tooling = executableTooling(result);
+
+    expect(result.status).toBe("failed");
+    expect(tooling.status).toBe("invalid");
+    expect(tooling.requiredExecutables).toEqual([]);
+    expect(
+      result.diagnostics.filter((item) => item.code === "foundation-convention-adapter-unresolved"),
+    ).toHaveLength(2);
+    expect(
+      result.diagnostics.filter(
+        (item) => item.code === "foundation-required-capability-unresolved",
+      ),
+    ).toHaveLength(0);
   });
 });

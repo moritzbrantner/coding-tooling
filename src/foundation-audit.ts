@@ -1,10 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
+import {
+  applyConventionConfigurations,
+  loadInstalledConventionConfigurations,
+} from "./convention-config.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { discoverComponents, loadConfig } from "./core.ts";
 import type {
   Capability,
+  Component,
   Diagnostic,
   ResultEnvelope,
   ResultStatus,
@@ -76,6 +81,91 @@ function component(
   data: Record<string, unknown> = {},
 ): FoundationComponent {
   return { status, diagnostics, ...data };
+}
+
+function configuredConventionComponents(
+  root: string,
+  config: ToolingConfig | undefined,
+): Component[] {
+  return discoverComponents(root).map((discovered) => ({
+    ...discovered,
+    capabilities: {
+      ...discovered.capabilities,
+      ...config?.capabilityCommands?.[discovered.name],
+      ...config?.capabilityCommands?.[discovered.path],
+    },
+  }));
+}
+
+function commandsEqual(left: string[] | undefined, right: string[] | undefined): boolean {
+  return (
+    left === right ||
+    (left !== undefined &&
+      right !== undefined &&
+      left.length === right.length &&
+      left.every((value, index) => value === right[index]))
+  );
+}
+
+function conventionAdapterEvidence(
+  root: string,
+  config: ToolingConfig | undefined,
+): { activeRules: Set<string>; diagnostics: Diagnostic[] } {
+  const configurations = loadInstalledConventionConfigurations(root);
+  if (configurations.length === 0) {
+    return { activeRules: new Set(), diagnostics: [] };
+  }
+
+  const configured = configuredConventionComponents(root, config);
+  let applied: Component[];
+  try {
+    applied = applyConventionConfigurations(root, configured);
+  } catch (error) {
+    return {
+      activeRules: new Set(),
+      diagnostics: [
+        {
+          code: "foundation-convention-adapter-invalid",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  }
+
+  const activeRules = new Set<string>();
+  const diagnostics: Diagnostic[] = [];
+  for (const configuration of configurations) {
+    for (let index = 0; index < configured.length; index += 1) {
+      const source = configured[index]!;
+      if (
+        source.kind !== "package" ||
+        (configuration.module !== "tooling" && !source.technologies.includes(configuration.module))
+      ) {
+        continue;
+      }
+      const original = source.capabilities[configuration.capability];
+      if (!original) {
+        diagnostics.push({
+          code: "foundation-convention-adapter-unresolved",
+          message: `${configuration.rule} installs ${configuration.tool} configuration for ${configuration.capability}, but ${source.name} has no selected ${configuration.capability} command`,
+          path: source.path,
+        });
+        continue;
+      }
+      const effective = applied[index]?.capabilities[configuration.capability];
+      if (commandsEqual(original, effective)) {
+        diagnostics.push({
+          code: "foundation-convention-adapter-unresolved",
+          message: `${configuration.rule} installs ${configuration.tool} configuration for ${configuration.capability}, but ${source.name} selects a command that the ${configuration.tool} adapter cannot compose`,
+          path: source.path,
+        });
+        continue;
+      }
+      if (configuration.tool === "oxlint") activeRules.add(configuration.rule);
+    }
+  }
+
+  return { activeRules, diagnostics };
 }
 
 function environmentAudit(root: string): FoundationComponent {
@@ -234,6 +324,7 @@ function addConventionExecutableRequirement(
 
 function conventionExecutableRequirements(
   root: string,
+  activeRules: ReadonlySet<string>,
 ): Map<ConventionExecutableName, Set<string>> {
   const requirements = new Map<ConventionExecutableName, Set<string>>();
   const installRoot = join(root, ".conventions", "modules");
@@ -248,6 +339,7 @@ function conventionExecutableRequirements(
       typeof value.ruleId === "string"
         ? value.ruleId
         : relativePosix(join(root, ".conventions"), path);
+    if (!activeRules.has(rule)) continue;
     addConventionExecutableRequirement(requirements, "oxlint", rule);
 
     const config = value.enforcement.config;
@@ -335,19 +427,27 @@ function conventionExecutableDeclarations(
   return { declarations, diagnostics };
 }
 
-function conventionExecutableAudit(root: string): {
+function conventionExecutableAudit(
+  root: string,
+  config: ToolingConfig | undefined,
+): {
   status: ConventionExecutableStatus;
   diagnostics: Diagnostic[];
   requiredExecutables: ConventionExecutableRequirement[];
 } {
-  const requiredByRule = conventionExecutableRequirements(root);
+  const adapterEvidence = conventionAdapterEvidence(root, config);
+  const requiredByRule = conventionExecutableRequirements(root, adapterEvidence.activeRules);
   const required = new Set(requiredByRule.keys());
   if (required.size === 0) {
-    return { status: "adopted", diagnostics: [], requiredExecutables: [] };
+    return {
+      status: adapterEvidence.diagnostics.length > 0 ? "invalid" : "adopted",
+      diagnostics: adapterEvidence.diagnostics,
+      requiredExecutables: [],
+    };
   }
 
   const inspection = conventionExecutableDeclarations(root, required);
-  const diagnostics = [...inspection.diagnostics];
+  const diagnostics = [...adapterEvidence.diagnostics, ...inspection.diagnostics];
   const requiredExecutables = [...requiredByRule.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([name, rules]) => {
@@ -382,16 +482,21 @@ function conventionExecutableAudit(root: string): {
     });
 
   const status: ConventionExecutableStatus =
+    adapterEvidence.diagnostics.length > 0 ||
     inspection.diagnostics.length > 0 ||
     requiredExecutables.some((entry) => entry.status === "invalid")
       ? "invalid"
       : requiredExecutables.some((entry) => entry.status === "missing")
         ? "missing"
         : "adopted";
-  return { status, diagnostics, requiredExecutables };
+  return {
+    status,
+    diagnostics,
+    requiredExecutables,
+  };
 }
 
-function conventionsAudit(root: string): FoundationComponent {
+function conventionsAudit(root: string, config: ToolingConfig | undefined): FoundationComponent {
   const manifestPresent = existsSync(join(root, "conventions.json"));
   const lockPresent = existsSync(join(root, "conventions.lock.json"));
   const snapshotPresent = existsSync(join(root, ".conventions"));
@@ -412,7 +517,8 @@ function conventionsAudit(root: string): FoundationComponent {
   }
 
   const check = conventionRegistryCommand("check", [], { root });
-  const executableTooling = check.status === "passed" ? conventionExecutableAudit(root) : undefined;
+  const executableTooling =
+    check.status === "passed" ? conventionExecutableAudit(root, config) : undefined;
   const diagnostics = [...check.diagnostics, ...(executableTooling?.diagnostics ?? [])];
   return component(
     check.status === "passed" && executableTooling?.status === "adopted" ? "adopted" : "invalid",
@@ -618,7 +724,7 @@ export function foundationAudit(root = repositoryRoot()): ResultEnvelope<Record<
       environment: environmentAudit(resolvedRoot),
       tooling: tooling.component,
       commands: commandInventory(resolvedRoot, tooling.config),
-      conventions: conventionsAudit(resolvedRoot),
+      conventions: conventionsAudit(resolvedRoot, tooling.config),
       renovate: renovateAudit(resolvedRoot),
     };
     const values = Object.values(components);
