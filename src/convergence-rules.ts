@@ -1,4 +1,10 @@
-import { convergenceRuleMode, setConvergenceRuleMode, type ConvergenceRuleMode } from "./convergence-rule-policy.ts";
+import {
+  convergenceRuleMode,
+  normalizerRuleId,
+  scaffoldRuleId,
+  setConvergenceRuleMode,
+  type ConvergenceRuleMode,
+} from "./convergence-rule-policy.ts";
 import { expectationRegistry, findingsCommand, type Finding } from "./expectations.ts";
 import { generatorCatalog } from "./generators.ts";
 import type { ResultEnvelope } from "./model.ts";
@@ -47,25 +53,6 @@ const builtInNormalizerRules = [
 ] as const;
 
 const knownScaffoldExpectations = new Set(["typescript-source-test"]);
-
-export function scaffoldRuleId(expectationId: string): string {
-  return `scaffold.${expectationId}`;
-}
-
-export function normalizerRuleId(tool: string): string {
-  switch (tool) {
-    case "oxfmt":
-      return "normalizer.oxfmt";
-    case "oxlint":
-      return "normalizer.oxlint-safe-fix";
-    case "cargo-fmt":
-      return "normalizer.rustfmt";
-    case "dotnet-format":
-      return "normalizer.dotnet-format";
-    default:
-      return `normalizer.${tool}`;
-  }
-}
 
 function currentFindings(root: string): Finding[] {
   const result = findingsCommand(root, { includeSuppressed: false });
@@ -214,10 +201,12 @@ export function convergenceRulesCommand(
       started,
       "error",
       { root, action, id, mode },
-      [{
-        code: "convergence-rules-failed",
-        message: error instanceof Error ? error.message : String(error),
-      }],
+      [
+        {
+          code: "convergence-rules-failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
     );
   }
 }
