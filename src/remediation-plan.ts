@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 
 import {
-  convergenceRuleMode,
+  convergenceRuleModeForPlanning,
   scaffoldRuleId,
+  validateConvergenceRulePolicy,
   type ConvergenceRuleMode,
 } from "./convergence-rule-policy.ts";
 import type { Finding, FindingSeverity } from "./expectation-model.ts";
@@ -82,7 +83,7 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
             ruleId,
             {
               id: ruleId,
-              mode: root ? convergenceRuleMode(root, ruleId) : ("apply" as const),
+              mode: root ? convergenceRuleModeForPlanning(root, ruleId) : ("apply" as const),
             },
           ] as const;
         }),
@@ -176,6 +177,24 @@ export function remediationPlanCommand(
   options: { includeBaseline?: boolean } = {},
 ): RemediationPlanEnvelope {
   const started = Date.now();
+  try {
+    validateConvergenceRulePolicy(root);
+  } catch (error) {
+    return {
+      schemaVersion: 1,
+      operation: "remediation-plan",
+      status: "error",
+      durationMs: Date.now() - started,
+      data: { root, candidates: [] },
+      diagnostics: [
+        {
+          code: "invalid-convergence-rule-policy",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  }
+
   const findings = findingsCommand(root, { includeSuppressed: false });
   if (findings.status === "error") {
     return {
