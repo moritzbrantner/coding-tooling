@@ -1,10 +1,12 @@
 import {
+  assertKnownConvergenceRuleIds,
+  builtInRefactorRuleIds,
   convergenceRuleMode,
   refactorRuleId,
   type ConvergenceRuleMode,
 } from "./convergence-rule-policy.ts";
 import { applyGeneratorPlan, type GeneratorApplyOptions } from "./generator-apply.ts";
-import { generatorCommand, type GeneratorPlan } from "./generators.ts";
+import { generatorCatalog, generatorCommand, type GeneratorPlan } from "./generators.ts";
 import {
   evaluateGeneratorPrerequisites,
   verifyGeneratorPostconditions,
@@ -22,6 +24,13 @@ type AppliedConvergenceRule = {
 };
 
 function executionRules(root: string, id: string, plan: GeneratorPlan): AppliedConvergenceRule[] {
+  assertKnownConvergenceRuleIds(
+    root,
+    "generator",
+    generatorCatalog(root).map((generator) => `generator.${generator.id}`),
+  );
+  assertKnownConvergenceRuleIds(root, "refactor", builtInRefactorRuleIds);
+
   const ids = new Set<string>([`generator.${id}`]);
   for (const operation of plan.operations) {
     ids.add(`generator.${operation.generator}`);

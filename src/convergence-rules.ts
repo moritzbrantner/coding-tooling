@@ -1,4 +1,8 @@
 import {
+  builtInNormalizerRuleIds,
+  builtInRefactorRuleIds,
+  builtInScaffoldRuleIds,
+  configuredConvergenceRuleIds,
   convergenceRuleMode,
   normalizerRuleId,
   scaffoldRuleId,
@@ -27,7 +31,7 @@ export type ConvergenceRuleCatalogEntry = {
 
 const builtInRefactorRules = [
   {
-    id: "refactor.typescript-barrel-export",
+    id: builtInRefactorRuleIds[0],
     description:
       "Ensure one exact TypeScript re-export in an export-only barrel at a deterministic insertion point.",
     technologies: ["typescript"],
@@ -37,32 +41,34 @@ const builtInRefactorRules = [
 
 const builtInNormalizerRules = [
   {
-    id: "normalizer.oxfmt",
+    id: builtInNormalizerRuleIds[0],
     tool: "oxfmt",
     description: "Apply the repository-declared safe Oxfmt write-mode formatter.",
     technologies: ["javascript", "typescript"],
   },
   {
-    id: "normalizer.oxlint-safe-fix",
+    id: builtInNormalizerRuleIds[1],
     tool: "oxlint",
     description: "Apply ordinary Oxlint --fix without stronger or unsafe fix modes.",
     technologies: ["javascript", "typescript"],
   },
   {
-    id: "normalizer.rustfmt",
+    id: builtInNormalizerRuleIds[2],
     tool: "cargo-fmt",
     description: "Convert cargo fmt --check into deterministic cargo fmt normalization.",
     technologies: ["rust"],
   },
   {
-    id: "normalizer.dotnet-format",
+    id: builtInNormalizerRuleIds[3],
     tool: "dotnet-format",
     description: "Convert dotnet format verification into deterministic formatting.",
     technologies: ["dotnet"],
   },
 ] as const;
 
-const knownScaffoldExpectations = new Set(["typescript-source-test"]);
+const knownScaffoldExpectations = new Set(
+  builtInScaffoldRuleIds.map((id) => id.slice("scaffold.".length)),
+);
 
 function currentFindings(root: string): Finding[] {
   const result = findingsCommand(root, { includeSuppressed: false });
@@ -192,33 +198,59 @@ export function convergenceRulesCommand(
   const started = Date.now();
   try {
     const catalog = convergenceRuleCatalog(root);
+    const catalogIds = new Set(catalog.map((rule) => rule.id));
+    const unknownConfiguredRuleIds = configuredConvergenceRuleIds(root).filter(
+      (configuredId) => !catalogIds.has(configuredId),
+    );
+    const reconciliation = { unknownConfiguredRuleIds };
+    const reconciliationDiagnostics = unknownConfiguredRuleIds.map((unknownId) => ({
+      code: "unknown-convergence-rule-policy",
+      message: `Configured convergence rule does not exist in the effective catalog: ${unknownId}`,
+    }));
+
     if (action === "list") {
-      return envelope(started, "passed", {
-        root,
-        ruleCount: catalog.length,
-        rules: catalog,
-        modes: ["disabled", "suggest", "apply"],
-        policy: {
-          detectorsRemainActiveWhenMutationIsDisabled: true,
-          suggestDoesNotMutate: true,
-          applyIsDefault: true,
+      return envelope(
+        started,
+        unknownConfiguredRuleIds.length === 0 ? "passed" : "failed",
+        {
+          root,
+          ruleCount: catalog.length,
+          rules: catalog,
+          modes: ["disabled", "suggest", "apply"],
+          reconciliation,
+          policy: {
+            detectorsRemainActiveWhenMutationIsDisabled: true,
+            suggestDoesNotMutate: true,
+            applyIsDefault: true,
+            unknownConfiguredRulesFailClosed: true,
+          },
         },
-      });
+        reconciliationDiagnostics,
+      );
+    }
+
+    if (unknownConfiguredRuleIds.length > 0) {
+      return envelope(
+        started,
+        "error",
+        { root, action, id, mode, reconciliation },
+        reconciliationDiagnostics,
+      );
     }
 
     if (!id) throw new Error(`${action} requires a convergence rule id`);
     const rule = catalog.find((candidate) => candidate.id === id);
     if (!rule) {
-      return envelope(started, "unavailable", { root, id }, [
+      return envelope(started, "unavailable", { root, id, reconciliation }, [
         { code: "convergence-rule-not-found", message: `Unknown convergence rule: ${id}` },
       ]);
     }
 
-    if (action === "describe") return envelope(started, "passed", { root, rule });
+    if (action === "describe") return envelope(started, "passed", { root, rule, reconciliation });
     if (!mode) throw new Error("set requires a convergence rule mode");
     const change = setConvergenceRuleMode(root, id, mode);
     const updated = convergenceRuleCatalog(root).find((candidate) => candidate.id === id)!;
-    return envelope(started, "passed", { root, rule: updated, change });
+    return envelope(started, "passed", { root, rule: updated, change, reconciliation });
   } catch (error) {
     return envelope(started, "error", { root, action, id, mode }, [
       {

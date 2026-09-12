@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { convergenceRuleMode } from "../src/convergence-rule-policy.ts";
 import { executeGeneratorCommand } from "../src/generator-execution.ts";
 
 const roots: string[] = [];
@@ -85,4 +86,41 @@ test("an unreadable convergence policy fails closed before generator mutation", 
     expect.objectContaining({ code: "invalid-convergence-rule-policy" }),
   );
   expect(existsSync(join(root, "generated.ts"))).toBeFalse();
+});
+
+test("an unknown configured generator rule fails closed before generator mutation", () => {
+  const root = rootFixture();
+  generator(root, "sample", "generated.ts");
+  writeFileSync(
+    join(root, ".coding-tooling.json"),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      convergence: { rules: { "generator.sampl": "disabled" } },
+    })}\n`,
+  );
+
+  const result = executeGeneratorCommand(root, "sample", {});
+
+  expect(result.status).toBe("error");
+  expect(result.data).toMatchObject({ result: "invalid-convergence-rule-policy" });
+  expect(result.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "invalid-convergence-rule-policy",
+      message: expect.stringContaining("generator.sampl"),
+    }),
+  );
+  expect(existsSync(join(root, "generated.ts"))).toBeFalse();
+});
+
+test("unknown closed convergence rules are rejected", () => {
+  const root = rootFixture();
+  writeFileSync(
+    join(root, ".coding-tooling.json"),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      convergence: { rules: { "normalizer.oxfmtt": "disabled" } },
+    })}\n`,
+  );
+
+  expect(() => convergenceRuleMode(root, "normalizer.oxfmt")).toThrow("normalizer.oxfmtt");
 });
