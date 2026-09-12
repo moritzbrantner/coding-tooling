@@ -62,11 +62,35 @@ function localGenerator(root: string): void {
   );
 }
 
+function localBarrelGenerator(root: string): void {
+  const directory = join(root, ".coding-tooling", "generators", "barrel");
+  mkdirSync(directory, { recursive: true });
+  writeFileSync(join(root, "src", "index.ts"), 'export * from "./existing";\n');
+  writeFileSync(
+    join(directory, "generator.json"),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      id: "barrel",
+      description: "Add one deterministic barrel export.",
+      rules: [],
+      technologies: ["typescript"],
+      inputs: {},
+      target: { kind: "root" },
+      operations: [
+        { kind: "typescript-barrel-export", path: "src/index.ts", module: "./service" },
+      ],
+      compose: [],
+      prerequisites: [],
+      postconditions: [],
+    })}\n`,
+  );
+}
+
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-test("lists generators, scaffolders, and normalizers as first-class convergence rules", () => {
+test("lists generators, scaffolders, refactors, and normalizers as first-class convergence rules", () => {
   const root = fixture();
   localGenerator(root);
 
@@ -81,6 +105,13 @@ test("lists generators, scaffolders, and normalizers as first-class convergence 
     expect.objectContaining({
       id: "scaffold.typescript-source-test",
       kind: "scaffold",
+      mode: "apply",
+    }),
+  );
+  expect(rules).toContainEqual(
+    expect.objectContaining({
+      id: "refactor.typescript-barrel-export",
+      kind: "refactor",
       mode: "apply",
     }),
   );
@@ -125,10 +156,31 @@ test("suggest mode exposes an exact generator plan without applying it", () => {
   expect(result.status).toBe("unavailable");
   expect(result.data).toMatchObject({
     result: "rule-withheld",
-    rule: { id: "generator.sample", mode: "suggest" },
+    rules: [{ id: "generator.sample", mode: "suggest" }],
+    withheldRules: [{ id: "generator.sample", mode: "suggest" }],
     plan: { generator: "sample" },
   });
   expect(existsSync(join(root, "generated.ts"))).toBeFalse();
+});
+
+test("structured refactors can be withheld independently from their generator", () => {
+  const root = fixture();
+  localBarrelGenerator(root);
+  configure(root, { "refactor.typescript-barrel-export": "disabled" });
+  const before = readFileSync(join(root, "src", "index.ts"), "utf8");
+
+  const result = executeGeneratorCommand(root, "barrel", {});
+
+  expect(result.status).toBe("unavailable");
+  expect(result.data).toMatchObject({
+    result: "rule-withheld",
+    rules: [
+      { id: "generator.barrel", mode: "apply" },
+      { id: "refactor.typescript-barrel-export", mode: "disabled" },
+    ],
+    withheldRules: [{ id: "refactor.typescript-barrel-export", mode: "disabled" }],
+  });
+  expect(readFileSync(join(root, "src", "index.ts"), "utf8")).toBe(before);
 });
 
 test("disabled normalizers remain discoverable but are not executed", () => {
