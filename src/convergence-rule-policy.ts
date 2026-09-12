@@ -9,8 +9,7 @@ export type ConvergenceRuleMode = (typeof convergenceRuleModes)[number];
 
 export type ConvergenceRuleNamespace = "generator" | "scaffold" | "refactor" | "normalizer";
 
-const convergenceRuleIdPattern =
-  /^(generator|scaffold|refactor|normalizer)\.[a-z0-9][a-z0-9._-]*$/;
+const convergenceRuleIdPattern = /^(generator|scaffold|refactor|normalizer)\.[a-z0-9][a-z0-9._-]*$/;
 
 export function convergenceRuleId(kind: ConvergenceRuleNamespace, id: string): string {
   return `${kind}.${id}`;

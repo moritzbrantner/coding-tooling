@@ -76,9 +76,7 @@ function localBarrelGenerator(root: string): void {
       technologies: ["typescript"],
       inputs: {},
       target: { kind: "root" },
-      operations: [
-        { kind: "typescript-barrel-export", path: "src/index.ts", module: "./service" },
-      ],
+      operations: [{ kind: "typescript-barrel-export", path: "src/index.ts", module: "./service" }],
       compose: [],
       prerequisites: [],
       postconditions: [],

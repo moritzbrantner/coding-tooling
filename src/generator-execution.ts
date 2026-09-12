@@ -27,9 +27,7 @@ function executionRules(root: string, id: string, plan: GeneratorPlan): AppliedC
     const ruleId = refactorRuleId(operation.kind);
     if (ruleId) ids.add(ruleId);
   }
-  return [...ids]
-    .sort()
-    .map((ruleId) => ({ id: ruleId, mode: convergenceRuleMode(root, ruleId) }));
+  return [...ids].sort().map((ruleId) => ({ id: ruleId, mode: convergenceRuleMode(root, ruleId) }));
 }
 
 export function executeGeneratorCommand(
