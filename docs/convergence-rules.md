@@ -9,6 +9,7 @@ coding-tooling convergence rules list --json
 coding-tooling convergence rules describe normalizer.oxlint-safe-fix --json
 coding-tooling convergence rules disable normalizer.oxlint-safe-fix --json
 coding-tooling convergence rules suggest scaffold.typescript-source-test --json
+coding-tooling convergence rules disable refactor.typescript-barrel-export --json
 coding-tooling convergence rules enable normalizer.oxlint-safe-fix --json
 ```
 
@@ -40,7 +41,8 @@ Rule modes live in the ordinary schema-v1 `.coding-tooling.json` policy file:
   "convergence": {
     "rules": {
       "normalizer.oxlint-safe-fix": "disabled",
-      "scaffold.typescript-source-test": "suggest"
+      "scaffold.typescript-source-test": "suggest",
+      "refactor.typescript-barrel-export": "disabled"
     }
   }
 }
@@ -50,11 +52,14 @@ Unknown mode values and malformed rule IDs fail configuration validation. Unconf
 
 ## Rule namespaces
 
-The registry currently has three mutation namespaces:
+The registry currently has four mutation namespaces:
 
 - `generator.<generator-id>` — installed convention generators and repository-local generators. The effective generator catalog remains the source of truth for available generator IDs.
 - `scaffold.<expectation-id>` — deterministic scaffolds emitted by findings. The detector remains authoritative for whether the condition exists.
+- `refactor.<operation-id>` — closed structured source transformations that can also be used inside generators.
 - `normalizer.<adapter-id>` — closed canonicalization/refactoring adapters.
+
+The first structured refactor rule is `refactor.typescript-barrel-export`. It controls the existing narrow operation that inserts one exact TypeScript re-export into an export-only barrel. A generator may remain enabled while this refactor is separately set to `suggest` or `disabled`; in that case generation planning succeeds but application is withheld before any mutation occurs.
 
 The built-in normalizer IDs are:
 
@@ -81,7 +86,7 @@ repository evidence
   -> verification
 ```
 
-Generators in `suggest` or `disabled` mode still support deterministic planning through `coding-tooling generate plan`; direct generation refuses to mutate and reports `convergence-rule-withheld`.
+Generators in `suggest` or `disabled` mode still support deterministic planning through `coding-tooling generate plan`; direct generation refuses to mutate and reports `convergence-rule-withheld`. The same pre-mutation gate applies when a generator plan requires a structured `refactor.*` rule that is not in `apply` mode.
 
 Scaffold rules in `suggest` or `disabled` mode are removed from automatic deterministic-scaffold execution but remain in remediation output with their exact scaffold command and effective rule mode.
 
@@ -89,6 +94,6 @@ Normalizer rules are discovered normally in every mode. Only `apply` normalizers
 
 ## Safety properties
 
-The registry does not add an arbitrary plugin execution surface. Generator descriptors remain restricted, scaffold implementations remain detector-owned, and normalizers remain the closed allowlisted adapters already accepted by deterministic normalization.
+The registry does not add an arbitrary plugin execution surface. Generator descriptors remain restricted, scaffold implementations remain detector-owned, structured refactors remain the closed allowlisted source mutations, and normalizers remain the closed allowlisted adapters already accepted by deterministic normalization.
 
 Generated application files remain ordinary user-owned repository code. Disabling a generator later does not reclaim or rewrite files that were generated earlier.
