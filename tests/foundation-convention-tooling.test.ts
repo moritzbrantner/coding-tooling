@@ -328,9 +328,7 @@ describe("foundation convention executable tooling", () => {
       },
     ]);
     expect(
-      result.diagnostics.filter(
-        (item) => item.code === "foundation-convention-adapter-unresolved",
-      ),
+      result.diagnostics.filter((item) => item.code === "foundation-convention-adapter-unresolved"),
     ).toHaveLength(2);
     expect(
       result.diagnostics.filter((item) => item.code === "foundation-convention-tool-missing"),

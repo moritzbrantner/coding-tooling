@@ -156,8 +156,7 @@ function conventionAdapterBindings(
       const source = configured[index]!;
       if (
         source.kind !== "package" ||
-        (configuration.module !== "tooling" &&
-          !source.technologies.includes(configuration.module))
+        (configuration.module !== "tooling" && !source.technologies.includes(configuration.module))
       ) {
         continue;
       }
