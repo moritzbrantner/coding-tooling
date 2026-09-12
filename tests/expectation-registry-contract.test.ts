@@ -29,6 +29,10 @@ import { createDetectorContext } from "../src/expectation-package-context.ts";
 import { missingCargoTargetPathFindings } from "../src/expectation-rust-detector.ts";
 import { missingRustTestFindings } from "../src/expectation-rust-test-detector.ts";
 import {
+  disabledTestCaseFindings,
+  focusedTestCaseFindings,
+} from "../src/expectation-test-state-detector.ts";
+import {
   missingJavaScriptTestFindings,
   missingTestFindings,
 } from "../src/expectation-test-detector.ts";
@@ -75,6 +79,8 @@ function detectorBatches(context: DetectorContext): RawFinding[][] {
     sourceDebtMarkerFindings(context),
     sourceUnimplementedStubFindings(context),
     sourceWorkMarkerFindings(context),
+    disabledTestCaseFindings(context),
+    focusedTestCaseFindings(context),
     missingTypeScriptConfigFindings(context),
     missingTestFindings(context),
     typeScriptAssignabilityFindings(context),
@@ -100,6 +106,8 @@ describe("expectation detector registry contract", () => {
       "source-debt-marker",
       "source-unimplemented-stub",
       "source-work-marker",
+      "test-disabled-case",
+      "test-focused-case",
       "typescript-project-config",
       "typescript-source-test",
       "typescript-type-assignability",
@@ -119,6 +127,8 @@ describe("expectation detector registry contract", () => {
       ["source-debt-marker", 2],
       ["source-unimplemented-stub", 1],
       ["source-work-marker", 1],
+      ["test-disabled-case", 1],
+      ["test-focused-case", 1],
       ["typescript-project-config", 1],
       ["typescript-source-test", 2],
       ["typescript-type-assignability", 1],
@@ -221,7 +231,7 @@ describe("expectation detector registry contract", () => {
 
     expect(repeatedBatches).toEqual(batches);
     expect(batches.map((batch) => batch.length)).toEqual([
-      0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0,
+      0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0,
     ]);
   });
 });
