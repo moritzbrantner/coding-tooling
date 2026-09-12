@@ -9,7 +9,19 @@ import {
   type ResultEnvelope,
   type ResultStatus,
 } from "./model.ts";
+import {
+  resolvePublicContractCaseEvidence,
+  validatePublicContractCaseReference,
+  type PublicContractCaseEvidence,
+  type PublicContractCaseExecution,
+  type PublicContractCaseReference,
+} from "./public-contract-case-evidence.ts";
 import { readJson, relativePosix, runCommand, walkFiles } from "./shared.ts";
+import {
+  prepareTestCaseEvidenceRun,
+  readTestCaseEvidence,
+  withTestCaseEvidenceEnvironment,
+} from "./test-case-evidence.ts";
 
 export type PublicContractEvidenceKind =
   | "behavioral"
@@ -50,6 +62,7 @@ export type PublicContractVerification = {
   kind: PublicContractEvidenceKind;
   capability: Capability;
   component?: string;
+  case?: PublicContractCaseReference;
   reason?: string;
 };
 
@@ -60,7 +73,9 @@ export type PublicContractManifest = {
 
 export type PublicContractEvidence = PublicContractVerification & {
   component: string;
+  capabilityOutcome: ResultStatus;
   outcome: ResultStatus;
+  caseEvidence?: PublicContractCaseEvidence;
 };
 
 export type PublicContractSurfaceResult = PublicContractSurface & {
@@ -393,7 +408,7 @@ function validateVerifications(
   verifications: PublicContractVerification[],
   surfaces: PublicContractSurface[],
 ): void {
-  const surfaceIds = new Set(surfaces.map((surface) => surface.id));
+  const surfaceById = new Map(surfaces.map((surface) => [surface.id, surface]));
   const ids = new Set<string>();
   for (const verification of verifications) {
     if (!verification.id?.trim())
@@ -401,8 +416,8 @@ function validateVerifications(
     if (ids.has(verification.id))
       throw new Error(`Duplicate public contract verification id: ${verification.id}`);
     ids.add(verification.id);
-    if (!surfaceIds.has(verification.surface))
-      throw new Error(`Unknown public contract surface: ${verification.surface}`);
+    const surface = surfaceById.get(verification.surface);
+    if (!surface) throw new Error(`Unknown public contract surface: ${verification.surface}`);
     if (!evidenceKinds.includes(verification.kind))
       throw new Error(`Unknown public contract evidence kind: ${verification.kind}`);
     if (!capabilities.includes(verification.capability))
@@ -411,6 +426,13 @@ function validateVerifications(
       throw new Error(
         `Public contract evidence kind '${verification.kind}' cannot use capability '${verification.capability}'`,
       );
+    }
+    if (verification.case) {
+      if (surface.kind !== "http-operation")
+        throw new Error("Public contract case evidence is only supported for HTTP operations");
+      if (!verification.capability.startsWith("test"))
+        throw new Error("Public contract HTTP case evidence requires a test capability");
+      validatePublicContractCaseReference(verification.case);
     }
   }
 }
@@ -455,35 +477,87 @@ export function publicContractCommand(
     const manifest = loadManifest(root, manifestPath);
     const verifications = manifest.verifications ?? [];
     validateVerifications(verifications, surfaces);
+    const currentRevision = revision(root);
     const bySurface = new Map<string, PublicContractEvidence[]>();
-    const executions = new Map<string, ResultStatus>();
+    const executions = new Map<string, PublicContractCaseExecution>();
+    const caseEvidenceExecutions = new Set<string>();
+    for (const verification of verifications) {
+      const surface = surfaces.find((candidate) => candidate.id === verification.surface)!;
+      const component = verification.component ?? surface.component;
+      const key = `${component}\u0000${verification.capability}`;
+      if (
+        surface.kind === "http-operation" &&
+        strongEvidence.has(verification.kind) &&
+        verification.case
+      )
+        caseEvidenceExecutions.add(key);
+    }
 
-    if (options.execute !== false) {
-      for (const verification of verifications) {
-        const surface = surfaces.find((candidate) => candidate.id === verification.surface)!;
-        const component = verification.component ?? surface.component;
-        const key = `${component}\u0000${verification.capability}`;
-        if (!executions.has(key))
-          executions.set(key, check(root, verification.capability, component).status);
-        const evidence: PublicContractEvidence = {
-          ...verification,
-          component,
-          outcome: executions.get(key)!,
-        };
-        bySurface.set(verification.surface, [
-          ...(bySurface.get(verification.surface) ?? []),
-          evidence,
-        ]);
+    for (const verification of verifications) {
+      const surface = surfaces.find((candidate) => candidate.id === verification.surface)!;
+      const component = verification.component ?? surface.component;
+      const key = `${component}\u0000${verification.capability}`;
+      if (!executions.has(key)) {
+        if (options.execute === false) {
+          executions.set(key, { capabilityOutcome: "unavailable" });
+        } else if (currentRevision && caseEvidenceExecutions.has(key)) {
+          const prepared = prepareTestCaseEvidenceRun(
+            root,
+            currentRevision,
+            verification.capability,
+            component,
+          );
+          const capabilityOutcome = withTestCaseEvidenceEnvironment(
+            prepared.environment,
+            () => check(root, verification.capability, component).status,
+          );
+          executions.set(key, {
+            capabilityOutcome,
+            prepared,
+            evidence: readTestCaseEvidence(prepared),
+          });
+        } else {
+          executions.set(key, {
+            capabilityOutcome: check(root, verification.capability, component).status,
+          });
+        }
       }
-    } else {
-      for (const verification of verifications) {
-        const surface = surfaces.find((candidate) => candidate.id === verification.surface)!;
-        const component = verification.component ?? surface.component;
-        bySurface.set(verification.surface, [
-          ...(bySurface.get(verification.surface) ?? []),
-          { ...verification, component, outcome: "unavailable" },
-        ]);
+
+      const execution = executions.get(key)!;
+      let outcome = execution.capabilityOutcome;
+      let caseEvidence: PublicContractCaseEvidence | undefined;
+      if (surface.kind === "http-operation" && strongEvidence.has(verification.kind)) {
+        if (!verification.capability.startsWith("test")) {
+          outcome = "unavailable";
+          caseEvidence = {
+            outcome: "missing",
+            reason: "http-case-evidence-requires-test-capability",
+          };
+        } else if (!currentRevision) {
+          outcome = "unavailable";
+          caseEvidence = {
+            id: verification.case?.id,
+            behavior: verification.case?.behavior,
+            outcome: "missing",
+            reason: "repository-revision-unavailable",
+          };
+        } else {
+          const resolved = resolvePublicContractCaseEvidence(verification.case, execution);
+          outcome = resolved.outcome;
+          caseEvidence = resolved.caseEvidence;
+        }
       }
+      const evidence: PublicContractEvidence = {
+        ...verification,
+        component,
+        capabilityOutcome: execution.capabilityOutcome,
+        outcome,
+        ...(caseEvidence ? { caseEvidence } : {}),
+      };
+      bySurface.set(verification.surface, [
+        ...(bySurface.get(verification.surface) ?? []),
+        evidence,
+      ]);
     }
 
     const results: PublicContractSurfaceResult[] = surfaces.map((surface) => {
@@ -537,6 +611,16 @@ export function publicContractCommand(
     };
 
     const diagnostics: Diagnostic[] = [];
+    const missingHttpCaseDeclarations = results
+      .filter((surface) => surface.kind === "http-operation")
+      .flatMap((surface) => surface.evidence)
+      .filter((item) => item.caseEvidence?.reason === "http-case-declaration-missing").length;
+    if (missingHttpCaseDeclarations > 0) {
+      diagnostics.push({
+        code: "public-contract-http-case-evidence-missing",
+        message: `${missingHttpCaseDeclarations} HTTP verification mappings rely on broad capability evidence without an exact behavioral case declaration.`,
+      });
+    }
     if (results.length === 0) {
       diagnostics.push({
         code: "public-contract-no-discovered-surfaces",
