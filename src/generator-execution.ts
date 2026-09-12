@@ -1,3 +1,4 @@
+import { convergenceRuleMode } from "./convergence-rule-policy.ts";
 import { applyGeneratorPlan, type GeneratorApplyOptions } from "./generator-apply.ts";
 import { generatorCommand, type GeneratorPlan } from "./generators.ts";
 import {
@@ -23,6 +24,27 @@ export function executeGeneratorCommand(
   if (planned.status !== "passed") return planned;
 
   const plan = planned.data.plan as GeneratorPlan;
+  const rule = { id: `generator.${id}`, mode: convergenceRuleMode(root, `generator.${id}`) };
+  if (rule.mode !== "apply") {
+    return {
+      schemaVersion: 1,
+      operation: "generate",
+      status: "unavailable",
+      durationMs: Date.now() - started,
+      data: {
+        result: "rule-withheld",
+        rule,
+        plan,
+      },
+      diagnostics: [
+        {
+          code: "convergence-rule-withheld",
+          message: `${rule.id} is configured as ${rule.mode}; generation planning is available but mutation is withheld`,
+        },
+      ],
+    };
+  }
+
   const prerequisites = evaluateGeneratorPrerequisites(root, plan);
   if (prerequisites.status !== "passed") {
     return {
@@ -32,6 +54,7 @@ export function executeGeneratorCommand(
       durationMs: Date.now() - started,
       data: {
         result: "prerequisite-failed",
+        rule,
         plan,
         prerequisites,
       },
@@ -48,6 +71,7 @@ export function executeGeneratorCommand(
       durationMs: Date.now() - started,
       data: {
         result: generation.result,
+        rule,
         plan,
         prerequisites,
         generation,
@@ -65,6 +89,7 @@ export function executeGeneratorCommand(
     durationMs: Date.now() - started,
     data: {
       result: verified ? "generated-and-verified" : "generated-but-unverified",
+      rule,
       plan,
       prerequisites,
       generation,
