@@ -216,8 +216,8 @@ describe("HTTP public contract case evidence", () => {
     expect(exported.evidence[0]).toMatchObject({
       capabilityOutcome: "passed",
       outcome: "passed",
-      caseEvidence: undefined,
     });
+    expect("caseEvidence" in exported.evidence[0]!).toBe(false);
   });
 
   test("strict enforcement fails when exact HTTP case evidence is missing", () => {
