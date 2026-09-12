@@ -109,9 +109,7 @@ export function configuredConvergenceRuleIds(
   namespace?: ConvergenceRuleNamespace,
 ): string[] {
   const ids = Object.keys(readConvergenceRuleConfig(root).convergence?.rules ?? {});
-  return ids
-    .filter((id) => namespace === undefined || id.startsWith(`${namespace}.`))
-    .sort();
+  return ids.filter((id) => namespace === undefined || id.startsWith(`${namespace}.`)).sort();
 }
 
 export function assertKnownConvergenceRuleIds(
