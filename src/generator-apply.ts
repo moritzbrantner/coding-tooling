@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 
+import { validateConvergenceRulePolicy } from "./convergence-rule-policy.ts";
 import { planGenerator, type GeneratorPlan, type PlannedGeneratorOperation } from "./generators.ts";
 import type { ResultEnvelope } from "./model.ts";
 
@@ -289,6 +290,16 @@ export function applyGeneratorPlan(
   plan: GeneratorPlan,
   options: GeneratorApplyOptions = {},
 ): GenerationApplyResult {
+  try {
+    validateConvergenceRulePolicy(root);
+  } catch (error) {
+    return failureResult(
+      "generation-failed",
+      "invalid-convergence-rule-policy",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+
   let prepared: PreparedMutation[];
   try {
     prepared = plan.operations.map((operation) => prepareMutation(root, operation));
