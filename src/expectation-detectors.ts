@@ -20,6 +20,10 @@ import {
 import { createDetectorContext } from "./expectation-package-context.ts";
 import { missingCargoTargetPathFindings } from "./expectation-rust-detector.ts";
 import { missingRustTestFindings } from "./expectation-rust-test-detector.ts";
+import {
+  disabledTestCaseFindings,
+  focusedTestCaseFindings,
+} from "./expectation-test-state-detector.ts";
 import { missingJavaScriptTestFindings, missingTestFindings } from "./expectation-test-detector.ts";
 import type {
   ExpectationDescriptor,
@@ -312,6 +316,43 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       ],
     },
     detect: sourceWorkMarkerFindings,
+  },
+  {
+    id: "test-disabled-case",
+    version: 1,
+    description: "Skipped and TODO test cases remain visible as explicit test debt",
+    defaultSeverity: "info",
+    policyKind: "advisory",
+    evidenceContract: {
+      basis: "syntax",
+      oracle: "bounded-test-case-state-scan",
+      independenceKey: "test-case-state-scan",
+      proves:
+        "A recognized test/it/describe .skip or test/it .todo call is present in a discovered test file.",
+      limitations: [
+        "Does not prove whether the disabled case is intentionally deferred or obsolete.",
+        "Only line-oriented direct test/it/describe calls are recognized; aliases and computed APIs remain unsupported.",
+      ],
+    },
+    detect: disabledTestCaseFindings,
+  },
+  {
+    id: "test-focused-case",
+    version: 1,
+    description: "Committed test suites do not retain focused-only test cases",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    evidenceContract: {
+      basis: "syntax",
+      oracle: "bounded-test-case-state-scan",
+      independenceKey: "test-case-state-scan",
+      proves: "A recognized test/it/describe .only call is present in a discovered test file.",
+      limitations: [
+        "Does not prove whether a particular runner honors the focus marker.",
+        "Only line-oriented direct test/it/describe calls are recognized; aliases and computed APIs remain unsupported.",
+      ],
+    },
+    detect: focusedTestCaseFindings,
   },
   {
     id: "typescript-project-config",

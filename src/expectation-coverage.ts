@@ -35,6 +35,7 @@ type CoverageTarget =
   | "dotnet-analysis-projects"
   | "javascript-source"
   | "script-source"
+  | "package-test-files"
   | "rust-explicit-targets"
   | "rust-source-surface"
   | "production-source"
@@ -55,6 +56,8 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "source-debt-marker": "production-source",
   "source-unimplemented-stub": "production-source",
   "source-work-marker": "work-marker-source",
+  "test-disabled-case": "package-test-files",
+  "test-focused-case": "package-test-files",
   "typescript-project-config": "typescript-source",
   "typescript-source-test": "typescript-source",
   "typescript-type-assignability": "typescript-analysis-projects",
@@ -97,6 +100,11 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
       return context.packages.reduce(
         (total, packageInfo) =>
           total + packageInfo.sourceFiles.length + packageInfo.javaScriptSourceFiles.length,
+        0,
+      );
+    case "package-test-files":
+      return context.packages.reduce(
+        (total, packageInfo) => total + packageInfo.testFiles.length,
         0,
       );
     case "rust-explicit-targets":

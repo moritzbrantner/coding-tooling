@@ -22,6 +22,7 @@ import {
   runCommand,
   walkFiles,
 } from "./shared.ts";
+import { collectTestExecutionEvidence } from "./test-execution-evidence.ts";
 
 type PackageManifest = {
   name?: string;
@@ -300,6 +301,52 @@ function missingDiagnostics(
   }));
 }
 
+function executePlannedCheck(root: string, planned: PlannedCheck) {
+  const started = Date.now();
+  const cwd = planned.path === "." ? root : join(root, planned.path);
+  const result = runCommand(planned.command[0], planned.command.slice(1), cwd);
+  const processStatus: ResultStatus = result.error
+    ? "error"
+    : result.status === 0
+      ? "passed"
+      : "failed";
+  const testExecution = collectTestExecutionEvidence({
+    cwd,
+    capability: planned.capability,
+    command: planned.command,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  });
+  const zeroExecutedCases =
+    processStatus === "passed" &&
+    testExecution?.status === "available" &&
+    testExecution.executedCases === 0;
+  const status: ResultStatus = zeroExecutedCases ? "failed" : processStatus;
+
+  return {
+    ...planned,
+    status,
+    processStatus,
+    exitCode: result.status,
+    durationMs: Date.now() - started,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    error: result.error,
+    testExecution,
+    failureReason: zeroExecutedCases ? "zero-tests-executed" : undefined,
+  };
+}
+
+function testExecutionDiagnostics(completed: ReturnType<typeof executePlannedCheck>): Diagnostic[] {
+  if (completed.failureReason !== "zero-tests-executed") return [];
+  return [
+    {
+      code: "test-zero-executed-cases",
+      message: `${completed.capability} for ${completed.component} completed without executing a behavioral test case`,
+    },
+  ];
+}
+
 export function runPlan(options: {
   root?: string;
   tier: string;
@@ -338,19 +385,9 @@ export function runPlan(options: {
 
     const results: Array<Record<string, unknown>> = [];
     for (const planned of plan.checks) {
-      const checkStarted = Date.now();
-      const cwd = planned.path === "." ? root : join(root, planned.path);
-      const result = runCommand(planned.command[0], planned.command.slice(1), cwd);
-      const completed = {
-        ...planned,
-        status: result.error ? "error" : result.status === 0 ? "passed" : "failed",
-        exitCode: result.status,
-        durationMs: Date.now() - checkStarted,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        error: result.error,
-      };
+      const completed = executePlannedCheck(root, planned);
       results.push(completed);
+      diagnostics.push(...testExecutionDiagnostics(completed));
       if (completed.status !== "passed") break;
     }
     const status: ResultStatus = results.some((result) => result.status === "error")
@@ -422,27 +459,14 @@ export function check(
       return envelope("check", "unavailable", started, { capability, results: [] }, [
         { code: "capability-unavailable", message: `${capability} is unavailable` },
       ]);
-    const results = checks.map((item) => {
-      const result = runCommand(
-        item.command[0],
-        item.command.slice(1),
-        item.path === "." ? root : join(root, item.path),
-      );
-      return {
-        ...item,
-        status: result.error ? "error" : result.status === 0 ? "passed" : "failed",
-        exitCode: result.status,
-        stdout: result.stdout,
-        stderr: result.stderr,
-        error: result.error,
-      };
-    });
+    const results = checks.map((item) => executePlannedCheck(root, item));
+    const diagnostics = results.flatMap(testExecutionDiagnostics);
     const status = results.some((item) => item.status === "error")
       ? "error"
       : results.some((item) => item.status === "failed")
         ? "failed"
         : "passed";
-    return envelope("check", status, started, { capability, results });
+    return envelope("check", status, started, { capability, results }, diagnostics);
   } catch (error) {
     return envelope("check", "error", started, { capability, results: [] }, [
       {
