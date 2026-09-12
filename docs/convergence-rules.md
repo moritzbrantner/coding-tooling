@@ -50,6 +50,10 @@ Rule modes live in the ordinary schema-v1 `.coding-tooling.json` policy file:
 
 Unknown mode values and malformed rule IDs fail configuration validation. Unconfigured rules use `apply`.
 
+Configured IDs must also resolve to real convergence rules. The closed scaffold, structured-refactor, and normalizer namespaces reject unknown IDs directly. Generator IDs are dynamic because convention and repository-local generators contribute to the effective catalog, so generator policy is reconciled against that catalog before direct generator mutation. A typo such as `generator.sampl = disabled` therefore cannot silently leave `generator.sample` at the default `apply` mode: generation fails closed instead.
+
+`coding-tooling convergence rules list --json` reports dynamic stale entries in `reconciliation.unknownConfiguredRuleIds` and returns a failing result until the policy is corrected. A rule may still be configured when it is currently not applicable; applicability and rule identity are deliberately separate concepts.
+
 ## Rule namespaces
 
 The registry currently has four mutation namespaces:
@@ -95,5 +99,7 @@ Normalizer rules are discovered normally in every mode. Only `apply` normalizers
 ## Safety properties
 
 The registry does not add an arbitrary plugin execution surface. Generator descriptors remain restricted, scaffold implementations remain detector-owned, structured refactors remain the closed allowlisted source mutations, and normalizers remain the closed allowlisted adapters already accepted by deterministic normalization.
+
+Malformed, unknown, or stale mutation policy fails closed at the relevant execution boundary rather than falling through to `apply`. Registry reconciliation remains observational: it reports stale policy but does not rewrite or suppress findings automatically.
 
 Generated application files remain ordinary user-owned repository code. Disabling a generator later does not reclaim or rewrite files that were generated earlier.
