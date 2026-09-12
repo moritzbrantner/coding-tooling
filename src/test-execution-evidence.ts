@@ -38,6 +38,8 @@ export type TestExecutionInput = {
   stderr: string;
 };
 
+const ansiEscapePattern = new RegExp("\\x1b\\[[0-9;]*m", "g");
+
 function testCapability(capability: Capability): boolean {
   return capability === "test" || capability.startsWith("test:");
 }
@@ -136,7 +138,7 @@ function evidence(
 }
 
 function outputLines(text: string): string[] {
-  return text.split(/\r?\n/).map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+  return text.split(/\r?\n/).map((line) => line.replace(ansiEscapePattern, "").trimEnd());
 }
 
 function bunEvidence(text: string, script: string | null): TestExecutionEvidence {
