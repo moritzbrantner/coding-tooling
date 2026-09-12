@@ -127,7 +127,11 @@ test("lists generators, scaffolders, refactors, and normalizers as first-class c
 
 test("disabling a scaffold keeps the finding but prevents convergence from mutating", () => {
   const root = fixture();
-  configure(root, { "scaffold.typescript-source-test": "disabled" });
+  configure(root, {
+    "scaffold.typescript-source-test": "disabled",
+    "normalizer.oxfmt": "disabled",
+    "normalizer.oxlint-safe-fix": "disabled",
+  });
 
   const result = convergeRepository(root, { verifyTier: null });
   const handoff = result.data.handoff as Array<Record<string, unknown>>;
