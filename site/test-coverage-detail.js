@@ -1,6 +1,5 @@
 export function parseCoverageDetail(content, format) {
-  if (format !== "lcov")
-    throw new Error(`Unsupported detailed coverage format: ${format}`);
+  if (format !== "lcov") throw new Error(`Unsupported detailed coverage format: ${format}`);
   return parseLcovDetail(content);
 }
 
