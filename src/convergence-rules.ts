@@ -10,7 +10,7 @@ import { generatorCatalog } from "./generators.ts";
 import type { ResultEnvelope } from "./model.ts";
 import { planNormalization } from "./normalization.ts";
 
-export type ConvergenceRuleKind = "generator" | "scaffold" | "normalizer";
+export type ConvergenceRuleKind = "generator" | "scaffold" | "refactor" | "normalizer";
 
 export type ConvergenceRuleCatalogEntry = {
   id: string;
@@ -24,6 +24,16 @@ export type ConvergenceRuleCatalogEntry = {
   applicable: boolean;
   details?: Record<string, unknown>;
 };
+
+const builtInRefactorRules = [
+  {
+    id: "refactor.typescript-barrel-export",
+    description:
+      "Ensure one exact TypeScript re-export in an export-only barrel at a deterministic insertion point.",
+    technologies: ["typescript"],
+    operation: "typescript-barrel-export",
+  },
+] as const;
 
 const builtInNormalizerRules = [
   {
@@ -81,6 +91,21 @@ export function convergenceRuleCatalog(root: string): ConvergenceRuleCatalogEntr
         postconditions: generator.postconditions,
         composedGenerators: generator.composedGenerators,
       },
+    });
+  }
+
+  for (const rule of builtInRefactorRules) {
+    rules.push({
+      id: rule.id,
+      kind: "refactor",
+      description: rule.description,
+      source: "coding-tooling",
+      implementation: "src/generator-apply.ts",
+      technologies: [...rule.technologies],
+      defaultMode: "apply",
+      mode: convergenceRuleMode(root, rule.id),
+      applicable: true,
+      details: { operation: rule.operation },
     });
   }
 
