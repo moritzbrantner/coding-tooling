@@ -76,12 +76,8 @@ The first detail protocol is LCOV-only and preserves exact file, line, function,
     {
       "path": "src/example.ts",
       "lines": [{ "line": 12, "hits": 1, "covered": true }],
-      "functions": [
-        { "name": "handleRequest", "line": 10, "hits": 1, "covered": true }
-      ],
-      "branches": [
-        { "line": 13, "block": "0", "branch": "1", "hits": 0, "covered": false }
-      ]
+      "functions": [{ "name": "handleRequest", "line": 10, "hits": 1, "covered": true }],
+      "branches": [{ "line": 13, "block": "0", "branch": "1", "hits": 0, "covered": false }]
     }
   ]
 }
