@@ -96,6 +96,7 @@ test("lists generators, scaffolders, refactors, and normalizers as first-class c
   const rules = result.data.rules as Array<{ id: string; kind: string; mode: string }>;
 
   expect(result.status).toBe("passed");
+  expect(result.data.reconciliation).toEqual({ unknownConfiguredRuleIds: [] });
   expect(rules).toContainEqual(
     expect.objectContaining({ id: "generator.sample", kind: "generator", mode: "apply" }),
   );
@@ -121,6 +122,25 @@ test("lists generators, scaffolders, refactors, and normalizers as first-class c
       id: "normalizer.oxlint-safe-fix",
       kind: "normalizer",
       mode: "apply",
+    }),
+  );
+});
+
+test("rule listing reports unknown configured generator ids", () => {
+  const root = fixture();
+  localGenerator(root);
+  configure(root, { "generator.sampl": "disabled" });
+
+  const result = convergenceRulesCommand(root, "list");
+
+  expect(result.status).toBe("failed");
+  expect(result.data.reconciliation).toEqual({
+    unknownConfiguredRuleIds: ["generator.sampl"],
+  });
+  expect(result.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "unknown-convergence-rule-policy",
+      message: expect.stringContaining("generator.sampl"),
     }),
   );
 });
