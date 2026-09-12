@@ -71,6 +71,27 @@ export function validateConvergenceRuleConfig(
   }
 }
 
+function assertKnownStaticConvergenceRuleIds(config: ToolingConfig): void {
+  const known = new Set<string>([
+    ...builtInScaffoldRuleIds,
+    ...builtInRefactorRuleIds,
+    ...builtInNormalizerRuleIds,
+  ]);
+  const unknown = Object.keys(config.convergence?.rules ?? {})
+    .filter(
+      (id) =>
+        (id.startsWith("scaffold.") ||
+          id.startsWith("refactor.") ||
+          id.startsWith("normalizer.")) &&
+        !known.has(id),
+    )
+    .sort();
+  if (unknown.length === 0) return;
+  throw new Error(
+    `Unknown configured convergence rule ${unknown.length === 1 ? "id" : "ids"}: ${unknown.join(", ")}`,
+  );
+}
+
 function readConvergenceRuleConfig(root: string): ToolingConfig {
   const path = join(root, ".coding-tooling.json");
   if (!existsSync(path)) return { schemaVersion: 1 };
@@ -79,6 +100,7 @@ function readConvergenceRuleConfig(root: string): ToolingConfig {
     throw new Error(".coding-tooling.json must use schemaVersion 1");
   }
   validateConvergenceRuleConfig(config);
+  assertKnownStaticConvergenceRuleIds(config);
   return config;
 }
 
