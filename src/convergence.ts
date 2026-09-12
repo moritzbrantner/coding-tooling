@@ -578,9 +578,10 @@ export function convergeRepository(
     }
   }
 
-  const finalDeterministic = planRemediationCandidates(finalFindings, { includeBaseline, root }).filter(
-    (candidate) => candidate.kind === "deterministic-scaffold",
-  );
+  const finalDeterministic = planRemediationCandidates(finalFindings, {
+    includeBaseline,
+    root,
+  }).filter((candidate) => candidate.kind === "deterministic-scaffold");
   if (finalDeterministic.length === 0) {
     const normalization = normalize(root);
     normalizations.push(normalization);

@@ -112,7 +112,8 @@ export function convergenceRuleCatalog(root: string): ConvergenceRuleCatalogEntr
 
   const findings = currentFindings(root);
   const scaffoldExpectations = new Set(knownScaffoldExpectations);
-  for (const finding of findings) if (finding.scaffold) scaffoldExpectations.add(finding.expectationId);
+  for (const finding of findings)
+    if (finding.scaffold) scaffoldExpectations.add(finding.expectationId);
   const expectations = new Map(expectationRegistry().map((entry) => [entry.id, entry]));
   for (const expectationId of [...scaffoldExpectations].sort()) {
     const id = scaffoldRuleId(expectationId);
@@ -183,12 +184,9 @@ export function convergenceRulesCommand(
     if (!id) throw new Error(`${action} requires a convergence rule id`);
     const rule = catalog.find((candidate) => candidate.id === id);
     if (!rule) {
-      return envelope(
-        started,
-        "unavailable",
-        { root, id },
-        [{ code: "convergence-rule-not-found", message: `Unknown convergence rule: ${id}` }],
-      );
+      return envelope(started, "unavailable", { root, id }, [
+        { code: "convergence-rule-not-found", message: `Unknown convergence rule: ${id}` },
+      ]);
     }
 
     if (action === "describe") return envelope(started, "passed", { root, rule });
@@ -197,16 +195,11 @@ export function convergenceRulesCommand(
     const updated = convergenceRuleCatalog(root).find((candidate) => candidate.id === id)!;
     return envelope(started, "passed", { root, rule: updated, change });
   } catch (error) {
-    return envelope(
-      started,
-      "error",
-      { root, action, id, mode },
-      [
-        {
-          code: "convergence-rules-failed",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      ],
-    );
+    return envelope(started, "error", { root, action, id, mode }, [
+      {
+        code: "convergence-rules-failed",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ]);
   }
 }

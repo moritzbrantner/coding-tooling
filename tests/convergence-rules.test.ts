@@ -74,13 +74,25 @@ test("lists generators, scaffolders, and normalizers as first-class convergence 
   const rules = result.data.rules as Array<{ id: string; kind: string; mode: string }>;
 
   expect(result.status).toBe("passed");
-  expect(rules).toContainEqual(expect.objectContaining({ id: "generator.sample", kind: "generator", mode: "apply" }));
   expect(rules).toContainEqual(
-    expect.objectContaining({ id: "scaffold.typescript-source-test", kind: "scaffold", mode: "apply" }),
+    expect.objectContaining({ id: "generator.sample", kind: "generator", mode: "apply" }),
   );
-  expect(rules).toContainEqual(expect.objectContaining({ id: "normalizer.oxfmt", kind: "normalizer", mode: "apply" }));
   expect(rules).toContainEqual(
-    expect.objectContaining({ id: "normalizer.oxlint-safe-fix", kind: "normalizer", mode: "apply" }),
+    expect.objectContaining({
+      id: "scaffold.typescript-source-test",
+      kind: "scaffold",
+      mode: "apply",
+    }),
+  );
+  expect(rules).toContainEqual(
+    expect.objectContaining({ id: "normalizer.oxfmt", kind: "normalizer", mode: "apply" }),
+  );
+  expect(rules).toContainEqual(
+    expect.objectContaining({
+      id: "normalizer.oxlint-safe-fix",
+      kind: "normalizer",
+      mode: "apply",
+    }),
   );
 });
 
@@ -151,12 +163,7 @@ test("disabled normalizers remain discoverable but are not executed", () => {
 test("rule commands persist enable, disable, and suggest state in repository config", () => {
   const root = fixture();
 
-  const disabled = convergenceRulesCommand(
-    root,
-    "set",
-    "normalizer.oxfmt",
-    "disabled",
-  );
+  const disabled = convergenceRulesCommand(root, "set", "normalizer.oxfmt", "disabled");
   expect(disabled.status).toBe("passed");
   expect(disabled.data.rule).toMatchObject({ id: "normalizer.oxfmt", mode: "disabled" });
 

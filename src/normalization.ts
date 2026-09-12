@@ -366,7 +366,9 @@ export function normalizeRepository(
   try {
     const plan = planNormalization(root);
     const appliedNormalizers = plan.normalizers.filter((normalizer) => normalizer.mode === "apply");
-    const withheldNormalizers = plan.normalizers.filter((normalizer) => normalizer.mode !== "apply");
+    const withheldNormalizers = plan.normalizers.filter(
+      (normalizer) => normalizer.mode !== "apply",
+    );
     const execute = dependencies.execute ?? defaultExecute;
     const fingerprint = dependencies.fingerprint ?? repositoryContentFingerprint;
     const coverage =

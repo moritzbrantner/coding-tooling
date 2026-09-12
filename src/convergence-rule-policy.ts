@@ -9,7 +9,10 @@ export type ConvergenceRuleMode = (typeof convergenceRuleModes)[number];
 
 const convergenceRuleIdPattern = /^(generator|scaffold|normalizer)\.[a-z0-9][a-z0-9._-]*$/;
 
-export function convergenceRuleId(kind: "generator" | "scaffold" | "normalizer", id: string): string {
+export function convergenceRuleId(
+  kind: "generator" | "scaffold" | "normalizer",
+  id: string,
+): string {
   return `${kind}.${id}`;
 }
 
@@ -64,13 +67,15 @@ export function setConvergenceRuleMode(
   mode: ConvergenceRuleMode,
 ): { changed: boolean; previousMode: ConvergenceRuleMode; mode: ConvergenceRuleMode } {
   if (!convergenceRuleIdPattern.test(id)) throw new Error(`Invalid convergence rule id: ${id}`);
-  if (!convergenceRuleModes.includes(mode)) throw new Error(`Invalid convergence rule mode: ${mode}`);
+  if (!convergenceRuleModes.includes(mode))
+    throw new Error(`Invalid convergence rule mode: ${mode}`);
 
   const path = join(root, ".coding-tooling.json");
   const config: ToolingConfig | undefined = existsSync(path)
     ? readJson<ToolingConfig>(path)
     : { schemaVersion: 1 };
-  if (!config || config.schemaVersion !== 1) throw new Error(".coding-tooling.json must use schemaVersion 1");
+  if (!config || config.schemaVersion !== 1)
+    throw new Error(".coding-tooling.json must use schemaVersion 1");
   validateConvergenceRuleConfig(config);
 
   const previousMode = config.convergence?.rules?.[id] ?? "apply";
@@ -89,5 +94,9 @@ export function setConvergenceRuleMode(
     },
   };
   writeFileSync(path, `${JSON.stringify(next, null, 2)}\n`);
-  return { changed: previousMode !== mode || config.convergence?.rules?.[id] !== mode, previousMode, mode };
+  return {
+    changed: previousMode !== mode || config.convergence?.rules?.[id] !== mode,
+    previousMode,
+    mode,
+  };
 }
