@@ -63,8 +63,12 @@ export function validateConvergenceRuleConfig(
 }
 
 export function convergenceRuleMode(root: string, id: string): ConvergenceRuleMode {
-  const config = readJson<ToolingConfig>(join(root, ".coding-tooling.json"));
-  if (!config || config.schemaVersion !== 1) return "apply";
+  const path = join(root, ".coding-tooling.json");
+  if (!existsSync(path)) return "apply";
+  const config = readJson<ToolingConfig>(path);
+  if (!config || config.schemaVersion !== 1) {
+    throw new Error(".coding-tooling.json must use schemaVersion 1");
+  }
   validateConvergenceRuleConfig(config);
   return config.convergence?.rules?.[id] ?? "apply";
 }
