@@ -13,6 +13,25 @@ export function convergenceRuleId(kind: "generator" | "scaffold" | "normalizer",
   return `${kind}.${id}`;
 }
 
+export function scaffoldRuleId(expectationId: string): string {
+  return convergenceRuleId("scaffold", expectationId);
+}
+
+export function normalizerRuleId(tool: string): string {
+  switch (tool) {
+    case "oxfmt":
+      return "normalizer.oxfmt";
+    case "oxlint":
+      return "normalizer.oxlint-safe-fix";
+    case "cargo-fmt":
+      return "normalizer.rustfmt";
+    case "dotnet-format":
+      return "normalizer.dotnet-format";
+    default:
+      return convergenceRuleId("normalizer", tool);
+  }
+}
+
 export function validateConvergenceRuleConfig(
   config: ToolingConfig,
   configuredPath = ".coding-tooling.json",
