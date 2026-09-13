@@ -353,7 +353,10 @@ export function nextSliceCommand(
       sources: {
         pullRequests: { status: pr.source.status, count: pr.candidates.length },
         roadmap: { count: roadmap.length },
-        issues: { status: issues.diagnostic ? "unavailable" : "passed", count: issues.candidates.length },
+        issues: {
+          status: issues.diagnostic ? "unavailable" : "passed",
+          count: issues.candidates.length,
+        },
         todos: { count: todos.length },
         capabilityGaps: { status: gaps.source.status, count: gaps.candidates.length },
       },

@@ -17,7 +17,7 @@ A task packet records the bounded capability being changed and the constraints t
   "changeKinds": ["behavior", "protocol"],
   "acceptance": {
     "requiredCapabilities": ["test:integration"],
-    "evidence": ["missing intermediate delta is rejected"]
+    "reviewRequirements": ["missing intermediate delta is rejected"]
   },
   "integrationCondition": "all exact-head required evidence passes"
 }
@@ -33,9 +33,9 @@ Task packets should normally live under an ignored `.artifacts/` path. They are 
 
 ## Change classification
 
-`changeKinds` derives risk-appropriate evidence instead of making each agent invent a validation plan. The current mapping distinguishes behavior, refactoring, performance, protocol, persistence, browser, mobile, dependency, security, deterministic replay, and documentation changes. Explicit acceptance capabilities and evidence are additive.
+`changeKinds` derives risk-appropriate evidence instead of making each agent invent a validation plan. The current mapping distinguishes behavior, refactoring, performance, protocol, persistence, browser, mobile, dependency, security, deterministic replay, and documentation changes. Explicit acceptance capabilities and semantic review requirements are additive.
 
-A missing required capability is unavailable evidence, not a passing result.
+A missing required capability is unavailable evidence, not a passing result. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence.
 
 ## Exact-head verification
 

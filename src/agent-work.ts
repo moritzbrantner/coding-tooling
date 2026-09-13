@@ -42,14 +42,14 @@ export type TaskPacket = {
   changeKinds: ChangeKind[];
   acceptance?: {
     requiredCapabilities?: Capability[];
-    evidence?: string[];
+    reviewRequirements?: string[];
   };
   integrationCondition?: string;
 };
 
 export type EvidencePlan = {
   requiredCapabilities: Capability[];
-  requiredEvidence: string[];
+  reviewRequirements: string[];
 };
 
 type PacketRead = {
@@ -65,47 +65,47 @@ type VerificationReport = ResultEnvelope<Record<string, unknown>> & {
 const kindEvidence: Record<ChangeKind, EvidencePlan> = {
   behavior: {
     requiredCapabilities: ["test"],
-    requiredEvidence: ["behavior-regression"],
+    reviewRequirements: [],
   },
   refactor: {
     requiredCapabilities: ["test"],
-    requiredEvidence: ["behavior-parity"],
+    reviewRequirements: [],
   },
   performance: {
     requiredCapabilities: ["benchmark:smoke"],
-    requiredEvidence: ["equivalent-workload-benchmark", "versioned-or-declared-baseline"],
+    reviewRequirements: [],
   },
   protocol: {
     requiredCapabilities: ["test:integration"],
-    requiredEvidence: ["protocol-compatibility"],
+    reviewRequirements: [],
   },
   persistence: {
     requiredCapabilities: ["test:integration"],
-    requiredEvidence: ["persistence-boundary"],
+    reviewRequirements: [],
   },
   browser: {
     requiredCapabilities: ["test:e2e:smoke"],
-    requiredEvidence: ["representative-browser-journey"],
+    reviewRequirements: [],
   },
   mobile: {
     requiredCapabilities: ["test"],
-    requiredEvidence: ["representative-mobile-runtime"],
+    reviewRequirements: [],
   },
   dependency: {
     requiredCapabilities: ["dependencies:audit"],
-    requiredEvidence: ["dependency-resolution"],
+    reviewRequirements: [],
   },
   security: {
     requiredCapabilities: ["test:integration"],
-    requiredEvidence: ["security-boundary"],
+    reviewRequirements: [],
   },
   replay: {
     requiredCapabilities: ["test"],
-    requiredEvidence: ["deterministic-replay"],
+    reviewRequirements: [],
   },
   documentation: {
     requiredCapabilities: [],
-    requiredEvidence: ["claim-matches-verified-capability"],
+    reviewRequirements: [],
   },
 };
 
@@ -127,16 +127,16 @@ function stringArray(value: unknown): string[] | undefined {
 export function evidenceForChangeKinds(
   kinds: ChangeKind[],
   explicitCapabilities: Capability[] = [],
-  explicitEvidence: string[] = [],
+  explicitReviewRequirements: string[] = [],
 ): EvidencePlan {
   return {
     requiredCapabilities: uniqueSorted([
       ...kinds.flatMap((kind) => kindEvidence[kind].requiredCapabilities),
       ...explicitCapabilities,
     ]),
-    requiredEvidence: uniqueSorted([
-      ...kinds.flatMap((kind) => kindEvidence[kind].requiredEvidence),
-      ...explicitEvidence,
+    reviewRequirements: uniqueSorted([
+      ...kinds.flatMap((kind) => kindEvidence[kind].reviewRequirements),
+      ...explicitReviewRequirements,
     ]),
   };
 }
@@ -197,7 +197,7 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
   }
 
   let requiredCapabilities: Capability[] = [];
-  let acceptanceEvidence: string[] = [];
+  let reviewRequirements: string[] = [];
   if (source.acceptance !== undefined) {
     if (
       !source.acceptance ||
@@ -224,14 +224,14 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
           requiredCapabilities = rawCapabilities as Capability[];
         }
       }
-      if (acceptance.evidence !== undefined) {
-        const evidence = stringArray(acceptance.evidence);
+      if (acceptance.reviewRequirements !== undefined) {
+        const evidence = stringArray(acceptance.reviewRequirements);
         if (!evidence) {
           diagnostics.push({
-            code: "task-packet-evidence-invalid",
-            message: "acceptance.evidence must contain non-empty strings",
+            code: "task-packet-review-requirements-invalid",
+            message: "acceptance.reviewRequirements must contain non-empty strings",
           });
-        } else acceptanceEvidence = evidence;
+        } else reviewRequirements = evidence;
       }
     }
   }
@@ -264,11 +264,11 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
     outOfScope,
     changeKinds: uniqueSorted(kinds),
   };
-  if (requiredCapabilities.length > 0 || acceptanceEvidence.length > 0) {
+  if (requiredCapabilities.length > 0 || reviewRequirements.length > 0) {
     packet.acceptance = {};
     if (requiredCapabilities.length > 0)
       packet.acceptance.requiredCapabilities = requiredCapabilities;
-    if (acceptanceEvidence.length > 0) packet.acceptance.evidence = acceptanceEvidence;
+    if (acceptanceEvidence.length > 0) packet.acceptance.reviewRequirements = acceptanceEvidence;
   }
   if (integrationCondition) packet.integrationCondition = integrationCondition;
 
