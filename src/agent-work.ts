@@ -199,7 +199,11 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
   let requiredCapabilities: Capability[] = [];
   let acceptanceEvidence: string[] = [];
   if (source.acceptance !== undefined) {
-    if (!source.acceptance || typeof source.acceptance !== "object" || Array.isArray(source.acceptance)) {
+    if (
+      !source.acceptance ||
+      typeof source.acceptance !== "object" ||
+      Array.isArray(source.acceptance)
+    ) {
       diagnostics.push({
         code: "task-packet-acceptance-invalid",
         message: "acceptance must be an object when supplied",
@@ -232,14 +236,22 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
     }
   }
   const integrationCondition =
-    typeof source.integrationCondition === "string" ? source.integrationCondition.trim() : undefined;
+    typeof source.integrationCondition === "string"
+      ? source.integrationCondition.trim()
+      : undefined;
   if (source.integrationCondition !== undefined && !integrationCondition) {
     diagnostics.push({
       code: "task-packet-integration-condition-invalid",
       message: "integrationCondition must be a non-empty string when supplied",
     });
   }
-  if (diagnostics.length > 0 || !isSha(source.baselineSha) || !mustPreserve || !outOfScope || !kinds) {
+  if (
+    diagnostics.length > 0 ||
+    !isSha(source.baselineSha) ||
+    !mustPreserve ||
+    !outOfScope ||
+    !kinds
+  ) {
     return { diagnostics };
   }
 
@@ -254,7 +266,8 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
   };
   if (requiredCapabilities.length > 0 || acceptanceEvidence.length > 0) {
     packet.acceptance = {};
-    if (requiredCapabilities.length > 0) packet.acceptance.requiredCapabilities = requiredCapabilities;
+    if (requiredCapabilities.length > 0)
+      packet.acceptance.requiredCapabilities = requiredCapabilities;
     if (acceptanceEvidence.length > 0) packet.acceptance.evidence = acceptanceEvidence;
   }
   if (integrationCondition) packet.integrationCondition = integrationCondition;
@@ -286,7 +299,14 @@ function envelope(
   data: Record<string, unknown>,
   diagnostics: Diagnostic[] = [],
 ): ResultEnvelope<Record<string, unknown>> {
-  return { schemaVersion: 1, operation, status, durationMs: Date.now() - started, data, diagnostics };
+  return {
+    schemaVersion: 1,
+    operation,
+    status,
+    durationMs: Date.now() - started,
+    data,
+    diagnostics,
+  };
 }
 
 function gitSha(root: string, runner: Runner, ref = "HEAD"): string | undefined {
@@ -340,11 +360,19 @@ export function agentVerificationCommand(
   const runner = dependencies.run ?? runCommand;
   const read = readTaskPacket(root, packetPath);
   if (!read.packet || !read.digest) {
-    return envelope("agent-verification", "failed", started, { root, packetPath }, read.diagnostics);
+    return envelope(
+      "agent-verification",
+      "failed",
+      started,
+      { root, packetPath },
+      read.diagnostics,
+    );
   }
   const worktree = cleanWorktree(root, runner);
   if (worktree.diagnostic) {
-    return envelope("agent-verification", "error", started, { root, packetPath }, [worktree.diagnostic]);
+    return envelope("agent-verification", "error", started, { root, packetPath }, [
+      worktree.diagnostic,
+    ]);
   }
   if (!worktree.clean) {
     return envelope("agent-verification", "unavailable", started, { root, packetPath }, [
@@ -360,14 +388,24 @@ export function agentVerificationCommand(
       { code: "verification-head-unavailable", message: "Could not resolve exact candidate HEAD" },
     ]);
   }
-  const baselineExists = runner("git", ["cat-file", "-e", `${read.packet.baselineSha}^{commit}`], root);
+  const baselineExists = runner(
+    "git",
+    ["cat-file", "-e", `${read.packet.baselineSha}^{commit}`],
+    root,
+  );
   if (baselineExists.status !== 0) {
-    return envelope("agent-verification", "unavailable", started, { root, packetPath, candidateSha }, [
-      {
-        code: "verification-baseline-unavailable",
-        message: `Baseline ${read.packet.baselineSha} is not available in this checkout`,
-      },
-    ]);
+    return envelope(
+      "agent-verification",
+      "unavailable",
+      started,
+      { root, packetPath, candidateSha },
+      [
+        {
+          code: "verification-baseline-unavailable",
+          message: `Baseline ${read.packet.baselineSha} is not available in this checkout`,
+        },
+      ],
+    );
   }
   const evidencePlan = evidenceForChangeKinds(
     read.packet.changeKinds,
@@ -388,7 +426,8 @@ export function agentVerificationCommand(
       [
         {
           code: "verification-head-moved",
-          message: "HEAD changed while verification was running; discard the stale evidence and rerun",
+          message:
+            "HEAD changed while verification was running; discard the stale evidence and rerun",
         },
       ],
     );
@@ -423,24 +462,33 @@ export function agentVerificationCommand(
     })),
   );
   const environment = expectedEnvironmentFingerprint(root, "default");
-  return envelope("agent-verification", status, started, {
-    schemaVersion: AGENT_VERIFICATION_VERSION,
-    root,
-    packetPath,
-    packetDigest: read.digest,
-    baselineSha: read.packet.baselineSha,
-    candidateSha,
-    environment: {
-      status: environment.status,
-      data: environment.data,
-      diagnostics: environment.diagnostics,
+  return envelope(
+    "agent-verification",
+    status,
+    started,
+    {
+      schemaVersion: AGENT_VERIFICATION_VERSION,
+      root,
+      packetPath,
+      packetDigest: read.digest,
+      baselineSha: read.packet.baselineSha,
+      candidateSha,
+      environment: {
+        status: environment.status,
+        data: environment.data,
+        diagnostics: environment.diagnostics,
+      },
+      evidencePlan,
+      results,
     },
-    evidencePlan,
-    results,
-  }, diagnostics);
+    diagnostics,
+  );
 }
 
-function readVerificationReport(root: string, path: string): {
+function readVerificationReport(
+  root: string,
+  path: string,
+): {
   report?: VerificationReport;
   sha256?: string;
   diagnostic?: Diagnostic;
@@ -531,7 +579,11 @@ export function agentHandoffCommand(
       ],
     );
   }
-  const baselineExists = runner("git", ["cat-file", "-e", `${read.packet.baselineSha}^{commit}`], root);
+  const baselineExists = runner(
+    "git",
+    ["cat-file", "-e", `${read.packet.baselineSha}^{commit}`],
+    root,
+  );
   if (baselineExists.status !== 0) {
     return envelope("agent-handoff", "unavailable", started, { root, packetPath, candidateSha }, [
       {
@@ -572,7 +624,8 @@ export function agentHandoffCommand(
         }
       : {
           kind: "integration-review",
-          condition: read.packet.integrationCondition ?? "review exact-head evidence before integration",
+          condition:
+            read.packet.integrationCondition ?? "review exact-head evidence before integration",
         };
   const verificationSummary = {
     path: verificationReportPath,

@@ -12,13 +12,8 @@ A task packet records the bounded capability being changed and the constraints t
   "goal": "Make checkpoint recovery reject missing intermediate mesh deltas",
   "baselineSha": "0123456789abcdef0123456789abcdef01234567",
   "ownedCapability": "streaming/checkpoint-recovery",
-  "mustPreserve": [
-    "exact geometry fingerprints",
-    "checkpoint byte stability"
-  ],
-  "outOfScope": [
-    "transport protocol redesign"
-  ],
+  "mustPreserve": ["exact geometry fingerprints", "checkpoint byte stability"],
+  "outOfScope": ["transport protocol redesign"],
   "changeKinds": ["behavior", "protocol"],
   "acceptance": {
     "requiredCapabilities": ["test:integration"],

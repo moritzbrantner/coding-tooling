@@ -3,11 +3,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import {
-  agentHandoffCommand,
-  agentVerificationCommand,
-  taskPacketCommand,
-} from "./agent-work.ts";
+import { agentHandoffCommand, agentVerificationCommand, taskPacketCommand } from "./agent-work.ts";
 import { writeReport } from "./core.ts";
 import { entryMain } from "./entry.ts";
 import { fleetAuthorityGraph } from "./fleet-authority-graph.ts";

@@ -46,7 +46,9 @@ function parseJson<T>(result: CommandResult): T | undefined {
 export function rankNextSliceCandidates(candidates: NextSliceCandidate[]): NextSliceCandidate[] {
   return [...candidates].sort(
     (left, right) =>
-      left.priority - right.priority || left.key.localeCompare(right.key) || left.summary.localeCompare(right.summary),
+      left.priority - right.priority ||
+      left.key.localeCompare(right.key) ||
+      left.summary.localeCompare(right.summary),
   );
 }
 
@@ -178,7 +180,8 @@ function issueCandidates(
       candidates: [],
       diagnostic: {
         code: "next-slice-issues-unavailable",
-        message: command.stderr.trim() || command.error || `Could not list open issues for ${repository}`,
+        message:
+          command.stderr.trim() || command.error || `Could not list open issues for ${repository}`,
       },
     };
   }
@@ -271,7 +274,8 @@ function capabilityGapCandidates(root: string): {
       kind: "capability-gap" as const,
       priority: 50 + index,
       key: `gap:${typeof entry.id === "string" ? entry.id : String(index).padStart(6, "0")}`,
-      summary: typeof entry.summary === "string" ? entry.summary : "Resolve repository capability gap",
+      summary:
+        typeof entry.summary === "string" ? entry.summary : "Resolve repository capability gap",
       source: entry,
     })),
   };
@@ -317,14 +321,7 @@ export function nextSliceCommand(
         capabilityGaps: { status: gaps.source.status, count: gaps.candidates.length },
       },
       policy: {
-        ordering: [
-          "blocking-open-pr",
-          "open-pr",
-          "roadmap",
-          "issue",
-          "todo",
-          "capability-gap",
-        ],
+        ordering: ["blocking-open-pr", "open-pr", "roadmap", "issue", "todo", "capability-gap"],
         selectionCount: 1,
         mutatesRepository: false,
       },

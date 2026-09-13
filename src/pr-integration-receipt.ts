@@ -37,12 +37,13 @@ function checkName(check: Record<string, unknown>): string {
 export function classifyPullRequestChecks(value: unknown): ClassifiedCheck[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value
-    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object")
+    .filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === "object",
+    )
     .map((check) => {
       const name = checkName(check);
       const status = typeof check.status === "string" ? check.status.toUpperCase() : "";
-      const conclusion =
-        typeof check.conclusion === "string" ? check.conclusion.toUpperCase() : "";
+      const conclusion = typeof check.conclusion === "string" ? check.conclusion.toUpperCase() : "";
       if (status && status !== "COMPLETED") return { name, state: "pending" as const };
       if (conclusion === "SKIPPED") return { name, state: "skipped" as const };
       if (conclusion === "SUCCESS" || conclusion === "NEUTRAL") {
@@ -57,10 +58,14 @@ export function classifyPullRequestChecks(value: unknown): ClassifiedCheck[] | u
       if (state) return { name, state: "failed" as const };
       return { name, state: "unavailable" as const };
     })
-    .sort((left, right) => left.name.localeCompare(right.name) || left.state.localeCompare(right.state));
+    .sort(
+      (left, right) => left.name.localeCompare(right.name) || left.state.localeCompare(right.state),
+    );
 }
 
-function requiredChecksFromEligibility(eligibility: ResultEnvelope<Record<string, unknown>>): string[] {
+function requiredChecksFromEligibility(
+  eligibility: ResultEnvelope<Record<string, unknown>>,
+): string[] {
   const readiness = eligibility.data.repositoryReadiness;
   if (!readiness || typeof readiness !== "object") return [];
   const evidence = (readiness as Record<string, unknown>).evidence;
@@ -121,7 +126,9 @@ export function pullRequestIntegrationReceipt(
     diagnostics.push({
       code: "integration-check-evidence-unavailable",
       message:
-        rawCommand.stderr.trim() || rawCommand.error || "Could not classify attached pull-request checks",
+        rawCommand.stderr.trim() ||
+        rawCommand.error ||
+        "Could not classify attached pull-request checks",
     });
   }
 
@@ -131,7 +138,8 @@ export function pullRequestIntegrationReceipt(
   for (const required of requiredChecks) {
     const check = checkByName.get(required);
     if (!check) receiptBlockers.push(`required-check-unavailable:${required}`);
-    else if (check.state !== "passed") receiptBlockers.push(`required-check-${check.state}:${required}`);
+    else if (check.state !== "passed")
+      receiptBlockers.push(`required-check-${check.state}:${required}`);
   }
   if (!checks) receiptBlockers.push("check-classification-unavailable");
 
@@ -155,10 +163,12 @@ export function pullRequestIntegrationReceipt(
     expectedBaseSha: options.expectedBaseSha ?? eligibility.data.baseSha ?? null,
     exactHeadBound:
       typeof eligibility.data.headSha === "string" &&
-      (options.expectedHeadSha === undefined || options.expectedHeadSha === eligibility.data.headSha),
+      (options.expectedHeadSha === undefined ||
+        options.expectedHeadSha === eligibility.data.headSha),
     exactBaseBound:
       typeof eligibility.data.baseSha === "string" &&
-      (options.expectedBaseSha === undefined || options.expectedBaseSha === eligibility.data.baseSha),
+      (options.expectedBaseSha === undefined ||
+        options.expectedBaseSha === eligibility.data.baseSha),
     requiredChecks,
     checks: checks ?? null,
     checkSummary: grouped,

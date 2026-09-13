@@ -109,7 +109,9 @@ function sourceDependencyEvidence(
       ],
     };
   }
-  const patches = Array.isArray(parsed.cargo?.patches) ? (parsed.cargo!.patches as SourcePatch[]) : [];
+  const patches = Array.isArray(parsed.cargo?.patches)
+    ? (parsed.cargo!.patches as SourcePatch[])
+    : [];
   const entries: Array<Record<string, unknown>> = [];
   const diagnostics: Diagnostic[] = [];
   for (const patch of patches) {
@@ -245,7 +247,8 @@ export function fleetAuthorityGraph(
     })
     .sort(
       (left, right) =>
-        left.repository.localeCompare(right.repository) || left.capability.localeCompare(right.capability),
+        left.repository.localeCompare(right.repository) ||
+        left.capability.localeCompare(right.capability),
     );
   const missingAuthoritySections = repositories
     .filter((repository) => repository.authority === null)
