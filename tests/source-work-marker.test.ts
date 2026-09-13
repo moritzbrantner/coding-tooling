@@ -124,10 +124,7 @@ test("surfaces malformed coding-tooling markers under source-work ownership", ()
       "",
     ].join("\n"),
   );
-  writeFileSync(
-    join(root, "tests", "legacy.test.ts"),
-    "// TODO(coding-tooling:test-legacy):\n",
-  );
+  writeFileSync(join(root, "tests", "legacy.test.ts"), "// TODO(coding-tooling:test-legacy):\n");
 
   const context = createDetectorContext(root);
   const structured = sourceWorkMarkerFindings(context);
