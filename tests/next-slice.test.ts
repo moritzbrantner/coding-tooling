@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { rankNextSliceCandidates, type NextSliceCandidate } from "../src/next-slice.ts";
+import {
+  nextSliceCommand,
+  rankNextSliceCandidates,
+  type NextSliceCandidate,
+} from "../src/next-slice.ts";
 
 function candidate(
   kind: NextSliceCandidate["kind"],
@@ -35,4 +42,37 @@ test("uses stable keys to break equal-priority ties", () => {
     candidate("roadmap", 20, "roadmap:a"),
   ]);
   expect(ranked.map((entry) => entry.key)).toEqual(["roadmap:a", "roadmap:z"]);
+});
+
+test("discovers only TODO markers written as source comments", () => {
+  const root = mkdtempSync(join(tmpdir(), "coding-tooling-next-"));
+  writeFileSync(join(root, "README.md"), "Documentation mentions actionable `TODO:` markers.\n");
+  writeFileSync(
+    join(root, "example.ts"),
+    [
+      'const fixture = "TODO: not backlog";',
+      "// TODO: implement source-comment work",
+      "// ordinary comment",
+    ].join("\n"),
+  );
+
+  const result = nextSliceCommand(root, {
+    run: () => ({ status: 1, stdout: "", stderr: "offline" }),
+  });
+  const candidates = result.data.candidates as NextSliceCandidate[];
+  expect(candidates.filter((entry) => entry.kind === "todo")).toEqual([
+    expect.objectContaining({ summary: "implement source-comment work" }),
+  ]);
+});
+
+test("does not select lower-priority local work when PR inventory is unavailable", () => {
+  const root = mkdtempSync(join(tmpdir(), "coding-tooling-next-"));
+  writeFileSync(join(root, "example.ts"), "// TODO: tempting lower-priority work\n");
+
+  const result = nextSliceCommand(root, {
+    run: () => ({ status: 1, stdout: "", stderr: "offline" }),
+  });
+  expect(result.status).toBe("unavailable");
+  expect(result.data.selected).toBeNull();
+  expect(result.data.blockedBy).toBe("pull-request-inventory");
 });
