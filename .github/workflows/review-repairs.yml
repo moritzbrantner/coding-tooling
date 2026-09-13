@@ -29,18 +29,29 @@ jobs:
           text = text.replace("evidence?: string[];", "reviewRequirements?: string[];")
           text = text.replace("requiredEvidence: string[];", "reviewRequirements: string[];")
           text = re.sub(r"requiredEvidence: \[[^\]]*\],", "reviewRequirements: [],", text)
-          text = text.replace("explicitEvidence: string[] = []", "explicitReviewRequirements: string[] = []")
-          text = text.replace("requiredEvidence: uniqueSorted([", "reviewRequirements: uniqueSorted([")
-          text = text.replace("...kinds.flatMap((kind) => kindEvidence[kind].requiredEvidence),", "...kinds.flatMap((kind) => kindEvidence[kind].reviewRequirements),")
-          text = text.replace("...explicitEvidence,", "...explicitReviewRequirements,")
-          text = text.replace("let acceptanceEvidence: string[] = [];", "let reviewRequirements: string[] = [];")
+          text = text.replace("explicitEvidence", "explicitReviewRequirements")
+          text = text.replace("requiredEvidence", "reviewRequirements")
+          text = text.replace("acceptanceEvidence", "reviewRequirements")
           text = text.replace("acceptance.evidence", "acceptance.reviewRequirements")
+          text = text.replace("acceptance?.evidence", "acceptance?.reviewRequirements")
           text = text.replace("task-packet-evidence-invalid", "task-packet-review-requirements-invalid")
-          text = text.replace("acceptance.evidence must contain non-empty strings", "acceptance.reviewRequirements must contain non-empty strings")
-          text = text.replace("else acceptanceEvidence = evidence;", "else reviewRequirements = evidence;")
-          text = text.replace("requiredCapabilities.length > 0 || acceptanceEvidence.length > 0", "requiredCapabilities.length > 0 || reviewRequirements.length > 0")
-          text = text.replace("if (acceptanceEvidence.length > 0) packet.acceptance.evidence = acceptanceEvidence;", "if (reviewRequirements.length > 0) packet.acceptance.reviewRequirements = reviewRequirements;")
+          text = text.replace("acceptance.reviewRequirements must contain non-empty strings", "acceptance.reviewRequirements must contain non-empty strings")
           path.write_text(text)
+
+          tests = Path("tests/agent-work.test.ts")
+          text = tests.read_text()
+          text = text.replace("requiredEvidence", "reviewRequirements")
+          text = text.replace("evidence: [", "reviewRequirements: [")
+          text = re.sub(
+              r'reviewRequirements: \[\n\s+"deterministic-replay",\n\s+"equivalent-workload-benchmark",\n\s+"representative-browser-journey",\n\s+"versioned-or-declared-baseline",\n\s+\],',
+              'reviewRequirements: [],',
+              text,
+          )
+          text = text.replace(
+              'reviewRequirements: ["authority-boundary", "behavior-regression"]',
+              'reviewRequirements: ["authority-boundary"]',
+          )
+          tests.write_text(text)
 
           docs = Path("docs/agent-work.md")
           text = docs.read_text()
@@ -48,7 +59,8 @@ jobs:
           text = text.replace("Explicit acceptance capabilities and evidence are additive.", "Explicit acceptance capabilities and semantic review requirements are additive.")
           marker = "A missing required capability is unavailable evidence, not a passing result."
           replacement = marker + " Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence."
-          text = text.replace(marker, replacement)
+          if marker in text and replacement not in text:
+              text = text.replace(marker, replacement)
           docs.write_text(text)
       - run: bun run format:write
       - name: Commit repairs
