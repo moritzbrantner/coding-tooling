@@ -1,0 +1,65 @@
+name: Refresh final conventions once
+
+on:
+  push:
+    branches: [repair/convention-snapshot]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: repair/convention-snapshot
+      - name: Check out authoritative conventions
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          repository: moritzbrantner/coding-agent-conventions
+          ref: f1a63b06fac72bc618318ee8ddd39c1db0f9aa8d
+          path: .tmp/coding-agent-conventions
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Refresh managed convention snapshot
+        run: bun src/cli.ts conventions update --conventions-root .tmp/coding-agent-conventions --json
+      - name: Verify published compatibility profiles resolve
+        run: |
+          for profile in profiles/dependency-update/*.json; do
+            bun src/cli.ts conventions resolve --config "$profile" --conventions-root .tmp/coding-agent-conventions --json
+          done
+      - name: Verify authoritative managed content
+        run: |
+          test -f .conventions/modules/base/docs/adr/0001-capability-internalization.md
+          grep -F '"sourceRevision": "f1a63b06fac72bc618318ee8ddd39c1db0f9aa8d"' conventions.lock.json
+          ! grep -R -E 'AGENT-001|AGENT-007|AGENT-008|TEST-002' .coding-tooling.json profiles/dependency-update
+      - name: Remove temporary convention checkout
+        run: rm -rf .tmp
+      - name: Format repository files
+        run: bun run format:write
+      - name: Verify managed snapshot and self tier
+        run: |
+          bun src/cli.ts conventions check --json
+          bun src/cli.ts run --tier self --config .coding-tooling.json --json
+      - name: Run repository validation
+        run: |
+          bun run format:check
+          bun run lint
+          bun run typecheck
+          bun test
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/refresh-final-conventions-once.yml
+      - name: Commit refreshed contract
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Bind managed conventions to authoritative source"
+          git push origin HEAD:repair/convention-snapshot
