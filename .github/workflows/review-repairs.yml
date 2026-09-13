@@ -35,7 +35,10 @@ jobs:
           text = text.replace("acceptance.evidence", "acceptance.reviewRequirements")
           text = text.replace("acceptance?.evidence", "acceptance?.reviewRequirements")
           text = text.replace("task-packet-evidence-invalid", "task-packet-review-requirements-invalid")
-          text = text.replace("acceptance.reviewRequirements must contain non-empty strings", "acceptance.reviewRequirements must contain non-empty strings")
+          semantic_needle = "    environment: verification.report.data.environment ?? null,\n    unresolvedFindings,"
+          semantic_replacement = "    environment: verification.report.data.environment ?? null,\n    semanticReview: {\n      required: read.packet.acceptance?.reviewRequirements ?? [],\n      machineVerified: false,\n      resolved: false,\n    },\n    unresolvedFindings,"
+          if semantic_needle in text and "semanticReview:" not in text:
+              text = text.replace(semantic_needle, semantic_replacement)
           path.write_text(text)
 
           tests = Path("tests/agent-work.test.ts")
