@@ -621,14 +621,18 @@ function casePortability(root: string, ruleId: string): ConventionCheckResult {
   const failures: string[] = [];
   const seen = new Map<string, string>();
   for (const file of repositoryFiles(root)) {
-    const key = file.relativePath.normalize("NFC").toLowerCase();
-    const previous = seen.get(key);
-    if (previous && previous !== file.relativePath) {
-      failures.push(
-        `${previous} and ${file.relativePath}: paths collide on case-insensitive filesystems`,
-      );
-    } else {
-      seen.set(key, file.relativePath);
+    const segments = file.relativePath.normalize("NFC").split("/");
+    for (let index = 0; index < segments.length; index += 1) {
+      const candidate = segments.slice(0, index + 1).join("/");
+      const key = candidate.toLowerCase();
+      const previous = seen.get(key);
+      if (previous && previous !== candidate) {
+        failures.push(
+          `${previous} and ${candidate}: path segments collide on case-insensitive filesystems`,
+        );
+        break;
+      }
+      seen.set(key, candidate);
     }
   }
   return builtinResult(ruleId, "case-portability", failures);
