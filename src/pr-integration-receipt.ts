@@ -67,7 +67,13 @@ function requiredChecksFromEligibility(eligibility: ResultEnvelope<Record<string
   if (!evidence || typeof evidence !== "object") return [];
   const required = (evidence as Record<string, unknown>).requiredChecks;
   return Array.isArray(required)
-    ? [...new Set(required.filter((entry): entry is string => typeof entry === "string" && entry))].sort()
+    ? [
+        ...new Set(
+          required.filter(
+            (entry): entry is string => typeof entry === "string" && entry.length > 0,
+          ),
+        ),
+      ].sort()
     : [];
 }
 
