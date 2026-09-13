@@ -24,9 +24,11 @@ const testFilePattern = /\.(?:test|spec)\.[^.]+$/;
 const storyFilePattern = /\.(?:stories|story)\.[^.]+$/;
 const generatedPathPattern = /(?:^|\/)(?:generated|gen)(?:\/|$)/;
 const debtMarkerPattern =
-  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:)|FIXME)\b/i;
-const workMarkerPattern =
-  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i;
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:|\(coding-tooling:)|FIXME)\b/i;
+const workMarkerPatterns = [
+  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i,
+  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i,
+];
 const unimplementedPatterns = [
   /\b(?:todo|unimplemented)!\s*\(/,
   /\bthrow\s+new\s+NotImplementedException\s*\(/,
@@ -85,7 +87,9 @@ type WorkMarker = {
 
 function workMarkers(content: string): WorkMarker[] {
   return content.split(/\r?\n/).flatMap((line, index) => {
-    const match = workMarkerPattern.exec(line);
+    const match = workMarkerPatterns
+      .map((pattern) => pattern.exec(line))
+      .find((candidate) => candidate?.[1] && candidate[2]?.trim());
     if (!match?.[1] || !match[2]?.trim()) return [];
     return [
       {

@@ -85,6 +85,34 @@ test("scans test source so generated test placeholders remain visible to agents"
   });
 });
 
+test("continues surfacing legacy generated work markers in test source", () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, "tests", "legacy.test.ts"),
+    [
+      'import { test } from "bun:test";',
+      "",
+      "// TODO(coding-tooling:test-legacy): Replace the generated scaffold with deterministic assertions.",
+      'test.todo("legacy scaffold");',
+      "",
+    ].join("\n"),
+  );
+
+  const findings = sourceWorkMarkerFindings(createDetectorContext(root));
+
+  expect(findings).toHaveLength(1);
+  expect(findings[0]).toMatchObject({
+    subject: {
+      key: "tests/legacy.test.ts#coding-tooling:test-legacy",
+      path: "tests/legacy.test.ts",
+    },
+    requirement: {
+      key: "resolve-work-marker:test-legacy",
+      description: "Replace the generated scaffold with deterministic assertions.",
+    },
+  });
+});
+
 test("does not double-count structured markers as generic TODO debt", () => {
   const root = fixture();
   writeFileSync(
