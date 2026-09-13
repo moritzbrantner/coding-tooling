@@ -40,6 +40,7 @@ export type ResultOperation =
   | "foundation"
   | "bootstrap"
   | "plan"
+  | "remediation-plan"
   | "run"
   | "install"
   | "contract"
