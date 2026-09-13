@@ -113,6 +113,40 @@ test("continues surfacing legacy generated work markers in test source", () => {
   });
 });
 
+test("surfaces malformed coding-tooling markers under source-work ownership", () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, "src", "service.ts"),
+    [
+      "// TODO: [coding-tooling:missing-instruction]",
+      "// TODO: [coding-tooling:bad_key] Repair the invalid key.",
+      "export const value = true;",
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "tests", "legacy.test.ts"),
+    "// TODO(coding-tooling:test-legacy):\n",
+  );
+
+  const context = createDetectorContext(root);
+  const structured = sourceWorkMarkerFindings(context);
+  const generic = sourceDebtMarkerFindings(context);
+
+  expect(structured).toHaveLength(3);
+  expect(structured.map((finding) => finding.requirement.key)).toEqual([
+    "repair-malformed-work-marker",
+    "repair-malformed-work-marker",
+    "repair-malformed-work-marker",
+  ]);
+  expect(structured.map((finding) => finding.subject.path)).toEqual([
+    "src/service.ts",
+    "src/service.ts",
+    "tests/legacy.test.ts",
+  ]);
+  expect(generic).toEqual([]);
+});
+
 test("does not double-count structured markers as generic TODO debt", () => {
   const root = fixture();
   writeFileSync(
