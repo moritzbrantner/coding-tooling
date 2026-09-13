@@ -19,6 +19,7 @@ export type AuthorityBoundaries = {
 type SourceDependencyConfig = {
   schemaVersion?: unknown;
   cargo?: {
+    localOnly?: unknown;
     patches?: unknown;
   };
 };
@@ -109,6 +110,7 @@ function sourceDependencyEvidence(
       ],
     };
   }
+  const localOnly = parsed.schemaVersion === 2 && parsed.cargo?.localOnly === true;
   const patches = Array.isArray(parsed.cargo?.patches)
     ? (parsed.cargo!.patches as SourcePatch[])
     : [];
@@ -126,6 +128,13 @@ function sourceDependencyEvidence(
         path: ".coding-tooling.source-deps.json",
       });
       continue;
+    }
+    if (localOnly && !localPath) {
+      diagnostics.push({
+        code: "authority-graph-local-source-required",
+        message: `${packageName} is local-only but does not declare localPath`,
+        path: ".coding-tooling.source-deps.json",
+      });
     }
     let actualRevision: string | null = null;
     if (localPath) {
@@ -148,6 +157,12 @@ function sourceDependencyEvidence(
             path: ".coding-tooling.source-deps.json",
           });
         }
+      } else if (localOnly) {
+        diagnostics.push({
+          code: "authority-graph-local-source-missing",
+          message: `${packageName} local-only checkout does not exist at ${localPath}`,
+          path: ".coding-tooling.source-deps.json",
+        });
       }
     }
     entries.push({
@@ -155,9 +170,11 @@ function sourceDependencyEvidence(
       repository: githubRepository(git),
       git,
       declaredRevision: rev,
+      localOnly,
       localPath,
       actualRevision,
-      exactRevisionSatisfied: actualRevision === null ? null : actualRevision === rev,
+      exactRevisionSatisfied:
+        actualRevision === null ? (localOnly ? false : null) : actualRevision === rev,
     });
   }
   entries.sort((left, right) => String(left.package).localeCompare(String(right.package)));
@@ -254,15 +271,19 @@ export function fleetAuthorityGraph(
     .filter((repository) => repository.authority === null)
     .map((repository) => repository.id)
     .sort();
-  const revisionDrift = diagnostics.some((diagnostic) =>
-    ["authority-graph-source-revision-drift", "authority-graph-source-patch-invalid"].includes(
-      diagnostic.code ?? "",
-    ),
+  const sourceGraphInvalid = diagnostics.some((diagnostic) =>
+    [
+      "authority-graph-source-revision-drift",
+      "authority-graph-source-patch-invalid",
+      "authority-graph-source-revision-unavailable",
+      "authority-graph-local-source-required",
+      "authority-graph-local-source-missing",
+    ].includes(diagnostic.code ?? ""),
   );
   const status: ResultStatus =
     repositories.length === 0
       ? "unavailable"
-      : duplicateOwners.length > 0 || revisionDrift
+      : duplicateOwners.length > 0 || sourceGraphInvalid
         ? "failed"
         : "passed";
   if (repositories.length === 0) {
@@ -292,8 +313,8 @@ export function fleetAuthorityGraph(
       },
       notes: [
         "Missing authority sections are adoption gaps, not automatic failures.",
-        "Duplicate authoritative owners and mismatched local source revisions fail the graph.",
-        "Source dependency revisions come from committed source-development configuration and are checked against local source checkouts when present.",
+        "Duplicate authoritative owners and invalid exact source revisions fail the graph.",
+        "Local-only source graphs require every declared local checkout to exist at the pinned revision.",
       ],
     },
     diagnostics,
