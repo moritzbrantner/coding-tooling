@@ -9,6 +9,9 @@ Copy the closest JSON profile into a Consumer Repository as `.coding-tooling.jso
 - `dotnet-service.json` uses the built-in dotnet formatting, build, and unit mappings. Add
   `capabilityCommands` for integration topology, audit policy, E2E, and BenchmarkDotNet entrypoints.
 
+Keep `conventionRefs` on active rule IDs. Before publishing a profile change, resolve it against the
+current `coding-agent-conventions` source so retired or missing IDs fail before consumers copy it.
+
 Do not paste a generic benchmark command that measures no representative workload. Optional
 capabilities are reported as unavailable; once mapped, a failing command fails the strict tier.
 
