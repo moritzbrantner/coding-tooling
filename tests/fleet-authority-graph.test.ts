@@ -3,10 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-  fleetAuthorityGraph,
-  parseAuthorityBoundaries,
-} from "../src/fleet-authority-graph.ts";
+import { fleetAuthorityGraph, parseAuthorityBoundaries } from "../src/fleet-authority-graph.ts";
 
 test("parses the standard AGENTS authority boundary section", () => {
   expect(
