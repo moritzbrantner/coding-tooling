@@ -15,6 +15,13 @@ This file contains repository-specific guidance for coding agents working in `co
 - Keep the GitHub Pages preflight conservative and structural; it must not imply behavioral correctness, security, coverage, or runtime-performance guarantees.
 - Keep local CLI analysis authoritative for conformance, findings, environment verification, validation execution, and mutations.
 
+## Authority boundaries
+
+- Owns: `coding-tooling/deterministic-evidence`, `coding-tooling/validation-selection`, `coding-tooling/pr-integration-mechanics`, `coding-tooling/fleet-metadata`
+- Adapts: `coding-agent-conventions/policy`, `coding-agent-skills/procedures`
+- Non-authoritative: `product-domain-semantics`, `human-architecture-decisions`
+- Prohibited write-back: remote or browser analysis must not mutate repository state except through an explicit authoritative local command
+
 ## Change discipline
 
 - Add or update tests for behavioral changes.
