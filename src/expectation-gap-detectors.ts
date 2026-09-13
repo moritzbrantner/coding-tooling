@@ -94,7 +94,7 @@ type WorkMarker =
     };
 
 function workMarkers(content: string): WorkMarker[] {
-  return content.split(/\r?\n/).flatMap((line, index) => {
+  return content.split(/\r?\n/).flatMap<WorkMarker>((line, index) => {
     const match = workMarkerPatterns
       .map((pattern) => pattern.exec(line))
       .find((candidate) => candidate?.[1] && candidate[2]?.trim());
