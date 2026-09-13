@@ -27,26 +27,40 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('src/expectation-gap-detectors.ts')
+          path = Path("src/expectation-gap-detectors.ts")
           text = path.read_text()
-          old = r'''const debtMarkerPattern =
-  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:)|FIXME)\b/i;
-const workMarkerPattern =
-  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i;'''
-          new = r'''const debtMarkerPattern =
-  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:|\(coding-tooling:)|FIXME)\b/i;
-const workMarkerPatterns = [
-  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i,
-  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i,
-];'''
+          old = "\n".join([
+              "const debtMarkerPattern =",
+              r"  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:)|FIXME)\b/i;",
+              "const workMarkerPattern =",
+              r"  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i;",
+          ])
+          new = "\n".join([
+              "const debtMarkerPattern =",
+              r"  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:|\(coding-tooling:)|FIXME)\b/i;",
+              "const workMarkerPatterns = [",
+              r"  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i,",
+              r"  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i,",
+              "];",
+          ])
           if old not in text:
-              raise SystemExit('work-marker regex block not found')
+              raise SystemExit("work-marker regex block not found")
           text = text.replace(old, new, 1)
 
-          old_parser = '''  return content.split(/\\r?\\n/).flatMap((line, index) => {\n    const match = workMarkerPattern.exec(line);\n    if (!match?.[1] || !match[2]?.trim()) return [];'''
-          new_parser = '''  return content.split(/\\r?\\n/).flatMap((line, index) => {\n    const match = workMarkerPatterns\n      .map((pattern) => pattern.exec(line))\n      .find((candidate) => candidate?.[1] && candidate[2]?.trim());\n    if (!match?.[1] || !match[2]?.trim()) return [];'''
+          old_parser = "\n".join([
+              r"  return content.split(/\r?\n/).flatMap((line, index) => {",
+              "    const match = workMarkerPattern.exec(line);",
+              "    if (!match?.[1] || !match[2]?.trim()) return [];",
+          ])
+          new_parser = "\n".join([
+              r"  return content.split(/\r?\n/).flatMap((line, index) => {",
+              "    const match = workMarkerPatterns",
+              "      .map((pattern) => pattern.exec(line))",
+              "      .find((candidate) => candidate?.[1] && candidate[2]?.trim());",
+              "    if (!match?.[1] || !match[2]?.trim()) return [];",
+          ])
           if old_parser not in text:
-              raise SystemExit('work-marker parser block not found')
+              raise SystemExit("work-marker parser block not found")
           path.write_text(text.replace(old_parser, new_parser, 1))
           PY
       - name: Add legacy-marker regression coverage
@@ -54,12 +68,42 @@ const workMarkerPatterns = [
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('tests/source-work-marker.test.ts')
+          path = Path("tests/source-work-marker.test.ts")
           text = path.read_text()
-          anchor = '''test("does not double-count structured markers as generic TODO debt", () => {'''
-          test_case = '''test("continues surfacing legacy generated work markers in test source", () => {\n  const root = fixture();\n  writeFileSync(\n    join(root, "tests", "legacy.test.ts"),\n    [\n      'import { test } from "bun:test";',\n      "",\n      "// TODO(coding-tooling:test-legacy): Replace the generated scaffold with deterministic assertions.",\n      'test.todo("legacy scaffold");',\n      "",\n    ].join("\\n"),\n  );\n\n  const findings = sourceWorkMarkerFindings(createDetectorContext(root));\n\n  expect(findings).toHaveLength(1);\n  expect(findings[0]).toMatchObject({\n    subject: {\n      key: "tests/legacy.test.ts#coding-tooling:test-legacy",\n      path: "tests/legacy.test.ts",\n    },\n    requirement: {\n      key: "resolve-work-marker:test-legacy",\n      description: "Replace the generated scaffold with deterministic assertions.",\n    },\n  });\n});\n\n'''
+          anchor = 'test("does not double-count structured markers as generic TODO debt", () => {'
+          test_case = "\n".join([
+              'test("continues surfacing legacy generated work markers in test source", () => {',
+              "  const root = fixture();",
+              "  writeFileSync(",
+              '    join(root, "tests", "legacy.test.ts"),',
+              "    [",
+              '      \'import { test } from "bun:test";\',',
+              '      "",',
+              '      "// TODO(coding-tooling:test-legacy): Replace the generated scaffold with deterministic assertions.",',
+              '      \'test.todo("legacy scaffold");\',',
+              '      "",',
+              '    ].join("\\n"),',
+              "  );",
+              "",
+              "  const findings = sourceWorkMarkerFindings(createDetectorContext(root));",
+              "",
+              "  expect(findings).toHaveLength(1);",
+              "  expect(findings[0]).toMatchObject({",
+              "    subject: {",
+              '      key: "tests/legacy.test.ts#coding-tooling:test-legacy",',
+              '      path: "tests/legacy.test.ts",',
+              "    },",
+              "    requirement: {",
+              '      key: "resolve-work-marker:test-legacy",',
+              '      description: "Replace the generated scaffold with deterministic assertions.",',
+              "    },",
+              "  });",
+              "});",
+              "",
+              "",
+          ])
           if anchor not in text:
-              raise SystemExit('legacy test insertion point not found')
+              raise SystemExit("legacy test insertion point not found")
           path.write_text(text.replace(anchor, test_case + anchor, 1))
           PY
       - name: Format and validate
