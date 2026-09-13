@@ -208,19 +208,22 @@ function issueCandidates(
   };
 }
 
-const todoExtensions = new Set([
-  ".cs",
-  ".js",
-  ".jsx",
-  ".md",
-  ".mjs",
-  ".rs",
-  ".ts",
-  ".tsx",
-  ".toml",
-  ".yml",
-  ".yaml",
-]);
+const slashTodoExtensions = new Set([".cs", ".js", ".jsx", ".mjs", ".rs", ".ts", ".tsx"]);
+const hashTodoExtensions = new Set([".toml", ".yml", ".yaml"]);
+
+function todoCommentPattern(path: string): RegExp | undefined {
+  const name = basename(path);
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) return undefined;
+  const extension = name.slice(dot).toLowerCase();
+  if (slashTodoExtensions.has(extension)) {
+    return /^\s*\/\/\s*TODO(?:\(#(\d+)\))?:\s*(.+?)\s*$/;
+  }
+  if (hashTodoExtensions.has(extension)) {
+    return /^\s*#\s*TODO(?:\(#(\d+)\))?:\s*(.+?)\s*$/;
+  }
+  return undefined;
+}
 
 function todoCandidates(root: string): NextSliceCandidate[] {
   const candidates: NextSliceCandidate[] = [];
@@ -228,12 +231,12 @@ function todoCandidates(root: string): NextSliceCandidate[] {
     .filter((path) => {
       const relative = relativePosix(root, path);
       if (relative.startsWith(".conventions/") || relative.startsWith(".artifacts/")) return false;
-      const name = basename(path);
-      const dot = name.lastIndexOf(".");
-      return dot >= 0 && todoExtensions.has(name.slice(dot).toLowerCase());
+      return todoCommentPattern(path) !== undefined;
     })
     .sort();
   for (const path of files) {
+    const pattern = todoCommentPattern(path);
+    if (!pattern) continue;
     let lines: string[];
     try {
       lines = readFileSync(path, "utf8").split(/\r?\n/);
@@ -241,7 +244,7 @@ function todoCandidates(root: string): NextSliceCandidate[] {
       continue;
     }
     lines.forEach((line, index) => {
-      const match = line.match(/\bTODO(?:\(#(\d+)\))?:\s*(.+?)\s*$/);
+      const match = line.match(pattern);
       if (!match || !match[2]!.trim()) return;
       const relative = relativePosix(root, path);
       candidates.push({
@@ -281,6 +284,33 @@ function capabilityGapCandidates(root: string): {
   };
 }
 
+function selectKnownCandidate(
+  pr: ReturnType<typeof pullRequestCandidates>,
+  roadmap: NextSliceCandidate[],
+  issues: ReturnType<typeof issueCandidates>,
+  todos: NextSliceCandidate[],
+  gaps: ReturnType<typeof capabilityGapCandidates>,
+): { selected: NextSliceCandidate | null; blockedBy: string | null } {
+  if (pr.source.status !== "passed") return { selected: null, blockedBy: "pull-request-inventory" };
+  if (pr.candidates.length > 0) {
+    return { selected: rankNextSliceCandidates(pr.candidates)[0] ?? null, blockedBy: null };
+  }
+  if (roadmap.length > 0) {
+    return { selected: rankNextSliceCandidates(roadmap)[0] ?? null, blockedBy: null };
+  }
+  if (issues.diagnostic) return { selected: null, blockedBy: "issue-inventory" };
+  if (issues.candidates.length > 0) {
+    return { selected: rankNextSliceCandidates(issues.candidates)[0] ?? null, blockedBy: null };
+  }
+  if (todos.length > 0) {
+    return { selected: rankNextSliceCandidates(todos)[0] ?? null, blockedBy: null };
+  }
+  if (gaps.source.status !== "passed") {
+    return { selected: null, blockedBy: "capability-gap-inventory" };
+  }
+  return { selected: rankNextSliceCandidates(gaps.candidates)[0] ?? null, blockedBy: null };
+}
+
 export function nextSliceCommand(
   repositoryRoot: string,
   dependencies: { run?: Runner } = {},
@@ -303,20 +333,27 @@ export function nextSliceCommand(
   const diagnostics: Diagnostic[] = [];
   if (issues.diagnostic) diagnostics.push(issues.diagnostic);
   diagnostics.push(...pr.source.diagnostics, ...gaps.source.diagnostics);
-  const selected = candidates[0] ?? null;
+  const selection = selectKnownCandidate(pr, roadmap, issues, todos, gaps);
+  if (selection.blockedBy) {
+    diagnostics.push({
+      code: "next-slice-higher-priority-source-unavailable",
+      message: `Cannot select lower-priority work while ${selection.blockedBy} is unavailable`,
+    });
+  }
   return {
     schemaVersion: 1,
     operation: "next-slice",
-    status: selected ? "passed" : "unavailable",
+    status: selection.blockedBy ? "unavailable" : selection.selected ? "passed" : "unavailable",
     durationMs: Date.now() - started,
     data: {
       root,
-      selected,
+      selected: selection.selected,
       candidates,
+      blockedBy: selection.blockedBy,
       sources: {
         pullRequests: { status: pr.source.status, count: pr.candidates.length },
         roadmap: { count: roadmap.length },
-        issues: { count: issues.candidates.length },
+        issues: { status: issues.diagnostic ? "unavailable" : "passed", count: issues.candidates.length },
         todos: { count: todos.length },
         capabilityGaps: { status: gaps.source.status, count: gaps.candidates.length },
       },
