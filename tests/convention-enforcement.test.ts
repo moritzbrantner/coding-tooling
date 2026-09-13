@@ -178,12 +178,14 @@ describe("installed convention enforcement", () => {
     const root = repository();
     enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
     mkdirSync(join(root, "Foo"), { recursive: true });
-    mkdirSync(join(root, "foo"), { recursive: true });
+    try {
+      mkdirSync(join(root, "foo"));
+    } catch (error) {
+      if ((error as { code?: string }).code === "EEXIST") return;
+      throw error;
+    }
     writeFileSync(join(root, "Foo", "a.ts"), "export {};\n");
     writeFileSync(join(root, "foo", "b.ts"), "export {};\n");
-
-    const caseVariants = readdirSync(root).filter((name) => name.toLowerCase() === "foo");
-    if (caseVariants.length < 2) return;
 
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");
