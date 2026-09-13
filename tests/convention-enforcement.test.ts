@@ -177,8 +177,8 @@ describe("installed convention enforcement", () => {
   test("rejects case-colliding directory segments", () => {
     const root = repository();
     enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
-    mkdirSync(join(root, "Foo"));
-    mkdirSync(join(root, "foo"));
+    mkdirSync(join(root, "Foo"), { recursive: true });
+    mkdirSync(join(root, "foo"), { recursive: true });
     writeFileSync(join(root, "Foo", "a.ts"), "export {};\n");
     writeFileSync(join(root, "foo", "b.ts"), "export {};\n");
 
