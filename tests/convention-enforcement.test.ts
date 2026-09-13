@@ -174,6 +174,22 @@ describe("installed convention enforcement", () => {
     expect(failed.diagnostics[0]?.message).toContain("case-insensitive filesystems");
   });
 
+  test("rejects case-colliding directory segments", () => {
+    const root = repository();
+    enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
+    mkdirSync(join(root, "Foo"));
+    mkdirSync(join(root, "foo"));
+    writeFileSync(join(root, "Foo", "a.ts"), "export {};\n");
+    writeFileSync(join(root, "foo", "b.ts"), "export {};\n");
+
+    const caseVariants = readdirSync(root).filter((name) => name.toLowerCase() === "foo");
+    if (caseVariants.length < 2) return;
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("Foo and foo");
+  });
+
   test("requires Vitest execution kind in filenames and scripts", () => {
     const root = repository({
       scripts: { "test:unit": "vitest run" },
