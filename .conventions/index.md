@@ -108,6 +108,7 @@ Read this section first. Open the linked managed source when a rule is relevant,
 ### base
 
 - [modules/base/principles/README.md](modules/base/principles/README.md)
+- [modules/base/docs/adr/0001-capability-internalization.md](modules/base/docs/adr/0001-capability-internalization.md)
 - [modules/base/conventions/agents/README.md](modules/base/conventions/agents/README.md)
 - [modules/base/conventions/codebase-design/README.md](modules/base/conventions/codebase-design/README.md)
 - [modules/base/conventions/repository/README.md](modules/base/conventions/repository/README.md)

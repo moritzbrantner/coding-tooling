@@ -1,10 +1,11 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "ce5961767492011483cd9234cdf991e482d8de1d",
+  "sourceRevision": "f1a63b06fac72bc618318ee8ddd39c1db0f9aa8d",
   "requestedModules": ["rust"],
   "resolvedModules": ["base", "rust"],
   "files": {
     "modules/base/principles/README.md": "76eabf9bd1006ec6948a1721af11a8e579d3503a62b2442e5b3a31132ae639f1",
+    "modules/base/docs/adr/0001-capability-internalization.md": "43e98e05265dd48f1f559cc428ba037e3da5530af687237764900a27471ab30e",
     "modules/base/conventions/agents/README.md": "bec31197ea2e31ca5a7acaad2ab1870495e89c90d62a645990cddfcf0bd49bfb",
     "modules/base/conventions/codebase-design/README.md": "18c5548fdbbd948cdcfe8e867114f47e15a4ba1f152cc2af6f99c028bfc944aa",
     "modules/base/conventions/repository/README.md": "37c0a7d6b1119c07ba00c5a71a47a6b8e5e0362c44c7154497a01df7f32f3022",
@@ -20,6 +21,6 @@
     "modules/rust/technologies/rust/README.md": "cf6eaeb058e999e8df328f9d2c9d17dc7330c6323074720efbf297d72deea583",
     "modules/rust/technologies/rust/RUST-002.json": "1d3e4fb66ffb2206b2c7259c8f401d2fe1fdf3ec04b01b91fec1f227ed888b86",
     "configurations.json": "569bf6db9f0a2c85726ccb231698002bb12727682fbfd96e93472591427b14f2",
-    "index.md": "7146b960757b5c998bf124a9db26fe1e231319a965d0c51960d92154c630cbc9"
+    "index.md": "d0cb3f4e3111c3d604a64847be6294cf664dbbadaaa33d839d05a9443e5a7946"
   }
 }
