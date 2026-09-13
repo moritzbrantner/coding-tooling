@@ -646,6 +646,11 @@ export function agentHandoffCommand(
     changedFiles: diff.stdout.split(/\r?\n/).filter(Boolean).sort(),
     verification: verificationSummary,
     environment: verification.report.data.environment ?? null,
+    semanticReview: {
+      required: read.packet.acceptance?.reviewRequirements ?? [],
+      machineVerified: false,
+      resolved: false,
+    },
     unresolvedFindings,
     strongestNextAction,
   });
