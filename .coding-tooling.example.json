@@ -14,7 +14,7 @@
     "release": ["package:check"]
   },
   "requiredCapabilities": ["lint", "typecheck", "test:unit", "build"],
-  "conventionRefs": ["AGENT-001", "AGENT-007", "TEST-002"],
+  "conventionRefs": ["PRINCIPLE-001", "PRINCIPLE-003"],
   "optionalCapabilities": [
     "test:integration",
     "test:integration:workflow",
