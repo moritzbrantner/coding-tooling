@@ -29,6 +29,6 @@ test("parses an authority section at end of file", () => {
   expect(
     parseAuthorityBoundaries(`## Authority boundaries
 - Owns: \`streaming/checkpoints\`
-`),
-  )?.owns).toEqual(["streaming/checkpoints"]);
+`)?.owns,
+  ).toEqual(["streaming/checkpoints"]);
 });
