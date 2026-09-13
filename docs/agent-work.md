@@ -35,7 +35,7 @@ Task packets should normally live under an ignored `.artifacts/` path. They are 
 
 `changeKinds` derives risk-appropriate evidence instead of making each agent invent a validation plan. The current mapping distinguishes behavior, refactoring, performance, protocol, persistence, browser, mobile, dependency, security, deterministic replay, and documentation changes. Explicit acceptance capabilities and semantic review requirements are additive.
 
-A missing required capability is unavailable evidence, not a passing result. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence.
+A missing required capability is unavailable evidence, not a passing result. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence.
 
 ## Exact-head verification
 

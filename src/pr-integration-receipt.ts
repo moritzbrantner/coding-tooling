@@ -147,9 +147,7 @@ export function pullRequestIntegrationReceipt(
   const checkByName = new Map((checks ?? []).map((check) => [check.name, check]));
   const receiptBlockers: string[] = [];
   if (!checksMatchEligibilityHead(eligibility.data.headSha, checksHeadSha)) {
-    receiptBlockers.push(
-      checksHeadSha ? "check-head-moved" : "check-head-unavailable",
-    );
+    receiptBlockers.push(checksHeadSha ? "check-head-moved" : "check-head-unavailable");
   }
   for (const required of requiredChecks) {
     const check = checkByName.get(required);
@@ -171,7 +169,10 @@ export function pullRequestIntegrationReceipt(
   const performanceEvidenceChecks = (checks ?? [])
     .filter((check) => /benchmark|performance|profile/i.test(check.name))
     .map((check) => ({ name: check.name, state: check.state }));
-  const checksBoundToEligibility = checksMatchEligibilityHead(eligibility.data.headSha, checksHeadSha);
+  const checksBoundToEligibility = checksMatchEligibilityHead(
+    eligibility.data.headSha,
+    checksHeadSha,
+  );
 
   Object.assign(data, {
     headSha: eligibility.data.headSha ?? null,
