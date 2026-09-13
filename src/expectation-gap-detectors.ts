@@ -23,9 +23,10 @@ const testPathPattern = /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)/;
 const testFilePattern = /\.(?:test|spec)\.[^.]+$/;
 const storyFilePattern = /\.(?:stories|story)\.[^.]+$/;
 const generatedPathPattern = /(?:^|\/)(?:generated|gen)(?:\/|$)/;
-const debtMarkerPattern = /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!\(coding-tooling:)|FIXME)\b/i;
+const debtMarkerPattern =
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:)|FIXME)\b/i;
 const workMarkerPattern =
-  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i;
+  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i;
 const unimplementedPatterns = [
   /\b(?:todo|unimplemented)!\s*\(/,
   /\bthrow\s+new\s+NotImplementedException\s*\(/,
@@ -164,7 +165,7 @@ export function sourceWorkMarkerFindings({ root }: DetectorContext): RawFinding[
         {
           kind: "file" as const,
           path: sourcePath,
-          detail: `TODO(coding-tooling:${marker.key}) on line ${marker.line}: ${marker.instruction}`,
+          detail: `TODO: [coding-tooling:${marker.key}] on line ${marker.line}: ${marker.instruction}`,
         },
       ],
       relatedFiles: [sourcePath],

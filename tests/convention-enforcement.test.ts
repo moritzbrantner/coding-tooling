@@ -101,6 +101,9 @@ describe("installed convention enforcement", () => {
     writeFileSync(source, "// TODO: make retry limit configurable\n");
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
 
+    writeFileSync(source, "// TODO: [coding-tooling:generated-test] replace generated scaffold\n");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+
     writeFileSync(source, "// TODO(#123): make retry limit configurable\n");
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
 

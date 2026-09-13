@@ -1,13 +1,8 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "02c853fd280cde06c778b3437789f8f57cb438ed",
-  "requestedModules": [
-    "rust"
-  ],
-  "resolvedModules": [
-    "base",
-    "rust"
-  ],
+  "sourceRevision": "ce5961767492011483cd9234cdf991e482d8de1d",
+  "requestedModules": ["rust"],
+  "resolvedModules": ["base", "rust"],
   "files": {
     "modules/base/principles/README.md": "76eabf9bd1006ec6948a1721af11a8e579d3503a62b2442e5b3a31132ae639f1",
     "modules/base/conventions/agents/README.md": "bec31197ea2e31ca5a7acaad2ab1870495e89c90d62a645990cddfcf0bd49bfb",

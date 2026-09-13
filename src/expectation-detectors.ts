@@ -273,7 +273,7 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       limitations: [
         "Only standalone comment markers are recognized; inline comments after code are intentionally outside this conservative text-scan contract.",
         "Does not prove that a marker represents actionable or current debt.",
-        "Structured TODO(coding-tooling:...) markers are owned by source-work-marker instead of being double-counted here.",
+        "Structured TODO: [coding-tooling:<key>] markers are owned by source-work-marker instead of being double-counted here.",
       ],
     },
     detect: sourceDebtMarkerFindings,
@@ -309,7 +309,7 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       oracle: "bounded-structured-work-marker-scan",
       independenceKey: "source-work-marker-scan",
       proves:
-        "A recognized TODO(coding-tooling:<key>): <instruction> marker exists at the reported source path and line.",
+        "A recognized TODO: [coding-tooling:<key>] <instruction> marker exists at the reported source path and line.",
       limitations: [
         "Does not prove that the authored instruction is semantically correct or sufficient.",
         "Recognizes only the deliberately small line-oriented comment syntax; it is not a general annotation language.",
