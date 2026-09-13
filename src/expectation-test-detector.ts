@@ -193,7 +193,7 @@ function testScaffold(
     content: `import { describe, test } from "bun:test";
 
 describe(${JSON.stringify(sourceLabel)}, () => {
-  // TODO(coding-tooling:${workMarker}): Replace this scaffold with meaningful deterministic assertions for ${sourceLabel}.
+  // TODO: [coding-tooling:${workMarker}] Replace this scaffold with meaningful deterministic assertions for ${sourceLabel}.
   test.todo("add deterministic coverage");
 });
 `,

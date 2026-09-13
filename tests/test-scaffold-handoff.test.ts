@@ -28,7 +28,7 @@ test("turns a missing-test scaffold into exact residual implementation work", ()
   expect(scaffold.status).toBe("passed");
 
   const generated = readFileSync(join(root, "tests", "service.test.ts"), "utf8");
-  expect(generated).toMatch(/TODO\(coding-tooling:test-[a-f0-9]{12}\):/);
+  expect(generated).toMatch(/TODO: \[coding-tooling:test-[a-f0-9]{12}\]/);
 
   const after = analyzeExpectations(root).findings;
   expect(after.some((finding) => finding.id === missingTest!.id)).toBeFalse();

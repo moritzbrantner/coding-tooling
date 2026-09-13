@@ -29,10 +29,10 @@ test("exposes each structured work marker as an exact source location", () => {
     join(root, "src", "endpoint.ts"),
     [
       "export function endpoint() {",
-      "  // TODO(coding-tooling:endpoint-query): Load the entity through the repository abstraction.",
+      "  // TODO: [coding-tooling:endpoint-query] Load the entity through the repository abstraction.",
       "  return undefined;",
       "}",
-      "// TODO(coding-tooling:endpoint-result): Map the domain result to the public response contract.",
+      "// TODO: [coding-tooling:endpoint-result] Map the domain result to the public response contract.",
       "",
     ].join("\n"),
   );
@@ -66,7 +66,7 @@ test("scans test source so generated test placeholders remain visible to agents"
     [
       'import { test } from "bun:test";',
       "",
-      "// TODO(coding-tooling:test-endpoint): Assert the public endpoint response and failure mapping.",
+      "// TODO: [coding-tooling:test-endpoint] Assert the public endpoint response and failure mapping.",
       'test.todo("endpoint contract");',
       "",
     ].join("\n"),
@@ -85,12 +85,40 @@ test("scans test source so generated test placeholders remain visible to agents"
   });
 });
 
+test("continues surfacing legacy generated work markers in test source", () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, "tests", "legacy.test.ts"),
+    [
+      'import { test } from "bun:test";',
+      "",
+      "// TODO(coding-tooling:test-legacy): Replace the generated scaffold with deterministic assertions.",
+      'test.todo("legacy scaffold");',
+      "",
+    ].join("\n"),
+  );
+
+  const findings = sourceWorkMarkerFindings(createDetectorContext(root));
+
+  expect(findings).toHaveLength(1);
+  expect(findings[0]).toMatchObject({
+    subject: {
+      key: "tests/legacy.test.ts#coding-tooling:test-legacy",
+      path: "tests/legacy.test.ts",
+    },
+    requirement: {
+      key: "resolve-work-marker:test-legacy",
+      description: "Replace the generated scaffold with deterministic assertions.",
+    },
+  });
+});
+
 test("does not double-count structured markers as generic TODO debt", () => {
   const root = fixture();
   writeFileSync(
     join(root, "src", "service.ts"),
     [
-      "// TODO(coding-tooling:service-behavior): Implement the declared behavior.",
+      "// TODO: [coding-tooling:service-behavior] Implement the declared behavior.",
       "// TODO: remove the compatibility fallback",
       "export const value = true;",
       "",
@@ -110,7 +138,7 @@ test("ignores marker-like text that is not in the bounded comment syntax", () =>
   const root = fixture();
   writeFileSync(
     join(root, "src", "strings.ts"),
-    'export const value = "TODO(coding-tooling:not-work): This is display text.";\n',
+    'export const value = "TODO: [coding-tooling:not-work] This is display text.";\n',
   );
 
   expect(sourceWorkMarkerFindings(createDetectorContext(root))).toEqual([]);

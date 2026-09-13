@@ -1,13 +1,5 @@
 # Agent conventions
 
-## AGENT-001 — Deterministic checks before agent judgment
-
-- Encode mechanically checkable properties as executable checks.
-
-## AGENT-002 — Agents work in isolated worktrees
-
-- Give concurrent implementation tasks separate worktrees or equivalent isolated checkouts.
-
 ## AGENT-003 — Separate execution from orchestration
 
 - Keep the development loop independent of its local, CI, or hosted orchestration adapter.
@@ -24,14 +16,6 @@
 
 - Derive relationships from paths, names, metadata, or indexes before searching semantically.
 
-## AGENT-007 — Run cheap validation before expensive validation
-
-- Run required checks from narrowest and cheapest to broadest and most expensive; stop at the first failure.
-
-## AGENT-008 — Revalidate downward after broader-scope fixes
-
-- After fixing a broad validation failure with production-code changes, restart at the narrowest affected layer.
-
 ## AGENT-009 — Delegate one bounded capability per implementation run
 
 - Give each delegated implementation run one independently verifiable capability slice.
@@ -42,4 +26,12 @@
 
 ## AGENT-010 — Apply progressive composition to agent execution
 
-- Resolve execution-layer choices to `PRINCIPLE-006`; AGENT-010 is the agent-category pointer and adds no second copy of that policy.
+- Resolve execution-layer choices to `PRINCIPLE-006` and progressive verification to `PRINCIPLE-003`; AGENT-010 is the agent-category pointer and adds no second copy of those policies.
+- Gather deterministic evidence first, preserve it across attempts, use focused validation while iterating, and escalate only when cheaper execution stops producing useful information or runtime/environment feedback is inherently required.
+
+## AGENT-011 — Classify failures before repairing them
+
+- Classify a failing signal before changing production behavior: candidate regression, pre-existing repository defect, repository-owned test or harness defect, environment or infrastructure failure, or unavailable/incomparable evidence.
+- Repair the layer that owns the failure. Do not change production code merely to satisfy an unrealistic fixture, broken harness, unavailable dependency, or unrelated pre-existing failure.
+- Preserve the evidence used for classification and revisit the classification when new evidence contradicts it.
+- When ownership cannot yet be established, improve the diagnostic evidence before widening the patch.

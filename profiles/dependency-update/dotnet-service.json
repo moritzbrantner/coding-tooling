@@ -21,5 +21,5 @@
     "dependencies:audit",
     "benchmark:smoke"
   ],
-  "conventionRefs": ["AGENT-001", "AGENT-007", "TEST-002"]
+  "conventionRefs": ["PRINCIPLE-001", "PRINCIPLE-003"]
 }
