@@ -57,7 +57,7 @@ test("discovers only TODO markers written as source comments", () => {
   );
 
   const result = nextSliceCommand(root, {
-    run: () => ({ command: "gh", status: 1, stdout: "", stderr: "offline" }),
+    run: () => ({ command: ["gh"], status: 1, stdout: "", stderr: "offline" }),
   });
   const candidates = result.data.candidates as NextSliceCandidate[];
   expect(candidates.filter((entry) => entry.kind === "todo")).toEqual([
@@ -70,7 +70,7 @@ test("does not select lower-priority local work when PR inventory is unavailable
   writeFileSync(join(root, "example.ts"), "// TODO: tempting lower-priority work\n");
 
   const result = nextSliceCommand(root, {
-    run: () => ({ command: "gh", status: 1, stdout: "", stderr: "offline" }),
+    run: () => ({ command: ["gh"], status: 1, stdout: "", stderr: "offline" }),
   });
   expect(result.status).toBe("unavailable");
   expect(result.data.selected).toBeNull();
