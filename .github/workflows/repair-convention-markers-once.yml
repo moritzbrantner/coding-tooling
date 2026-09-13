@@ -78,6 +78,10 @@ jobs:
           PY
       - name: Refresh managed snapshot from merged convention source
         run: bun src/cli.ts conventions update --conventions-root .tmp/coding-agent-conventions --json
+      - name: Remove temporary convention checkout
+        run: rm -rf .tmp
+      - name: Format repaired repository files
+        run: bun run format:write
       - name: Verify marker and convention contracts
         run: |
           bun src/cli.ts conventions check --json
@@ -91,10 +95,8 @@ jobs:
           bun run lint
           bun run typecheck
           bun test
-      - name: Remove temporary checkout and workflow
-        run: |
-          rm -rf .tmp
-          rm .github/workflows/repair-convention-markers-once.yml
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/repair-convention-markers-once.yml
       - name: Commit repaired contract
         run: |
           git config user.name "github-actions[bot]"
