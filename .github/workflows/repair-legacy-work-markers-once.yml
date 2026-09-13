@@ -1,0 +1,81 @@
+name: Repair legacy work markers once
+
+on:
+  push:
+    branches: [repair/convention-snapshot]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: repair/convention-snapshot
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Preserve legacy work-marker reads
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/expectation-gap-detectors.ts')
+          text = path.read_text()
+          old = r'''const debtMarkerPattern =
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:)|FIXME)\b/i;
+const workMarkerPattern =
+  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i;'''
+          new = r'''const debtMarkerPattern =
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:|\(coding-tooling:)|FIXME)\b/i;
+const workMarkerPatterns = [
+  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i,
+  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i,
+];'''
+          if old not in text:
+              raise SystemExit('work-marker regex block not found')
+          text = text.replace(old, new, 1)
+
+          old_parser = '''  return content.split(/\\r?\\n/).flatMap((line, index) => {\n    const match = workMarkerPattern.exec(line);\n    if (!match?.[1] || !match[2]?.trim()) return [];'''
+          new_parser = '''  return content.split(/\\r?\\n/).flatMap((line, index) => {\n    const match = workMarkerPatterns\n      .map((pattern) => pattern.exec(line))\n      .find((candidate) => candidate?.[1] && candidate[2]?.trim());\n    if (!match?.[1] || !match[2]?.trim()) return [];'''
+          if old_parser not in text:
+              raise SystemExit('work-marker parser block not found')
+          path.write_text(text.replace(old_parser, new_parser, 1))
+          PY
+      - name: Add legacy-marker regression coverage
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/source-work-marker.test.ts')
+          text = path.read_text()
+          anchor = '''test("does not double-count structured markers as generic TODO debt", () => {'''
+          test_case = '''test("continues surfacing legacy generated work markers in test source", () => {\n  const root = fixture();\n  writeFileSync(\n    join(root, "tests", "legacy.test.ts"),\n    [\n      'import { test } from "bun:test";',\n      "",\n      "// TODO(coding-tooling:test-legacy): Replace the generated scaffold with deterministic assertions.",\n      'test.todo("legacy scaffold");',\n      "",\n    ].join("\\n"),\n  );\n\n  const findings = sourceWorkMarkerFindings(createDetectorContext(root));\n\n  expect(findings).toHaveLength(1);\n  expect(findings[0]).toMatchObject({\n    subject: {\n      key: "tests/legacy.test.ts#coding-tooling:test-legacy",\n      path: "tests/legacy.test.ts",\n    },\n    requirement: {\n      key: "resolve-work-marker:test-legacy",\n      description: "Replace the generated scaffold with deterministic assertions.",\n    },\n  });\n});\n\n'''
+          if anchor not in text:
+              raise SystemExit('legacy test insertion point not found')
+          path.write_text(text.replace(anchor, test_case + anchor, 1))
+          PY
+      - name: Format and validate
+        run: |
+          bun run format:write
+          bun test tests/source-work-marker.test.ts tests/test-scaffold-handoff.test.ts
+          bun run format:check
+          bun run lint
+          bun run typecheck
+          bun test
+      - name: Remove one-shot workflow
+        run: rm .github/workflows/repair-legacy-work-markers-once.yml
+      - name: Commit compatibility repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Preserve legacy generated work markers"
+          git push origin HEAD:repair/convention-snapshot
