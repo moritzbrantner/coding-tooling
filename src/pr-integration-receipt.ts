@@ -12,6 +12,7 @@ type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean
 type CheckState = "passed" | "skipped" | "pending" | "failed" | "unavailable";
 
 type RawPullRequest = {
+  headRefOid?: unknown;
   statusCheckRollup?: unknown;
 };
 
@@ -61,6 +62,15 @@ export function classifyPullRequestChecks(value: unknown): ClassifiedCheck[] | u
     .sort(
       (left, right) => left.name.localeCompare(right.name) || left.state.localeCompare(right.state),
     );
+}
+
+export function checksMatchEligibilityHead(eligibilityHead: unknown, checksHead: unknown): boolean {
+  return (
+    typeof eligibilityHead === "string" &&
+    typeof checksHead === "string" &&
+    eligibilityHead.length > 0 &&
+    eligibilityHead === checksHead
+  );
 }
 
 function requiredChecksFromEligibility(
@@ -117,10 +127,11 @@ export function pullRequestIntegrationReceipt(
 
   const rawCommand = runner(
     "gh",
-    ["pr", "view", String(prNumber), "--json", "statusCheckRollup"],
+    ["pr", "view", String(prNumber), "--json", "headRefOid,statusCheckRollup"],
     root,
   );
   const raw = parseJson<RawPullRequest>(rawCommand);
+  const checksHeadSha = typeof raw?.headRefOid === "string" ? raw.headRefOid : undefined;
   const checks = classifyPullRequestChecks(raw?.statusCheckRollup);
   if (!checks) {
     diagnostics.push({
@@ -135,6 +146,11 @@ export function pullRequestIntegrationReceipt(
   const requiredChecks = requiredChecksFromEligibility(eligibility);
   const checkByName = new Map((checks ?? []).map((check) => [check.name, check]));
   const receiptBlockers: string[] = [];
+  if (!checksMatchEligibilityHead(eligibility.data.headSha, checksHeadSha)) {
+    receiptBlockers.push(
+      checksHeadSha ? "check-head-moved" : "check-head-unavailable",
+    );
+  }
   for (const required of requiredChecks) {
     const check = checkByName.get(required);
     if (!check) receiptBlockers.push(`required-check-unavailable:${required}`);
@@ -155,13 +171,16 @@ export function pullRequestIntegrationReceipt(
   const performanceEvidenceChecks = (checks ?? [])
     .filter((check) => /benchmark|performance|profile/i.test(check.name))
     .map((check) => ({ name: check.name, state: check.state }));
+  const checksBoundToEligibility = checksMatchEligibilityHead(eligibility.data.headSha, checksHeadSha);
 
   Object.assign(data, {
     headSha: eligibility.data.headSha ?? null,
+    checksHeadSha: checksHeadSha ?? null,
     baseSha: eligibility.data.baseSha ?? null,
     expectedHeadSha: options.expectedHeadSha ?? eligibility.data.headSha ?? null,
     expectedBaseSha: options.expectedBaseSha ?? eligibility.data.baseSha ?? null,
     exactHeadBound:
+      checksBoundToEligibility &&
       typeof eligibility.data.headSha === "string" &&
       (options.expectedHeadSha === undefined ||
         options.expectedHeadSha === eligibility.data.headSha),
