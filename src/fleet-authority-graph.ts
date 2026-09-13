@@ -42,8 +42,11 @@ function values(text: string): string[] {
 }
 
 export function parseAuthorityBoundaries(source: string): AuthorityBoundaries | undefined {
-  const section = source.match(/^## Authority boundaries\s*$([\s\S]*?)(?=^##\s|\z)/im)?.[1];
-  if (!section) return undefined;
+  const heading = /^## Authority boundaries\s*$/im.exec(source);
+  if (!heading) return undefined;
+  const remainder = source.slice(heading.index + heading[0].length);
+  const nextHeading = /^##\s+/m.exec(remainder);
+  const section = nextHeading ? remainder.slice(0, nextHeading.index) : remainder;
   const result: AuthorityBoundaries = {
     owns: [],
     adapts: [],
@@ -186,10 +189,12 @@ export function fleetAuthorityGraph(
       owners.set(capability, current);
     }
     const sourceDependencies = sourceDependencyEvidence(repositoryRoot, runner);
-    diagnostics.push(...sourceDependencies.diagnostics.map((diagnostic) => ({
-      ...diagnostic,
-      message: `${id}: ${diagnostic.message}`,
-    })));
+    diagnostics.push(
+      ...sourceDependencies.diagnostics.map((diagnostic) => ({
+        ...diagnostic,
+        message: `${id}: ${diagnostic.message}`,
+      })),
+    );
     return {
       id,
       root: repositoryRoot,
