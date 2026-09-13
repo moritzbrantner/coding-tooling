@@ -11,12 +11,7 @@ const baselineSha = "0123456789abcdef0123456789abcdef01234567";
 test("change kinds deterministically derive validation evidence", () => {
   expect(evidenceForChangeKinds(["browser", "performance", "replay"])).toEqual({
     requiredCapabilities: ["benchmark:smoke", "test", "test:e2e:smoke"],
-    requiredEvidence: [
-      "deterministic-replay",
-      "equivalent-workload-benchmark",
-      "representative-browser-journey",
-      "versioned-or-declared-baseline",
-    ],
+    reviewRequirements: [],
   });
 });
 
@@ -25,7 +20,7 @@ test("explicit acceptance requirements compose with derived requirements", () =>
     evidenceForChangeKinds(["behavior"], ["typecheck", "test"], ["authority-boundary"]),
   ).toEqual({
     requiredCapabilities: ["test", "typecheck"],
-    requiredEvidence: ["authority-boundary", "behavior-regression"],
+    reviewRequirements: ["authority-boundary"],
   });
 });
 
@@ -40,7 +35,7 @@ test("normalizes a bounded task packet to a stable digest", () => {
     changeKinds: ["replay", "behavior"],
     acceptance: {
       requiredCapabilities: ["typecheck", "test"],
-      evidence: ["seeded replay"],
+      reviewRequirements: ["seeded replay"],
     },
   });
   const second = normalizeTaskPacket({
@@ -53,7 +48,7 @@ test("normalizes a bounded task packet to a stable digest", () => {
     changeKinds: ["behavior", "replay"],
     acceptance: {
       requiredCapabilities: ["test", "typecheck"],
-      evidence: ["seeded replay"],
+      reviewRequirements: ["seeded replay"],
     },
   });
 

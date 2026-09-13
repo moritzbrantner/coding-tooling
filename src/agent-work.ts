@@ -268,7 +268,7 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
     packet.acceptance = {};
     if (requiredCapabilities.length > 0)
       packet.acceptance.requiredCapabilities = requiredCapabilities;
-    if (acceptanceEvidence.length > 0) packet.acceptance.reviewRequirements = acceptanceEvidence;
+    if (reviewRequirements.length > 0) packet.acceptance.reviewRequirements = reviewRequirements;
   }
   if (integrationCondition) packet.integrationCondition = integrationCondition;
 
@@ -340,7 +340,7 @@ export function taskPacketCommand(
   const evidencePlan = evidenceForChangeKinds(
     read.packet.changeKinds,
     read.packet.acceptance?.requiredCapabilities ?? [],
-    read.packet.acceptance?.evidence ?? [],
+    read.packet.acceptance?.reviewRequirements ?? [],
   );
   return envelope("agent-task-packet", "passed", started, {
     root,
@@ -410,7 +410,7 @@ export function agentVerificationCommand(
   const evidencePlan = evidenceForChangeKinds(
     read.packet.changeKinds,
     read.packet.acceptance?.requiredCapabilities ?? [],
-    read.packet.acceptance?.evidence ?? [],
+    read.packet.acceptance?.reviewRequirements ?? [],
   );
   const results = evidencePlan.requiredCapabilities.map((capability) => ({
     capability,
