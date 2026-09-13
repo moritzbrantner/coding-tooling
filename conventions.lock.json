@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceRevision": "f1a63b06fac72bc618318ee8ddd39c1db0f9aa8d",
+  "sourceRevision": "570aec226614572501b53ce21e58542b470a521e",
   "requestedModules": ["rust"],
   "resolvedModules": ["base", "rust"],
   "files": {
@@ -19,7 +19,7 @@
     "modules/base/conventions/scripts/README.md": "8a72616fc9b04833e9c2208712666b3e934b1e046f2a25c8c64388d76e8ba899",
     "modules/base/conventions/security/README.md": "13d51a84d3aec3efc8f1919417680698c9dc7ab1c01286e0454ef8149c33c0fa",
     "modules/rust/technologies/rust/README.md": "cf6eaeb058e999e8df328f9d2c9d17dc7330c6323074720efbf297d72deea583",
-    "modules/rust/technologies/rust/RUST-002.json": "1d3e4fb66ffb2206b2c7259c8f401d2fe1fdf3ec04b01b91fec1f227ed888b86",
+    "modules/rust/technologies/rust/RUST-002.json": "387bc5b7b81eae9ac4bac44f8abb34088137d58014243d44b2b146f8683808d1",
     "configurations.json": "569bf6db9f0a2c85726ccb231698002bb12727682fbfd96e93472591427b14f2",
     "index.md": "d0cb3f4e3111c3d604a64847be6294cf664dbbadaaa33d839d05a9443e5a7946"
   }
