@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "bin": {
-    "coding-tooling": "./src/entry.ts"
+    "coding-tooling": "./src/router.ts"
   },
   "type": "module",
   "scripts": {
