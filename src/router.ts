@@ -7,10 +7,12 @@ import { agentHandoffCommand, agentVerificationCommand, taskPacketCommand } from
 import { writeReport } from "./core.ts";
 import { entryMain } from "./entry.ts";
 import { fleetAuthorityGraph } from "./fleet-authority-graph.ts";
+import { reconcileFleetSourceDependencies } from "./fleet-source-deps.ts";
 import type { ResultEnvelope } from "./model.ts";
 import { nextSliceCommand } from "./next-slice.ts";
 import { pullRequestIntegrationReceipt } from "./pr-integration-receipt.ts";
 import { repositoryRoot } from "./shared.ts";
+import { verifySourceDependencyGraph } from "./source-graph.ts";
 
 function option(argv: string[], name: string): string | undefined {
   const index = argv.indexOf(`--${name}`);
@@ -44,12 +46,19 @@ function usage(): number {
   coding-tooling agent handoff <path> --verification-report <path> [--root <path>] [--report <path>] [--json]
   coding-tooling next [--root <path>] [--json]
   coding-tooling pr receipt <number> [--expected-head <sha>] [--expected-base <sha>] [--root <path>] [--json]
-  coding-tooling fleet authority-graph [--root <path>] [--json]`);
+  coding-tooling source-deps verify-graph [--config <path>] [--root <path>] [--json]
+  coding-tooling fleet authority-graph [--root <path>] [--json]
+  coding-tooling fleet source-deps reconcile [--apply] [--root <path>] [--json]`);
   return 2;
 }
 
-function validFlags(argv: string[], start: number, valueFlags: Set<string>): boolean {
-  const allowed = new Set(["--json", ...valueFlags]);
+function validFlags(
+  argv: string[],
+  start: number,
+  valueFlags: Set<string>,
+  booleanFlags: Set<string> = new Set(),
+): boolean {
+  const allowed = new Set(["--json", ...valueFlags, ...booleanFlags]);
   for (let index = start; index < argv.length; index += 1) {
     const value = argv[index]!;
     if (!value.startsWith("--")) continue;
@@ -114,9 +123,19 @@ export function routerMain(argv = process.argv.slice(2)): number {
     );
   }
 
+  if (argv[0] === "source-deps" && argv[1] === "verify-graph") {
+    if (!validFlags(argv, 2, new Set(["--root", "--config"]))) return usage();
+    return print(verifySourceDependencyGraph(root, option(argv, "config")), compact);
+  }
+
   if (argv[0] === "fleet" && argv[1] === "authority-graph") {
     if (!validFlags(argv, 2, new Set(["--root"]))) return usage();
     return print(fleetAuthorityGraph(root), compact);
+  }
+
+  if (argv[0] === "fleet" && argv[1] === "source-deps" && argv[2] === "reconcile") {
+    if (!validFlags(argv, 3, new Set(["--root"]), new Set(["--apply"]))) return usage();
+    return print(reconcileFleetSourceDependencies(root, { apply: argv.includes("--apply") }), compact);
   }
 
   return entryMain(argv);
