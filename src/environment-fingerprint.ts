@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
 import type { Diagnostic, ResultEnvelope } from "./model.ts";
+import { readSourceDependencyConfig } from "./source-deps.ts";
 import { relativePosix, walkFiles } from "./shared.ts";
 
 export type EnvironmentFingerprintProfile = "default" | "source-development";
@@ -10,12 +11,6 @@ export type EnvironmentFingerprintProfile = "default" | "source-development";
 type FingerprintLayer = {
   digest: string;
   inputs: unknown;
-};
-
-type SourcePatch = {
-  package: string;
-  git: string;
-  rev: string;
 };
 
 const lockfiles = [
@@ -235,50 +230,26 @@ function sourceInputs(
     return { profile, mode: "source-development", configPresent: false };
   }
 
-  const parsed = JSON.parse(text(path)) as {
-    schemaVersion?: unknown;
-    cargo?: { localOnly?: unknown; patches?: unknown };
-  };
-  if (
-    (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2) ||
-    !parsed.cargo ||
-    !Array.isArray(parsed.cargo.patches)
-  ) {
+  try {
+    const loaded = readSourceDependencyConfig(root);
+    const patches = loaded.patches
+      .map((patch) => ({ package: patch.package, git: patch.git, rev: patch.rev }))
+      .sort((left, right) => left.package.localeCompare(right.package));
+    return {
+      profile,
+      mode: "source-development",
+      schemaVersion: loaded.schemaVersion,
+      localOnly: loaded.localOnly,
+      patches,
+    };
+  } catch (error) {
     diagnostics.push({
       code: "environment-fingerprint-source-config-invalid",
-      message: ".coding-tooling.source-deps.json is not a supported source dependency contract",
+      message: error instanceof Error ? error.message : String(error),
       path: ".coding-tooling.source-deps.json",
     });
     return { profile, mode: "source-development", configPresent: true };
   }
-
-  const patches: SourcePatch[] = [];
-  for (const candidate of parsed.cargo.patches) {
-    if (!candidate || typeof candidate !== "object") continue;
-    const patch = candidate as Record<string, unknown>;
-    if (
-      typeof patch.package !== "string" ||
-      typeof patch.git !== "string" ||
-      typeof patch.rev !== "string"
-    ) {
-      diagnostics.push({
-        code: "environment-fingerprint-source-config-invalid",
-        message: "Every source patch must declare package, git, and rev",
-        path: ".coding-tooling.source-deps.json",
-      });
-      continue;
-    }
-    patches.push({ package: patch.package, git: patch.git, rev: patch.rev });
-  }
-  patches.sort((left, right) => left.package.localeCompare(right.package));
-
-  return {
-    profile,
-    mode: "source-development",
-    schemaVersion: parsed.schemaVersion,
-    localOnly: parsed.cargo.localOnly === true,
-    patches,
-  };
 }
 
 export function expectedEnvironmentFingerprint(
