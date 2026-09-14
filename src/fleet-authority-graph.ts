@@ -102,23 +102,43 @@ function sourceDependencyEvidence(
 
   const entries: Array<Record<string, unknown>> = [];
   const diagnostics: Diagnostic[] = [];
-  for (const patch of loaded.patches) {
-    const packageName = patch.package;
-    const git = patch.git;
-    const rev = patch.rev.toLowerCase();
-    const localPath = patch.localPath ?? null;
-    if (!packageName || !git || !/^[0-9a-f]{40}$/i.test(rev)) {
+  const sources =
+    loaded.schemaVersion <= 2
+      ? loaded.patches.map((patch) => ({
+          ecosystem: "cargo" as const,
+          git: patch.git,
+          rev: patch.rev,
+          localPath: patch.localPath ?? null,
+          localOnly: loaded.localOnly,
+          packages: [{ package: patch.package }],
+        }))
+      : loaded.sourceRepositories.map((repository) => ({
+          ecosystem: repository.ecosystem,
+          git: repository.git,
+          rev: repository.rev,
+          localPath: repository.localPath ?? null,
+          localOnly: repository.localOnly,
+          packages: repository.packages,
+        }));
+
+  for (const source of sources) {
+    const git = source.git;
+    const rev = source.rev.toLowerCase();
+    const localPath = source.localPath;
+    const packageNames = source.packages.map((entry) => entry.package).filter(Boolean);
+    const label = packageNames.join(", ") || git;
+    if (!git || packageNames.length === 0 || !/^[0-9a-f]{40}$/i.test(rev)) {
       diagnostics.push({
         code: "authority-graph-source-patch-invalid",
-        message: `Source patch ${packageName || "<unnamed>"} lacks package, Git URL, or exact revision`,
+        message: `Source ${label} lacks package, Git URL, or exact revision`,
         path: ".coding-tooling.source-deps.json",
       });
       continue;
     }
-    if (loaded.localOnly && !localPath) {
+    if (source.localOnly && !localPath) {
       diagnostics.push({
         code: "authority-graph-local-source-required",
-        message: `${packageName} is local-only but does not declare localPath`,
+        message: `${label} is local-only but does not declare localPath`,
         path: ".coding-tooling.source-deps.json",
       });
     }
@@ -132,36 +152,39 @@ function sourceDependencyEvidence(
           if (actualRevision !== rev) {
             diagnostics.push({
               code: "authority-graph-source-revision-drift",
-              message: `${packageName} local source is ${actualRevision}, expected ${rev}`,
+              message: `${label} local source is ${actualRevision}, expected ${rev}`,
               path: ".coding-tooling.source-deps.json",
             });
           }
         } else {
           diagnostics.push({
             code: "authority-graph-source-revision-unavailable",
-            message: `Could not resolve local source revision for ${packageName}`,
+            message: `Could not resolve local source revision for ${label}`,
             path: ".coding-tooling.source-deps.json",
           });
         }
-      } else if (loaded.localOnly) {
+      } else if (source.localOnly) {
         diagnostics.push({
           code: "authority-graph-local-source-missing",
-          message: `${packageName} local-only checkout does not exist at ${localPath}`,
+          message: `${label} local-only checkout does not exist at ${localPath}`,
           path: ".coding-tooling.source-deps.json",
         });
       }
     }
-    entries.push({
-      package: packageName,
-      repository: githubRepository(git),
-      git,
-      declaredRevision: rev,
-      localOnly: loaded.localOnly,
-      localPath,
-      actualRevision,
-      exactRevisionSatisfied:
-        actualRevision === null ? (loaded.localOnly ? false : null) : actualRevision === rev,
-    });
+    for (const packageEntry of source.packages) {
+      entries.push({
+        package: packageEntry.package,
+        ecosystem: source.ecosystem,
+        repository: githubRepository(git),
+        git,
+        declaredRevision: rev,
+        localOnly: source.localOnly,
+        localPath,
+        actualRevision,
+        exactRevisionSatisfied:
+          actualRevision === null ? (source.localOnly ? false : null) : actualRevision === rev,
+      });
+    }
   }
   entries.sort((left, right) => String(left.package).localeCompare(String(right.package)));
   return { entries, diagnostics };

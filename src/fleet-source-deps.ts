@@ -71,7 +71,7 @@ function migrationConfig(
   loaded: LoadedSourceDependencyConfig,
   runner: Runner,
 ): { content?: string; reason?: string } {
-  if (loaded.schemaVersion === 3) return {};
+  if (loaded.schemaVersion >= 3) return {};
   const byRepository = new Map<string, CargoSourcePatch[]>();
   for (const patch of loaded.patches) {
     const key = canonicalRepository(patch.git);
@@ -226,8 +226,9 @@ export function reconcileFleetSourceDependencies(
       changed: changes.some((change) => change.changed === true),
       notes: [
         "Schema-v3 migration preserves existing exact revisions; it never chooses a new revision.",
+        "Schema-v4 declarations are already repository-level and are never downgraded by Cargo reconciliation.",
         "Transitive revision conflicts block apply and require compatibility evidence before reconciliation.",
-        "A repeated apply is a verified no-op when every eligible repository is already on schema v3.",
+        "A repeated apply is a verified no-op when every eligible legacy Cargo repository is already on schema v3 or newer.",
       ],
     },
     diagnostics:

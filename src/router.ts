@@ -12,6 +12,7 @@ import type { ResultEnvelope } from "./model.ts";
 import { nextSliceCommand } from "./next-slice.ts";
 import { pullRequestIntegrationReceipt } from "./pr-integration-receipt.ts";
 import { repositoryRoot } from "./shared.ts";
+import { sourceDependencies } from "./source-deps.ts";
 import { verifySourceDependencyGraph } from "./source-graph.ts";
 
 function option(argv: string[], name: string): string | undefined {
@@ -46,6 +47,7 @@ function usage(): number {
   coding-tooling agent handoff <path> --verification-report <path> [--root <path>] [--report <path>] [--json]
   coding-tooling next [--root <path>] [--json]
   coding-tooling pr receipt <number> [--expected-head <sha>] [--expected-base <sha>] [--root <path>] [--json]
+  coding-tooling source-deps <prepare|activate|status|smoke|restore|deactivate> [--config <path>] [--root <path>] [--json]
   coding-tooling source-deps verify-graph [--config <path>] [--root <path>] [--json]
   coding-tooling fleet authority-graph [--root <path>] [--json]
   coding-tooling fleet source-deps reconcile [--apply] [--root <path>] [--json]`);
@@ -121,6 +123,23 @@ export function routerMain(argv = process.argv.slice(2)): number {
       }),
       compact,
     );
+  }
+
+  if (argv[0] === "source-deps" && argv[1] !== "verify-graph") {
+    const action = argv[1];
+    if (
+      action !== "prepare" &&
+      action !== "activate" &&
+      action !== "status" &&
+      action !== "smoke" &&
+      action !== "restore" &&
+      action !== "deactivate"
+    )
+      return usage();
+    if (!validFlags(argv, 2, new Set(["--root", "--config"]))) return usage();
+    const normalizedAction =
+      action === "prepare" ? "activate" : action === "restore" ? "deactivate" : action;
+    return print(sourceDependencies(root, normalizedAction, option(argv, "config")), compact);
   }
 
   if (argv[0] === "source-deps" && argv[1] === "verify-graph") {
