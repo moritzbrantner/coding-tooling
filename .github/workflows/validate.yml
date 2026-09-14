@@ -24,13 +24,6 @@ jobs:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
-      - name: Print formatter diff for source graph changes
-        shell: bash
-        run: |
-          files=(src/fleet-source-deps.ts src/router.ts src/source-aware-pipeline.ts src/source-deps.ts src/source-graph.ts)
-          bun x oxfmt "${files[@]}"
-          git diff -- "${files[@]}"
-          git checkout -- "${files[@]}"
       - name: Validate through the local Action
         uses: ./
         with:
