@@ -1,0 +1,1 @@
+Schema v4 adds the JavaScript source adapter without changing schema-v1/v2/v3 Cargo behavior. JavaScript repositories are exact-revision, local-only inputs and use package manifests as the build/materialization contract.
