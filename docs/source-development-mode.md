@@ -29,17 +29,13 @@ Example shape:
         "git": "https://github.com/example/editor-core.git",
         "rev": "0123456789abcdef0123456789abcdef01234567",
         "localPath": "../editor-core",
-        "packages": [
-          { "package": "@example/editor-core" }
-        ]
+        "packages": [{ "package": "@example/editor-core" }]
       },
       {
         "git": "https://github.com/example/timeline-editor.git",
         "rev": "89abcdef0123456789abcdef0123456789abcdef",
         "localPath": "../timeline-editor",
-        "packages": [
-          { "package": "@example/timeline-editor" }
-        ]
+        "packages": [{ "package": "@example/timeline-editor" }]
       }
     ]
   }

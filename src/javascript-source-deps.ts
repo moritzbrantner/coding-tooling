@@ -1,12 +1,5 @@
 import { spawnSync } from "node:child_process";
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export type JavaScriptSourcePackage = {
@@ -102,7 +95,9 @@ export function parseJavaScriptSourceConfig(
       `Every JavaScript source repository requires git, rev, localPath, and packages: ${configPath}`,
     );
     if (!exactRevision(rev)) {
-      throw new Error(`JavaScript source repository ${git} requires an exact 40-character revision`);
+      throw new Error(
+        `JavaScript source repository ${git} requires an exact 40-character revision`,
+      );
     }
     const localPath = requireString(
       repository.localPath,
@@ -153,9 +148,7 @@ function command(command: string, args: string[], cwd: string, capture = false):
   });
   if (result.status !== 0) {
     const stderr = capture && typeof result.stderr === "string" ? result.stderr.trim() : "";
-    throw new Error(
-      `${command} ${args.join(" ")} failed in ${cwd}${stderr ? `: ${stderr}` : ""}`,
-    );
+    throw new Error(`${command} ${args.join(" ")} failed in ${cwd}${stderr ? `: ${stderr}` : ""}`);
   }
   return capture && typeof result.stdout === "string" ? result.stdout : "";
 }
@@ -169,7 +162,10 @@ function localRevision(path: string): string {
 function containedPath(root: string, candidate: string, label: string): string {
   const target = resolve(root, candidate);
   const relation = relative(root, target);
-  if (relation === "" || (!relation.startsWith(`..${sep}`) && relation !== ".." && !isAbsolute(relation))) {
+  if (
+    relation === "" ||
+    (!relation.startsWith(`..${sep}`) && relation !== ".." && !isAbsolute(relation))
+  ) {
     return target;
   }
   throw new Error(`${label} escapes its source repository: ${candidate}`);
@@ -177,7 +173,8 @@ function containedPath(root: string, candidate: string, label: string): string {
 
 function packageManifest(path: string, expectedName: string): PackageManifest {
   const manifestPath = join(path, "package.json");
-  if (!existsSync(manifestPath)) throw new Error(`Missing package.json for ${expectedName}: ${manifestPath}`);
+  if (!existsSync(manifestPath))
+    throw new Error(`Missing package.json for ${expectedName}: ${manifestPath}`);
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as PackageManifest;
   if (manifest.name !== expectedName) {
     throw new Error(
@@ -232,7 +229,9 @@ function sourcePackages(root: string, config: JavaScriptSourceConfig): SourcePac
         repositoryRoot,
         packageRoot,
         manifest,
-        sourceDependencies: manifestDependencyNames(manifest).filter((name) => configuredNames.has(name)),
+        sourceDependencies: manifestDependencyNames(manifest).filter((name) =>
+          configuredNames.has(name),
+        ),
       });
     }
   }
@@ -336,13 +335,17 @@ export function activateJavaScriptSourceDependencies(
         if (dependency) materializePackage(entry.repositoryRoot, dependency);
       }
       if (typeof entry.manifest.scripts?.build !== "string") {
-        throw new Error(`${entry.packageName} source checkout has no build script: ${entry.packageRoot}`);
+        throw new Error(
+          `${entry.packageName} source checkout has no build script: ${entry.packageRoot}`,
+        );
       }
       command("bun", ["run", "build"], entry.packageRoot);
       for (const packageFile of packageFiles(entry)) {
         const source = join(entry.packageRoot, packageFile);
         if (!existsSync(source)) {
-          throw new Error(`${entry.packageName} source build did not create package file ${source}`);
+          throw new Error(
+            `${entry.packageName} source build did not create package file ${source}`,
+          );
         }
       }
     }
@@ -426,7 +429,8 @@ export function smokeJavaScriptSourceDependencies(
   config: JavaScriptSourceConfig,
 ): Record<string, unknown> {
   const status = statusJavaScriptSourceDependencies(root, config);
-  if (status.active !== true) throw new Error("JavaScript source dependency mode is not fully active");
+  if (status.active !== true)
+    throw new Error("JavaScript source dependency mode is not fully active");
   const packageNames = config.repositories
     .flatMap((repository) => repository.packages.map((entry) => entry.package))
     .sort();

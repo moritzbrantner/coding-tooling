@@ -424,7 +424,8 @@ export function sourceDependencies(
     }
 
     if (action === "smoke") {
-      if (!managed) throw new Error(`Source dependency mode is not active: ${loaded.cargoConfigPath}`);
+      if (!managed)
+        throw new Error(`Source dependency mode is not active: ${loaded.cargoConfigPath}`);
       const javascript = loaded.javascript
         ? smokeJavaScriptSourceDependencies(root, loaded.javascript)
         : null;
