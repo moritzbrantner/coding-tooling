@@ -19,6 +19,10 @@ function gitRepository(root: string): string {
   return spawnSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
 }
 
+function tomlPath(path: string): string {
+  return path.replaceAll("\\", "\\\\");
+}
+
 test("schema v3 pins one revision per source repository", () => {
   const workspace = mkdtempSync(join(tmpdir(), "coding-tooling-source-v3-"));
   const consumer = join(workspace, "consumer");
@@ -58,6 +62,6 @@ test("schema v3 pins one revision per source repository", () => {
   const rendered = renderSourceDependencies(consumer);
   expect(rendered.schemaVersion).toBe(3);
   expect(rendered.localOnly).toBe(true);
-  expect(rendered.content).toContain(join(source, "crates", "a"));
-  expect(rendered.content).toContain(join(source, "crates", "b"));
+  expect(rendered.content).toContain(tomlPath(join(source, "crates", "a")));
+  expect(rendered.content).toContain(tomlPath(join(source, "crates", "b")));
 });
