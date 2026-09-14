@@ -3,9 +3,9 @@
   "kind": "coding-tooling-test-coverage-detail",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "93f46bf2545e4a7f1b75ec0797ad087bbea9a512"
+    "revision": "61675f0a5ecd8334de3fffc42de65dd80afa95d8"
   },
-  "generatedAt": "2026-09-13T06:33:48.000Z",
+  "generatedAt": "2026-09-14T02:43:26.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1
@@ -5265,6 +5265,78 @@
         },
         {
           "line": 526,
+          "hits": 1,
+          "covered": true
+        }
+      ],
+      "functions": [],
+      "branches": []
+    },
+    {
+      "path": "site/analysis-message.js",
+      "lines": [
+        {
+          "line": 1,
+          "hits": 132,
+          "covered": true
+        },
+        {
+          "line": 3,
+          "hits": 31,
+          "covered": true
+        },
+        {
+          "line": 4,
+          "hits": 12,
+          "covered": true
+        },
+        {
+          "line": 5,
+          "hits": 6,
+          "covered": true
+        },
+        {
+          "line": 6,
+          "hits": 15,
+          "covered": true
+        },
+        {
+          "line": 7,
+          "hits": 10,
+          "covered": true
+        },
+        {
+          "line": 8,
+          "hits": 2,
+          "covered": true
+        },
+        {
+          "line": 11,
+          "hits": 30,
+          "covered": true
+        },
+        {
+          "line": 12,
+          "hits": 12,
+          "covered": true
+        },
+        {
+          "line": 13,
+          "hits": 6,
+          "covered": true
+        },
+        {
+          "line": 14,
+          "hits": 15,
+          "covered": true
+        },
+        {
+          "line": 15,
+          "hits": 20,
+          "covered": true
+        },
+        {
+          "line": 16,
           "hits": 1,
           "covered": true
         }
