@@ -5,10 +5,12 @@ import { runPlan } from "./core.ts";
 import { verifyEnvironmentFingerprint } from "./environment-verification.ts";
 import { type Diagnostic, type ResultEnvelope, type ResultStatus } from "./model.ts";
 import { sourceDependencies } from "./source-deps.ts";
+import { verifySourceDependencyGraph } from "./source-graph.ts";
 import { walkFiles } from "./shared.ts";
 
 type PipelineRunner = typeof runPlan;
 type SourceDependenciesRunner = typeof sourceDependencies;
+type SourceGraphVerifier = typeof verifySourceDependencyGraph;
 type EnvironmentVerifier = typeof verifyEnvironmentFingerprint;
 
 type SourceDependencyConfig = {
@@ -29,12 +31,14 @@ type FileSnapshot = {
 export type SourceAwarePipelineDependencies = {
   runPipeline?: PipelineRunner;
   sourceDependencies?: SourceDependenciesRunner;
+  verifySourceGraph?: SourceGraphVerifier;
   verifyEnvironment?: EnvironmentVerifier;
 };
 
 export type SourceAwarePipelineExecution = {
   pipeline: ResultEnvelope<Record<string, unknown>>;
   sourceDevelopment: boolean;
+  sourceGraph?: ResultEnvelope<Record<string, unknown>>;
   sourceActivation?: ResultEnvelope<Record<string, unknown>>;
   environment?: ResultEnvelope<Record<string, unknown>>;
 };
@@ -170,6 +174,7 @@ export function runSourceAwarePipeline(
 ): SourceAwarePipelineExecution {
   const pipelineRunner = dependencies.runPipeline ?? runPlan;
   const sourceDependenciesRunner = dependencies.sourceDependencies ?? sourceDependencies;
+  const sourceGraphVerifier = dependencies.verifySourceGraph ?? verifySourceDependencyGraph;
   const environmentVerifier = dependencies.verifyEnvironment ?? verifyEnvironmentFingerprint;
   const source = sourceDevelopmentConfig(root);
 
@@ -191,6 +196,17 @@ export function runSourceAwarePipeline(
     };
   }
 
+  const sourceGraph = sourceGraphVerifier(root);
+  if (sourceGraph.status !== "passed") {
+    return {
+      pipeline: envelope(sourceGraph.status, "source-graph-verification", tier, sourceGraph.diagnostics, {
+        sourceGraph: sourceGraph.data,
+      }),
+      sourceDevelopment: true,
+      sourceGraph,
+    };
+  }
+
   const cargoConfig = snapshotFile(source.cargoConfigPath);
   const cargoLocks = cargoLockSnapshots(root);
   const activation = sourceDependenciesRunner(root, "activate");
@@ -204,6 +220,7 @@ export function runSourceAwarePipeline(
         cleanupDiagnostics,
       ),
       sourceDevelopment: true,
+      sourceGraph,
       sourceActivation: activation,
     };
   }
@@ -220,6 +237,7 @@ export function runSourceAwarePipeline(
         cleanupDiagnostics,
       ),
       sourceDevelopment: true,
+      sourceGraph,
       sourceActivation: activation,
       environment,
     };
@@ -235,6 +253,7 @@ export function runSourceAwarePipeline(
   return {
     pipeline: withRestoreDiagnostics(pipeline, cleanupDiagnostics),
     sourceDevelopment: true,
+    sourceGraph,
     sourceActivation: activation,
     environment,
   };
