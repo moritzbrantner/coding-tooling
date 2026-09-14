@@ -2,6 +2,14 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 
+import {
+  activateJavaScriptSourceDependencies,
+  deactivateJavaScriptSourceDependencies,
+  type JavaScriptSourceConfig,
+  parseJavaScriptSourceConfig,
+  smokeJavaScriptSourceDependencies,
+  statusJavaScriptSourceDependencies,
+} from "./javascript-source-deps.ts";
 import type { ResultEnvelope } from "./model.ts";
 import { reconcileTextFile, reconciliationChanged } from "./reconciliation.ts";
 
@@ -26,6 +34,18 @@ export type CargoSourceRepository = {
   }>;
 };
 
+export type SourceRepository = {
+  ecosystem: "cargo" | "javascript";
+  git: string;
+  rev: string;
+  localPath?: string;
+  localOnly: boolean;
+  packages: Array<{
+    package: string;
+    path?: string;
+  }>;
+};
+
 type RawSourceDependencyConfig = {
   schemaVersion?: unknown;
   cargo?: {
@@ -34,18 +54,21 @@ type RawSourceDependencyConfig = {
     patches?: unknown;
     repositories?: unknown;
   };
+  javascript?: unknown;
 };
 
 export type LoadedSourceDependencyConfig = {
   path: string;
-  schemaVersion: 1 | 2 | 3;
+  schemaVersion: 1 | 2 | 3 | 4;
   cargoConfigPath: string;
   localOnly: boolean;
   patches: CargoSourcePatch[];
   repositories: CargoSourceRepository[];
+  javascript: JavaScriptSourceConfig | null;
+  sourceRepositories: SourceRepository[];
 };
 
-type SourceDependencyAction = "activate" | "status" | "deactivate";
+type SourceDependencyAction = "activate" | "status" | "smoke" | "deactivate";
 
 function exactRevision(value: string): boolean {
   return /^[0-9a-f]{40}$/i.test(value);
@@ -82,23 +105,62 @@ function normalizeLegacyRepositories(patches: CargoSourcePatch[]): CargoSourceRe
     .sort((left, right) => left.git.localeCompare(right.git) || left.rev.localeCompare(right.rev));
 }
 
+function sourceRepositories(
+  cargo: CargoSourceRepository[],
+  cargoLocalOnly: boolean,
+  javascript: JavaScriptSourceConfig | null,
+): SourceRepository[] {
+  const repositories: SourceRepository[] = cargo.map((repository) => ({
+    ecosystem: "cargo",
+    git: repository.git,
+    rev: repository.rev,
+    ...(repository.localPath ? { localPath: repository.localPath } : {}),
+    localOnly: cargoLocalOnly,
+    packages: repository.packages,
+  }));
+  for (const repository of javascript?.repositories ?? []) {
+    repositories.push({
+      ecosystem: "javascript",
+      git: repository.git,
+      rev: repository.rev,
+      localPath: repository.localPath,
+      localOnly: true,
+      packages: repository.packages,
+    });
+  }
+  return repositories.sort(
+    (left, right) =>
+      left.git.localeCompare(right.git) || left.ecosystem.localeCompare(right.ecosystem),
+  );
+}
+
 export function readSourceDependencyConfig(
   root: string,
   configPath?: string,
 ): LoadedSourceDependencyConfig {
   const path = resolve(root, configPath ?? defaultSourceDependencyConfigPath);
   const parsed = JSON.parse(readFileSync(path, "utf8")) as RawSourceDependencyConfig;
-  if (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2 && parsed.schemaVersion !== 3) {
+  if (
+    parsed.schemaVersion !== 1 &&
+    parsed.schemaVersion !== 2 &&
+    parsed.schemaVersion !== 3 &&
+    parsed.schemaVersion !== 4
+  ) {
     throw new Error(`Unsupported source dependency schema: ${path}`);
   }
   if (!parsed.cargo || typeof parsed.cargo !== "object") {
     throw new Error(`Invalid source dependency config: ${path}`);
   }
+  if (parsed.schemaVersion !== 4 && parsed.javascript !== undefined) {
+    throw new Error(`JavaScript source dependencies require schemaVersion 4: ${path}`);
+  }
 
+  const javascript =
+    parsed.schemaVersion === 4 ? parseJavaScriptSourceConfig(parsed.javascript, path) : null;
   const localOnly = parsed.cargo.localOnly === true;
   if (localOnly && parsed.schemaVersion === 1) {
     throw new Error(
-      `Local-only source dependency config requires schemaVersion 2 or 3 so older tooling cannot silently fall back to remote Git: ${path}`,
+      `Local-only source dependency config requires schemaVersion 2 or newer so older tooling cannot silently fall back to remote Git: ${path}`,
     );
   }
   const configuredCargoPath =
@@ -144,18 +206,23 @@ export function readSourceDependencyConfig(
       seen.add(packageName);
       return { package: packageName, git, rev, ...(localPath ? { localPath } : {}) };
     });
+    const repositories = normalizeLegacyRepositories(patches);
     return {
       path,
       schemaVersion: parsed.schemaVersion,
       cargoConfigPath: resolve(root, configuredCargoPath),
       localOnly,
       patches,
-      repositories: normalizeLegacyRepositories(patches),
+      repositories,
+      javascript,
+      sourceRepositories: sourceRepositories(repositories, localOnly, javascript),
     };
   }
 
   if (!Array.isArray(parsed.cargo.repositories)) {
-    throw new Error(`Schema 3 source dependency config requires cargo.repositories: ${path}`);
+    throw new Error(
+      `Schema ${parsed.schemaVersion} source dependency config requires cargo.repositories: ${path}`,
+    );
   }
   const seenRepositories = new Set<string>();
   const repositories: CargoSourceRepository[] = parsed.cargo.repositories.map(
@@ -179,7 +246,9 @@ export function readSourceDependencyConfig(
       }
       const repositoryKey = git.replace(/\.git$/i, "").toLowerCase();
       if (seenRepositories.has(repositoryKey)) {
-        throw new Error(`Schema 3 declares source repository more than once: ${git}`);
+        throw new Error(
+          `Schema ${parsed.schemaVersion} declares Cargo source repository more than once: ${git}`,
+        );
       }
       seenRepositories.add(repositoryKey);
       const localPath =
@@ -199,7 +268,7 @@ export function readSourceDependencyConfig(
         const packageRecord = packageCandidate as Record<string, unknown>;
         const packageName = requireString(
           packageRecord.package,
-          `Every schema 3 package requires package: ${path}`,
+          `Every schema ${parsed.schemaVersion} Cargo package requires package: ${path}`,
         );
         const packagePath =
           packageRecord.path === undefined
@@ -213,7 +282,7 @@ export function readSourceDependencyConfig(
         return { package: packageName, ...(packagePath ? { path: packagePath } : {}) };
       });
       packages.sort((left, right) => left.package.localeCompare(right.package));
-      return { git, rev, ...(localPath ? { localPath } : {}), packages };
+      return { git, rev: rev.toLowerCase(), ...(localPath ? { localPath } : {}), packages };
     },
   );
   repositories.sort((left, right) => left.git.localeCompare(right.git));
@@ -231,11 +300,13 @@ export function readSourceDependencyConfig(
 
   return {
     path,
-    schemaVersion: 3,
+    schemaVersion: parsed.schemaVersion,
     cargoConfigPath: resolve(root, configuredCargoPath),
     localOnly,
     patches,
     repositories,
+    javascript,
+    sourceRepositories: sourceRepositories(repositories, localOnly, javascript),
   };
 }
 
@@ -280,7 +351,7 @@ export function renderSourceDependencies(
   content: string;
   packages: string[];
   localOnly: boolean;
-  schemaVersion: 1 | 2 | 3;
+  schemaVersion: 1 | 2 | 3 | 4;
 } {
   const loaded = readSourceDependencyConfig(root, configPath);
   const patches = [...loaded.patches].sort((left, right) =>
@@ -297,6 +368,12 @@ export function renderSourceDependencies(
   };
 }
 
+function javascriptPackages(config: JavaScriptSourceConfig | null): string[] {
+  return (config?.repositories ?? [])
+    .flatMap((repository) => repository.packages.map((entry) => entry.package))
+    .sort();
+}
+
 export function sourceDependencies(
   root: string,
   action: SourceDependencyAction,
@@ -309,12 +386,17 @@ export function sourceDependencies(
       ? readFileSync(loaded.cargoConfigPath, "utf8")
       : undefined;
     const managed = existing?.startsWith(generatedHeader) ?? false;
-    const packages = loaded.patches.map((patch) => patch.package).sort();
+    const cargoPackages = loaded.patches.map((patch) => patch.package).sort();
+    const jsPackages = javascriptPackages(loaded.javascript);
+    const packages = [...new Set([...cargoPackages, ...jsPackages])].sort();
 
     if (action === "deactivate") {
       if (existing !== undefined && !managed) {
         throw new Error(`Refusing to remove unmanaged Cargo config: ${loaded.cargoConfigPath}`);
       }
+      const javascript = loaded.javascript
+        ? deactivateJavaScriptSourceDependencies(root, loaded.javascript)
+        : null;
       const reconciliation = managed ? "changed" : "unchanged";
       if (managed) rmSync(loaded.cargoConfigPath);
       return {
@@ -331,7 +413,36 @@ export function sourceDependencies(
           configPath: loaded.path,
           cargoConfigPath: loaded.cargoConfigPath,
           packages,
+          cargoPackages,
+          javascriptPackages: jsPackages,
+          javascript,
           resolution: loaded.localOnly ? "local-only" : "local-or-git",
+          javascriptResolution: loaded.javascript ? "local-only" : null,
+        },
+        diagnostics: [],
+      };
+    }
+
+    if (action === "smoke") {
+      if (!managed) throw new Error(`Source dependency mode is not active: ${loaded.cargoConfigPath}`);
+      const javascript = loaded.javascript
+        ? smokeJavaScriptSourceDependencies(root, loaded.javascript)
+        : null;
+      return {
+        schemaVersion: 1,
+        operation: "source-deps",
+        status: "passed",
+        durationMs: Math.round(performance.now() - started),
+        data: {
+          action,
+          active: true,
+          sourceSchemaVersion: loaded.schemaVersion,
+          configPath: loaded.path,
+          cargoConfigPath: loaded.cargoConfigPath,
+          packages,
+          cargoPackages,
+          javascriptPackages: jsPackages,
+          javascript,
         },
         diagnostics: [],
       };
@@ -339,6 +450,7 @@ export function sourceDependencies(
 
     const rendered = renderSourceDependencies(root, configPath);
     let reconciliation: "created" | "changed" | "unchanged" = "unchanged";
+    let javascript: Record<string, unknown> | null = null;
     if (action === "activate") {
       if (existing !== undefined && !managed) {
         throw new Error(
@@ -346,7 +458,22 @@ export function sourceDependencies(
         );
       }
       reconciliation = reconcileTextFile(rendered.cargoConfigPath, rendered.content);
+      try {
+        javascript = loaded.javascript
+          ? activateJavaScriptSourceDependencies(root, loaded.javascript)
+          : null;
+      } catch (error) {
+        if (existing === undefined) rmSync(rendered.cargoConfigPath, { force: true });
+        else if (managed) reconcileTextFile(rendered.cargoConfigPath, existing);
+        throw error;
+      }
+    } else {
+      javascript = loaded.javascript
+        ? statusJavaScriptSourceDependencies(root, loaded.javascript)
+        : null;
     }
+    const javascriptActive =
+      !loaded.javascript || (javascript !== null && javascript.active === true);
 
     return {
       schemaVersion: 1,
@@ -355,14 +482,18 @@ export function sourceDependencies(
       durationMs: Math.round(performance.now() - started),
       data: {
         action,
-        active: action === "activate" ? true : managed,
+        active: action === "activate" ? true : managed && javascriptActive,
         changed: action === "activate" ? reconciliationChanged(reconciliation) : false,
         reconciliation,
         sourceSchemaVersion: rendered.schemaVersion,
         configPath: rendered.configPath,
         cargoConfigPath: rendered.cargoConfigPath,
-        packages: rendered.packages,
+        packages,
+        cargoPackages,
+        javascriptPackages: jsPackages,
+        javascript,
         resolution: rendered.localOnly ? "local-only" : "local-or-git",
+        javascriptResolution: loaded.javascript ? "local-only" : null,
       },
       diagnostics: [],
     };
