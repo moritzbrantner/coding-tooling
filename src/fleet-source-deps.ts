@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 
 import type { Diagnostic, ResultEnvelope } from "./model.ts";
@@ -19,6 +19,11 @@ type V3Repository = {
   rev: string;
   localPath: string;
   packages: Array<{ package: string; path?: string }>;
+};
+
+type GitLocation = {
+  repositoryIdentity: string;
+  prefix: string;
 };
 
 function posix(value: string): string {
@@ -45,9 +50,19 @@ function canonicalRepository(git: string): string {
     .toLowerCase();
 }
 
-function gitRoot(path: string, cwd: string, runner: Runner): string | null {
-  const result = runner("git", ["-C", path, "rev-parse", "--show-toplevel"], cwd);
-  return result.status === 0 && result.stdout.trim() ? realpathSync(result.stdout.trim()) : null;
+function gitLocation(path: string, cwd: string, runner: Runner): GitLocation | null {
+  const rootResult = runner("git", ["-C", path, "rev-parse", "--show-toplevel"], cwd);
+  const prefixResult = runner("git", ["-C", path, "rev-parse", "--show-prefix"], cwd);
+  if (rootResult.status !== 0 || prefixResult.status !== 0 || !rootResult.stdout.trim()) return null;
+  return {
+    repositoryIdentity: posix(rootResult.stdout.trim()).toLowerCase(),
+    prefix: posix(prefixResult.stdout.trim()).replace(/\/$/, ""),
+  };
+}
+
+function repositoryRootFromPackagePath(packagePath: string, prefix: string): string {
+  const segments = prefix.split("/").filter(Boolean);
+  return resolve(packagePath, ...segments.map(() => ".."));
 }
 
 function migrationConfig(
@@ -56,7 +71,6 @@ function migrationConfig(
   runner: Runner,
 ): { content?: string; reason?: string } {
   if (loaded.schemaVersion === 3) return {};
-  const canonicalRoot = realpathSync(root);
   const byRepository = new Map<string, CargoSourcePatch[]>();
   for (const patch of loaded.patches) {
     const key = canonicalRepository(patch.git);
@@ -77,31 +91,29 @@ function migrationConfig(
       };
     }
 
-    const packageRoots = patches.map((patch) => {
-      const packagePath = realpathSync(resolve(root, patch.localPath!));
-      return { patch, packagePath, repositoryRoot: gitRoot(packagePath, root, runner) };
+    const packageLocations = patches.map((patch) => {
+      const packagePath = resolve(root, patch.localPath!);
+      return { patch, packagePath, location: gitLocation(packagePath, root, runner) };
     });
-    if (packageRoots.some((entry) => entry.repositoryRoot === null)) {
+    if (packageLocations.some((entry) => entry.location === null)) {
       return { reason: `${patches[0]!.git} local repository root cannot be resolved` };
     }
-    const roots = [...new Set(packageRoots.map((entry) => entry.repositoryRoot!))];
-    if (roots.length !== 1) {
+    const repositoryIdentities = [
+      ...new Set(packageLocations.map((entry) => entry.location!.repositoryIdentity)),
+    ];
+    if (repositoryIdentities.length !== 1) {
       return { reason: `${patches[0]!.git} package paths resolve to multiple Git repositories` };
     }
-    const repositoryRoot = roots[0]!;
-    const packages = packageRoots
-      .map(({ patch, packagePath }) => {
-        const packageRelative = posix(relative(repositoryRoot, packagePath));
-        if (packageRelative.startsWith("../") || packageRelative === "..") {
-          throw new Error(`${patch.package} is outside ${repositoryRoot}`);
-        }
-        return {
-          package: patch.package,
-          ...(packageRelative && packageRelative !== "." ? { path: packageRelative } : {}),
-        };
-      })
+
+    const first = packageLocations[0]!;
+    const repositoryRoot = repositoryRootFromPackagePath(first.packagePath, first.location!.prefix);
+    const packages = packageLocations
+      .map(({ patch, location }) => ({
+        package: patch.package,
+        ...(location!.prefix ? { path: location!.prefix } : {}),
+      }))
       .sort((left, right) => left.package.localeCompare(right.package));
-    const localPath = posix(relative(canonicalRoot, repositoryRoot)) || ".";
+    const localPath = posix(relative(resolve(root), repositoryRoot)) || ".";
     repositories.push({
       git: patches[0]!.git,
       rev: revisions[0]!,
