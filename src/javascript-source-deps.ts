@@ -54,6 +54,20 @@ function exactRevision(value: string): boolean {
   return /^[0-9a-f]{40}$/i.test(value);
 }
 
+function safePackageIdentity(value: string): boolean {
+  if (!value || value.includes("\\") || value.includes("\0")) return false;
+  const segments = value.split("/");
+  if (value.startsWith("@")) {
+    return (
+      segments.length === 2 &&
+      segments[0]!.length > 1 &&
+      segments[1]!.length > 0 &&
+      segments.every((segment) => segment !== "." && segment !== "..")
+    );
+  }
+  return segments.length === 1 && segments[0] !== "." && segments[0] !== "..";
+}
+
 function requireString(value: unknown, message: string): string {
   if (typeof value !== "string" || !value.trim()) throw new Error(message);
   return value;
@@ -120,6 +134,9 @@ export function parseJavaScriptSourceConfig(
         packageRecord.package,
         `Every JavaScript source package requires package: ${configPath}`,
       );
+      if (!safePackageIdentity(packageName)) {
+        throw new Error(`Invalid JavaScript package identity: ${packageName}`);
+      }
       if (seenPackages.has(packageName)) {
         throw new Error(`Duplicate JavaScript source package: ${packageName}`);
       }
@@ -282,7 +299,18 @@ function packageFiles(entry: SourcePackage): string[] {
 }
 
 function targetDirectory(root: string, packageName: string): string {
-  return join(root, "node_modules", ...packageName.split("/"));
+  const modulesRoot = resolve(root, "node_modules");
+  const target = resolve(modulesRoot, ...packageName.split("/"));
+  const relation = relative(modulesRoot, target);
+  if (
+    relation === "" ||
+    relation === ".." ||
+    relation.startsWith(`..${sep}`) ||
+    isAbsolute(relation)
+  ) {
+    throw new Error(`JavaScript package target escapes node_modules: ${packageName}`);
+  }
+  return target;
 }
 
 function materializePackage(root: string, entry: SourcePackage): void {
