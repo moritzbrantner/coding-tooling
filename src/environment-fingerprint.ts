@@ -232,15 +232,40 @@ function sourceInputs(
 
   try {
     const loaded = readSourceDependencyConfig(root);
-    const patches = loaded.patches
-      .map((patch) => ({ package: patch.package, git: patch.git, rev: patch.rev }))
-      .sort((left, right) => left.package.localeCompare(right.package));
+    if (loaded.schemaVersion <= 3) {
+      const patches = loaded.patches
+        .map((patch) => ({ package: patch.package, git: patch.git, rev: patch.rev }))
+        .sort((left, right) => left.package.localeCompare(right.package));
+      return {
+        profile,
+        mode: "source-development",
+        schemaVersion: loaded.schemaVersion,
+        localOnly: loaded.localOnly,
+        patches,
+      };
+    }
+
+    const repositories = loaded.sourceRepositories
+      .map((repository) => ({
+        ecosystem: repository.ecosystem,
+        git: repository.git,
+        rev: repository.rev,
+        localOnly: repository.localOnly,
+        packages: repository.packages
+          .map((entry) => ({ package: entry.package, ...(entry.path ? { path: entry.path } : {}) }))
+          .sort((left, right) => left.package.localeCompare(right.package)),
+      }))
+      .sort(
+        (left, right) =>
+          left.git.localeCompare(right.git) || left.ecosystem.localeCompare(right.ecosystem),
+      );
     return {
       profile,
       mode: "source-development",
       schemaVersion: loaded.schemaVersion,
-      localOnly: loaded.localOnly,
-      patches,
+      cargoLocalOnly: loaded.localOnly,
+      javascriptLocalOnly: loaded.javascript?.localOnly ?? null,
+      repositories,
     };
   } catch (error) {
     diagnostics.push({
