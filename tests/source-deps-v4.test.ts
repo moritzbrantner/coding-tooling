@@ -57,6 +57,34 @@ describe("source dependency schema v4", () => {
     ]);
   });
 
+  test("rejects JavaScript package identities that can escape node_modules", () => {
+    const root = repository();
+    writeFileSync(
+      join(root, ".coding-tooling.source-deps.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 4,
+          cargo: { repositories: [] },
+          javascript: {
+            localOnly: true,
+            repositories: [
+              {
+                git: "https://github.com/example/source-a.git",
+                rev: "1111111111111111111111111111111111111111",
+                localPath: "source-a",
+                packages: [{ package: ".." }],
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(() => readSourceDependencyConfig(root)).toThrow("Invalid JavaScript package identity");
+  });
+
   test("includes JavaScript exact revisions in the source-development fingerprint", () => {
     const root = repository();
     const first = expectedEnvironmentFingerprint(root, "source-development");
