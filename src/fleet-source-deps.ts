@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 
 import type { Diagnostic, ResultEnvelope } from "./model.ts";
@@ -47,7 +47,7 @@ function canonicalRepository(git: string): string {
 
 function gitRoot(path: string, cwd: string, runner: Runner): string | null {
   const result = runner("git", ["-C", path, "rev-parse", "--show-toplevel"], cwd);
-  return result.status === 0 && result.stdout.trim() ? resolve(result.stdout.trim()) : null;
+  return result.status === 0 && result.stdout.trim() ? realpathSync(result.stdout.trim()) : null;
 }
 
 function migrationConfig(
@@ -56,6 +56,7 @@ function migrationConfig(
   runner: Runner,
 ): { content?: string; reason?: string } {
   if (loaded.schemaVersion === 3) return {};
+  const canonicalRoot = realpathSync(root);
   const byRepository = new Map<string, CargoSourcePatch[]>();
   for (const patch of loaded.patches) {
     const key = canonicalRepository(patch.git);
@@ -77,7 +78,7 @@ function migrationConfig(
     }
 
     const packageRoots = patches.map((patch) => {
-      const packagePath = resolve(root, patch.localPath!);
+      const packagePath = realpathSync(resolve(root, patch.localPath!));
       return { patch, packagePath, repositoryRoot: gitRoot(packagePath, root, runner) };
     });
     if (packageRoots.some((entry) => entry.repositoryRoot === null)) {
@@ -100,7 +101,7 @@ function migrationConfig(
         };
       })
       .sort((left, right) => left.package.localeCompare(right.package));
-    const localPath = posix(relative(root, repositoryRoot)) || ".";
+    const localPath = posix(relative(canonicalRoot, repositoryRoot)) || ".";
     repositories.push({
       git: patches[0]!.git,
       rev: revisions[0]!,
