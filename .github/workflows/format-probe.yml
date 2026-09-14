@@ -4,22 +4,30 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   format-probe:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: 1.4.0
       - run: bun install --frozen-lockfile
-      - name: Print canonical formatted files
+      - name: Apply canonical formatting
         shell: bash
         run: |
-          for file in src/fleet-source-deps.ts src/router.ts src/source-aware-pipeline.ts src/source-deps.ts src/source-graph.ts; do
-            echo "===== $file BEGIN ====="
-            bun x oxfmt --stdin-filepath "$file" < "$file"
-            echo "===== $file END ====="
-          done
+          files=(src/fleet-source-deps.ts src/router.ts src/source-aware-pipeline.ts src/source-deps.ts src/source-graph.ts)
+          bun x oxfmt "${files[@]}"
+          if git diff --quiet -- "${files[@]}"; then
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -- "${files[@]}"
+          git commit -m "Format source graph implementation"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
