@@ -64,3 +64,44 @@ test("fails a local-only source graph when the configured checkout is absent", (
     "authority-graph-local-source-missing",
   );
 });
+
+test("fails a JavaScript-only local source graph when the configured checkout is absent", () => {
+  const fleet = mkdtempSync(join(tmpdir(), "coding-tooling-authority-js-"));
+  const repository = join(fleet, "consumer");
+  mkdirSync(join(repository, ".git"), { recursive: true });
+  writeFileSync(
+    join(repository, ".coding-tooling.source-deps.json"),
+    JSON.stringify({
+      schemaVersion: 4,
+      cargo: { repositories: [] },
+      javascript: {
+        localOnly: true,
+        repositories: [
+          {
+            git: "https://github.com/example/editor-core.git",
+            rev: "0123456789abcdef0123456789abcdef01234567",
+            localPath: "../editor-core",
+            packages: [{ package: "@example/editor-core" }],
+          },
+        ],
+      },
+    }),
+  );
+
+  const result = fleetAuthorityGraph(fleet);
+  expect(result.status).toBe("failed");
+  expect(result.diagnostics.map((entry) => entry.code)).toContain(
+    "authority-graph-local-source-missing",
+  );
+  expect(
+    (result.data.repositories as Array<{ sourceDependencies: Array<{ package: string }> }>)[0]
+      ?.sourceDependencies,
+  ).toEqual([
+    expect.objectContaining({
+      package: "@example/editor-core",
+      ecosystem: "javascript",
+      declaredRevision: "0123456789abcdef0123456789abcdef01234567",
+      exactRevisionSatisfied: false,
+    }),
+  ]);
+});
