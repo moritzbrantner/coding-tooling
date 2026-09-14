@@ -53,7 +53,8 @@ function canonicalRepository(git: string): string {
 function gitLocation(path: string, cwd: string, runner: Runner): GitLocation | null {
   const rootResult = runner("git", ["-C", path, "rev-parse", "--show-toplevel"], cwd);
   const prefixResult = runner("git", ["-C", path, "rev-parse", "--show-prefix"], cwd);
-  if (rootResult.status !== 0 || prefixResult.status !== 0 || !rootResult.stdout.trim()) return null;
+  if (rootResult.status !== 0 || prefixResult.status !== 0 || !rootResult.stdout.trim())
+    return null;
   return {
     repositoryIdentity: posix(rootResult.stdout.trim()).toLowerCase(),
     prefix: posix(prefixResult.stdout.trim()).replace(/\/$/, ""),
