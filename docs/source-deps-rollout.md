@@ -1,1 +1,0 @@
-The first intended migration target is subtitle-merger's editor-core -> timeline-editor acceptance chain. The consumer keeps its pinned ordinary-install Timeline revision while source acceptance uses exact sibling source revisions through coding-tooling.
