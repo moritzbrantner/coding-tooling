@@ -1,0 +1,21 @@
+name: Source Deps Format Preview
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Show canonical format patch
+        run: |
+          bun run format
+          git diff -- docs/source-development-mode.md src/javascript-source-deps.ts src/source-deps.ts
