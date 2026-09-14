@@ -38,7 +38,11 @@ function repositoryDirectories(root: string): string[] {
 }
 
 function canonicalRepository(git: string): string {
-  return git.trim().replace(/\.git$/i, "").replace(/\/$/, "").toLowerCase();
+  return git
+    .trim()
+    .replace(/\.git$/i, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
 }
 
 function gitRoot(path: string, cwd: string, runner: Runner): string | null {
@@ -67,7 +71,9 @@ function migrationConfig(
       return { reason: `${patches[0]!.git} uses multiple revisions inside one consumer` };
     }
     if (patches.some((patch) => !patch.localPath)) {
-      return { reason: `${patches[0]!.git} has no complete local-path evidence for schema-v3 migration` };
+      return {
+        reason: `${patches[0]!.git} has no complete local-path evidence for schema-v3 migration`,
+      };
     }
 
     const packageRoots = patches.map((patch) => {

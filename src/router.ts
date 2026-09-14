@@ -135,7 +135,10 @@ export function routerMain(argv = process.argv.slice(2)): number {
 
   if (argv[0] === "fleet" && argv[1] === "source-deps" && argv[2] === "reconcile") {
     if (!validFlags(argv, 3, new Set(["--root"]), new Set(["--apply"]))) return usage();
-    return print(reconcileFleetSourceDependencies(root, { apply: argv.includes("--apply") }), compact);
+    return print(
+      reconcileFleetSourceDependencies(root, { apply: argv.includes("--apply") }),
+      compact,
+    );
   }
 
   return entryMain(argv);

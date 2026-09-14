@@ -22,7 +22,11 @@ type Expectation = {
 };
 
 function canonicalRepository(git: string): string {
-  return git.trim().replace(/\.git$/i, "").replace(/\/$/, "").toLowerCase();
+  return git
+    .trim()
+    .replace(/\.git$/i, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
 }
 
 function localRepositoryRoot(
@@ -204,7 +208,9 @@ export function verifySourceDependencyGraph(
       ].sort(),
       localRoots: [
         ...new Set(
-          entries.map((entry) => entry.localRoot).filter((value): value is string => value !== null),
+          entries
+            .map((entry) => entry.localRoot)
+            .filter((value): value is string => value !== null),
         ),
       ].sort(),
       consumers: [...new Set(entries.map((entry) => entry.consumerRoot))].sort(),

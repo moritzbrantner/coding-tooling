@@ -199,9 +199,15 @@ export function runSourceAwarePipeline(
   const sourceGraph = sourceGraphVerifier(root);
   if (sourceGraph.status !== "passed") {
     return {
-      pipeline: envelope(sourceGraph.status, "source-graph-verification", tier, sourceGraph.diagnostics, {
-        sourceGraph: sourceGraph.data,
-      }),
+      pipeline: envelope(
+        sourceGraph.status,
+        "source-graph-verification",
+        tier,
+        sourceGraph.diagnostics,
+        {
+          sourceGraph: sourceGraph.data,
+        },
+      ),
       sourceDevelopment: true,
       sourceGraph,
     };

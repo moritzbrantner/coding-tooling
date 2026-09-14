@@ -75,7 +75,9 @@ function normalizeLegacyRepositories(patches: CargoSourcePatch[]): CargoSourceRe
   return [...grouped.values()]
     .map((repository) => ({
       ...repository,
-      packages: repository.packages.sort((left, right) => left.package.localeCompare(right.package)),
+      packages: repository.packages.sort((left, right) =>
+        left.package.localeCompare(right.package),
+      ),
     }))
     .sort((left, right) => left.git.localeCompare(right.git) || left.rev.localeCompare(right.rev));
 }
@@ -107,7 +109,9 @@ export function readSourceDependencyConfig(
   const seen = new Set<string>();
   if (parsed.schemaVersion === 1 || parsed.schemaVersion === 2) {
     if (!Array.isArray(parsed.cargo.patches)) {
-      throw new Error(`Schema ${parsed.schemaVersion} source dependency config requires cargo.patches: ${path}`);
+      throw new Error(
+        `Schema ${parsed.schemaVersion} source dependency config requires cargo.patches: ${path}`,
+      );
     }
     const patches: CargoSourcePatch[] = parsed.cargo.patches.map((candidate, index) => {
       if (!candidate || typeof candidate !== "object") {
@@ -129,7 +133,10 @@ export function readSourceDependencyConfig(
       const localPath =
         patch.localPath === undefined
           ? undefined
-          : requireString(patch.localPath, `localPath must be a string for ${packageName}: ${path}`);
+          : requireString(
+              patch.localPath,
+              `localPath must be a string for ${packageName}: ${path}`,
+            );
       if (localOnly && !localPath) {
         throw new Error(`Local-only source patch ${packageName} requires localPath: ${path}`);
       }
@@ -151,51 +158,64 @@ export function readSourceDependencyConfig(
     throw new Error(`Schema 3 source dependency config requires cargo.repositories: ${path}`);
   }
   const seenRepositories = new Set<string>();
-  const repositories: CargoSourceRepository[] = parsed.cargo.repositories.map((candidate, index) => {
-    if (!candidate || typeof candidate !== "object") {
-      throw new Error(`Invalid Cargo source repository at index ${index}: ${path}`);
-    }
-    const repository = candidate as Record<string, unknown>;
-    const git = requireString(repository.git, `Every source repository requires git and rev: ${path}`);
-    const rev = requireString(repository.rev, `Every source repository requires git and rev: ${path}`);
-    if (!exactRevision(rev)) {
-      throw new Error(`Source repository ${git} requires an exact 40-character revision: ${path}`);
-    }
-    const repositoryKey = git.replace(/\.git$/i, "").toLowerCase();
-    if (seenRepositories.has(repositoryKey)) {
-      throw new Error(`Schema 3 declares source repository more than once: ${git}`);
-    }
-    seenRepositories.add(repositoryKey);
-    const localPath =
-      repository.localPath === undefined
-        ? undefined
-        : requireString(repository.localPath, `localPath must be a string for ${git}: ${path}`);
-    if (localOnly && !localPath) {
-      throw new Error(`Local-only source repository ${git} requires localPath: ${path}`);
-    }
-    if (!Array.isArray(repository.packages) || repository.packages.length === 0) {
-      throw new Error(`Source repository ${git} must declare at least one package: ${path}`);
-    }
-    const packages = repository.packages.map((packageCandidate, packageIndex) => {
-      if (!packageCandidate || typeof packageCandidate !== "object") {
-        throw new Error(`Invalid package at ${git} index ${packageIndex}: ${path}`);
+  const repositories: CargoSourceRepository[] = parsed.cargo.repositories.map(
+    (candidate, index) => {
+      if (!candidate || typeof candidate !== "object") {
+        throw new Error(`Invalid Cargo source repository at index ${index}: ${path}`);
       }
-      const packageRecord = packageCandidate as Record<string, unknown>;
-      const packageName = requireString(
-        packageRecord.package,
-        `Every schema 3 package requires package: ${path}`,
+      const repository = candidate as Record<string, unknown>;
+      const git = requireString(
+        repository.git,
+        `Every source repository requires git and rev: ${path}`,
       );
-      const packagePath =
-        packageRecord.path === undefined
+      const rev = requireString(
+        repository.rev,
+        `Every source repository requires git and rev: ${path}`,
+      );
+      if (!exactRevision(rev)) {
+        throw new Error(
+          `Source repository ${git} requires an exact 40-character revision: ${path}`,
+        );
+      }
+      const repositoryKey = git.replace(/\.git$/i, "").toLowerCase();
+      if (seenRepositories.has(repositoryKey)) {
+        throw new Error(`Schema 3 declares source repository more than once: ${git}`);
+      }
+      seenRepositories.add(repositoryKey);
+      const localPath =
+        repository.localPath === undefined
           ? undefined
-          : requireString(packageRecord.path, `Package path must be a string for ${packageName}: ${path}`);
-      if (seen.has(packageName)) throw new Error(`Duplicate Cargo source patch: ${packageName}`);
-      seen.add(packageName);
-      return { package: packageName, ...(packagePath ? { path: packagePath } : {}) };
-    });
-    packages.sort((left, right) => left.package.localeCompare(right.package));
-    return { git, rev, ...(localPath ? { localPath } : {}), packages };
-  });
+          : requireString(repository.localPath, `localPath must be a string for ${git}: ${path}`);
+      if (localOnly && !localPath) {
+        throw new Error(`Local-only source repository ${git} requires localPath: ${path}`);
+      }
+      if (!Array.isArray(repository.packages) || repository.packages.length === 0) {
+        throw new Error(`Source repository ${git} must declare at least one package: ${path}`);
+      }
+      const packages = repository.packages.map((packageCandidate, packageIndex) => {
+        if (!packageCandidate || typeof packageCandidate !== "object") {
+          throw new Error(`Invalid package at ${git} index ${packageIndex}: ${path}`);
+        }
+        const packageRecord = packageCandidate as Record<string, unknown>;
+        const packageName = requireString(
+          packageRecord.package,
+          `Every schema 3 package requires package: ${path}`,
+        );
+        const packagePath =
+          packageRecord.path === undefined
+            ? undefined
+            : requireString(
+                packageRecord.path,
+                `Package path must be a string for ${packageName}: ${path}`,
+              );
+        if (seen.has(packageName)) throw new Error(`Duplicate Cargo source patch: ${packageName}`);
+        seen.add(packageName);
+        return { package: packageName, ...(packagePath ? { path: packagePath } : {}) };
+      });
+      packages.sort((left, right) => left.package.localeCompare(right.package));
+      return { git, rev, ...(localPath ? { localPath } : {}), packages };
+    },
+  );
   repositories.sort((left, right) => left.git.localeCompare(right.git));
 
   const patches = repositories.flatMap((repository) =>
@@ -263,7 +283,9 @@ export function renderSourceDependencies(
   schemaVersion: 1 | 2 | 3;
 } {
   const loaded = readSourceDependencyConfig(root, configPath);
-  const patches = [...loaded.patches].sort((left, right) => left.package.localeCompare(right.package));
+  const patches = [...loaded.patches].sort((left, right) =>
+    left.package.localeCompare(right.package),
+  );
   const body = patches.map((patch) => renderPatch(root, patch, loaded.localOnly)).join("\n");
   return {
     configPath: loaded.path,
@@ -319,7 +341,9 @@ export function sourceDependencies(
     let reconciliation: "created" | "changed" | "unchanged" = "unchanged";
     if (action === "activate") {
       if (existing !== undefined && !managed) {
-        throw new Error(`Refusing to overwrite unmanaged Cargo config: ${rendered.cargoConfigPath}`);
+        throw new Error(
+          `Refusing to overwrite unmanaged Cargo config: ${rendered.cargoConfigPath}`,
+        );
       }
       reconciliation = reconcileTextFile(rendered.cargoConfigPath, rendered.content);
     }
