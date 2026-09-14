@@ -2,7 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import type { ResultEnvelope } from "./model.ts";
-import { readJson, relativePosix } from "./shared.ts";
+import { readSourceDependencyConfig } from "./source-deps.ts";
+import { relativePosix } from "./shared.ts";
 
 export type ArchitectureLayer = "foundation" | "domain" | "adapter" | "application" | "tooling";
 export type DependencyRelation = "foundation" | "capability" | "adapter" | "tooling" | "optional";
@@ -35,17 +36,6 @@ type DependencyAuditConfig = {
   graph?: Record<string, string[]>;
 };
 
-type SourcePatch = {
-  package?: string;
-  git?: string;
-};
-
-type SourceDependencyConfig = {
-  cargo?: {
-    patches?: SourcePatch[];
-  };
-};
-
 export type DependencyFinding = {
   severity: "error" | "warning";
   code: string;
@@ -62,17 +52,24 @@ function repositoryFromGit(value: string): string | undefined {
 
 function sourcePatchRepositories(root: string): Map<string, string[]> {
   const sourcePath = resolve(root, ".coding-tooling.source-deps.json");
-  const sourceConfig = readJson<SourceDependencyConfig>(sourcePath);
   const grouped = new Map<string, string[]>();
+  if (!existsSync(sourcePath)) return grouped;
 
-  for (const patch of sourceConfig?.cargo?.patches ?? []) {
-    if (!patch.git) continue;
+  let patches;
+  try {
+    patches = readSourceDependencyConfig(root).patches;
+  } catch {
+    return grouped;
+  }
+
+  for (const patch of patches) {
     const repository = repositoryFromGit(patch.git);
     if (!repository) continue;
     const packages = grouped.get(repository) ?? [];
-    packages.push(patch.package ?? "<unknown>");
+    packages.push(patch.package);
     grouped.set(repository, packages);
   }
+  for (const packages of grouped.values()) packages.sort();
   return grouped;
 }
 

@@ -143,7 +143,9 @@ function mergePolicy(root: string): MergePolicy {
 
 function localOnlySourceGraph(root: string): boolean {
   const config = readJson<SourceDependencyConfig>(join(root, ".coding-tooling.source-deps.json"));
-  return config?.schemaVersion === 2 && config.cargo?.localOnly === true;
+  return (
+    (config?.schemaVersion === 2 || config?.schemaVersion === 3) && config.cargo?.localOnly === true
+  );
 }
 
 function parseJson<T>(result: CommandResult): T | undefined {
@@ -241,7 +243,7 @@ function classify(
       blockers.push({
         code: "merge-hosted-authority-conflicts-with-local-source",
         message:
-          "A schema-version-2 localOnly source graph requires the stronger local integration path and cannot be trusted for unattended hosted merging",
+          "A schema-version-2-or-3 localOnly source graph requires the stronger local integration path and cannot be trusted for unattended hosted merging",
         path: ".coding-tooling.source-deps.json",
       });
     }

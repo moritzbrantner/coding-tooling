@@ -3,7 +3,8 @@ import { basename, join, resolve } from "node:path";
 
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { readRepositoryMetadata } from "./repository-metadata.ts";
-import { readJson, type CommandResult, runCommand } from "./shared.ts";
+import { readSourceDependencyConfig } from "./source-deps.ts";
+import { type CommandResult, runCommand } from "./shared.ts";
 
 export const FLEET_AUTHORITY_GRAPH_VERSION = "coding-tooling/fleet-authority-graph/v1" as const;
 
@@ -14,21 +15,6 @@ export type AuthorityBoundaries = {
   adapts: string[];
   nonAuthoritative: string[];
   prohibitedWriteBack: string[];
-};
-
-type SourceDependencyConfig = {
-  schemaVersion?: unknown;
-  cargo?: {
-    localOnly?: unknown;
-    patches?: unknown;
-  };
-};
-
-type SourcePatch = {
-  package?: unknown;
-  git?: unknown;
-  rev?: unknown;
-  localPath?: unknown;
 };
 
 function values(text: string): string[] {
@@ -97,30 +83,30 @@ function sourceDependencyEvidence(
 ): { entries: Array<Record<string, unknown>>; diagnostics: Diagnostic[] } {
   const path = join(root, ".coding-tooling.source-deps.json");
   if (!existsSync(path)) return { entries: [], diagnostics: [] };
-  const parsed = readJson<SourceDependencyConfig>(path);
-  if (!parsed || (parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2)) {
+
+  let loaded;
+  try {
+    loaded = readSourceDependencyConfig(root);
+  } catch (error) {
     return {
       entries: [],
       diagnostics: [
         {
           code: "authority-graph-source-deps-invalid",
-          message: ".coding-tooling.source-deps.json has an unsupported schema",
+          message: error instanceof Error ? error.message : String(error),
           path: ".coding-tooling.source-deps.json",
         },
       ],
     };
   }
-  const localOnly = parsed.schemaVersion === 2 && parsed.cargo?.localOnly === true;
-  const patches = Array.isArray(parsed.cargo?.patches)
-    ? (parsed.cargo!.patches as SourcePatch[])
-    : [];
+
   const entries: Array<Record<string, unknown>> = [];
   const diagnostics: Diagnostic[] = [];
-  for (const patch of patches) {
-    const packageName = typeof patch.package === "string" ? patch.package : "";
-    const git = typeof patch.git === "string" ? patch.git : "";
-    const rev = typeof patch.rev === "string" ? patch.rev.toLowerCase() : "";
-    const localPath = typeof patch.localPath === "string" ? patch.localPath : null;
+  for (const patch of loaded.patches) {
+    const packageName = patch.package;
+    const git = patch.git;
+    const rev = patch.rev.toLowerCase();
+    const localPath = patch.localPath ?? null;
     if (!packageName || !git || !/^[0-9a-f]{40}$/i.test(rev)) {
       diagnostics.push({
         code: "authority-graph-source-patch-invalid",
@@ -129,7 +115,7 @@ function sourceDependencyEvidence(
       });
       continue;
     }
-    if (localOnly && !localPath) {
+    if (loaded.localOnly && !localPath) {
       diagnostics.push({
         code: "authority-graph-local-source-required",
         message: `${packageName} is local-only but does not declare localPath`,
@@ -157,7 +143,7 @@ function sourceDependencyEvidence(
             path: ".coding-tooling.source-deps.json",
           });
         }
-      } else if (localOnly) {
+      } else if (loaded.localOnly) {
         diagnostics.push({
           code: "authority-graph-local-source-missing",
           message: `${packageName} local-only checkout does not exist at ${localPath}`,
@@ -170,11 +156,11 @@ function sourceDependencyEvidence(
       repository: githubRepository(git),
       git,
       declaredRevision: rev,
-      localOnly,
+      localOnly: loaded.localOnly,
       localPath,
       actualRevision,
       exactRevisionSatisfied:
-        actualRevision === null ? (localOnly ? false : null) : actualRevision === rev,
+        actualRevision === null ? (loaded.localOnly ? false : null) : actualRevision === rev,
     });
   }
   entries.sort((left, right) => String(left.package).localeCompare(String(right.package)));
@@ -273,6 +259,7 @@ export function fleetAuthorityGraph(
     .sort();
   const sourceGraphInvalid = diagnostics.some((diagnostic) =>
     [
+      "authority-graph-source-deps-invalid",
       "authority-graph-source-revision-drift",
       "authority-graph-source-patch-invalid",
       "authority-graph-source-revision-unavailable",

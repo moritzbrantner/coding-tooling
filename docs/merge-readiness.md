@@ -7,7 +7,7 @@ The command is deliberately fail-closed. A repository is not inferred to be safe
 ## Classifications
 
 - `not-ready` — the deterministic repository foundation is incomplete, merge authority is undeclared, or the hosted authority contract is invalid.
-- `local-gated` — authoritative integration remains local. This includes schema-version-2 `cargo.localOnly` source graphs and repositories that explicitly declare local merge authority.
+- `local-gated` — authoritative integration remains local. This includes schema-version-2-or-3 `cargo.localOnly` source graphs and repositories that explicitly declare local merge authority.
 - `protection-required` — the repository declares hosted merge authority, but protected-branch or required-check evidence is missing, incomplete, or unavailable.
 - `trusted-auto-merge` — the deterministic foundation passes, hosted authority is explicit, the default branch is verifiably protected, at least one required check is protected, and every declared authoritative check is present in the protected required-check set.
 
@@ -43,7 +43,7 @@ Local-authoritative example:
 
 A hosted declaration with zero `requiredChecks` is invalid. A local declaration requires a non-empty reason so the guarded boundary is explicit.
 
-A schema-version-2 `.coding-tooling.source-deps.json` with `cargo.localOnly: true` always forces `local-gated`, even if the repository accidentally declares hosted authority. The readiness report emits a deterministic conflict blocker instead of silently weakening the source-development boundary.
+A schema-version-2-or-3 `.coding-tooling.source-deps.json` with `cargo.localOnly: true` always forces `local-gated`, even if the repository accidentally declares hosted authority. The readiness report emits a deterministic conflict blocker instead of silently weakening the source-development boundary.
 
 ## Remote evidence
 

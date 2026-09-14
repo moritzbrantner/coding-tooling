@@ -13,7 +13,17 @@ function repository(
   writeFileSync(join(root, ".coding-tooling.dependencies.json"), JSON.stringify(config));
   writeFileSync(
     join(root, ".coding-tooling.source-deps.json"),
-    JSON.stringify({ schemaVersion: 2, cargo: { localOnly: true, patches } }),
+    JSON.stringify({
+      schemaVersion: 2,
+      cargo: {
+        localOnly: true,
+        patches: patches.map((patch) => ({
+          ...patch,
+          rev: "1111111111111111111111111111111111111111",
+          localPath: `../source/${patch.package}`,
+        })),
+      },
+    }),
   );
   return root;
 }
