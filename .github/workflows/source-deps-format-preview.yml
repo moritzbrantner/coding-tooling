@@ -17,5 +17,5 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Show canonical format patch
         run: |
-          bun run format
+          bun run format:write
           git diff -- docs/source-development-mode.md src/javascript-source-deps.ts src/source-deps.ts
