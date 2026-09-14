@@ -51,6 +51,7 @@ test("reconciles legacy package pins into an idempotent schema-v3 repository pin
   );
 
   const plan = reconcileFleetSourceDependencies(workspace);
+  expect(plan.diagnostics).toEqual([]);
   expect(plan.status).toBe("passed");
   const repositories = plan.data.repositories as Array<Record<string, unknown>>;
   expect(repositories.find((repository) => repository.id === "consumer")?.migrationAvailable).toBe(
@@ -58,6 +59,7 @@ test("reconciles legacy package pins into an idempotent schema-v3 repository pin
   );
 
   const applied = reconcileFleetSourceDependencies(workspace, { apply: true });
+  expect(applied.diagnostics).toEqual([]);
   expect(applied.status).toBe("passed");
   expect(applied.data.changed).toBe(true);
   const migrated = JSON.parse(
@@ -70,6 +72,7 @@ test("reconciles legacy package pins into an idempotent schema-v3 repository pin
   ]);
 
   const repeated = reconcileFleetSourceDependencies(workspace, { apply: true });
+  expect(repeated.diagnostics).toEqual([]);
   expect(repeated.status).toBe("passed");
   expect(repeated.data.changed).toBe(false);
 });
