@@ -4,9 +4,9 @@ import { join, resolve } from "node:path";
 import type { Diagnostic, ResultEnvelope } from "./model.ts";
 import {
   defaultSourceDependencyConfigPath,
-  readSourceDependencyConfig,
-  type CargoSourceRepository,
   type LoadedSourceDependencyConfig,
+  readSourceDependencyConfig,
+  type SourceRepository,
 } from "./source-deps.ts";
 import { type CommandResult, runCommand } from "./shared.ts";
 
@@ -14,6 +14,7 @@ type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean
 
 type Expectation = {
   repository: string;
+  ecosystem: SourceRepository["ecosystem"];
   git: string;
   revision: string;
   consumerRoot: string;
@@ -32,16 +33,19 @@ function canonicalRepository(git: string): string {
 function localRepositoryRoot(
   consumerRoot: string,
   loaded: LoadedSourceDependencyConfig,
-  repository: CargoSourceRepository,
+  repository: SourceRepository,
   runner: Runner,
 ): { root: string | null; diagnostic?: Diagnostic } {
   const direct = repository.localPath ? resolve(consumerRoot, repository.localPath) : null;
-  const packagePath = loaded.patches.find(
-    (patch) =>
-      patch.git === repository.git &&
-      patch.rev.toLowerCase() === repository.rev.toLowerCase() &&
-      patch.localPath,
-  )?.localPath;
+  const packagePath =
+    repository.ecosystem === "cargo"
+      ? loaded.patches.find(
+          (patch) =>
+            patch.git === repository.git &&
+            patch.rev.toLowerCase() === repository.rev.toLowerCase() &&
+            patch.localPath,
+        )?.localPath
+      : undefined;
   const candidate = direct ?? (packagePath ? resolve(consumerRoot, packagePath) : null);
   if (!candidate) return { root: null };
   if (!existsSync(candidate)) {
@@ -125,10 +129,10 @@ export function verifySourceDependencyGraph(
       return;
     }
 
-    for (const repository of loaded.repositories) {
+    for (const repository of loaded.sourceRepositories) {
       const local = localRepositoryRoot(repositoryRoot, loaded, repository, runner);
       if (local.diagnostic) diagnostics.push(local.diagnostic);
-      if (loaded.localOnly && !local.root && !local.diagnostic) {
+      if (repository.localOnly && !local.root && !local.diagnostic) {
         diagnostics.push({
           code: "source-graph-local-source-required",
           message: `${repository.git} is local-only but no local source checkout can be resolved`,
@@ -152,6 +156,7 @@ export function verifySourceDependencyGraph(
 
       expectations.push({
         repository: canonicalRepository(repository.git),
+        ecosystem: repository.ecosystem,
         git: repository.git,
         revision: repository.rev.toLowerCase(),
         consumerRoot: repositoryRoot,
@@ -197,6 +202,7 @@ export function verifySourceDependencyGraph(
   const repositories = [...byRepository.entries()]
     .map(([repository, entries]) => ({
       repository,
+      ecosystems: [...new Set(entries.map((entry) => entry.ecosystem))].sort(),
       git: [...new Set(entries.map((entry) => entry.git))].sort()[0] ?? repository,
       declaredRevisions: [...new Set(entries.map((entry) => entry.revision))].sort(),
       actualRevisions: [
