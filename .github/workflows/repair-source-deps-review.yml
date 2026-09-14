@@ -25,11 +25,10 @@ jobs:
 
           js_path = Path("src/javascript-source-deps.ts")
           js = js_path.read_text()
-          marker = '''function exactRevision(value: string): boolean {
-            return /^[0-9a-f]{40}$/i.test(value);
-          }
-          '''
-          replacement = marker + '''
+          if "function safePackageIdentity" not in js:
+            js, count = re.subn(
+              r'(function exactRevision\(value: string\): boolean \{\n  return /\^\[0-9a-f\]\{40\}\$/i\.test\(value\);\n\}\n)',
+              r'''\1
           function safePackageIdentity(value: string): boolean {
             if (!value || value.includes("\\\\") || value.includes("\\0")) return false;
             const segments = value.split("/");
@@ -43,37 +42,34 @@ jobs:
             }
             return segments.length === 1 && segments[0] !== "." && segments[0] !== "..";
           }
-          '''
-          if "function safePackageIdentity" not in js:
-            if marker not in js:
-              raise SystemExit("exactRevision marker not found")
-            js = js.replace(marker, replacement, 1)
+''',
+              js,
+              count=1,
+            )
+            if count != 1:
+              raise SystemExit("exactRevision block not found")
 
-          marker = '''      const packageName = requireString(
-                packageRecord.package,
-                `Every JavaScript source package requires package: ${configPath}`,
-              );
-              if (seenPackages.has(packageName)) {
-          '''
-          replacement = '''      const packageName = requireString(
-                packageRecord.package,
-                `Every JavaScript source package requires package: ${configPath}`,
-              );
-              if (!safePackageIdentity(packageName)) {
+          if "Invalid JavaScript package identity" not in js:
+            pattern = re.compile(
+              r'(\s+const packageName = requireString\(\n\s+packageRecord\.package,\n\s+`Every JavaScript source package requires package: \$\{configPath\}`,\n\s+\);\n)(\s+if \(seenPackages\.has\(packageName\)\) \{)'
+            )
+            js, count = pattern.subn(
+              r'''\1      if (!safePackageIdentity(packageName)) {
                 throw new Error(`Invalid JavaScript package identity: ${packageName}`);
               }
-              if (seenPackages.has(packageName)) {
-          '''
-          if "Invalid JavaScript package identity" not in js:
-            if marker not in js:
-              raise SystemExit("packageName marker not found")
-            js = js.replace(marker, replacement, 1)
+\2''',
+              js,
+              count=1,
+            )
+            if count != 1:
+              raise SystemExit("packageName block not found")
 
-          marker = '''function targetDirectory(root: string, packageName: string): string {
-            return join(root, "node_modules", ...packageName.split("/"));
-          }
-          '''
-          replacement = '''function targetDirectory(root: string, packageName: string): string {
+          if "JavaScript package target escapes node_modules" not in js:
+            pattern = re.compile(
+              r'function targetDirectory\(root: string, packageName: string\): string \{\n  return join\(root, "node_modules", \.\.\.packageName\.split\("/"\)\);\n\}'
+            )
+            js, count = pattern.subn(
+              '''function targetDirectory(root: string, packageName: string): string {
             const modulesRoot = resolve(root, "node_modules");
             const target = resolve(modulesRoot, ...packageName.split("/"));
             const relation = relative(modulesRoot, target);
@@ -86,21 +82,22 @@ jobs:
               throw new Error(`JavaScript package target escapes node_modules: ${packageName}`);
             }
             return target;
-          }
-          '''
-          if "JavaScript package target escapes node_modules" not in js:
-            if marker not in js:
-              raise SystemExit("targetDirectory marker not found")
-            js = js.replace(marker, replacement, 1)
+          }''',
+              js,
+              count=1,
+            )
+            if count != 1:
+              raise SystemExit("targetDirectory block not found")
           js_path.write_text(js)
 
           fleet_path = Path("src/fleet-authority-graph.ts")
           fleet = fleet_path.read_text()
-          pattern = re.compile(
-            r'''  const entries: Array<Record<string, unknown>> = \[\];\n  const diagnostics: Diagnostic\[\] = \[\];\n  for \(const patch of loaded\.patches\) \{.*?\n  \}\n  entries\.sort''',
-            re.S,
-          )
-          replacement = '''  const entries: Array<Record<string, unknown>> = [];
+          if "const sources =" not in fleet:
+            pattern = re.compile(
+              r'  const entries: Array<Record<string, unknown>> = \[\];\n  const diagnostics: Diagnostic\[\] = \[\];\n  for \(const patch of loaded\.patches\) \{.*?\n  \}\n  entries\.sort',
+              re.S,
+            )
+            replacement = '''  const entries: Array<Record<string, unknown>> = [];
             const diagnostics: Diagnostic[] = [];
             const sources =
               loaded.schemaVersion <= 2
@@ -187,11 +184,10 @@ jobs:
               }
             }
             entries.sort'''
-          fleet, count = pattern.subn(replacement, fleet, count=1)
-          if count != 1:
-            if "const sources =" not in fleet:
+            fleet, count = pattern.subn(replacement, fleet, count=1)
+            if count != 1:
               raise SystemExit("fleet source evidence block not found")
-          fleet_path.write_text(fleet)
+            fleet_path.write_text(fleet)
           PY
           bun run format:write
           bun run typecheck
