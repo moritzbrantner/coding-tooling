@@ -371,13 +371,23 @@ function runClippy(
   };
 }
 
-function repositoryFiles(root: string): Array<{ absolutePath: string; relativePath: string }> {
-  return walkFiles(root, 20)
+function repositoryFiles(
+  root: string,
+  includeFixtures = false,
+): Array<{ absolutePath: string; relativePath: string }> {
+  return walkFiles(
+    root,
+    20,
+    includeFixtures ? { includeIgnoredDirectories: ["fixtures"] } : {},
+  )
     .map((absolutePath) => ({
       absolutePath,
       relativePath: relative(root, absolutePath).replaceAll("\\", "/"),
     }))
-    .filter((file) => !file.relativePath.startsWith(".conventions/"));
+    .filter((file) => !file.relativePath.startsWith(".conventions/"))
+    .sort((left, right) =>
+      left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0,
+    );
 }
 
 function builtinResult(ruleId: string, check: string, failures: string[]): ConventionCheckResult {
@@ -539,7 +549,7 @@ function textHygiene(root: string, ruleId: string): ConventionCheckResult {
   const failures: string[] = [];
   const decoder = new TextDecoder("utf-8", { fatal: true });
 
-  for (const file of repositoryFiles(root)) {
+  for (const file of repositoryFiles(root, true)) {
     let stats;
     try {
       stats = lstatSync(file.absolutePath);
