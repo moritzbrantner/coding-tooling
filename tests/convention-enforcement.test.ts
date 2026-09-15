@@ -111,9 +111,15 @@ describe("installed convention enforcement", () => {
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");
     expect(failed.diagnostics[0]?.message).toContain("instead of FIXME");
+
+    writeFileSync(source, "export {};\n");
+    const fixtures = join(root, "fixtures");
+    mkdirSync(fixtures);
+    writeFileSync(join(fixtures, "legacy.ts"), "// FIXME: fixture parser input\n");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
   });
 
-  test("requires portable UTF-8 LF text", () => {
+  test("requires portable UTF-8 LF text, including fixtures", () => {
     const root = repository();
     const source = join(root, "src", "thing.ts");
     enforce(root, "REP-011", { kind: "builtin", check: "text-hygiene" });
@@ -125,6 +131,16 @@ describe("installed convention enforcement", () => {
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");
     expect(failed.diagnostics[0]?.message).toContain("use LF line endings");
+
+    writeFileSync(source, "export const value = 1;\n");
+    const fixtures = join(root, "fixtures");
+    mkdirSync(fixtures);
+    writeFileSync(join(fixtures, "input.txt"), "fixture input\r\n");
+    const fixtureFailed = runConventionChecks(root, discoverComponents(root));
+    expect(fixtureFailed.status).toBe("failed");
+    expect(fixtureFailed.diagnostics[0]?.message).toContain(
+      "fixtures/input.txt: use LF line endings",
+    );
   });
 
   test("requires immutable external CI action revisions", () => {
@@ -174,12 +190,12 @@ describe("installed convention enforcement", () => {
     expect(failed.diagnostics[0]?.message).toContain("case-insensitive filesystems");
   });
 
-  test("rejects case-colliding directory segments", () => {
+  test("rejects case-colliding directory segments with stable diagnostic ordering", () => {
     const root = repository();
     enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
-    mkdirSync(join(root, "Foo"), { recursive: true });
+    mkdirSync(join(root, "foo"), { recursive: true });
     try {
-      mkdirSync(join(root, "foo"));
+      mkdirSync(join(root, "Foo"));
     } catch (error) {
       if ((error as { code?: string }).code === "EEXIST") return;
       throw error;
