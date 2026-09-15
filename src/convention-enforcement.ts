@@ -78,6 +78,7 @@ export type ConventionCheckResult = {
 const sourceExtensions = new Set([
   ".cjs",
   ".cs",
+  ".cts",
   ".js",
   ".json",
   ".jsx",
@@ -92,6 +93,7 @@ const sourceExtensions = new Set([
 const todoExtensions = new Set([
   ".cjs",
   ".cs",
+  ".cts",
   ".js",
   ".jsx",
   ".mjs",
@@ -112,6 +114,7 @@ const knownTextExtensions = new Set([
   ".cs",
   ".csproj",
   ".css",
+  ".cts",
   ".editorconfig",
   ".graphql",
   ".h",
@@ -371,19 +374,48 @@ function runClippy(
   };
 }
 
-function repositoryFiles(
-  root: string,
-  includeFixtures = false,
-): Array<{ absolutePath: string; relativePath: string }> {
-  return walkFiles(root, 20, includeFixtures ? { includeIgnoredDirectories: ["fixtures"] } : {})
-    .map((absolutePath) => ({
+type RepositoryFile = { absolutePath: string; relativePath: string };
+
+function sortRepositoryFiles(files: RepositoryFile[]): RepositoryFile[] {
+  return files.sort((left, right) =>
+    left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0,
+  );
+}
+
+function repositoryFiles(root: string): RepositoryFile[] {
+  return sortRepositoryFiles(
+    walkFiles(root, 20)
+      .map((absolutePath) => ({
+        absolutePath,
+        relativePath: relative(root, absolutePath).replaceAll("\\", "/"),
+      }))
+      .filter((file) => !file.relativePath.startsWith(".conventions/")),
+  );
+}
+
+function textHygieneFiles(root: string): RepositoryFile[] {
+  const tracked = runCommand("git", ["ls-files", "-z"], root);
+  if (tracked.status === 0) {
+    return sortRepositoryFiles(
+      tracked.stdout
+        .split("\0")
+        .filter((relativePath) => relativePath.length > 0)
+        .map((relativePath) => ({
+          absolutePath: join(root, ...relativePath.split("/")),
+          relativePath,
+        }))
+        .filter((file) => existsSync(file.absolutePath)),
+    );
+  }
+
+  return sortRepositoryFiles(
+    walkFiles(root, 20, {
+      includeIgnoredDirectories: ["bin", "build", "dist", "fixtures", "obj", "target"],
+    }).map((absolutePath) => ({
       absolutePath,
       relativePath: relative(root, absolutePath).replaceAll("\\", "/"),
-    }))
-    .filter((file) => !file.relativePath.startsWith(".conventions/"))
-    .sort((left, right) =>
-      left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0,
-    );
+    })),
+  );
 }
 
 function builtinResult(ruleId: string, check: string, failures: string[]): ConventionCheckResult {
@@ -545,7 +577,7 @@ function textHygiene(root: string, ruleId: string): ConventionCheckResult {
   const failures: string[] = [];
   const decoder = new TextDecoder("utf-8", { fatal: true });
 
-  for (const file of repositoryFiles(root, true)) {
+  for (const file of textHygieneFiles(root)) {
     let stats;
     try {
       stats = lstatSync(file.absolutePath);

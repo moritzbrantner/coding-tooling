@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -113,6 +114,13 @@ describe("installed convention enforcement", () => {
     expect(failed.diagnostics[0]?.message).toContain("instead of FIXME");
 
     writeFileSync(source, "export {};\n");
+    const commonjsTypeScript = join(root, "src", "common.cts");
+    writeFileSync(commonjsTypeScript, "// FIXME: commonjs typescript behavior\n");
+    const ctsFailed = runConventionChecks(root, discoverComponents(root));
+    expect(ctsFailed.status).toBe("failed");
+    expect(ctsFailed.diagnostics[0]?.message).toContain("instead of FIXME");
+    rmSync(commonjsTypeScript);
+
     const fixtures = join(root, "fixtures");
     mkdirSync(fixtures);
     writeFileSync(join(fixtures, "legacy.ts"), "// FIXME: fixture parser input\n");
@@ -140,6 +148,19 @@ describe("installed convention enforcement", () => {
     expect(fixtureFailed.status).toBe("failed");
     expect(fixtureFailed.diagnostics[0]?.message).toContain(
       "fixtures/input.txt: use LF line endings",
+    );
+
+    writeFileSync(join(fixtures, "input.txt"), "fixture input\n");
+    const dist = join(root, "dist");
+    mkdirSync(dist);
+    writeFileSync(join(dist, "index.js"), "export const built = true;\r\n");
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["add", "."], { cwd: root });
+
+    const trackedOutputFailed = runConventionChecks(root, discoverComponents(root));
+    expect(trackedOutputFailed.status).toBe("failed");
+    expect(trackedOutputFailed.diagnostics[0]?.message).toContain(
+      "dist/index.js: use LF line endings",
     );
   });
 

@@ -113,6 +113,39 @@ test("continues surfacing legacy generated work markers in test source", () => {
   });
 });
 
+test("recognizes structured markers in documentation comment forms", () => {
+  const root = fixture();
+  writeFileSync(
+    join(root, "src", "docs.ts"),
+    [
+      "/// TODO: [coding-tooling:doc-current] Implement the documented behavior.",
+      "/** TODO(coding-tooling:doc-legacy): Replace the legacy documented behavior. */",
+      "/** TODO: [coding-tooling:bad_key] Repair the malformed documentation marker. */",
+      "export const value = true;",
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "src", "docs.py"),
+    "## TODO: [coding-tooling:hash-current] Implement the documented Python behavior.\n",
+  );
+
+  const context = createDetectorContext(root);
+  const structured = sourceWorkMarkerFindings(context);
+  const generic = sourceDebtMarkerFindings(context);
+
+  expect(structured).toHaveLength(4);
+  expect(structured.map((finding) => finding.requirement.key).sort()).toEqual(
+    [
+      "repair-malformed-work-marker",
+      "resolve-work-marker:doc-current",
+      "resolve-work-marker:doc-legacy",
+      "resolve-work-marker:hash-current",
+    ].sort(),
+  );
+  expect(generic).toEqual([]);
+});
+
 test("surfaces malformed coding-tooling markers under source-work ownership", () => {
   const root = fixture();
   writeFileSync(

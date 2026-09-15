@@ -26,11 +26,11 @@ const generatedPathPattern = /(?:^|\/)(?:generated|gen)(?:\/|$)/;
 const debtMarkerPattern =
   /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:|\(coding-tooling:)|FIXME)\b/i;
 const workMarkerPatterns = [
-  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i,
-  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i,
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i,
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i,
 ];
 const workMarkerCandidatePattern =
-  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO(?::\s*\[coding-tooling:|\(coding-tooling:)/i;
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*TODO(?::\s*\[coding-tooling:|\(coding-tooling:)/i;
 const unimplementedPatterns = [
   /\b(?:todo|unimplemented)!\s*\(/,
   /\bthrow\s+new\s+NotImplementedException\s*\(/,
