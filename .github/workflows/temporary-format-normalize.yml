@@ -23,7 +23,7 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Normalize only the expected file
         run: |
-          bun run format
+          ./node_modules/.bin/oxfmt src/convention-enforcement.ts
           changed="$(git diff --name-only)"
           test "$changed" = "src/convention-enforcement.ts"
       - name: Commit canonical formatting
