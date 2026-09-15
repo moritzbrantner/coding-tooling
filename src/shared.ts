@@ -75,8 +75,13 @@ const ignoredDirectories = new Set([
   "target",
 ]);
 
-export function walkFiles(root: string, maxDepth = 3): string[] {
+export function walkFiles(
+  root: string,
+  maxDepth = 3,
+  options: { includeIgnoredDirectories?: readonly string[] } = {},
+): string[] {
   const files: string[] = [];
+  const includedIgnoredDirectories = new Set(options.includeIgnoredDirectories ?? []);
 
   function walk(current: string, depth: number): void {
     if (depth > maxDepth) return;
@@ -91,7 +96,9 @@ export function walkFiles(root: string, maxDepth = 3): string[] {
     for (const entry of entries) {
       const fullPath = join(current, entry.name);
       if (entry.isDirectory()) {
-        if (!ignoredDirectories.has(entry.name)) walk(fullPath, depth + 1);
+        if (!ignoredDirectories.has(entry.name) || includedIgnoredDirectories.has(entry.name)) {
+          walk(fullPath, depth + 1);
+        }
       } else if (entry.isFile() || entry.isSymbolicLink()) {
         // Never recurse through symlinks. Returning the entry lets callers either
         // validate its resolved target or treat it as unexpected managed drift.
