@@ -104,13 +104,13 @@ The system does not require generator operations to commute. When two determinis
 Generators can leave exact semantic work for an agent with this deliberately small comment syntax:
 
 ```text
-TODO(coding-tooling:<stable-key>): <implementation instruction>
+TODO: [coding-tooling:<stable-key>] <implementation instruction>
 ```
 
 For example:
 
 ```ts
-// TODO(coding-tooling:create-order-handler): Implement the declared create-order behavior through the repository abstraction.
+// TODO: [coding-tooling:create-order-handler] Implement the declared create-order behavior through the repository abstraction.
 ```
 
 `source-work-marker` emits one finding per marker. Each finding keeps the marker key, instruction, file, and line instead of grouping every TODO in a file into one vague debt item. Structured markers are recognized in ordinary source and test source. The generic `source-debt-marker` detector deliberately excludes them so they are not double-counted.

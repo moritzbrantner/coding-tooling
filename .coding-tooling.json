@@ -5,7 +5,7 @@
     "self": ["format:check", "lint", "typecheck", "test:unit"]
   },
   "requiredCapabilities": ["format:check", "lint", "typecheck", "test:unit"],
-  "conventionRefs": ["AGENT-001", "AGENT-007"],
+  "conventionRefs": ["PRINCIPLE-001", "PRINCIPLE-003"],
   "merge": {
     "authority": "hosted",
     "requiredChecks": [

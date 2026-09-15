@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -101,6 +102,9 @@ describe("installed convention enforcement", () => {
     writeFileSync(source, "// TODO: make retry limit configurable\n");
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
 
+    writeFileSync(source, "// TODO: [coding-tooling:generated-test] replace generated scaffold\n");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+
     writeFileSync(source, "// TODO(#123): make retry limit configurable\n");
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
 
@@ -108,9 +112,22 @@ describe("installed convention enforcement", () => {
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");
     expect(failed.diagnostics[0]?.message).toContain("instead of FIXME");
+
+    writeFileSync(source, "export {};\n");
+    const commonjsTypeScript = join(root, "src", "common.cts");
+    writeFileSync(commonjsTypeScript, "// FIXME: commonjs typescript behavior\n");
+    const ctsFailed = runConventionChecks(root, discoverComponents(root));
+    expect(ctsFailed.status).toBe("failed");
+    expect(ctsFailed.diagnostics[0]?.message).toContain("instead of FIXME");
+    rmSync(commonjsTypeScript);
+
+    const fixtures = join(root, "fixtures");
+    mkdirSync(fixtures);
+    writeFileSync(join(fixtures, "legacy.ts"), "// FIXME: fixture parser input\n");
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
   });
 
-  test("requires portable UTF-8 LF text", () => {
+  test("requires portable UTF-8 LF text, including fixtures", () => {
     const root = repository();
     const source = join(root, "src", "thing.ts");
     enforce(root, "REP-011", { kind: "builtin", check: "text-hygiene" });
@@ -122,6 +139,29 @@ describe("installed convention enforcement", () => {
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");
     expect(failed.diagnostics[0]?.message).toContain("use LF line endings");
+
+    writeFileSync(source, "export const value = 1;\n");
+    const fixtures = join(root, "fixtures");
+    mkdirSync(fixtures);
+    writeFileSync(join(fixtures, "input.txt"), "fixture input\r\n");
+    const fixtureFailed = runConventionChecks(root, discoverComponents(root));
+    expect(fixtureFailed.status).toBe("failed");
+    expect(fixtureFailed.diagnostics[0]?.message).toContain(
+      "fixtures/input.txt: use LF line endings",
+    );
+
+    writeFileSync(join(fixtures, "input.txt"), "fixture input\n");
+    const dist = join(root, "dist");
+    mkdirSync(dist);
+    writeFileSync(join(dist, "index.js"), "export const built = true;\r\n");
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["add", "."], { cwd: root });
+
+    const trackedOutputFailed = runConventionChecks(root, discoverComponents(root));
+    expect(trackedOutputFailed.status).toBe("failed");
+    expect(trackedOutputFailed.diagnostics[0]?.message).toContain(
+      "dist/index.js: use LF line endings",
+    );
   });
 
   test("requires immutable external CI action revisions", () => {
@@ -169,6 +209,24 @@ describe("installed convention enforcement", () => {
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");
     expect(failed.diagnostics[0]?.message).toContain("case-insensitive filesystems");
+  });
+
+  test("rejects case-colliding directory segments with stable diagnostic ordering", () => {
+    const root = repository();
+    enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
+    mkdirSync(join(root, "foo"), { recursive: true });
+    try {
+      mkdirSync(join(root, "Foo"));
+    } catch (error) {
+      if ((error as { code?: string }).code === "EEXIST") return;
+      throw error;
+    }
+    writeFileSync(join(root, "Foo", "a.ts"), "export {};\n");
+    writeFileSync(join(root, "foo", "b.ts"), "export {};\n");
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("Foo and foo");
   });
 
   test("requires Vitest execution kind in filenames and scripts", () => {

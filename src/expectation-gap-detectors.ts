@@ -23,9 +23,14 @@ const testPathPattern = /(?:^|\/)(?:test|tests|__tests__)(?:\/|$)/;
 const testFilePattern = /\.(?:test|spec)\.[^.]+$/;
 const storyFilePattern = /\.(?:stories|story)\.[^.]+$/;
 const generatedPathPattern = /(?:^|\/)(?:generated|gen)(?:\/|$)/;
-const debtMarkerPattern = /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!\(coding-tooling:)|FIXME)\b/i;
-const workMarkerPattern =
-  /^\s*(?:\/\/|#|\/\*|\*)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i;
+const debtMarkerPattern =
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*(?:TODO(?!:\s*\[coding-tooling:|\(coding-tooling:)|FIXME)\b/i;
+const workMarkerPatterns = [
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*TODO:\s*\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\]\s+(.+?)\s*(?:\*\/)?$/i,
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*TODO\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\):\s*(.+?)\s*(?:\*\/)?$/i,
+];
+const workMarkerCandidatePattern =
+  /^\s*(?:\/{2,}|#+|\/\*+|\*+)\s*TODO(?::\s*\[coding-tooling:|\(coding-tooling:)/i;
 const unimplementedPatterns = [
   /\b(?:todo|unimplemented)!\s*\(/,
   /\bthrow\s+new\s+NotImplementedException\s*\(/,
@@ -76,23 +81,37 @@ function markerEvidence(
   return firstLine === undefined ? undefined : { line: firstLine, count };
 }
 
-type WorkMarker = {
-  key: string;
-  instruction: string;
-  line: number;
-};
+type WorkMarker =
+  | {
+      kind: "valid";
+      key: string;
+      instruction: string;
+      line: number;
+    }
+  | {
+      kind: "malformed";
+      line: number;
+    };
 
 function workMarkers(content: string): WorkMarker[] {
-  return content.split(/\r?\n/).flatMap((line, index) => {
-    const match = workMarkerPattern.exec(line);
-    if (!match?.[1] || !match[2]?.trim()) return [];
-    return [
-      {
-        key: match[1].toLowerCase(),
-        instruction: match[2].trim(),
-        line: index + 1,
-      },
-    ];
+  return content.split(/\r?\n/).flatMap<WorkMarker>((line, index) => {
+    const match = workMarkerPatterns
+      .map((pattern) => pattern.exec(line))
+      .find((candidate) => candidate?.[1] && candidate[2]?.trim());
+    if (match?.[1] && match[2]?.trim()) {
+      return [
+        {
+          kind: "valid" as const,
+          key: match[1].toLowerCase(),
+          instruction: match[2].trim(),
+          line: index + 1,
+        },
+      ];
+    }
+    if (workMarkerCandidatePattern.test(line)) {
+      return [{ kind: "malformed" as const, line: index + 1 }];
+    }
+    return [];
   });
 }
 
@@ -147,29 +166,58 @@ export function sourceWorkMarkerFindings({ root }: DetectorContext): RawFinding[
     const content = readSource(path);
     if (content === undefined) return [];
     const sourcePath = relativePosix(root, path);
-    return workMarkers(content).map((marker) => ({
-      subject: {
-        kind: "file" as const,
-        key: `${sourcePath}#coding-tooling:${marker.key}`,
-        path: sourcePath,
-        description: `Work marker ${marker.key} in ${sourcePath}:${marker.line}`,
-      },
-      requirement: {
-        kind: "signal" as const,
-        key: `resolve-work-marker:${marker.key}`,
-        description: marker.instruction,
-      },
-      message: marker.instruction,
-      evidence: [
-        {
+    return workMarkers(content).map((marker) => {
+      if (marker.kind === "malformed") {
+        return {
+          subject: {
+            kind: "file" as const,
+            key: `${sourcePath}#coding-tooling:malformed:${marker.line}`,
+            path: sourcePath,
+            description: `Malformed coding-tooling work marker in ${sourcePath}:${marker.line}`,
+          },
+          requirement: {
+            kind: "signal" as const,
+            key: "repair-malformed-work-marker",
+            description:
+              "use TODO: [coding-tooling:<key>] <instruction> or TODO(coding-tooling:<key>): <instruction>",
+          },
+          message: "Malformed coding-tooling TODO marker",
+          evidence: [
+            {
+              kind: "file" as const,
+              path: sourcePath,
+              detail: `coding-tooling TODO marker on line ${marker.line} is malformed`,
+            },
+          ],
+          relatedFiles: [sourcePath],
+          verification: [],
+        };
+      }
+
+      return {
+        subject: {
           kind: "file" as const,
+          key: `${sourcePath}#coding-tooling:${marker.key}`,
           path: sourcePath,
-          detail: `TODO(coding-tooling:${marker.key}) on line ${marker.line}: ${marker.instruction}`,
+          description: `Work marker ${marker.key} in ${sourcePath}:${marker.line}`,
         },
-      ],
-      relatedFiles: [sourcePath],
-      verification: [],
-    }));
+        requirement: {
+          kind: "signal" as const,
+          key: `resolve-work-marker:${marker.key}`,
+          description: marker.instruction,
+        },
+        message: marker.instruction,
+        evidence: [
+          {
+            kind: "file" as const,
+            path: sourcePath,
+            detail: `TODO: [coding-tooling:${marker.key}] on line ${marker.line}: ${marker.instruction}`,
+          },
+        ],
+        relatedFiles: [sourcePath],
+        verification: [],
+      };
+    });
   });
 }
 
