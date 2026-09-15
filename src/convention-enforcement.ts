@@ -375,11 +375,7 @@ function repositoryFiles(
   root: string,
   includeFixtures = false,
 ): Array<{ absolutePath: string; relativePath: string }> {
-  return walkFiles(
-    root,
-    20,
-    includeFixtures ? { includeIgnoredDirectories: ["fixtures"] } : {},
-  )
+  return walkFiles(root, 20, includeFixtures ? { includeIgnoredDirectories: ["fixtures"] } : {})
     .map((absolutePath) => ({
       absolutePath,
       relativePath: relative(root, absolutePath).replaceAll("\\", "/"),
