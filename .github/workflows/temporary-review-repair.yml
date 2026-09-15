@@ -25,32 +25,23 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           def replace_once(path: str, old: str, new: str) -> None:
               file = Path(path)
               text = file.read_text()
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f"expected exactly one match in {path}, found {count}")
+                  raise SystemExit(f"expected exactly one match in {path}, found {count}: {old!r}")
               file.write_text(text.replace(old, new, 1))
 
-          def replace_in_test(path: str, test_signature: str, old: str, new: str) -> None:
+          def regex_once(path: str, pattern: str, replacement: str) -> None:
               file = Path(path)
               text = file.read_text()
-              start = text.find(test_signature)
-              if start < 0:
-                  raise SystemExit(f"test signature missing in {path}: {test_signature}")
-              end = text.find('\ntest(', start + len(test_signature))
-              if end < 0:
-                  end = len(text)
-              section = text[start:end]
-              count = section.count(old)
+              updated, count = re.subn(pattern, lambda _: replacement, text, count=1, flags=re.S)
               if count != 1:
-                  raise SystemExit(
-                      f"expected exactly one test-scoped match in {path}, found {count}: {old!r}"
-                  )
-              section = section.replace(old, new, 1)
-              file.write_text(text[:start] + section + text[end:])
+                  raise SystemExit(f"expected exactly one regex match in {path}, found {count}")
+              file.write_text(updated)
 
           replace_once(
               "src/expectation-gap-detectors.ts",
@@ -70,56 +61,23 @@ jobs:
 
           replace_once(
               "src/convention-enforcement.ts",
-              '''const sourceExtensions = new Set([
-            ".cjs",
-            ".cs",
-            ".js",''',
-              '''const sourceExtensions = new Set([
-            ".cjs",
-            ".cs",
-            ".cts",
-            ".js",''',
+              'const sourceExtensions = new Set([\n  ".cjs",\n  ".cs",\n  ".js",',
+              'const sourceExtensions = new Set([\n  ".cjs",\n  ".cs",\n  ".cts",\n  ".js",',
           )
           replace_once(
               "src/convention-enforcement.ts",
-              '''const todoExtensions = new Set([
-            ".cjs",
-            ".cs",
-            ".js",''',
-              '''const todoExtensions = new Set([
-            ".cjs",
-            ".cs",
-            ".cts",
-            ".js",''',
+              'const todoExtensions = new Set([\n  ".cjs",\n  ".cs",\n  ".js",',
+              'const todoExtensions = new Set([\n  ".cjs",\n  ".cs",\n  ".cts",\n  ".js",',
           )
           replace_once(
               "src/convention-enforcement.ts",
-              '''  ".cs",
-            ".csproj",
-            ".css",
-            ".editorconfig",''',
-              '''  ".cs",
-            ".csproj",
-            ".css",
-            ".cts",
-            ".editorconfig",''',
+              '  ".cs",\n  ".csproj",\n  ".css",\n  ".editorconfig",',
+              '  ".cs",\n  ".csproj",\n  ".css",\n  ".cts",\n  ".editorconfig",',
           )
-          replace_once(
+
+          regex_once(
               "src/convention-enforcement.ts",
-              '''function repositoryFiles(
-            root: string,
-            includeFixtures = false,
-          ): Array<{ absolutePath: string; relativePath: string }> {
-            return walkFiles(root, 20, includeFixtures ? { includeIgnoredDirectories: ["fixtures"] } : {})
-              .map((absolutePath) => ({
-                absolutePath,
-                relativePath: relative(root, absolutePath).replaceAll("\\\\", "/"),
-              }))
-              .filter((file) => !file.relativePath.startsWith(".conventions/"))
-              .sort((left, right) =>
-                left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0,
-              );
-          }''',
+              r'function repositoryFiles\(\n.*?\n\}\n\nfunction builtinResult',
               '''type RepositoryFile = { absolutePath: string; relativePath: string };
 
           function sortRepositoryFiles(files: RepositoryFile[]): RepositoryFile[] {
@@ -162,7 +120,9 @@ jobs:
                 relativePath: relative(root, absolutePath).replaceAll("\\\\", "/"),
               })),
             );
-          }''',
+          }
+
+          function builtinResult''',
           )
           replace_once(
               "src/convention-enforcement.ts",
@@ -212,14 +172,13 @@ jobs:
           replace_once(
               "tests/convention-enforcement.test.ts",
               'import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";',
-              '''import { execFileSync } from "node:child_process";
-          import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";''',
+              'import { execFileSync } from "node:child_process";\nimport { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";',
           )
-          replace_in_test(
+          replace_once(
               "tests/convention-enforcement.test.ts",
-              'test("requires actionable TODO syntax and rejects FIXME", () => {',
-              '    const fixtures = join(root, "fixtures");',
-              '''    const commonjsTypeScript = join(root, "src", "common.cts");
+              '    writeFileSync(source, "export {};\\n");\n    const fixtures = join(root, "fixtures");',
+              '''    writeFileSync(source, "export {};\\n");
+            const commonjsTypeScript = join(root, "src", "common.cts");
             writeFileSync(commonjsTypeScript, "// FIXME: commonjs typescript behavior\\n");
             const ctsFailed = runConventionChecks(root, discoverComponents(root));
             expect(ctsFailed.status).toBe("failed");
@@ -228,12 +187,9 @@ jobs:
 
             const fixtures = join(root, "fixtures");''',
           )
-          replace_in_test(
+          replace_once(
               "tests/convention-enforcement.test.ts",
-              'test("requires portable UTF-8 LF text, including fixtures", () => {',
-              '''    expect(fixtureFailed.diagnostics[0]?.message).toContain(
-              "fixtures/input.txt: use LF line endings",
-            );''',
+              '    expect(fixtureFailed.diagnostics[0]?.message).toContain(\n      "fixtures/input.txt: use LF line endings",\n    );\n  });',
               '''    expect(fixtureFailed.diagnostics[0]?.message).toContain(
               "fixtures/input.txt: use LF line endings",
             );
@@ -249,7 +205,8 @@ jobs:
             expect(trackedOutputFailed.status).toBe("failed");
             expect(trackedOutputFailed.diagnostics[0]?.message).toContain(
               "dist/index.js: use LF line endings",
-            );''',
+            );
+          });''',
           )
           PY
       - name: Canonically format repaired files
