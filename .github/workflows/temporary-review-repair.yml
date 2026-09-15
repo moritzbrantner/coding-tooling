@@ -1,0 +1,272 @@
+name: temporary-review-repair
+
+on:
+  push:
+    branches:
+      - repair/convention-snapshot
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: repair/convention-snapshot
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - name: Install dependencies reproducibly
+        run: bun install --frozen-lockfile
+      - name: Apply narrow review repairs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"expected exactly one match in {path}, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "src/expectation-gap-detectors.ts",
+              '''const workMarkerPatterns = [
+            /^\\s*(?:\\/\\/|#|\\/\\*|\\*)\\s*TODO:\\s*\\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\\]\\s+(.+?)\\s*(?:\\*\\/)?$/i,
+            /^\\s*(?:\\/\\/|#|\\/\\*|\\*)\\s*TODO\\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\\):\\s*(.+?)\\s*(?:\\*\\/)?$/i,
+          ];
+          const workMarkerCandidatePattern =
+            /^\\s*(?:\\/\\/|#|\\/\\*|\\*)\\s*TODO(?::\\s*\\[coding-tooling:|\\(coding-tooling:)/i;''',
+              '''const workMarkerPatterns = [
+            /^\\s*(?:\\/{2,}|#+|\\/\\*+|\\*+)\\s*TODO:\\s*\\[coding-tooling:([a-z0-9][a-z0-9-]{0,63})\\]\\s+(.+?)\\s*(?:\\*\\/)?$/i,
+            /^\\s*(?:\\/{2,}|#+|\\/\\*+|\\*+)\\s*TODO\\(coding-tooling:([a-z0-9][a-z0-9-]{0,63})\\):\\s*(.+?)\\s*(?:\\*\\/)?$/i,
+          ];
+          const workMarkerCandidatePattern =
+            /^\\s*(?:\\/{2,}|#+|\\/\\*+|\\*+)\\s*TODO(?::\\s*\\[coding-tooling:|\\(coding-tooling:)/i;''',
+          )
+
+          replace_once(
+              "src/convention-enforcement.ts",
+              '''const sourceExtensions = new Set([
+            ".cjs",
+            ".cs",
+            ".js",''',
+              '''const sourceExtensions = new Set([
+            ".cjs",
+            ".cs",
+            ".cts",
+            ".js",''',
+          )
+          replace_once(
+              "src/convention-enforcement.ts",
+              '''const todoExtensions = new Set([
+            ".cjs",
+            ".cs",
+            ".js",''',
+              '''const todoExtensions = new Set([
+            ".cjs",
+            ".cs",
+            ".cts",
+            ".js",''',
+          )
+          replace_once(
+              "src/convention-enforcement.ts",
+              '''  ".cs",
+            ".csproj",
+            ".css",
+            ".editorconfig",''',
+              '''  ".cs",
+            ".csproj",
+            ".css",
+            ".cts",
+            ".editorconfig",''',
+          )
+
+          replace_once(
+              "src/convention-enforcement.ts",
+              '''function repositoryFiles(
+            root: string,
+            includeFixtures = false,
+          ): Array<{ absolutePath: string; relativePath: string }> {
+            return walkFiles(root, 20, includeFixtures ? { includeIgnoredDirectories: ["fixtures"] } : {})
+              .map((absolutePath) => ({
+                absolutePath,
+                relativePath: relative(root, absolutePath).replaceAll("\\\\", "/"),
+              }))
+              .filter((file) => !file.relativePath.startsWith(".conventions/"))
+              .sort((left, right) =>
+                left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0,
+              );
+          }''',
+              '''type RepositoryFile = { absolutePath: string; relativePath: string };
+
+          function sortRepositoryFiles(files: RepositoryFile[]): RepositoryFile[] {
+            return files.sort((left, right) =>
+              left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0,
+            );
+          }
+
+          function repositoryFiles(root: string): RepositoryFile[] {
+            return sortRepositoryFiles(
+              walkFiles(root, 20)
+                .map((absolutePath) => ({
+                  absolutePath,
+                  relativePath: relative(root, absolutePath).replaceAll("\\\\", "/"),
+                }))
+                .filter((file) => !file.relativePath.startsWith(".conventions/")),
+            );
+          }
+
+          function textHygieneFiles(root: string): RepositoryFile[] {
+            const tracked = runCommand("git", ["ls-files", "-z"], root);
+            if (tracked.status === 0) {
+              return sortRepositoryFiles(
+                tracked.stdout
+                  .split("\\0")
+                  .filter((relativePath) => relativePath.length > 0)
+                  .map((relativePath) => ({
+                    absolutePath: join(root, ...relativePath.split("/")),
+                    relativePath,
+                  }))
+                  .filter((file) => existsSync(file.absolutePath)),
+              );
+            }
+
+            return sortRepositoryFiles(
+              walkFiles(root, 20, {
+                includeIgnoredDirectories: ["bin", "build", "dist", "fixtures", "obj", "target"],
+              }).map((absolutePath) => ({
+                absolutePath,
+                relativePath: relative(root, absolutePath).replaceAll("\\\\", "/"),
+              })),
+            );
+          }''',
+          )
+          replace_once(
+              "src/convention-enforcement.ts",
+              'for (const file of repositoryFiles(root, true)) {',
+              'for (const file of textHygieneFiles(root)) {',
+          )
+
+          replace_once(
+              "tests/source-work-marker.test.ts",
+              '''test("surfaces malformed coding-tooling markers under source-work ownership", () => {''',
+              '''test("recognizes structured markers in documentation comment forms", () => {
+            const root = fixture();
+            writeFileSync(
+              join(root, "src", "docs.ts"),
+              [
+                "/// TODO: [coding-tooling:doc-current] Implement the documented behavior.",
+                "/** TODO(coding-tooling:doc-legacy): Replace the legacy documented behavior. */",
+                "/** TODO: [coding-tooling:bad_key] Repair the malformed documentation marker. */",
+                "export const value = true;",
+                "",
+              ].join("\\n"),
+            );
+            writeFileSync(
+              join(root, "src", "docs.py"),
+              "## TODO: [coding-tooling:hash-current] Implement the documented Python behavior.\\n",
+            );
+
+            const context = createDetectorContext(root);
+            const structured = sourceWorkMarkerFindings(context);
+            const generic = sourceDebtMarkerFindings(context);
+
+            expect(structured).toHaveLength(4);
+            expect(structured.map((finding) => finding.requirement.key).sort()).toEqual(
+              [
+                "repair-malformed-work-marker",
+                "resolve-work-marker:doc-current",
+                "resolve-work-marker:doc-legacy",
+                "resolve-work-marker:hash-current",
+              ].sort(),
+            );
+            expect(generic).toEqual([]);
+          });
+
+          test("surfaces malformed coding-tooling markers under source-work ownership", () => {''',
+          )
+
+          replace_once(
+              "tests/convention-enforcement.test.ts",
+              '''import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";''',
+              '''import { execFileSync } from "node:child_process";
+          import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";''',
+          )
+          replace_once(
+              "tests/convention-enforcement.test.ts",
+              '''    writeFileSync(source, "export {};\\n");
+            const fixtures = join(root, "fixtures");''',
+              '''    writeFileSync(source, "export {};\\n");
+            const commonjsTypeScript = join(root, "src", "common.cts");
+            writeFileSync(commonjsTypeScript, "// FIXME: commonjs typescript behavior\\n");
+            const ctsFailed = runConventionChecks(root, discoverComponents(root));
+            expect(ctsFailed.status).toBe("failed");
+            expect(ctsFailed.diagnostics[0]?.message).toContain("instead of FIXME");
+            rmSync(commonjsTypeScript);
+
+            const fixtures = join(root, "fixtures");''',
+          )
+          replace_once(
+              "tests/convention-enforcement.test.ts",
+              '''    expect(fixtureFailed.diagnostics[0]?.message).toContain(
+              "fixtures/input.txt: use LF line endings",
+            );
+          });''',
+              '''    expect(fixtureFailed.diagnostics[0]?.message).toContain(
+              "fixtures/input.txt: use LF line endings",
+            );
+
+            writeFileSync(join(fixtures, "input.txt"), "fixture input\\n");
+            const dist = join(root, "dist");
+            mkdirSync(dist);
+            writeFileSync(join(dist, "index.js"), "export const built = true;\\r\\n");
+            execFileSync("git", ["init", "-q"], { cwd: root });
+            execFileSync("git", ["add", "."], { cwd: root });
+
+            const trackedOutputFailed = runConventionChecks(root, discoverComponents(root));
+            expect(trackedOutputFailed.status).toBe("failed");
+            expect(trackedOutputFailed.diagnostics[0]?.message).toContain(
+              "dist/index.js: use LF line endings",
+            );
+          });''',
+          )
+          PY
+      - name: Canonically format repaired files
+        run: |
+          ./node_modules/.bin/oxfmt \
+            src/expectation-gap-detectors.ts \
+            src/convention-enforcement.ts \
+            tests/source-work-marker.test.ts \
+            tests/convention-enforcement.test.ts
+      - name: Validate focused repair
+        run: |
+          bun test tests/source-work-marker.test.ts tests/convention-enforcement.test.ts
+          bun run format:check
+          bun run lint
+          bun run typecheck
+      - name: Guard the repair scope
+        run: |
+          changed="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            src/convention-enforcement.ts \
+            src/expectation-gap-detectors.ts \
+            tests/convention-enforcement.test.ts \
+            tests/source-work-marker.test.ts | sort)"
+          test "$changed" = "$expected"
+      - name: Commit reviewed repair
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add \
+            src/convention-enforcement.ts \
+            src/expectation-gap-detectors.ts \
+            tests/convention-enforcement.test.ts \
+            tests/source-work-marker.test.ts
+          git commit -m "Close convention enforcement false-greens"
+          git push origin HEAD:repair/convention-snapshot
