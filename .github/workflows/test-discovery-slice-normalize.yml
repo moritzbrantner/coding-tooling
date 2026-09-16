@@ -24,107 +24,86 @@ jobs:
           from pathlib import Path
 
           discovery_path = Path("src/test-discovery-evidence.ts")
-          discovery = discovery_path.read_text()
+          lines = discovery_path.read_text().splitlines()
 
-          old_filter = '''  return filters.some((filter) => {
-            if (isAbsolute(filter)) return resolve(filter) === absolute;
-            return local.includes(filter.replace(/^\\.\\//, ""));
-          });'''
-          new_filter = '''  return filters.some((filter) => {
-            if (isAbsolute(filter)) return resolve(filter) === absolute;
-            if (filter.startsWith("./")) return local === filter.slice(2).replaceAll("\\\\", "/");
-            return local.includes(filter);
-          });'''
-          assert old_filter in discovery
-          discovery = discovery.replace(old_filter, new_filter, 1)
+          filter_line = '    return local.includes(filter.replace(/^\\.\\//, ""));'
+          filter_index = lines.index(filter_line)
+          lines[filter_index:filter_index + 1] = [
+              '    if (filter.startsWith("./")) return local === filter.slice(2).replaceAll("\\\\", "/");',
+              '    return local.includes(filter);',
+          ]
 
-          reconciliation_anchor = '''  if (discovery.status !== "available") {
-            return {
-              schemaVersion: 1,
-              status: "incomplete",
-              discoveredFiles: discovery.discoveredFileCount,
-              executedFiles: execution.executedFiles,
-              reason: `discovery-${discovery.status}`,
-            };
-          }'''
-          reconciliation_replacement = '''  if (discovery.reason === "vitest-discovery-cross-component") {
-            return {
-              schemaVersion: 1,
-              status: "mismatch",
-              discoveredFiles: discovery.discoveredFileCount,
-              executedFiles: execution.executedFiles,
-              reason: "native-discovery-cross-component",
-            };
-          }
-          if (discovery.status !== "available") {
-            return {
-              schemaVersion: 1,
-              status: "incomplete",
-              discoveredFiles: discovery.discoveredFileCount,
-              executedFiles: execution.executedFiles,
-              reason: `discovery-${discovery.status}`,
-            };
-          }'''
-          assert reconciliation_anchor in discovery
-          discovery_path.write_text(discovery.replace(reconciliation_anchor, reconciliation_replacement, 1))
+          reconciliation_index = lines.index('  if (discovery.status !== "available") {')
+          lines[reconciliation_index:reconciliation_index] = [
+              '  if (discovery.reason === "vitest-discovery-cross-component") {',
+              '    return {',
+              '      schemaVersion: 1,',
+              '      status: "mismatch",',
+              '      discoveredFiles: discovery.discoveredFileCount,',
+              '      executedFiles: execution.executedFiles,',
+              '      reason: "native-discovery-cross-component",',
+              '    };',
+              '  }',
+          ]
+          discovery_path.write_text("\n".join(lines) + "\n")
 
           test_path = Path("tests/test-discovery-evidence.test.ts")
-          tests = test_path.read_text()
+          lines = test_path.read_text().splitlines()
+          bun_index = lines.index('  test("reports conventional Bun tests excluded by runner configuration", () => {')
+          bun_test = [
+              '  test("treats an explicit Bun file path as an exact filter", () => {',
+              '    const root = repository();',
+              '    file(root, "tests/alpha.test.ts");',
+              '    file(root, "tests/alpha-extra.test.ts");',
+              '    const runner = successfulRunner();',
+              '',
+              '    const result = collectTestDiscoveryEvidence(',
+              '      {',
+              '        cwd: root,',
+              '        capability: "test:unit",',
+              '        command: ["bun", "test", "./tests/alpha.test.ts"],',
+              '      },',
+              '      runner.run,',
+              '    );',
+              '',
+              '    expect(result).toMatchObject({',
+              '      status: "available",',
+              '      discoveredFileCount: 1,',
+              '      discoveredFiles: ["tests/alpha.test.ts"],',
+              '      excludedFileCount: 1,',
+              '    });',
+              '  });',
+              '',
+          ]
+          lines[bun_index:bun_index] = bun_test
 
-          bun_anchor = '''  test("reports conventional Bun tests excluded by runner configuration", () => {'''
-          bun_test = '''  test("treats an explicit Bun file path as an exact filter", () => {
-            const root = repository();
-            file(root, "tests/alpha.test.ts");
-            file(root, "tests/alpha-extra.test.ts");
-            const runner = successfulRunner();
-
-            const result = collectTestDiscoveryEvidence(
-              {
-                cwd: root,
-                capability: "test:unit",
-                command: ["bun", "test", "./tests/alpha.test.ts"],
-              },
-              runner.run,
-            );
-
-            expect(result).toMatchObject({
-              status: "available",
-              discoveredFileCount: 1,
-              discoveredFiles: ["tests/alpha.test.ts"],
-              excludedFileCount: 1,
-            });
-          });
-
-          '''
-          assert bun_anchor in tests
-          tests = tests.replace(bun_anchor, bun_test + bun_anchor, 1)
-
-          cross_anchor = '''    expect(result).toMatchObject({
-              status: "incomplete",
-              runner: "vitest",
-              reason: "vitest-discovery-cross-component",
-            });
-          });'''
-          cross_replacement = '''    expect(result).toMatchObject({
-              status: "incomplete",
-              runner: "vitest",
-              reason: "vitest-discovery-cross-component",
-            });
-
-            const execution = collectTestExecutionEvidence({
-              cwd: root,
-              capability: "test:unit",
-              command: ["vitest", "run"],
-              stdout: "Test Files  1 passed (1)\\nTests  1 passed (1)",
-              stderr: "",
-            });
-            expect(reconcileTestScope(result, execution)).toMatchObject({
-              status: "mismatch",
-              reason: "native-discovery-cross-component",
-            });
-          });'''
-          assert cross_anchor in tests
-          test_path.write_text(tests.replace(cross_anchor, cross_replacement, 1))
+          cross_start = lines.index('  test("fails closed when Vitest lists a test owned by a nested component", () => {')
+          reason_index = next(
+              index
+              for index in range(cross_start, len(lines))
+              if 'reason: "vitest-discovery-cross-component"' in lines[index]
+          )
+          expectation_close = next(
+              index
+              for index in range(reason_index + 1, len(lines))
+              if lines[index] == '    });'
+          )
+          cross_assertion = [
+              '',
+              '    const execution = collectTestExecutionEvidence({',
+              '      cwd: root,',
+              '      capability: "test:unit",',
+              '      command: ["vitest", "run"],',
+              '      stdout: "Test Files  1 passed (1)\\nTests  1 passed (1)",',
+              '      stderr: "",',
+              '    });',
+              '    expect(reconcileTestScope(result, execution)).toMatchObject({',
+              '      status: "mismatch",',
+              '      reason: "native-discovery-cross-component",',
+              '    });',
+          ]
+          lines[expectation_close + 1:expectation_close + 1] = cross_assertion
+          test_path.write_text("\n".join(lines) + "\n")
       - name: Normalize and verify focused slice
         run: |
           bun run format:write
