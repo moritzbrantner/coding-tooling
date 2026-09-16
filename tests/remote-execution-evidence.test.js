@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { remoteValidationOutcome } from "../site/evidence-model.js";
 import { remoteExecutionEvidence } from "../site/execution-evidence.js";
 
 describe("remote execution evidence", () => {
@@ -112,6 +113,97 @@ describe("remote execution evidence", () => {
     expect(evidence.failClosed.status).toBe("finding");
   });
 
+  test("maps resolved wrappers into continue-on-error fail-closed evidence", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify\n        run: npm run verify\n        continue-on-error: true\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "all-proven-validation-is-fail-open",
+      }),
+    );
+  });
+
+  test("maps backgrounded wrapper steps into fail-closed evidence", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify\n        run: npm run verify & true\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "all-proven-validation-is-fail-open",
+      }),
+    );
+  });
+
+  test("maps resolved wrappers into shell-suppression fail-closed evidence", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify\n        run: npm run verify || true\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed.status).toBe("finding");
+  });
+
+  test("treats exit-zero wrapper fallbacks as explicit suppression", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify\n        run: npm run verify || exit 0\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "all-proven-validation-is-fail-open",
+      }),
+    );
+  });
+
+  test("does not let a workspace-scoped wrapper hide suppression on the proving step", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Root verify\n        run: npm run verify || true\n      - name: Child verify\n        run: npm run verify --workspace child\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "all-proven-validation-is-fail-open",
+      }),
+    );
+  });
+
+  test("maps explicit-cd wrapper steps into fail-closed evidence", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify app\n        run: cd packages/app && npm run verify || true\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content, "packages/app"),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "all-proven-validation-is-fail-open",
+      }),
+    );
+  });
+
   test("keeps matrix lists outside step evidence", () => {
     const path = ".github/workflows/validate.yml";
     const evidence = remoteExecutionEvidence({
@@ -142,6 +234,28 @@ describe("remote execution evidence", () => {
     expect(evidence.failClosed.status).toBe("satisfied");
   });
 });
+
+function wrapperValidation(path, content, workingDirectory = ".") {
+  const result = remoteValidationOutcome({
+    workflowPaths: [path],
+    workflows: [{ path, content }],
+    externalCiPaths: [],
+    workflowFetchTruncated: false,
+    defaultBranch: "main",
+    declaredCommands: [{ command: "npm run test:unit", workingDirectory }],
+    packageScripts: [
+      {
+        workingDirectory,
+        manager: "npm",
+        scripts: { verify: "npm run test:unit", "test:unit": "vitest run" },
+      },
+    ],
+  });
+  if (result.status !== "satisfied") {
+    throw new Error(`wrapper validation fixture must be satisfied, got ${result.status}`);
+  }
+  return result;
+}
 
 function validation(path, matchedCommands) {
   return {

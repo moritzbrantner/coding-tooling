@@ -374,7 +374,11 @@ function runClippy(
   };
 }
 
-type RepositoryFile = { absolutePath: string; relativePath: string };
+type RepositoryFile = {
+  absolutePath: string;
+  relativePath: string;
+  gitMode?: string;
+};
 
 function sortRepositoryFiles(files: RepositoryFile[]): RepositoryFile[] {
   return files.sort((left, right) =>
@@ -382,31 +386,49 @@ function sortRepositoryFiles(files: RepositoryFile[]): RepositoryFile[] {
   );
 }
 
+function trackedRepositoryFiles(root: string): RepositoryFile[] | undefined {
+  const tracked = runCommand("git", ["ls-files", "--stage", "-z"], root);
+  if (tracked.status !== 0) return undefined;
+
+  const files: RepositoryFile[] = [];
+  for (const entry of tracked.stdout.split("\0")) {
+    if (!entry) continue;
+    const separator = entry.indexOf("\t");
+    if (separator < 0) continue;
+    const metadata = entry.slice(0, separator);
+    const relativePath = entry.slice(separator + 1);
+    const match = metadata.match(/^(\d{6}) [0-9a-f]+ \d+$/);
+    if (!match || !relativePath) continue;
+    const [, gitMode] = match;
+    files.push({
+      absolutePath: join(root, ...relativePath.split("/")),
+      relativePath,
+      gitMode,
+    });
+  }
+  return sortRepositoryFiles(files);
+}
+
 function repositoryFiles(root: string): RepositoryFile[] {
-  return sortRepositoryFiles(
-    walkFiles(root, 20)
-      .map((absolutePath) => ({
-        absolutePath,
-        relativePath: relative(root, absolutePath).replaceAll("\\", "/"),
-      }))
-      .filter((file) => !file.relativePath.startsWith(".conventions/")),
-  );
+  const walked = walkFiles(root, 20)
+    .map((absolutePath) => ({
+      absolutePath,
+      relativePath: relative(root, absolutePath).replaceAll("\\", "/"),
+    }))
+    .filter((file) => !file.relativePath.startsWith(".conventions/"));
+  const tracked = trackedRepositoryFiles(root);
+  if (!tracked) return sortRepositoryFiles(walked);
+
+  const files = new Map(walked.map((file) => [file.relativePath, file]));
+  for (const file of tracked) {
+    if (!file.relativePath.startsWith(".conventions/")) files.set(file.relativePath, file);
+  }
+  return sortRepositoryFiles([...files.values()]);
 }
 
 function textHygieneFiles(root: string): RepositoryFile[] {
-  const tracked = runCommand("git", ["ls-files", "-z"], root);
-  if (tracked.status === 0) {
-    return sortRepositoryFiles(
-      tracked.stdout
-        .split("\0")
-        .filter((relativePath) => relativePath.length > 0)
-        .map((relativePath) => ({
-          absolutePath: join(root, ...relativePath.split("/")),
-          relativePath,
-        }))
-        .filter((file) => existsSync(file.absolutePath)),
-    );
-  }
+  const tracked = trackedRepositoryFiles(root);
+  if (tracked) return tracked.filter((file) => !file.relativePath.startsWith(".conventions/"));
 
   return sortRepositoryFiles(
     walkFiles(root, 20, {
@@ -578,13 +600,15 @@ function textHygiene(root: string, ruleId: string): ConventionCheckResult {
   const decoder = new TextDecoder("utf-8", { fatal: true });
 
   for (const file of textHygieneFiles(root)) {
+    if (file.gitMode === "160000" || file.gitMode === "120000") continue;
+
     let stats;
     try {
       stats = lstatSync(file.absolutePath);
     } catch {
       continue;
     }
-    if (stats.isSymbolicLink() || stats.size > 5_000_000) continue;
+    if (!stats.isFile() || stats.isSymbolicLink() || stats.size > 5_000_000) continue;
 
     const buffer = readFileSync(file.absolutePath);
     const knownText =
@@ -616,8 +640,19 @@ function ciActionPins(root: string, ruleId: string): ConventionCheckResult {
       file.relativePath === "action.yml" ||
       file.relativePath === "action.yaml";
     if (!workflowLike) continue;
+    if (file.gitMode === "160000" || file.gitMode === "120000") {
+      failures.push(`${file.relativePath}: tracked workflow must be a regular file`);
+      continue;
+    }
 
-    for (const [index, line] of readFileSync(file.absolutePath, "utf8").split(/\r?\n/).entries()) {
+    let content: string;
+    try {
+      content = readFileSync(file.absolutePath, "utf8");
+    } catch {
+      failures.push(`${file.relativePath}: tracked workflow could not be read`);
+      continue;
+    }
+    for (const [index, line] of content.split(/\r?\n/).entries()) {
       const value = line.match(/^\s*(?:-\s*)?uses:\s*([^\s#]+)/)?.[1];
       if (!value || value.startsWith("./") || value.startsWith("docker://")) continue;
       const separator = value.lastIndexOf("@");
