@@ -301,6 +301,7 @@ export function remoteValidationOutcome(input) {
   const workflowPaths = [...new Set(input.workflowPaths ?? [])].toSorted();
   const externalCiPaths = [...new Set(input.externalCiPaths ?? [])].toSorted();
   const declaredCommands = normalizeDeclaredCommands(input.declaredCommands);
+  const packageScripts = normalizePackageScripts(input.packageScripts);
   const loaded = new Map(
     (input.workflows ?? [])
       .filter((workflow) => workflow?.path && typeof workflow.content === "string")
@@ -314,6 +315,7 @@ export function remoteValidationOutcome(input) {
         content: loaded.get(path),
         defaultBranch: input.defaultBranch,
         declaredCommands,
+        packageScripts,
         localActionIsCodingTooling: Boolean(input.localActionIsCodingTooling),
       }),
     );
@@ -382,10 +384,44 @@ function normalizeDeclaredCommands(values) {
   );
 }
 
+function normalizePackageScripts(values) {
+  return (values ?? [])
+    .flatMap((value) => {
+      const workingDirectory = normalizeWorkingDirectory(value?.workingDirectory ?? ".");
+      const manager = value?.manager === "bun" || value?.manager === "npm" ? value.manager : null;
+      const scripts = strings(value?.scripts);
+      if (workingDirectory === null || manager === null || Object.keys(scripts).length === 0) {
+        return [];
+      }
+      return [{ workingDirectory, manager, scripts }];
+    })
+    .toSorted(
+      (left, right) =>
+        left.workingDirectory.localeCompare(right.workingDirectory) ||
+        left.manager.localeCompare(right.manager),
+    );
+}
+
 function analyzeWorkflowValidation(input) {
   const relevantTrigger = workflowHasRelevantTrigger(input.content, input.defaultBranch);
-  const matchedCommandEvidence = input.declaredCommands.filter((command) =>
+  const literalMatchedCommandEvidence = input.declaredCommands.filter((command) =>
     workflowRunsCommand(input.content, command),
+  );
+  const matchedPackageScriptEvidence = input.packageScripts.flatMap((packageEvidence) =>
+    workflowPackageScriptValidationEvidence(input.content, packageEvidence, input.declaredCommands),
+  );
+  const wrapperMatchedCommandKeys = new Set(
+    matchedPackageScriptEvidence.flatMap((evidence) =>
+      evidence.matchedCommands.map((command) => `${evidence.workingDirectory}\0${command}`),
+    ),
+  );
+  const matchedCommandEvidence = input.declaredCommands.filter(
+    (command) =>
+      literalMatchedCommandEvidence.some(
+        (literal) =>
+          literal.command === command.command &&
+          literal.workingDirectory === command.workingDirectory,
+      ) || wrapperMatchedCommandKeys.has(`${command.workingDirectory}\0${command.command}`),
   );
   const matchedCommands = [
     ...new Set(matchedCommandEvidence.map((command) => command.command)),
@@ -402,8 +438,133 @@ function analyzeWorkflowValidation(input) {
     validationInvocation,
     matchedCommands,
     matchedCommandEvidence,
+    matchedPackageScriptEvidence,
     codingToolingAction,
   };
+}
+
+function workflowPackageScriptValidationEvidence(content, packageEvidence, declaredCommands) {
+  const declared = declaredCommands.filter(
+    (command) => command.workingDirectory === packageEvidence.workingDirectory,
+  );
+  if (declared.length === 0) return [];
+  const results = [];
+  for (const script of Object.keys(packageEvidence.scripts).toSorted()) {
+    const wrapperCommand = `${packageEvidence.manager} run ${script}`;
+    if (
+      !workflowRunsCommand(
+        content,
+        {
+          command: wrapperCommand,
+          workingDirectory: packageEvidence.workingDirectory,
+        },
+        packageScriptInvocationMatchesInDirectory,
+      )
+    ) {
+      continue;
+    }
+    const matchedCommands = resolvePackageScriptValidation(
+      packageEvidence.scripts,
+      packageEvidence.manager,
+      script,
+      declared,
+    );
+    if (matchedCommands.length === 0) continue;
+    results.push({
+      command: wrapperCommand,
+      script,
+      workingDirectory: packageEvidence.workingDirectory,
+      matchedCommands,
+    });
+  }
+  return results.toSorted(
+    (left, right) =>
+      left.workingDirectory.localeCompare(right.workingDirectory) ||
+      left.command.localeCompare(right.command),
+  );
+}
+
+function resolvePackageScriptValidation(
+  scripts,
+  manager,
+  script,
+  declaredCommands,
+  seen = new Set(),
+) {
+  if (seen.has(script) || seen.size >= 16) return [];
+  const source = scripts[script];
+  if (typeof source !== "string" || !source.trim()) return [];
+  const nextSeen = new Set(seen);
+  nextSeen.add(script);
+  const segments = boundedPackageScriptSegments(source);
+  if (segments.length === 0) return [];
+  const matches = new Set();
+  for (const segment of segments) {
+    let bounded = false;
+    for (const declared of declaredCommands) {
+      if (!packageScriptDeclaredCommandMatches(segment, declared.command, manager)) continue;
+      matches.add(declared.command);
+      bounded = true;
+    }
+    const referencedScript = packageScriptReference(segment, manager);
+    if (!referencedScript) {
+      if (!bounded) return [];
+      continue;
+    }
+    if (typeof scripts[referencedScript] !== "string" || !scripts[referencedScript].trim())
+      return [];
+    const canonicalReference = `${manager} run ${referencedScript}`;
+    const declaredReference = declaredCommands.some(
+      (declared) => declared.command === canonicalReference,
+    );
+    if (declaredReference) {
+      matches.add(canonicalReference);
+      bounded = true;
+    }
+    const nestedMatches = resolvePackageScriptValidation(
+      scripts,
+      manager,
+      referencedScript,
+      declaredCommands,
+      nextSeen,
+    );
+    if (!declaredReference && nestedMatches.length === 0) return [];
+    for (const matched of nestedMatches) matches.add(matched);
+    bounded = true;
+    if (!bounded) return [];
+  }
+  return [...matches].toSorted();
+}
+
+function packageScriptDeclaredCommandMatches(segment, command, manager) {
+  const packageScriptCommand =
+    command.startsWith(`${manager} run `) ||
+    (manager === "npm" && /^npm\s+(?:test|start|stop|restart)$/.test(command));
+  return packageScriptCommand
+    ? packageScriptInvocationMatches(segment, command)
+    : shellCommandMatches(segment, command);
+}
+
+function boundedPackageScriptSegments(source) {
+  const value = String(source).trim();
+  if (!value || /[;|`\n\r]/.test(value) || /(^|[^&])&([^&]|$)/.test(value) || value.includes("$("))
+    return [];
+  return value
+    .split(/\s*&&\s*/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function packageScriptReference(segment, manager) {
+  const run = segment.match(
+    new RegExp(`^${manager}\\s+run\\s+([A-Za-z0-9:_-]+)(?:\\s+--(?:\\s+.*)?)?$`),
+  );
+  if (run) return run[1];
+  if (manager === "npm") {
+    const shorthand = segment.match(/^npm\s+(test|start|stop|restart)(?:\s+--(?:\s+.*)?)?$/);
+    if (shorthand) return shorthand[1];
+  }
+  return null;
 }
 
 function workflowHasRelevantTrigger(content, defaultBranch) {
@@ -462,7 +623,11 @@ function inlinePushRelevant(value, defaultBranch) {
   return true;
 }
 
-function workflowRunsCommand(content, declaredCommand) {
+function workflowRunsCommand(
+  content,
+  declaredCommand,
+  matchesInDirectory = shellCommandMatchesInDirectory,
+) {
   const needle = normalizeCommand(declaredCommand?.command ?? declaredCommand);
   const requiredWorkingDirectory = normalizeWorkingDirectory(
     declaredCommand?.workingDirectory ?? ".",
@@ -477,9 +642,7 @@ function workflowRunsCommand(content, declaredCommand) {
     const workingDirectory = workflowRunWorkingDirectory(lines, index, indent);
     const inline = match[2].trim();
     if (inline && !new Set(["|", ">", "|-", ">-", "|+", ">+"]).has(inline)) {
-      if (
-        shellCommandMatchesInDirectory(inline, needle, workingDirectory, requiredWorkingDirectory)
-      )
+      if (matchesInDirectory(inline, needle, workingDirectory, requiredWorkingDirectory))
         return true;
       continue;
     }
@@ -490,14 +653,7 @@ function workflowRunsCommand(content, declaredCommand) {
       if (blockIndent <= indent) break;
       const shellLine = blockRaw.trim();
       if (shellLine.startsWith("#")) continue;
-      if (
-        shellCommandMatchesInDirectory(
-          shellLine,
-          needle,
-          workingDirectory,
-          requiredWorkingDirectory,
-        )
-      )
+      if (matchesInDirectory(shellLine, needle, workingDirectory, requiredWorkingDirectory))
         return true;
     }
   }
@@ -547,6 +703,37 @@ function shellCommandMatchesInDirectory(value, command, workingDirectory, requir
   const prefix = `cd ${requiredDirectory} && `;
   return (
     normalized.startsWith(prefix) && shellCommandMatches(normalized.slice(prefix.length), command)
+  );
+}
+
+function packageScriptInvocationMatchesInDirectory(
+  value,
+  command,
+  workingDirectory,
+  requiredDirectory,
+) {
+  if (workingDirectory === requiredDirectory && packageScriptInvocationMatches(value, command))
+    return true;
+  if (workingDirectory !== "." || requiredDirectory === ".") return false;
+  const normalized = normalizeCommand(value);
+  const prefix = `cd ${requiredDirectory} && `;
+  return (
+    normalized.startsWith(prefix) &&
+    packageScriptInvocationMatches(normalized.slice(prefix.length), command)
+  );
+}
+
+function packageScriptInvocationMatches(value, command) {
+  const normalized = normalizeCommand(value);
+  if (normalized === command) return true;
+  if (!normalized.startsWith(`${command} `)) return false;
+  const suffix = normalized.slice(command.length).trimStart();
+  return (
+    suffix === "--" ||
+    suffix.startsWith("-- ") ||
+    suffix.startsWith("#") ||
+    /^(?:&&|\|\|)(?:\s|$)/.test(suffix) ||
+    /^&(?:\s|$)/.test(suffix)
   );
 }
 
