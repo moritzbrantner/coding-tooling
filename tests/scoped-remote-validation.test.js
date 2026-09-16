@@ -127,6 +127,46 @@ describe("component-scoped remote validation", () => {
     expect(result.workflowEvidence[0].matchedPackageScriptEvidence).toEqual([]);
   });
 
+  test("workspace-scoped commands inside wrapper bodies cannot satisfy root package evidence", () => {
+    const result = validation(
+      `${pullRequestPrefix}      - run: npm run verify\n`,
+      [{ command: "npm run test:unit", workingDirectory: "." }],
+      [
+        {
+          workingDirectory: ".",
+          manager: "npm",
+          scripts: {
+            verify: "npm run test:unit --workspace child",
+            "test:unit": "vitest run",
+          },
+        },
+      ],
+    );
+
+    expect(result.status).toBe("finding");
+    expect(result.workflowEvidence[0].matchedPackageScriptEvidence).toEqual([]);
+  });
+
+  test("missing prerequisite package scripts invalidate the complete wrapper chain", () => {
+    const result = validation(
+      `${pullRequestPrefix}      - run: npm run verify\n`,
+      [{ command: "npm run test:unit", workingDirectory: "." }],
+      [
+        {
+          workingDirectory: ".",
+          manager: "npm",
+          scripts: {
+            verify: "npm run missing && npm run test:unit",
+            "test:unit": "vitest run",
+          },
+        },
+      ],
+    );
+
+    expect(result.status).toBe("finding");
+    expect(result.workflowEvidence[0].matchedPackageScriptEvidence).toEqual([]);
+  });
+
   test("backgrounded package-script validation remains non-validating", () => {
     const result = validation(
       `${pullRequestPrefix}      - run: npm run verify\n`,
