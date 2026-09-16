@@ -115,10 +115,14 @@ function parseFinding(value: unknown, index: number): AgentFinding {
     reproducibility: value.reproducibility,
     context: {
       ...(typeof value.context.deviceId === "string" ? { deviceId: value.context.deviceId } : {}),
-      ...(typeof value.context.scenarioId === "string" ? { scenarioId: value.context.scenarioId } : {}),
+      ...(typeof value.context.scenarioId === "string"
+        ? { scenarioId: value.context.scenarioId }
+        : {}),
       ...(typeof value.context.url === "string" ? { url: value.context.url } : {}),
     },
-    evidence: value.evidence.map((item, evidenceIndex) => parseEvidence(item, evidenceIndex, index)),
+    evidence: value.evidence.map((item, evidenceIndex) =>
+      parseEvidence(item, evidenceIndex, index),
+    ),
   };
 }
 
@@ -133,7 +137,9 @@ function readContract(path: string): AgentFindingsReport {
     typeof value.target.baseUrl !== "string" ||
     !Array.isArray(value.findings)
   ) {
-    throw new Error("agent-findings.json must use the mobile-analysis agent findings schemaVersion 1 contract");
+    throw new Error(
+      "agent-findings.json must use the mobile-analysis agent findings schemaVersion 1 contract",
+    );
   }
   return {
     schemaVersion: 1,
@@ -143,7 +149,11 @@ function readContract(path: string): AgentFindingsReport {
   };
 }
 
-function localEvidencePath(root: string, contractPath: string, finding: AgentFinding): string | undefined {
+function localEvidencePath(
+  root: string,
+  contractPath: string,
+  finding: AgentFinding,
+): string | undefined {
   const local = finding.evidence.find((evidence) => evidence.kind !== "url");
   return local ? relativePosix(root, join(dirname(contractPath), local.value)) : undefined;
 }
