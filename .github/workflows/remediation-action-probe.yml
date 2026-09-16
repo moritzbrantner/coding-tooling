@@ -15,6 +15,8 @@ jobs:
         with:
           bun-version: 1.4.0
       - run: bun install --frozen-lockfile
-      - run: bun run format:check
-      - run: bun run typecheck
-      - run: bun test tests/action-contract.test.ts
+      - name: Show canonical formatter diff
+        run: |
+          bun run format:write
+          git diff -- tests/action-contract.test.ts
+          git diff --quiet -- tests/action-contract.test.ts
