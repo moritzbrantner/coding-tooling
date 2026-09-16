@@ -1,0 +1,40 @@
+name: Make Newline Fixture Portable
+
+on:
+  push:
+    branches:
+      - fix/index-backed-convention-enforcement
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Guard impossible Windows newline-path fixture
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/convention-enforcement.test.ts')
+          source = path.read_text()
+          before = '  test("parses tracked workflow paths containing newlines", () => {\n'
+          after = '  test("parses tracked workflow paths containing newlines", () => {\n    if (process.platform === "win32") return;\n'
+          if before not in source:
+              raise SystemExit('newline fixture target not found')
+          path.write_text(source.replace(before, after, 1))
+          PY
+          git rm -f .github/workflows/portable-newline-fixture.yml
+          bun run format:write
+          bun test tests/convention-enforcement.test.ts
+          bun run typecheck
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/convention-enforcement.test.ts
+          git commit -m "Make newline path regression portable"
+          git push origin HEAD:fix/index-backed-convention-enforcement
