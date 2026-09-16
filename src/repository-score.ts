@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { loadConfig } from "./core.ts";
 import { deploymentRuntimeParitySubjects } from "./expectation-deployment-detector.ts";
 import { productionSourceFiles, workMarkerSourceFiles } from "./expectation-gap-detectors.ts";
+import { mobileAnalysisOrchestrationSubjects } from "./expectation-mobile-analysis-detector.ts";
 import { createDetectorContext, type PackageInfo } from "./expectation-package-context.ts";
 import { explicitCargoTargets } from "./expectation-rust-detector.ts";
 import { rustTestSurfaces } from "./expectation-rust-test-detector.ts";
@@ -119,6 +120,7 @@ function categoryForExpectation(id: string): RepositoryScoreCategory {
   if (
     id.includes("aggregate-check") ||
     id.includes("deployment") ||
+    id.includes("orchestration") ||
     id.includes("required-capability")
   ) {
     return "automation";
@@ -291,6 +293,15 @@ function repositoryScoreSubjects(root: string, findings: readonly ScoreFinding[]
     countSubjects(
       deploymentWorkflows,
       directFindingSubjects(findings, "deployment-runtime-parity"),
+    ),
+  );
+
+  const mobileAnalysisConfigs = mobileAnalysisOrchestrationSubjects(root);
+  models.set(
+    "mobile-analysis-orchestration",
+    countSubjects(
+      mobileAnalysisConfigs,
+      directFindingSubjects(findings, "mobile-analysis-orchestration"),
     ),
   );
 

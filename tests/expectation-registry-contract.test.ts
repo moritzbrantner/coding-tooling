@@ -17,6 +17,7 @@ import {
   sourceUnimplementedStubFindings,
   sourceWorkMarkerFindings,
 } from "../src/expectation-gap-detectors.ts";
+import { mobileAnalysisOrchestrationFindings } from "../src/expectation-mobile-analysis-detector.ts";
 import { duplicateValues, semanticFindingId } from "../src/expectation-model.ts";
 import {
   consumerVerificationDependencyFindings,
@@ -70,6 +71,7 @@ function detectorBatches(context: DetectorContext): RawFinding[][] {
     consumerVerificationDependencyFindings(context),
     dotNetAssignabilityFindings(context),
     missingJavaScriptTestFindings(context),
+    mobileAnalysisOrchestrationFindings(context),
     missingAggregateCheckFindings(context),
     missingCliWiringFindings(context),
     missingTestCapabilityFindings(context),
@@ -97,6 +99,7 @@ describe("expectation detector registry contract", () => {
       "deployment-runtime-parity",
       "dotnet-type-assignability",
       "javascript-source-test",
+      "mobile-analysis-orchestration",
       "package-aggregate-check",
       "package-cli-wiring",
       "package-test-capability",
@@ -118,6 +121,7 @@ describe("expectation detector registry contract", () => {
       ["deployment-runtime-parity", 1],
       ["dotnet-type-assignability", 1],
       ["javascript-source-test", 1],
+      ["mobile-analysis-orchestration", 1],
       ["package-aggregate-check", 1],
       ["package-cli-wiring", 1],
       ["package-test-capability", 1],
@@ -159,6 +163,15 @@ describe("expectation detector registry contract", () => {
       basis: "syntax",
       oracle: "consumer-verification-install-spec-scan",
       independenceKey: "consumer-dependency-resolution-verifier",
+    });
+
+    const mobileOrchestration = registry.find(
+      (entry) => entry.id === "mobile-analysis-orchestration",
+    );
+    expect(mobileOrchestration?.evidenceContract).toMatchObject({
+      basis: "configuration",
+      oracle: "mobile-analysis-config-and-pages-workflow",
+      independenceKey: "mobile-analysis-orchestration",
     });
 
     const typescriptAssignability = registry.find(
@@ -231,7 +244,7 @@ describe("expectation detector registry contract", () => {
 
     expect(repeatedBatches).toEqual(batches);
     expect(batches.map((batch) => batch.length)).toEqual([
-      0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0,
+      0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0,
     ]);
   });
 });

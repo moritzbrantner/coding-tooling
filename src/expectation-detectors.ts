@@ -10,6 +10,7 @@ import {
   sourceUnimplementedStubFindings,
   sourceWorkMarkerFindings,
 } from "./expectation-gap-detectors.ts";
+import { mobileAnalysisOrchestrationFindings } from "./expectation-mobile-analysis-detector.ts";
 import {
   consumerVerificationDependencyFindings,
   missingAggregateCheckFindings,
@@ -139,6 +140,27 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       ],
     },
     detect: missingJavaScriptTestFindings,
+  },
+  {
+    id: "mobile-analysis-orchestration",
+    version: 1,
+    description:
+      "Configured mobile analysis is wired to run automatically after an applicable Pages deployment",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    evidenceContract: {
+      basis: "configuration",
+      oracle: "mobile-analysis-config-and-pages-workflow",
+      independenceKey: "mobile-analysis-orchestration",
+      proves:
+        "A repository with explicit mobile-analysis configuration and a recognized Pages deployment has matching post-deployment reusable-workflow wiring.",
+      limitations: [
+        "Does not execute mobile-analysis or prove that the deployed URL is reachable.",
+        "Only GitHub Pages deployment workflows are auto-orchestrated in this version; other hosting systems remain not-applicable.",
+        "Multiple recognized Pages deployment workflows are treated as ambiguous rather than guessed.",
+      ],
+    },
+    detect: mobileAnalysisOrchestrationFindings,
   },
   {
     id: "package-aggregate-check",
