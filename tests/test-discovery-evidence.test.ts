@@ -69,6 +69,28 @@ describe("native test discovery evidence", () => {
     expect(runner.calls).toEqual([["bun", "test", "--dry-run"]]);
   });
 
+  test("does not consume a Bun file filter after bare bail", () => {
+    const root = repository();
+    file(root, "tests/alpha.test.ts");
+    file(root, "tests/beta.test.ts");
+    const runner = successfulRunner();
+
+    const result = collectTestDiscoveryEvidence(
+      {
+        cwd: root,
+        capability: "test:unit",
+        command: ["bun", "test", "--bail", "./tests/alpha.test.ts"],
+      },
+      runner.run,
+    );
+
+    expect(result).toMatchObject({
+      status: "available",
+      discoveredFileCount: 1,
+      discoveredFiles: ["tests/alpha.test.ts"],
+    });
+  });
+
   test("treats an explicit Bun file path as an exact filter", () => {
     const root = repository();
     file(root, "tests/alpha.test.ts");

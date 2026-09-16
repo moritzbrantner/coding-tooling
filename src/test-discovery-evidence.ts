@@ -69,7 +69,6 @@ const bunValueFlags = new Set([
   "--rerun-each",
   "--retry",
   "--seed",
-  "--bail",
   "--max-concurrency",
   "--test-name-pattern",
   "-t",
@@ -92,6 +91,7 @@ const bunBooleanFlags = new Set([
   "--only-failures",
   "--dry-run",
   "--verbose",
+  "--bail",
 ]);
 
 function boundedFiles(files: readonly string[]): { values: string[]; truncated: boolean } {
@@ -302,6 +302,7 @@ function bunArguments(command: readonly string[]): BunArguments {
       index += 1;
       continue;
     }
+    if (value.startsWith("--bail=")) continue;
     if (bunBooleanFlags.has(value) || value.startsWith("--coverage-reporter=")) continue;
     if (value.startsWith("-")) {
       return {
