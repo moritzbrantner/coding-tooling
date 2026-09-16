@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "format": "oxfmt --check .",
-    "format:check": "bun scripts/emit-formatted-target.ts",
+    "format:check": "oxfmt --check .",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
