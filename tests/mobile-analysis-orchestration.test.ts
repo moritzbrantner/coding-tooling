@@ -10,13 +10,10 @@ const roots: string[] = [];
 
 const mobileAnalysisRef =
   "moritzbrantner/mobile-analysis/.github/workflows/analyze.yml@4a9e5b24d8acd9753830b45f82968341b56d8d41";
-const codingToolingRef =
-  "moritzbrantner/coding-tooling@1bb73191e4a7e62ef5a228e7066dba649cc14073";
+const codingToolingRef = "moritzbrantner/coding-tooling@1bb73191e4a7e62ef5a228e7066dba649cc14073";
 const checkoutRef = "actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8";
-const downloadArtifactRef =
-  "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
-const uploadArtifactRef =
-  "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const downloadArtifactRef = "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+const uploadArtifactRef = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 const deploymentRevisionExpression =
   "${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}";
 const deploymentHeadShaExpression = "${{ github.event.workflow_run.head_sha }}";
@@ -110,16 +107,18 @@ describe("mobile-analysis orchestration", () => {
     expect(workflow).toContain(`revision: ${deploymentRevisionExpression}`);
     expect(workflow).toContain("github.event.workflow_run.conclusion == 'success'");
     expect(workflow).toContain("prioritize:");
-    expect(workflow).toContain("github.event_name == 'workflow_run' && needs.analyze.result == 'success'");
+    expect(workflow).toContain(
+      "github.event_name == 'workflow_run' && needs.analyze.result == 'success'",
+    );
     expect(workflow).toContain(`uses: ${checkoutRef}`);
     expect(workflow).toContain(`ref: ${deploymentHeadShaExpression}`);
     expect(workflow).toContain(`uses: ${downloadArtifactRef}`);
     expect(workflow).toContain("name: mobile-analysis");
     expect(workflow).toContain("path: mobile-analysis-output");
+    expect(workflow).toContain(`MOBILE_ANALYSIS_EXPECTED_REVISION: ${deploymentHeadShaExpression}`);
     expect(workflow).toContain(
-      `MOBILE_ANALYSIS_EXPECTED_REVISION: ${deploymentHeadShaExpression}`,
+      'readFileSync("mobile-analysis-output/agent-findings.json", "utf8")',
     );
-    expect(workflow).toContain('readFileSync("mobile-analysis-output/agent-findings.json", "utf8")');
     expect(workflow).toContain('report.producer !== "mobile-analysis"');
     expect(workflow).toContain("report.revision !== expected");
     expect(workflow).toContain(`uses: ${codingToolingRef}`);
@@ -148,9 +147,7 @@ describe("mobile-analysis orchestration", () => {
       expectationVersion: 2,
     });
     expect((findings[0] as { scaffold?: unknown }).scaffold).toBeUndefined();
-    expect((findings[0] as { message: string }).message).toContain(
-      "same-run evidence provenance",
-    );
+    expect((findings[0] as { message: string }).message).toContain("same-run evidence provenance");
   });
 
   test("rejects orchestration that can run after an unsuccessful deployment", () => {

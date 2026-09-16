@@ -121,7 +121,7 @@ describe("expectation detector registry contract", () => {
       ["deployment-runtime-parity", 1],
       ["dotnet-type-assignability", 1],
       ["javascript-source-test", 1],
-      ["mobile-analysis-orchestration", 1],
+      ["mobile-analysis-orchestration", 2],
       ["package-aggregate-check", 1],
       ["package-cli-wiring", 1],
       ["package-test-capability", 1],
