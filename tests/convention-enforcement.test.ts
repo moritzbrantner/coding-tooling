@@ -162,6 +162,37 @@ describe("installed convention enforcement", () => {
     expect(trackedOutputFailed.diagnostics[0]?.message).toContain(
       "dist/index.js: use LF line endings",
     );
+
+    writeFileSync(join(dist, "index.js"), "export const built = true;\n");
+    const submodule = join(root, "vendor", "module");
+    mkdirSync(submodule, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: submodule });
+    writeFileSync(join(submodule, "README.md"), "fixture\n");
+    execFileSync("git", ["add", "."], { cwd: submodule });
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-qm",
+        "fixture",
+      ],
+      { cwd: submodule },
+    );
+    const submoduleSha = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: submodule,
+      encoding: "utf8",
+    }).trim();
+    execFileSync(
+      "git",
+      ["update-index", "--add", "--cacheinfo", "160000," + submoduleSha + ",vendor/module"],
+      { cwd: root },
+    );
+
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
   });
 
   test("requires immutable external CI action revisions", () => {
@@ -227,6 +258,27 @@ describe("installed convention enforcement", () => {
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");
     expect(failed.diagnostics[0]?.message).toContain("Foo and foo");
+  });
+
+  test("checks tracked case collisions inside ignored output directories", () => {
+    const root = repository();
+    enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
+    const dist = join(root, "dist");
+    mkdirSync(join(dist, "foo"), { recursive: true });
+    try {
+      mkdirSync(join(dist, "Foo"));
+    } catch (error) {
+      if ((error as { code?: string }).code === "EEXIST") return;
+      throw error;
+    }
+    writeFileSync(join(dist, "Foo", "a.ts"), "export {};\n");
+    writeFileSync(join(dist, "foo", "b.ts"), "export {};\n");
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["add", "."], { cwd: root });
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("dist/Foo and dist/foo");
   });
 
   test("requires Vitest execution kind in filenames and scripts", () => {
