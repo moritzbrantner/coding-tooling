@@ -14,8 +14,7 @@ const pagesDeploymentPattern =
 const mobileAnalysisCallPattern =
   /moritzbrantner\/mobile-analysis\/\.github\/workflows\/analyze\.yml@[0-9a-f]{40}/i;
 const completedWorkflowRunPattern = /types:\s*(?:\[\s*completed\s*\]|\r?\n\s*-\s*completed)/i;
-const successfulWorkflowRunPattern =
-  /workflow_run\.conclusion\s*==\s*["']success["']/i;
+const successfulWorkflowRunPattern = /workflow_run\.conclusion\s*==\s*["']success["']/i;
 
 type PagesWorkflow = {
   path: string;
