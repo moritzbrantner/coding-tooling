@@ -394,9 +394,12 @@ function performanceContractValidationError(value: unknown): string | undefined 
         return `${metricPrefix}.direction must be lower or higher`;
       if (!performanceSignals.has(String(metric.signal)))
         return `${metricPrefix}.signal is not supported`;
-      if (typeof metric.blocking !== "boolean")
-        return `${metricPrefix}.blocking must be boolean`;
-      if (metric.blocking === true && metric.signal === "wall-clock" && !nonEmptyString(metric.notes))
+      if (typeof metric.blocking !== "boolean") return `${metricPrefix}.blocking must be boolean`;
+      if (
+        metric.blocking === true &&
+        metric.signal === "wall-clock" &&
+        !nonEmptyString(metric.notes)
+      )
         return `${metricPrefix} uses blocking wall-clock evidence without documenting the controlled execution boundary`;
     }
   }
@@ -424,8 +427,7 @@ function requiredPerformanceContractFindings(root: string): RawFinding[] {
         requirement: {
           kind: "file" as const,
           key: "performance-contract",
-          description:
-            "a .performance/contract.json for repositories that require benchmark:smoke",
+          description: "a .performance/contract.json for repositories that require benchmark:smoke",
           expectedArtifact: relativeContractPath,
         },
         message: "benchmark:smoke is required but .performance/contract.json is missing",
