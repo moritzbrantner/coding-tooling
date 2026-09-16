@@ -13,6 +13,9 @@ const pagesDeploymentPattern =
   /(?:actions\/upload-pages-artifact|actions\/deploy-pages|deploy-pages\.ya?ml|pages:\s*write)/i;
 const mobileAnalysisCallPattern =
   /moritzbrantner\/mobile-analysis\/\.github\/workflows\/analyze\.yml@[0-9a-f]{40}/i;
+const completedWorkflowRunPattern = /types:\s*(?:\[\s*completed\s*\]|\r?\n\s*-\s*completed)/i;
+const successfulWorkflowRunPattern =
+  /workflow_run\.conclusion\s*==\s*["']success["']/i;
 
 type PagesWorkflow = {
   path: string;
@@ -82,9 +85,10 @@ function parseConfig(root: string): { config?: MobileAnalysisConfig; error?: str
     if (typeof baseUrl !== "string" || !baseUrl.trim()) {
       return { error: `${configName}.target.baseUrl must be a non-empty string` };
     }
+    const targetUrl = baseUrl.trim();
     let parsed: URL;
     try {
-      parsed = new URL(baseUrl);
+      parsed = new URL(targetUrl);
     } catch {
       return { error: `${configName}.target.baseUrl must be a valid URL` };
     }
@@ -102,7 +106,7 @@ function parseConfig(root: string): { config?: MobileAnalysisConfig; error?: str
     }
     return {
       config: {
-        targetUrl: baseUrl,
+        targetUrl,
         runUnlighthouse: enabled ?? true,
       },
     };
@@ -119,8 +123,13 @@ function scalar(content: string, key: string): string | undefined {
   return value ? unquote(value) : undefined;
 }
 
-function referencesWorkflow(content: string, page: PagesWorkflow): boolean {
-  return content.includes("workflow_run:") && content.includes(page.name);
+function referencesSuccessfulDeployment(content: string, page: PagesWorkflow): boolean {
+  return (
+    content.includes("workflow_run:") &&
+    content.includes(page.name) &&
+    completedWorkflowRunPattern.test(content) &&
+    successfulWorkflowRunPattern.test(content)
+  );
 }
 
 function analysisWorkflowPaths(root: string): Array<{ path: string; content: string }> {
@@ -143,7 +152,7 @@ function isCorrectlyWired(
 ): boolean {
   return (
     mobileAnalysisCallPattern.test(content) &&
-    referencesWorkflow(content, page) &&
+    referencesSuccessfulDeployment(content, page) &&
     scalar(content, "target_url") === config.targetUrl &&
     scalar(content, "config_path") === configName &&
     scalar(content, "run_unlighthouse") === String(config.runUnlighthouse)
@@ -246,7 +255,7 @@ export function mobileAnalysisOrchestrationFindings({ root }: DetectorContext): 
       {
         ...shared,
         message:
-          "mobile-analysis orchestration exists but does not match the configured target, Pages trigger, or exact reusable-workflow contract",
+          "mobile-analysis orchestration exists but does not match the configured target, successful Pages trigger, or exact reusable-workflow contract",
       },
     ];
   }
