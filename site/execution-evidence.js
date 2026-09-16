@@ -528,10 +528,7 @@ function packageScriptInvocationMatches(value, command) {
 
 function obviousShellSuppression(value) {
   const normalized = normalizeCommand(value);
-  return (
-    /\|\|\s*(?:true|:|exit\s+0)\s*$/.test(normalized) ||
-    /(?:^|\s)&(?:\s|$)/.test(normalized)
-  );
+  return /\|\|\s*(?:true|:|exit\s+0)\s*$/.test(normalized) || /(?:^|\s)&(?:\s|$)/.test(normalized);
 }
 
 function shellCommandMatches(value, command) {

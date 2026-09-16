@@ -511,7 +511,8 @@ function resolvePackageScriptValidation(
       if (!bounded) return [];
       continue;
     }
-    if (typeof scripts[referencedScript] !== "string" || !scripts[referencedScript].trim()) return [];
+    if (typeof scripts[referencedScript] !== "string" || !scripts[referencedScript].trim())
+      return [];
     const canonicalReference = `${manager} run ${referencedScript}`;
     const declaredReference = declaredCommands.some(
       (declared) => declared.command === canonicalReference,
