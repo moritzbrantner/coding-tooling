@@ -167,7 +167,11 @@ export function mobileAnalysisOrchestrationFindings({ root }: DetectorContext): 
   const parsed = parseConfig(root);
   const analyzerWorkflows = analysisWorkflowPaths(root);
   const evidence = [
-    { kind: "config" as const, path: configName, detail: "mobile-analysis is explicitly configured" },
+    {
+      kind: "config" as const,
+      path: configName,
+      detail: "mobile-analysis is explicitly configured",
+    },
     ...pages.map((page) => ({
       kind: "config" as const,
       path: page.path,
@@ -187,7 +191,8 @@ export function mobileAnalysisOrchestrationFindings({ root }: DetectorContext): 
         requirement: {
           kind: "wiring" as const,
           key: "mobile-analysis-orchestration",
-          description: "mobile-analysis has a valid post-deployment target and orchestration workflow",
+          description:
+            "mobile-analysis has a valid post-deployment target and orchestration workflow",
         },
         message: parsed.error ?? `${configName} is invalid`,
         evidence,
@@ -240,7 +245,8 @@ export function mobileAnalysisOrchestrationFindings({ root }: DetectorContext): 
     return [
       {
         ...shared,
-        message: "mobile-analysis orchestration exists but does not match the configured target, Pages trigger, or exact reusable-workflow contract",
+        message:
+          "mobile-analysis orchestration exists but does not match the configured target, Pages trigger, or exact reusable-workflow contract",
       },
     ];
   }
