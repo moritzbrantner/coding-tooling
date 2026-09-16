@@ -406,19 +406,20 @@ function trackedRepositoryFiles(root: string): RepositoryFile[] | undefined {
 }
 
 function repositoryFiles(root: string): RepositoryFile[] {
+  const walked = walkFiles(root, 20)
+    .map((absolutePath) => ({
+      absolutePath,
+      relativePath: relative(root, absolutePath).replaceAll("\\", "/"),
+    }))
+    .filter((file) => !file.relativePath.startsWith(".conventions/"));
   const tracked = trackedRepositoryFiles(root);
-  if (tracked) {
-    return tracked.filter((file) => !file.relativePath.startsWith(".conventions/"));
-  }
+  if (!tracked) return sortRepositoryFiles(walked);
 
-  return sortRepositoryFiles(
-    walkFiles(root, 20)
-      .map((absolutePath) => ({
-        absolutePath,
-        relativePath: relative(root, absolutePath).replaceAll("\\", "/"),
-      }))
-      .filter((file) => !file.relativePath.startsWith(".conventions/")),
-  );
+  const files = new Map(walked.map((file) => [file.relativePath, file]));
+  for (const file of tracked) {
+    if (!file.relativePath.startsWith(".conventions/")) files.set(file.relativePath, file);
+  }
+  return sortRepositoryFiles([...files.values()]);
 }
 
 function textHygieneFiles(root: string): RepositoryFile[] {

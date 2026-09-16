@@ -260,6 +260,25 @@ describe("installed convention enforcement", () => {
     expect(failed.diagnostics[0]?.message).toContain("Foo and foo");
   });
 
+  test("still checks untracked working-tree paths after Git initialization", () => {
+    const root = repository();
+    enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    mkdirSync(join(root, "foo"), { recursive: true });
+    try {
+      mkdirSync(join(root, "Foo"));
+    } catch (error) {
+      if ((error as { code?: string }).code === "EEXIST") return;
+      throw error;
+    }
+    writeFileSync(join(root, "Foo", "a.ts"), "export {};\n");
+    writeFileSync(join(root, "foo", "b.ts"), "export {};\n");
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("Foo and foo");
+  });
+
   test("checks tracked case collisions inside ignored output directories", () => {
     const root = repository();
     enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
