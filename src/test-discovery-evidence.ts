@@ -3,12 +3,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Glob, TOML } from "bun";
 
 import type { Capability } from "./model.ts";
-import {
-  type CommandResult,
-  relativePosix,
-  runCommand,
-  walkFiles,
-} from "./shared.ts";
+import { type CommandResult, relativePosix, runCommand, walkFiles } from "./shared.ts";
 import {
   isTestCapability,
   resolveTestRunner,
@@ -222,7 +217,12 @@ function bunDiscoveryConfig(cwd: string): BunDiscoveryConfig {
     const test = parsed.test as { root?: unknown; pathIgnorePatterns?: unknown };
     const root = test.root === undefined ? "." : test.root;
     if (typeof root !== "string" || !root.trim()) {
-      return { status: "incomplete", root: ".", ignorePatterns: [], reason: "bunfig-test-root-invalid" };
+      return {
+        status: "incomplete",
+        root: ".",
+        ignorePatterns: [],
+        reason: "bunfig-test-root-invalid",
+      };
     }
     const ignore = test.pathIgnorePatterns;
     const ignorePatterns =
@@ -249,7 +249,12 @@ function bunDiscoveryConfig(cwd: string): BunDiscoveryConfig {
 
 function bunArguments(command: readonly string[]): BunArguments {
   if (command[0] !== "bun" || command[1] !== "test") {
-    return { status: "incomplete", filters: [], ignorePatterns: null, reason: "bun-command-unavailable" };
+    return {
+      status: "incomplete",
+      filters: [],
+      ignorePatterns: null,
+      reason: "bun-command-unavailable",
+    };
   }
 
   const filters: string[] = [];
@@ -287,14 +292,24 @@ function bunArguments(command: readonly string[]): BunArguments {
     }
     if (bunValueFlags.has(value)) {
       if (!command[index + 1]) {
-        return { status: "incomplete", filters, ignorePatterns: null, reason: "bun-option-value-missing" };
+        return {
+          status: "incomplete",
+          filters,
+          ignorePatterns: null,
+          reason: "bun-option-value-missing",
+        };
       }
       index += 1;
       continue;
     }
     if (bunBooleanFlags.has(value) || value.startsWith("--coverage-reporter=")) continue;
     if (value.startsWith("-")) {
-      return { status: "incomplete", filters, ignorePatterns: null, reason: "bun-option-unsupported" };
+      return {
+        status: "incomplete",
+        filters,
+        ignorePatterns: null,
+        reason: "bun-option-unsupported",
+      };
     }
     filters.push(value);
   }
@@ -312,7 +327,8 @@ function bunFilterMatches(cwd: string, local: string, filters: readonly string[]
   const absolute = resolve(cwd, local);
   return filters.some((filter) => {
     if (isAbsolute(filter)) return resolve(filter) === absolute;
-    return local.includes(filter.replace(/^\.\//, ""));
+    if (filter.startsWith("./")) return local === filter.slice(2).replaceAll("\\", "/");
+    return local.includes(filter);
   });
 }
 
@@ -335,7 +351,13 @@ function bunDiscovery(
 
   const testRoot = resolve(input.cwd, config.root);
   if (!pathInside(input.cwd, testRoot))
-    return incompleteEvidence("bun", candidates, "bun-test-root-outside-component", "bun-dry-run", null);
+    return incompleteEvidence(
+      "bun",
+      candidates,
+      "bun-test-root-outside-component",
+      "bun-dry-run",
+      null,
+    );
 
   const ignorePatterns = args.ignorePatterns ?? config.ignorePatterns;
   let discovered: string[];
@@ -347,7 +369,13 @@ function bunDiscovery(
       return bunFilterMatches(input.cwd, local, args.filters);
     });
   } catch {
-    return incompleteEvidence("bun", candidates, "bun-ignore-pattern-unsupported", "bun-dry-run", null);
+    return incompleteEvidence(
+      "bun",
+      candidates,
+      "bun-ignore-pattern-unsupported",
+      "bun-dry-run",
+      null,
+    );
   }
 
   const dryRunCommand = command.includes("--dry-run") ? [...command] : [...command, "--dry-run"];
@@ -379,8 +407,11 @@ function vitestListCommand(command: readonly string[]): string[] | null {
   let rest = command.slice(vitestIndex + 1);
   const subcommand = rest[0];
   if (subcommand === "run") rest = rest.slice(1);
-  else if (["watch", "dev", "related", "bench", "init", "doctor"].includes(subcommand ?? "")) return null;
-  rest = rest.filter((value) => value !== "--run" && value !== "--watch" && value !== "--filesOnly");
+  else if (["watch", "dev", "related", "bench", "init", "doctor"].includes(subcommand ?? ""))
+    return null;
+  rest = rest.filter(
+    (value) => value !== "--run" && value !== "--watch" && value !== "--filesOnly",
+  );
   return [...prefix, "list", ...rest, "--filesOnly"];
 }
 
@@ -394,12 +425,14 @@ function vitestDiscoveredFiles(
     const value = raw.replace(ansiEscapePattern, "").trim();
     if (!value) continue;
     const absolute = isAbsolute(value) ? resolve(value) : resolve(cwd, value);
-    if (!pathInside(cwd, absolute)) return { status: "incomplete", reason: "vitest-discovery-outside-component" };
+    if (!pathInside(cwd, absolute))
+      return { status: "incomplete", reason: "vitest-discovery-outside-component" };
     const local = relativePosix(cwd, absolute);
     if (excludedByComponentBoundary(local, excludedSubtrees)) {
       return { status: "incomplete", reason: "vitest-discovery-cross-component" };
     }
-    if (!existsSync(absolute)) return { status: "incomplete", reason: "vitest-discovery-path-unreadable" };
+    if (!existsSync(absolute))
+      return { status: "incomplete", reason: "vitest-discovery-path-unreadable" };
     files.push(local);
   }
   return { status: "available", files: [...new Set(files)].sort() };
@@ -414,7 +447,13 @@ function vitestDiscovery(
 ): TestDiscoveryEvidence {
   const listCommand = vitestListCommand(command);
   if (!listCommand)
-    return incompleteEvidence("vitest", candidates, "vitest-list-command-unsupported", "vitest-list", null);
+    return incompleteEvidence(
+      "vitest",
+      candidates,
+      "vitest-list-command-unsupported",
+      "vitest-list",
+      null,
+    );
   const native = runner(listCommand[0]!, listCommand.slice(1), input.cwd);
   if (native.error || native.status !== 0) {
     return incompleteEvidence(
@@ -471,6 +510,15 @@ export function reconcileTestScope(
       discoveredFiles: discovery?.discoveredFileCount ?? null,
       executedFiles: execution?.executedFiles ?? null,
       reason: discovery ? "execution-evidence-unavailable" : "discovery-evidence-unavailable",
+    };
+  }
+  if (discovery.reason === "vitest-discovery-cross-component") {
+    return {
+      schemaVersion: 1,
+      status: "mismatch",
+      discoveredFiles: discovery.discoveredFileCount,
+      executedFiles: execution.executedFiles,
+      reason: "native-discovery-cross-component",
     };
   }
   if (discovery.status !== "available") {

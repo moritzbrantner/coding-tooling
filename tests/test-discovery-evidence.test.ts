@@ -69,14 +69,34 @@ describe("native test discovery evidence", () => {
     expect(runner.calls).toEqual([["bun", "test", "--dry-run"]]);
   });
 
+  test("treats an explicit Bun file path as an exact filter", () => {
+    const root = repository();
+    file(root, "tests/alpha.test.ts");
+    file(root, "tests/alpha-extra.test.ts");
+    const runner = successfulRunner();
+
+    const result = collectTestDiscoveryEvidence(
+      {
+        cwd: root,
+        capability: "test:unit",
+        command: ["bun", "test", "./tests/alpha.test.ts"],
+      },
+      runner.run,
+    );
+
+    expect(result).toMatchObject({
+      status: "available",
+      discoveredFileCount: 1,
+      discoveredFiles: ["tests/alpha.test.ts"],
+      excludedFileCount: 1,
+    });
+  });
+
   test("reports conventional Bun tests excluded by runner configuration", () => {
     const root = repository();
     file(root, "kept.test.ts");
     file(root, "ignored/hidden.test.ts");
-    writeFileSync(
-      join(root, "bunfig.toml"),
-      '[test]\npathIgnorePatterns = ["ignored/**"]\n',
-    );
+    writeFileSync(join(root, "bunfig.toml"), '[test]\npathIgnorePatterns = ["ignored/**"]\n');
     const runner = successfulRunner();
 
     const result = collectTestDiscoveryEvidence(
@@ -173,6 +193,18 @@ describe("native test discovery evidence", () => {
       status: "incomplete",
       runner: "vitest",
       reason: "vitest-discovery-cross-component",
+    });
+
+    const execution = collectTestExecutionEvidence({
+      cwd: root,
+      capability: "test:unit",
+      command: ["vitest", "run"],
+      stdout: "Test Files  1 passed (1)\nTests  1 passed (1)",
+      stderr: "",
+    });
+    expect(reconcileTestScope(result, execution)).toMatchObject({
+      status: "mismatch",
+      reason: "native-discovery-cross-component",
     });
   });
 

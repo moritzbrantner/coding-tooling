@@ -23,10 +23,7 @@ import {
   runCommand,
   walkFiles,
 } from "./shared.ts";
-import {
-  collectTestDiscoveryEvidence,
-  reconcileTestScope,
-} from "./test-discovery-evidence.ts";
+import { collectTestDiscoveryEvidence, reconcileTestScope } from "./test-discovery-evidence.ts";
 import { collectTestExecutionEvidence } from "./test-execution-evidence.ts";
 
 type PackageManifest = {
@@ -317,9 +314,7 @@ function nestedComponentSubtrees(
   return [...new Set(componentPaths)]
     .filter(
       (path) =>
-        path !== "." &&
-        path !== plannedPath &&
-        (plannedPath === "." || path.startsWith(prefix)),
+        path !== "." && path !== plannedPath && (plannedPath === "." || path.startsWith(prefix)),
     )
     .map((path) => relativePosix(cwd, join(root, path)))
     .filter((path) => path !== "." && !path.startsWith("../"))

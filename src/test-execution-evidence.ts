@@ -76,7 +76,8 @@ function resolveScriptRunner(
   script: string,
   seen = new Set<string>(),
 ): TestRunnerResolution {
-  if (seen.has(script)) return { runner: null, script, command: null, reason: "package-script-cycle" };
+  if (seen.has(script))
+    return { runner: null, script, command: null, reason: "package-script-cycle" };
   const command = scripts[script];
   if (typeof command !== "string" || !command.trim()) {
     return { runner: null, script, command: null, reason: "package-script-missing" };
@@ -100,10 +101,7 @@ function resolveScriptRunner(
   return resolveScriptRunner(scripts, wrapped, nextSeen);
 }
 
-export function resolveTestRunner(
-  cwd: string,
-  command: readonly string[],
-): TestRunnerResolution {
+export function resolveTestRunner(cwd: string, command: readonly string[]): TestRunnerResolution {
   if (command[0] === "bun" && command[1] === "test") {
     return { runner: "bun", script: null, command: [...command], reason: "native-command" };
   }
