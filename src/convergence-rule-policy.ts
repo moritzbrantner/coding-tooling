@@ -9,7 +9,10 @@ export type ConvergenceRuleMode = (typeof convergenceRuleModes)[number];
 
 export type ConvergenceRuleNamespace = "generator" | "scaffold" | "refactor" | "normalizer";
 
-export const builtInScaffoldRuleIds = ["scaffold.typescript-source-test"] as const;
+export const builtInScaffoldRuleIds = [
+  "scaffold.mobile-analysis-orchestration",
+  "scaffold.typescript-source-test",
+] as const;
 export const builtInRefactorRuleIds = ["refactor.typescript-barrel-export"] as const;
 export const builtInNormalizerRuleIds = [
   "normalizer.oxfmt",
