@@ -62,9 +62,7 @@ function writeContract(root: string): void {
               scenarioId: "settings",
               url: "https://example.com/app/",
             },
-            evidence: [
-              { kind: "screenshot", value: "screenshots/pixel-settings-final.png" },
-            ],
+            evidence: [{ kind: "screenshot", value: "screenshots/pixel-settings-final.png" }],
           },
         ],
       },
