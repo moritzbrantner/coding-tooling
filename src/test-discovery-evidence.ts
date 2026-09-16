@@ -491,7 +491,9 @@ export function collectTestDiscoveryEvidence(
     return incompleteEvidence(
       resolution.runner,
       candidates,
-      "native-runner-command-not-safely-resolved",
+      resolution.reason === "native-runner-resolved"
+        ? "native-runner-command-not-safely-resolved"
+        : resolution.reason,
     );
   }
   return resolution.runner === "bun"

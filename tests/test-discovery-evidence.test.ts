@@ -165,6 +165,40 @@ describe("native test discovery evidence", () => {
     });
   });
 
+  test("keeps forwarded package-script discovery scope incomplete", () => {
+    const root = repository({
+      "test:unit": "bun run test:implementation -- ./tests/alpha.test.ts",
+      "test:implementation": "bun test",
+    });
+    file(root, "tests/alpha.test.ts");
+    file(root, "tests/beta.test.ts");
+    const runner = successfulRunner();
+
+    const discovery = collectTestDiscoveryEvidence(
+      {
+        cwd: root,
+        capability: "test:unit",
+        command: ["bun", "run", "test:unit"],
+      },
+      runner.run,
+    );
+    const execution = collectTestExecutionEvidence({
+      cwd: root,
+      capability: "test:unit",
+      command: ["bun", "run", "test:unit"],
+      stdout: "1 pass\n0 fail\nRan 1 test across 1 file.",
+      stderr: "",
+    });
+
+    expect(discovery).toMatchObject({
+      status: "incomplete",
+      runner: "bun",
+      reason: "package-script-forwarded-arguments-unresolved",
+    });
+    expect(runner.calls).toEqual([]);
+    expect(execution).toMatchObject({ status: "available", runner: "bun", executedFiles: 1 });
+  });
+
   test("uses Vitest's native files-only listing as authoritative discovery", () => {
     const root = repository();
     file(root, "tests/included.test.ts");

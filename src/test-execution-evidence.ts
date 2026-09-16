@@ -66,9 +66,15 @@ function simpleCommandTokens(command: string): string[] | null {
   return tokens.length > 0 ? tokens : null;
 }
 
-function wrapperScript(command: string): string | undefined {
-  const match = /^(?:bun|npm)\s+run\s+([A-Za-z0-9:_-]+)(?:\s+--(?:\s+.*)?)?$/.exec(command.trim());
-  return match?.[1];
+type PackageScriptWrapper = {
+  script: string;
+  forwardsArguments: boolean;
+};
+
+function wrapperScript(command: string): PackageScriptWrapper | undefined {
+  const match = /^(?:bun|npm)\s+run\s+([A-Za-z0-9:_-]+)(\s+--(?:\s+.*)?)?$/.exec(command.trim());
+  if (!match) return undefined;
+  return { script: match[1]!, forwardsArguments: Boolean(match[2]) };
 }
 
 function resolveScriptRunner(
@@ -98,7 +104,15 @@ function resolveScriptRunner(
     return { runner: null, script, command: null, reason: "package-script-runner-unrecognized" };
   const nextSeen = new Set(seen);
   nextSeen.add(script);
-  return resolveScriptRunner(scripts, wrapped, nextSeen);
+  const resolved = resolveScriptRunner(scripts, wrapped.script, nextSeen);
+  if (wrapped.forwardsArguments && resolved.runner) {
+    return {
+      ...resolved,
+      command: null,
+      reason: "package-script-forwarded-arguments-unresolved",
+    };
+  }
+  return resolved;
 }
 
 export function resolveTestRunner(cwd: string, command: readonly string[]): TestRunnerResolution {
@@ -127,7 +141,15 @@ export function resolveTestRunner(cwd: string, command: readonly string[]): Test
   const manifest = readJson<PackageManifest>(manifestPath);
   if (!manifest?.scripts)
     return { runner: null, script, command: null, reason: "package-scripts-unavailable" };
-  return resolveScriptRunner(manifest.scripts, script);
+  const resolved = resolveScriptRunner(manifest.scripts, script);
+  if (command.length > 3 && resolved.runner) {
+    return {
+      ...resolved,
+      command: null,
+      reason: "package-script-invocation-arguments-unresolved",
+    };
+  }
+  return resolved;
 }
 
 function count(text: string, pattern: RegExp): number | null {
