@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import { runConventionChecks } from "../src/convention-enforcement.ts";
@@ -162,6 +162,67 @@ describe("installed convention enforcement", () => {
     expect(trackedOutputFailed.diagnostics[0]?.message).toContain(
       "dist/index.js: use LF line endings",
     );
+
+    writeFileSync(join(dist, "index.js"), "export const built = true;\n");
+    const submodule = join(root, "vendor", "module");
+    mkdirSync(submodule, { recursive: true });
+    execFileSync("git", ["init", "-q"], { cwd: submodule });
+    writeFileSync(join(submodule, "README.md"), "fixture\n");
+    execFileSync("git", ["add", "."], { cwd: submodule });
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "-qm",
+        "fixture",
+      ],
+      { cwd: submodule },
+    );
+    const submoduleSha = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: submodule,
+      encoding: "utf8",
+    }).trim();
+    execFileSync(
+      "git",
+      ["update-index", "--add", "--cacheinfo", "160000," + submoduleSha + ",vendor/module"],
+      { cwd: root },
+    );
+
+    expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+  });
+
+  test("parses tracked workflow paths containing newlines", () => {
+    if (process.platform === "win32") return;
+    const root = repository();
+    enforce(root, "SEC-005", { kind: "builtin", check: "ci-action-pins" });
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    const workflow = join(root, ".github", "workflows", "bad\nname.yml");
+    mkdirSync(dirname(workflow), { recursive: true });
+    writeFileSync(workflow, "steps:\n  - uses: actions/checkout@v6\n");
+    execFileSync("git", ["add", "."], { cwd: root });
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("external action must use a full commit SHA");
+  });
+
+  test("fails closed when a tracked workflow cannot be read", () => {
+    const root = repository();
+    enforce(root, "SEC-005", { kind: "builtin", check: "ci-action-pins" });
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    const workflow = join(root, ".github", "workflows", "missing.yml");
+    mkdirSync(dirname(workflow), { recursive: true });
+    writeFileSync(workflow, "steps:\n  - uses: actions/checkout@v6\n");
+    execFileSync("git", ["add", "."], { cwd: root });
+    rmSync(workflow);
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("tracked workflow could not be read");
   });
 
   test("requires immutable external CI action revisions", () => {
@@ -227,6 +288,46 @@ describe("installed convention enforcement", () => {
     const failed = runConventionChecks(root, discoverComponents(root));
     expect(failed.status).toBe("failed");
     expect(failed.diagnostics[0]?.message).toContain("Foo and foo");
+  });
+
+  test("still checks untracked working-tree paths after Git initialization", () => {
+    const root = repository();
+    enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    mkdirSync(join(root, "foo"), { recursive: true });
+    try {
+      mkdirSync(join(root, "Foo"));
+    } catch (error) {
+      if ((error as { code?: string }).code === "EEXIST") return;
+      throw error;
+    }
+    writeFileSync(join(root, "Foo", "a.ts"), "export {};\n");
+    writeFileSync(join(root, "foo", "b.ts"), "export {};\n");
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("Foo and foo");
+  });
+
+  test("checks tracked case collisions inside ignored output directories", () => {
+    const root = repository();
+    enforce(root, "REPO-013", { kind: "builtin", check: "case-portability" });
+    const dist = join(root, "dist");
+    mkdirSync(join(dist, "foo"), { recursive: true });
+    try {
+      mkdirSync(join(dist, "Foo"));
+    } catch (error) {
+      if ((error as { code?: string }).code === "EEXIST") return;
+      throw error;
+    }
+    writeFileSync(join(dist, "Foo", "a.ts"), "export {};\n");
+    writeFileSync(join(dist, "foo", "b.ts"), "export {};\n");
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["add", "."], { cwd: root });
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("dist/Foo and dist/foo");
   });
 
   test("requires Vitest execution kind in filenames and scripts", () => {
