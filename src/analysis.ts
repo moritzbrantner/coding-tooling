@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
 
 import { dotNetRoslynAnalysisProvider } from "./analysis-dotnet.ts";
+import { mobileAnalysisProvider } from "./analysis-mobile.ts";
 import type {
   AnalysisAction,
   AnalysisDiagnostic,
@@ -18,6 +19,7 @@ export type AnalysisData = {
 
 export const analysisProviders: readonly AnalysisProvider[] = [
   dotNetRoslynAnalysisProvider,
+  mobileAnalysisProvider,
   typeScriptAnalysisProvider,
 ];
 

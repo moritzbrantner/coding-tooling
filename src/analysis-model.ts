@@ -19,6 +19,7 @@ export type AnalysisDiagnostic = {
   message: string;
   project?: string;
   location?: AnalysisLocation;
+  metadata?: Record<string, unknown>;
 };
 
 export type AnalysisFileReplacement = {

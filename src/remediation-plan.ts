@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { analyzeProvider } from "./analysis.ts";
+import type { AnalysisDiagnostic } from "./analysis-model.ts";
 import {
   convergenceRuleModeForPlanning,
   scaffoldRuleId,
@@ -147,6 +149,110 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
   };
 }
 
+type MobileDiagnosticMetadata = {
+  category?: unknown;
+  context?: unknown;
+  evidence?: unknown;
+};
+
+function mobileScenarioId(diagnostic: AnalysisDiagnostic): string | undefined {
+  const metadata = diagnostic.metadata as MobileDiagnosticMetadata | undefined;
+  const context = metadata?.context;
+  if (typeof context !== "object" || context === null || Array.isArray(context)) return undefined;
+  const scenarioId = (context as Record<string, unknown>).scenarioId;
+  return typeof scenarioId === "string" && scenarioId.length > 0 ? scenarioId : undefined;
+}
+
+function mobileCategory(diagnostic: AnalysisDiagnostic): string | undefined {
+  const category = (diagnostic.metadata as MobileDiagnosticMetadata | undefined)?.category;
+  return typeof category === "string" && category.length > 0 ? category : undefined;
+}
+
+function mobileEvidencePaths(diagnostic: AnalysisDiagnostic): string[] {
+  const metadata = diagnostic.metadata as MobileDiagnosticMetadata | undefined;
+  if (!Array.isArray(metadata?.evidence)) return [];
+  return metadata.evidence.flatMap((value) => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return [];
+    const evidence = value as Record<string, unknown>;
+    if (
+      (evidence.kind !== "artifact" && evidence.kind !== "screenshot") ||
+      typeof evidence.value !== "string" ||
+      !evidence.value
+    ) {
+      return [];
+    }
+    return [`mobile-analysis-output/${evidence.value}`];
+  });
+}
+
+function mobileAnalysisCandidates(root: string): RemediationCandidate[] {
+  const provider = analyzeProvider(root, "mobile-analysis");
+  if (!provider || provider.status !== "applied" || provider.diagnostics.length === 0) return [];
+
+  const bySubject = new Map<string, AnalysisDiagnostic[]>();
+  for (const diagnostic of provider.diagnostics) {
+    const scenarioId = mobileScenarioId(diagnostic);
+    const key = scenarioId ? `mobile-scenario:${scenarioId}` : `mobile-finding:${diagnostic.code}`;
+    const current = bySubject.get(key) ?? [];
+    current.push(diagnostic);
+    bySubject.set(key, current);
+  }
+
+  return [...bySubject.entries()].map(([subjectKey, diagnostics]) => {
+    const ordered = [...diagnostics].sort(
+      (left, right) =>
+        severityRank[left.severity] - severityRank[right.severity] ||
+        left.code.localeCompare(right.code),
+    );
+    const ids = ordered.map((diagnostic) => diagnostic.code);
+    const id = candidateId(ids);
+    const scenarioId = mobileScenarioId(ordered[0]!);
+    const severities = [...new Set(ordered.map((diagnostic) => diagnostic.severity))].sort(
+      (left, right) => severityRank[left] - severityRank[right],
+    );
+    const categories = [
+      ...new Set(ordered.flatMap((diagnostic) => mobileCategory(diagnostic) ?? [])),
+    ].sort();
+    const relatedFiles = [
+      ...new Set(
+        ordered.flatMap((diagnostic) => [
+          ...(diagnostic.location?.path ? [diagnostic.location.path] : []),
+          ...mobileEvidencePaths(diagnostic),
+        ]),
+      ),
+      ...provider.projects,
+    ]
+      .filter((value, index, all) => all.indexOf(value) === index)
+      .sort();
+    const subject: Finding["subject"] = {
+      kind: "repository",
+      key: subjectKey,
+      description: scenarioId
+        ? `mobile scenario ${scenarioId}`
+        : `mobile finding ${ordered[0]!.code}`,
+    };
+    const priority = Math.min(...ordered.map((diagnostic) => severityRank[diagnostic.severity]));
+    const nonInfo = ordered.some((diagnostic) => diagnostic.severity !== "info");
+
+    return {
+      id,
+      kind: nonInfo ? "implementation" : "review",
+      priority,
+      subject,
+      summary: `Resolve mobile-analysis${categories.length > 0 ? ` ${categories.join("/")}` : ""} finding${ordered.length === 1 ? "" : "s"} for ${subject.description}`,
+      findingIds: ids,
+      expectationIds: ["mobile-analysis"],
+      severities,
+      relatedFiles,
+      verification: [["coding-tooling", "analyze", "--json"]],
+      scaffolds: [],
+      convergenceRules: [],
+      requiresAgent: true,
+      suggestedBranch: `remediate/${branchToken(subject.key)}-${id.slice(-6).toLowerCase()}`,
+    };
+  });
+}
+
 export function planRemediationCandidates(
   findings: Finding[],
   options: { includeBaseline?: boolean; root?: string } = {},
@@ -162,14 +268,16 @@ export function planRemediationCandidates(
     current.push(finding);
     bySubject.set(finding.subject.key, current);
   }
-  return [...bySubject.values()]
-    .map((grouped) => candidateFor(grouped, options.root))
-    .sort(
-      (left, right) =>
-        left.priority - right.priority ||
-        left.subject.key.localeCompare(right.subject.key) ||
-        left.id.localeCompare(right.id),
-    );
+  const expectationCandidates = [...bySubject.values()].map((grouped) =>
+    candidateFor(grouped, options.root),
+  );
+  const mobileCandidates = options.root ? mobileAnalysisCandidates(options.root) : [];
+  return [...expectationCandidates, ...mobileCandidates].sort(
+    (left, right) =>
+      left.priority - right.priority ||
+      left.subject.key.localeCompare(right.subject.key) ||
+      left.id.localeCompare(right.id),
+  );
 }
 
 export function remediationPlanCommand(
