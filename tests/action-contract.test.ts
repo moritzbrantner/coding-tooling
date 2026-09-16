@@ -56,9 +56,7 @@ describe("composite action contract", () => {
 
     expect(source).toContain("remediation planning");
     expect(source).toContain('"$INPUT_OPERATION" == "remediation-plan"');
-    expect(source).toContain(
-      'remediation plan --json > "$INPUT_REPORT_PATH"',
-    );
+    expect(source).toContain('remediation plan --json > "$INPUT_REPORT_PATH"');
     expect(source).toContain('echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"');
   });
 
