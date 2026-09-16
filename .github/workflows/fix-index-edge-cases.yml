@@ -1,0 +1,32 @@
+name: Fix Index Edge Cases
+
+on:
+  push:
+    branches:
+      - fix/index-backed-convention-enforcement
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Apply and verify edge-case repairs
+        run: |
+          bun scripts/fix-index-edge-cases.mjs
+          sed -i 's/import { join } from "node:path";/import { dirname, join } from "node:path";/' tests/convention-enforcement.test.ts
+          bun run format:write
+          bun test tests/convention-enforcement.test.ts
+          bun run typecheck
+          git rm scripts/fix-index-edge-cases.mjs .github/workflows/fix-index-edge-cases.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/convention-enforcement.ts tests/convention-enforcement.test.ts
+          git commit -m "Handle Git index workflow edge cases"
+          git push origin HEAD:fix/index-backed-convention-enforcement
