@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import { runConventionChecks } from "../src/convention-enforcement.ts";
@@ -193,6 +193,35 @@ describe("installed convention enforcement", () => {
     );
 
     expect(runConventionChecks(root, discoverComponents(root)).status).toBe("passed");
+  });
+
+  test("parses tracked workflow paths containing newlines", () => {
+    const root = repository();
+    enforce(root, "SEC-005", { kind: "builtin", check: "ci-action-pins" });
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    const workflow = join(root, ".github", "workflows", "bad\nname.yml");
+    mkdirSync(dirname(workflow), { recursive: true });
+    writeFileSync(workflow, "steps:\n  - uses: actions/checkout@v6\n");
+    execFileSync("git", ["add", "."], { cwd: root });
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("external action must use a full commit SHA");
+  });
+
+  test("fails closed when a tracked workflow cannot be read", () => {
+    const root = repository();
+    enforce(root, "SEC-005", { kind: "builtin", check: "ci-action-pins" });
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    const workflow = join(root, ".github", "workflows", "missing.yml");
+    mkdirSync(dirname(workflow), { recursive: true });
+    writeFileSync(workflow, "steps:\n  - uses: actions/checkout@v6\n");
+    execFileSync("git", ["add", "."], { cwd: root });
+    rmSync(workflow);
+
+    const failed = runConventionChecks(root, discoverComponents(root));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("tracked workflow could not be read");
   });
 
   test("requires immutable external CI action revisions", () => {

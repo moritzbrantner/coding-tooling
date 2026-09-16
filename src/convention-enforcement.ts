@@ -393,9 +393,13 @@ function trackedRepositoryFiles(root: string): RepositoryFile[] | undefined {
   const files: RepositoryFile[] = [];
   for (const entry of tracked.stdout.split("\0")) {
     if (!entry) continue;
-    const match = entry.match(/^(\d{6}) [0-9a-f]+ \d+\t(.+)$/);
-    if (!match) continue;
-    const [, gitMode, relativePath] = match;
+    const separator = entry.indexOf("\t");
+    if (separator < 0) continue;
+    const metadata = entry.slice(0, separator);
+    const relativePath = entry.slice(separator + 1);
+    const match = metadata.match(/^(\d{6}) [0-9a-f]+ \d+$/);
+    if (!match || !relativePath) continue;
+    const [, gitMode] = match;
     files.push({
       absolutePath: join(root, ...relativePath.split("/")),
       relativePath,
@@ -635,12 +639,17 @@ function ciActionPins(root: string, ruleId: string): ConventionCheckResult {
       (file.relativePath.startsWith(".github/") && /\.ya?ml$/i.test(file.relativePath)) ||
       file.relativePath === "action.yml" ||
       file.relativePath === "action.yaml";
-    if (!workflowLike || file.gitMode === "160000") continue;
+    if (!workflowLike) continue;
+    if (file.gitMode === "160000" || file.gitMode === "120000") {
+      failures.push(`${file.relativePath}: tracked workflow must be a regular file`);
+      continue;
+    }
 
     let content: string;
     try {
       content = readFileSync(file.absolutePath, "utf8");
     } catch {
+      failures.push(`${file.relativePath}: tracked workflow could not be read`);
       continue;
     }
     for (const [index, line] of content.split(/\r?\n/).entries()) {
