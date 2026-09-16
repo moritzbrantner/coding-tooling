@@ -344,7 +344,12 @@ function failClosedWorkflow(workflowEvidence, content) {
             step.commands.some((candidate) => shellCommandMatches(candidate, command)),
           );
     const wrapperMatch = (workflowEvidence.matchedPackageScriptEvidence ?? []).some((wrapper) =>
-      stepRunsCommandInDirectory(step, wrapper.command, wrapper.workingDirectory),
+      stepRunsCommandInDirectory(
+        step,
+        wrapper.command,
+        wrapper.workingDirectory,
+        packageScriptInvocationMatches,
+      ),
     );
     const actionMatch = workflowEvidence.codingToolingAction && step.codingToolingAction;
     if (!commandMatch && !wrapperMatch && !actionMatch) continue;
@@ -487,25 +492,46 @@ function literalScalar(value) {
   return result || null;
 }
 
-function stepRunsCommandInDirectory(step, command, requiredWorkingDirectory) {
+function stepRunsCommandInDirectory(
+  step,
+  command,
+  requiredWorkingDirectory,
+  matches = shellCommandMatches,
+) {
   if (
     step.workingDirectory === requiredWorkingDirectory &&
-    step.commands.some((candidate) => shellCommandMatches(candidate, command))
+    step.commands.some((candidate) => matches(candidate, command))
   )
     return true;
   if (step.workingDirectory !== "." || requiredWorkingDirectory === ".") return false;
   const prefix = `cd ${requiredWorkingDirectory} && `;
   return step.commands.some((candidate) => {
     const normalized = normalizeCommand(candidate);
-    return (
-      normalized.startsWith(prefix) && shellCommandMatches(normalized.slice(prefix.length), command)
-    );
+    return normalized.startsWith(prefix) && matches(normalized.slice(prefix.length), command);
   });
+}
+
+function packageScriptInvocationMatches(value, command) {
+  const normalized = normalizeCommand(value);
+  const needle = normalizeCommand(command);
+  if (normalized === needle) return true;
+  if (!normalized.startsWith(`${needle} `)) return false;
+  const suffix = normalized.slice(needle.length).trimStart();
+  return (
+    suffix === "--" ||
+    suffix.startsWith("-- ") ||
+    suffix.startsWith("#") ||
+    /^(?:&&|\|\|)(?:\s|$)/.test(suffix) ||
+    /^&(?:\s|$)/.test(suffix)
+  );
 }
 
 function obviousShellSuppression(value) {
   const normalized = normalizeCommand(value);
-  return /\|\|\s*(?:true|:)\s*$/.test(normalized) || /(?:^|\s)&(?:\s|$)/.test(normalized);
+  return (
+    /\|\|\s*(?:true|:|exit\s+0)\s*$/.test(normalized) ||
+    /(?:^|\s)&(?:\s|$)/.test(normalized)
+  );
 }
 
 function shellCommandMatches(value, command) {
