@@ -82,25 +82,15 @@ jobs:
           execution_path.write_text(execution.replace(old_return, new_return, 1))
 
           discovery_path = Path("src/test-discovery-evidence.ts")
-          discovery = discovery_path.read_text()
-          old_reason = '''  if (!resolution.command) {
-            return incompleteEvidence(
-              resolution.runner,
-              candidates,
-              "native-runner-command-not-safely-resolved",
-            );
-          }'''
-          new_reason = '''  if (!resolution.command) {
-            return incompleteEvidence(
-              resolution.runner,
-              candidates,
-              resolution.reason === "native-runner-resolved"
-                ? "native-runner-command-not-safely-resolved"
-                : resolution.reason,
-            );
-          }'''
-          assert old_reason in discovery
-          discovery_path.write_text(discovery.replace(old_reason, new_reason, 1))
+          lines = discovery_path.read_text().splitlines()
+          reason_line = '      "native-runner-command-not-safely-resolved",'
+          reason_index = lines.index(reason_line)
+          lines[reason_index:reason_index + 1] = [
+              '      resolution.reason === "native-runner-resolved"',
+              '        ? "native-runner-command-not-safely-resolved"',
+              '        : resolution.reason,',
+          ]
+          discovery_path.write_text("\n".join(lines) + "\n")
 
           test_path = Path("tests/test-discovery-evidence.test.ts")
           tests = test_path.read_text()
