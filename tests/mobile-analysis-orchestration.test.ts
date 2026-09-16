@@ -122,8 +122,8 @@ describe("mobile-analysis orchestration", () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({
       expectationId: "mobile-analysis-orchestration",
-      scaffold: undefined,
     });
+    expect((findings[0] as { scaffold?: unknown }).scaffold).toBeUndefined();
     expect((findings[0] as { message: string }).message).toContain(
       "will not guess which deployment should trigger mobile-analysis",
     );
@@ -142,7 +142,7 @@ describe("mobile-analysis orchestration", () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({
       expectationId: "mobile-analysis-orchestration",
-      scaffold: undefined,
     });
+    expect((findings[0] as { scaffold?: unknown }).scaffold).toBeUndefined();
   });
 });
