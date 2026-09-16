@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/coding-tooling/performance-contract.schema.json",
+  "title": "coding-tooling performance contract",
+  "type": "object",
+  "required": ["schemaVersion", "suite", "scenarios"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "description", "dimensions", "metrics"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "kind": {
+            "enum": ["common", "idle", "scaling", "stress", "journey", "micro"]
+          },
+          "description": { "type": "string", "minLength": 1 },
+          "dimensions": {
+            "type": "object",
+            "additionalProperties": {
+              "oneOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }]
+            }
+          },
+          "correctnessEvidence": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "metrics": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["name", "unit", "direction", "signal", "blocking"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "unit": { "type": "string", "minLength": 1 },
+                "direction": { "enum": ["lower", "higher"] },
+                "signal": {
+                  "enum": [
+                    "operation-count",
+                    "allocation-count",
+                    "instruction-count",
+                    "cache-event-count",
+                    "wall-clock",
+                    "memory",
+                    "size",
+                    "throughput",
+                    "custom"
+                  ]
+                },
+                "blocking": { "type": "boolean" },
+                "budget": {
+                  "type": "object",
+                  "properties": {
+                    "max": { "type": "number" },
+                    "min": { "type": "number" },
+                    "relativeRegressionPercent": { "type": "number", "minimum": 0 },
+                    "absoluteNoiseFloor": { "type": "number", "minimum": 0 }
+                  },
+                  "additionalProperties": false,
+                  "minProperties": 1
+                },
+                "notes": { "type": "string", "minLength": 1, "pattern": "\\S" }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "blocking": { "const": true },
+                      "signal": { "const": "wall-clock" }
+                    },
+                    "required": ["blocking", "signal"]
+                  },
+                  "then": {
+                    "required": ["notes"]
+                  }
+                }
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

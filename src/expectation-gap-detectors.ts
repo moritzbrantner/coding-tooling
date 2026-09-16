@@ -1,9 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
-import { extname, resolve } from "node:path";
+import { extname, join, resolve } from "node:path";
 
+import { loadConfig } from "./core.ts";
 import type { DetectorContext, PackageInfo } from "./expectation-package-context.ts";
 import type { RawFinding } from "./expectation-detector-types.ts";
-import { relativePosix, walkFiles } from "./shared.ts";
+import { readJson, relativePosix, walkFiles } from "./shared.ts";
 
 const sourceExtensions = new Set([
   ".cjs",
@@ -330,11 +331,155 @@ function hasBenchmarkArtifact(packageInfo: PackageInfo, command: string): boolea
   });
 }
 
+const performanceScenarioKinds = new Set([
+  "common",
+  "idle",
+  "scaling",
+  "stress",
+  "journey",
+  "micro",
+]);
+const performanceDirections = new Set(["lower", "higher"]);
+const performanceSignals = new Set([
+  "operation-count",
+  "allocation-count",
+  "instruction-count",
+  "cache-event-count",
+  "wall-clock",
+  "memory",
+  "size",
+  "throughput",
+  "custom",
+]);
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function performanceContractValidationError(value: unknown): string | undefined {
+  const contract = record(value);
+  if (!contract) return "contract root must be an object";
+  if (contract.schemaVersion !== 1) return "schemaVersion must equal 1";
+  if (!nonEmptyString(contract.suite)) return "suite must be a non-empty string";
+  if (!Array.isArray(contract.scenarios) || contract.scenarios.length === 0)
+    return "scenarios must be a non-empty array";
+
+  for (const [scenarioIndex, rawScenario] of contract.scenarios.entries()) {
+    const scenario = record(rawScenario);
+    const prefix = `scenarios[${scenarioIndex}]`;
+    if (!scenario) return `${prefix} must be an object`;
+    if (!nonEmptyString(scenario.id) || !/^[a-z0-9][a-z0-9-]*$/.test(scenario.id))
+      return `${prefix}.id must be a kebab-case identifier`;
+    if (!performanceScenarioKinds.has(String(scenario.kind)))
+      return `${prefix}.kind is not supported`;
+    if (!nonEmptyString(scenario.description))
+      return `${prefix}.description must be a non-empty string`;
+    if (!record(scenario.dimensions)) return `${prefix}.dimensions must be an object`;
+    if (!Array.isArray(scenario.metrics) || scenario.metrics.length === 0)
+      return `${prefix}.metrics must be a non-empty array`;
+
+    for (const [metricIndex, rawMetric] of scenario.metrics.entries()) {
+      const metric = record(rawMetric);
+      const metricPrefix = `${prefix}.metrics[${metricIndex}]`;
+      if (!metric) return `${metricPrefix} must be an object`;
+      if (!nonEmptyString(metric.name)) return `${metricPrefix}.name must be a non-empty string`;
+      if (!nonEmptyString(metric.unit)) return `${metricPrefix}.unit must be a non-empty string`;
+      if (!performanceDirections.has(String(metric.direction)))
+        return `${metricPrefix}.direction must be lower or higher`;
+      if (!performanceSignals.has(String(metric.signal)))
+        return `${metricPrefix}.signal is not supported`;
+      if (typeof metric.blocking !== "boolean") return `${metricPrefix}.blocking must be boolean`;
+      if (
+        metric.blocking === true &&
+        metric.signal === "wall-clock" &&
+        !nonEmptyString(metric.notes)
+      )
+        return `${metricPrefix} uses blocking wall-clock evidence without documenting the controlled execution boundary`;
+    }
+  }
+  return undefined;
+}
+
+function requiredPerformanceContractFindings(root: string): RawFinding[] {
+  const configPath = join(root, ".coding-tooling.json");
+  if (!existsSync(configPath)) return [];
+  const config = loadConfig(root);
+  if (!(config.requiredCapabilities ?? []).includes("benchmark:smoke")) return [];
+
+  const relativeConfigPath = ".coding-tooling.json";
+  const contractPath = join(root, ".performance", "contract.json");
+  const relativeContractPath = ".performance/contract.json";
+  if (!existsSync(contractPath)) {
+    return [
+      {
+        subject: {
+          kind: "file" as const,
+          key: relativeConfigPath,
+          path: relativeConfigPath,
+          description: "coding-tooling repository configuration",
+        },
+        requirement: {
+          kind: "file" as const,
+          key: "performance-contract",
+          description: "a .performance/contract.json for repositories that require benchmark:smoke",
+          expectedArtifact: relativeContractPath,
+        },
+        message: "benchmark:smoke is required but .performance/contract.json is missing",
+        evidence: [
+          {
+            kind: "file" as const,
+            path: relativeConfigPath,
+            detail: "requiredCapabilities includes benchmark:smoke",
+          },
+        ],
+        relatedFiles: [relativeConfigPath],
+        verification: [],
+      },
+    ];
+  }
+
+  const contract = readJson<unknown>(contractPath);
+  const validationError = performanceContractValidationError(contract);
+  if (!validationError) return [];
+  return [
+    {
+      subject: {
+        kind: "file" as const,
+        key: relativeContractPath,
+        path: relativeContractPath,
+        description: "repository performance contract",
+      },
+      requirement: {
+        kind: "file" as const,
+        key: "performance-contract",
+        description: "a structurally valid performance contract v1",
+        expectedArtifact: relativeContractPath,
+      },
+      message: `Invalid performance contract: ${validationError}`,
+      evidence: [
+        {
+          kind: "file" as const,
+          path: relativeContractPath,
+          detail: validationError,
+        },
+      ],
+      relatedFiles: [relativeConfigPath, relativeContractPath],
+      verification: [],
+    },
+  ];
+}
+
 export function missingBenchmarkEvidenceFindings({
   root,
   packages,
 }: DetectorContext): RawFinding[] {
-  return packages.flatMap((packageInfo) => {
+  const packageFindings = packages.flatMap((packageInfo) => {
     const script = benchmarkScript(packageInfo);
     if (!script || hasBenchmarkArtifact(packageInfo, script.command)) return [];
     const manifestPath = relativePosix(root, packageInfo.manifestPath);
@@ -365,4 +510,5 @@ export function missingBenchmarkEvidenceFindings({
       },
     ];
   });
+  return [...packageFindings, ...requiredPerformanceContractFindings(root)];
 }

@@ -13,6 +13,16 @@ Where a repository emits the generic benchmark report format, results should sat
 
 Benchmarks are opt-in by default because they are more expensive and hardware-sensitive than focused tests.
 
+## Performance contracts
+
+Repositories where execution cost is an explicit engineering contract should commit `.performance/contract.json` conforming to `../../schemas/performance-contract.schema.json` and expose `benchmark:smoke` through `.coding-tooling.json` or the repository's package adapter.
+
+The performance contract is intentionally domain-neutral. Each repository owns its scenario dimensions, correctness evidence, metric names, and budgets. Prefer blocking deterministic work signals such as operation, allocation, instruction, or cache-event counts. Shared-runner wall-clock evidence is normally advisory; blocking wall-clock contracts must document the controlled execution boundary in the metric notes.
+
+A useful contract normally includes a common active scenario, an idle/quiescent scenario when meaningful, and one bounded scaling/stress scenario when its execution shape differs. Product repositories should describe composition journeys rather than copying every foundation microbenchmark.
+
+`coding-tooling` owns the shared contract schema and capability discovery. The repository owns generating and enforcing its domain-specific deterministic counters. `runtime-profiler` owns profiling captures, and Moonlight or another evaluator owns cross-revision comparison/verdicts.
+
 ## External runtime evidence collectors
 
 `runtime-profiler` is a separate evidence-producing component, not an implementation detail of `coding-tooling`.
