@@ -110,6 +110,23 @@ describe("component-scoped remote validation", () => {
     ]);
   });
 
+  test("backgrounded package-script validation remains non-validating", () => {
+    const result = validation(
+      `${pullRequestPrefix}      - run: npm run verify\n`,
+      [{ command: "npm run test:unit", workingDirectory: "." }],
+      [
+        {
+          workingDirectory: ".",
+          manager: "npm",
+          scripts: { verify: "npm run test:unit & true", "test:unit": "vitest run" },
+        },
+      ],
+    );
+
+    expect(result.status).toBe("finding");
+    expect(result.workflowEvidence[0].matchedPackageScriptEvidence).toEqual([]);
+  });
+
   test("cyclic package-script wrappers remain non-validating", () => {
     const result = validation(
       `${pullRequestPrefix}      - run: npm run verify\n`,

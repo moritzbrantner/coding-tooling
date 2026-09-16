@@ -345,8 +345,13 @@ function failClosedWorkflow(workflowEvidence, content) {
         : (workflowEvidence.matchedCommands ?? []).some((command) =>
             step.commands.some((candidate) => shellCommandMatches(candidate, command)),
           );
+    const wrapperMatch = (workflowEvidence.matchedPackageScriptEvidence ?? []).some(
+      (wrapper) =>
+        step.workingDirectory === wrapper.workingDirectory &&
+        step.commands.some((candidate) => shellCommandMatches(candidate, wrapper.command)),
+    );
     const actionMatch = workflowEvidence.codingToolingAction && step.codingToolingAction;
-    if (!commandMatch && !actionMatch) continue;
+    if (!commandMatch && !wrapperMatch && !actionMatch) continue;
     mapped = true;
     if (step.continueOnError || step.commands.some(obviousShellSuppression))
       explicitlySuppressed = true;

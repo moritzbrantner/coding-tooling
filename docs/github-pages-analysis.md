@@ -80,7 +80,9 @@ This keeps the first Pages coverage contract conservative. CI-generated but ephe
 
 ## Remote CI validation evidence
 
-Remote preflight distinguishes automation presence from mechanically evidenced validation. GitHub Actions workflow names do not count as validation by themselves. A workflow satisfies the v1 signal only when its inspected YAML text shows a pull-request or default-branch trigger and also invokes a repository validation command discovered from component capabilities or the coding-tooling Action seam.
+Remote preflight distinguishes automation presence from mechanically evidenced validation. GitHub Actions workflow names do not count as validation by themselves. A workflow satisfies the v1 signal only when its inspected YAML text shows a pull-request or default-branch trigger and also invokes a repository validation command discovered from component capabilities, a bounded same-component Bun/npm package-script wrapper proven from fetched `package.json` evidence, or the coding-tooling Action seam.
+
+Schema-v1 `workflowEvidence` keeps direct declared-command matches in `matchedCommandEvidence` and records bounded wrapper provenance separately in `matchedPackageScriptEvidence`. Each wrapper entry names the invoked wrapper command, package working directory, script key, and the declared commands reached through that bounded chain. The field is additive within v1 and exists so downstream evidence can distinguish the workflow step that actually ran from the underlying declared validation commands it proves.
 
 Deployment/release-only workflows therefore remain automation without proven validation. Supported external CI configuration is reported as `unsupported`/external rather than as missing CI because Pages does not execute or interpret those providers. If the bounded GitHub workflow evidence cannot be inspected completely, validation evidence is `incomplete`, never satisfied or absent.
 

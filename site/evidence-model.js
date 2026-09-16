@@ -518,7 +518,8 @@ function resolvePackageScriptValidation(
 
 function boundedPackageScriptSegments(source) {
   const value = String(source).trim();
-  if (!value || /[;|`\n\r]/.test(value) || value.includes("$(")) return [];
+  if (!value || /[;|`\n\r]/.test(value) || /(^|[^&])&([^&]|$)/.test(value) || value.includes("$("))
+    return [];
   return value
     .split(/\s*&&\s*/)
     .map((segment) => segment.trim())

@@ -37,7 +37,7 @@ Existing remote CI evidence already requires a relevant trigger and a recognized
 - `continue-on-error: true`; or
 - an obvious trailing `|| true` / `|| :` shell suppression.
 
-If another recognized validation path still propagates failure normally, that independent path remains valid evidence. Complex shell control flow, expressions, traps, wrappers, and indirect scripts are not interpreted.
+If another recognized validation path still propagates failure normally, that independent path remains valid evidence. Complex shell control flow, expressions, traps, and unbounded indirect scripts are not interpreted. A bounded same-component Bun/npm package-script chain may be resolved from fetched `package.json` evidence; fail-closed mapping still uses the invoked wrapper step so `continue-on-error` and obvious shell suppression cannot become false-green validation.
 
 This is not a general shell analyzer. The purpose is only to prevent mechanically obvious fail-open execution from being represented as fail-closed merge evidence.
 
