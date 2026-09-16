@@ -143,9 +143,9 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
   },
   {
     id: "mobile-analysis-orchestration",
-    version: 1,
+    version: 2,
     description:
-      "Configured mobile analysis is wired to run automatically after an applicable Pages deployment",
+      "Configured mobile analysis continues exact-revision Pages evidence into read-only remediation planning",
     defaultSeverity: "warning",
     policyKind: "advisory",
     evidenceContract: {
@@ -153,9 +153,10 @@ export const expectationDescriptors: ExpectationDescriptor[] = [
       oracle: "mobile-analysis-config-and-pages-workflow",
       independenceKey: "mobile-analysis-orchestration",
       proves:
-        "A repository with explicit mobile-analysis configuration and a recognized Pages deployment has matching post-deployment reusable-workflow wiring.",
+        "A repository with explicit mobile-analysis configuration and one recognized Pages deployment wires the exact deployed revision into mobile-analysis and feeds its same-run evidence artifact into pinned read-only coding-tooling remediation planning.",
       limitations: [
         "Does not execute mobile-analysis or prove that the deployed URL is reachable.",
+        "Manual workflow dispatch may run analysis for inspection but is deliberately excluded from automatic remediation continuation because it lacks a proven Pages deployment revision.",
         "Only GitHub Pages deployment workflows are auto-orchestrated in this version; other hosting systems remain not-applicable.",
         "Multiple recognized Pages deployment workflows are treated as ambiguous rather than guessed.",
       ],

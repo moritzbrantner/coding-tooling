@@ -8,7 +8,17 @@ import { relativePosix, walkFiles } from "./shared.ts";
 const configName = "mobile-analysis.config.json";
 const generatedWorkflowPath = ".github/workflows/mobile-analysis.yml";
 const mobileAnalysisWorkflowRef =
-  "moritzbrantner/mobile-analysis/.github/workflows/analyze.yml@bf0b80f0b62b429702c0657a8d4a347243a6e4e0";
+  "moritzbrantner/mobile-analysis/.github/workflows/analyze.yml@4a9e5b24d8acd9753830b45f82968341b56d8d41";
+const codingToolingActionRef =
+  "moritzbrantner/coding-tooling@1bb73191e4a7e62ef5a228e7066dba649cc14073";
+const checkoutActionRef = "actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8";
+const downloadArtifactActionRef =
+  "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+const uploadArtifactActionRef = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const setupNodeActionRef = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020";
+const deploymentRevisionExpression =
+  "${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}";
+const deploymentHeadShaExpression = "${{ github.event.workflow_run.head_sha }}";
 const pagesDeploymentPattern =
   /(?:actions\/upload-pages-artifact|actions\/deploy-pages|deploy-pages\.ya?ml|pages:\s*write)/i;
 const mobileAnalysisCallPattern =
@@ -144,22 +154,47 @@ function analysisWorkflowPaths(root: string): Array<{ path: string; content: str
   });
 }
 
+function hasArtifactContinuation(content: string): boolean {
+  return (
+    content.includes("prioritize:") &&
+    content.includes("needs: analyze") &&
+    content.includes("github.event_name == 'workflow_run' && needs.analyze.result == 'success'") &&
+    content.includes(`uses: ${checkoutActionRef}`) &&
+    content.includes(`ref: ${deploymentHeadShaExpression}`) &&
+    content.includes(`uses: ${downloadArtifactActionRef}`) &&
+    content.includes("name: mobile-analysis") &&
+    content.includes("path: mobile-analysis-output") &&
+    content.includes(`uses: ${setupNodeActionRef}`) &&
+    content.includes(`MOBILE_ANALYSIS_EXPECTED_REVISION: ${deploymentHeadShaExpression}`) &&
+    content.includes('readFileSync("mobile-analysis-output/agent-findings.json", "utf8")') &&
+    content.includes('report.producer !== "mobile-analysis"') &&
+    content.includes("report.revision !== expected") &&
+    content.includes(`uses: ${codingToolingActionRef}`) &&
+    content.includes("operation: remediation-plan") &&
+    content.includes("report-path: .artifacts/coding-tooling/mobile-remediation-plan.json") &&
+    content.includes(`uses: ${uploadArtifactActionRef}`) &&
+    content.includes("name: coding-tooling-mobile-remediation")
+  );
+}
+
 function isCorrectlyWired(
   content: string,
   page: PagesWorkflow,
   config: MobileAnalysisConfig,
 ): boolean {
   return (
-    mobileAnalysisCallPattern.test(content) &&
+    content.includes(`uses: ${mobileAnalysisWorkflowRef}`) &&
     referencesSuccessfulDeployment(content, page) &&
     scalar(content, "target_url") === config.targetUrl &&
     scalar(content, "config_path") === configName &&
-    scalar(content, "run_unlighthouse") === String(config.runUnlighthouse)
+    scalar(content, "run_unlighthouse") === String(config.runUnlighthouse) &&
+    scalar(content, "revision") === deploymentRevisionExpression &&
+    hasArtifactContinuation(content)
   );
 }
 
 function generatedWorkflow(page: PagesWorkflow, config: MobileAnalysisConfig): string {
-  return `name: Mobile analysis\n\non:\n  workflow_dispatch:\n  workflow_run:\n    workflows:\n      - ${yamlScalar(page.name)}\n    types:\n      - completed\n\npermissions:\n  contents: read\n\njobs:\n  analyze:\n    if: \${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}\n    uses: ${mobileAnalysisWorkflowRef}\n    with:\n      target_url: ${yamlScalar(config.targetUrl)}\n      config_path: ${configName}\n      run_unlighthouse: ${String(config.runUnlighthouse)}\n`;
+  return `name: Mobile analysis\n\non:\n  workflow_dispatch:\n  workflow_run:\n    workflows:\n      - ${yamlScalar(page.name)}\n    types:\n      - completed\n\npermissions:\n  contents: read\n\njobs:\n  analyze:\n    if: \${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}\n    uses: ${mobileAnalysisWorkflowRef}\n    with:\n      target_url: ${yamlScalar(config.targetUrl)}\n      config_path: ${configName}\n      run_unlighthouse: ${String(config.runUnlighthouse)}\n      revision: ${deploymentRevisionExpression}\n\n  prioritize:\n    needs: analyze\n    if: \${{ github.event_name == 'workflow_run' && needs.analyze.result == 'success' }}\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout analyzed revision\n        uses: ${checkoutActionRef}\n        with:\n          ref: ${deploymentHeadShaExpression}\n      - name: Download mobile evidence\n        uses: ${downloadArtifactActionRef}\n        with:\n          name: mobile-analysis\n          path: mobile-analysis-output\n      - name: Set up Node.js\n        uses: ${setupNodeActionRef}\n        with:\n          node-version: "22"\n      - name: Verify mobile evidence provenance\n        env:\n          MOBILE_ANALYSIS_EXPECTED_REVISION: ${deploymentHeadShaExpression}\n        run: |\n          node --input-type=module <<'NODE'\n          import { readFileSync } from "node:fs";\n          const expected = process.env.MOBILE_ANALYSIS_EXPECTED_REVISION?.toLowerCase();\n          if (!expected || !/^[0-9a-f]{40}$/.test(expected)) {\n            throw new Error("expected mobile-analysis revision must be an exact Git SHA");\n          }\n          const report = JSON.parse(\n            readFileSync("mobile-analysis-output/agent-findings.json", "utf8"),\n          );\n          if (report.producer !== "mobile-analysis" || report.revision !== expected) {\n            throw new Error(\n              "mobile-analysis artifact revision mismatch: expected " +\n                expected +\n                ", received " +\n                String(report.revision),\n            );\n          }\n          NODE\n      - name: Plan mobile remediation\n        uses: ${codingToolingActionRef}\n        with:\n          operation: remediation-plan\n          report-path: .artifacts/coding-tooling/mobile-remediation-plan.json\n      - name: Upload mobile remediation plan\n        uses: ${uploadArtifactActionRef}\n        with:\n          name: coding-tooling-mobile-remediation\n          path: .artifacts/coding-tooling/mobile-remediation-plan.json\n          if-no-files-found: error\n          retention-days: 14\n`;
 }
 
 export function mobileAnalysisOrchestrationSubjects(root: string): string[] {
@@ -200,7 +235,7 @@ export function mobileAnalysisOrchestrationFindings({ root }: DetectorContext): 
           kind: "wiring" as const,
           key: "mobile-analysis-orchestration",
           description:
-            "mobile-analysis has a valid post-deployment target and orchestration workflow",
+            "mobile-analysis has a valid exact-revision deployment target and remediation continuation",
         },
         message: parsed.error ?? `${configName} is invalid`,
         evidence,
@@ -233,7 +268,8 @@ export function mobileAnalysisOrchestrationFindings({ root }: DetectorContext): 
     requirement: {
       kind: "wiring" as const,
       key: "mobile-analysis-orchestration",
-      description: "mobile-analysis runs automatically after the configured Pages deployment",
+      description:
+        "mobile-analysis analyzes the deployed Pages revision and feeds same-run evidence into read-only remediation planning",
     },
     evidence,
     relatedFiles,
@@ -254,7 +290,7 @@ export function mobileAnalysisOrchestrationFindings({ root }: DetectorContext): 
       {
         ...shared,
         message:
-          "mobile-analysis orchestration exists but does not match the configured target, successful Pages trigger, or exact reusable-workflow contract",
+          "mobile-analysis orchestration exists but does not match the configured target, exact deployed revision, same-run evidence provenance, or pinned remediation continuation contract",
       },
     ];
   }
@@ -262,7 +298,7 @@ export function mobileAnalysisOrchestrationFindings({ root }: DetectorContext): 
   return [
     {
       ...shared,
-      message: `${configName} is applicable to ${pages[0]!.path}, but no post-deployment mobile-analysis workflow is wired`,
+      message: `${configName} is applicable to ${pages[0]!.path}, but no exact-revision mobile-analysis remediation continuation is wired`,
       scaffold: {
         kind: "create-file" as const,
         path: generatedWorkflowPath,

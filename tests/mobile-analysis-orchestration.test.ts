@@ -9,7 +9,14 @@ import { findingsCommand } from "../src/expectations.ts";
 const roots: string[] = [];
 
 const mobileAnalysisRef =
-  "moritzbrantner/mobile-analysis/.github/workflows/analyze.yml@bf0b80f0b62b429702c0657a8d4a347243a6e4e0";
+  "moritzbrantner/mobile-analysis/.github/workflows/analyze.yml@4a9e5b24d8acd9753830b45f82968341b56d8d41";
+const codingToolingRef = "moritzbrantner/coding-tooling@1bb73191e4a7e62ef5a228e7066dba649cc14073";
+const checkoutRef = "actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8";
+const downloadArtifactRef = "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+const uploadArtifactRef = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const deploymentRevisionExpression =
+  "${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}";
+const deploymentHeadShaExpression = "${{ github.event.workflow_run.head_sha }}";
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -72,7 +79,7 @@ describe("mobile-analysis orchestration", () => {
     expect(mobileFindings(configured)).toEqual([]);
   });
 
-  test("convergence scaffolds a pinned post-deployment analyzer workflow", () => {
+  test("convergence scaffolds exact-revision analysis and same-run remediation continuation", () => {
     const root = fixture();
     writeConfig(root);
     writePages(root);
@@ -81,6 +88,7 @@ describe("mobile-analysis orchestration", () => {
     expect(before).toHaveLength(1);
     expect(before[0]).toMatchObject({
       expectationId: "mobile-analysis-orchestration",
+      expectationVersion: 2,
       requirement: { key: "mobile-analysis-orchestration" },
       scaffold: { kind: "create-file", path: ".github/workflows/mobile-analysis.yml" },
     });
@@ -96,20 +104,50 @@ describe("mobile-analysis orchestration", () => {
     expect(workflow).toContain('target_url: "https://example.test/app/"');
     expect(workflow).toContain("config_path: mobile-analysis.config.json");
     expect(workflow).toContain("run_unlighthouse: false");
+    expect(workflow).toContain(`revision: ${deploymentRevisionExpression}`);
     expect(workflow).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(workflow).toContain("prioritize:");
+    expect(workflow).toContain(
+      "github.event_name == 'workflow_run' && needs.analyze.result == 'success'",
+    );
+    expect(workflow).toContain(`uses: ${checkoutRef}`);
+    expect(workflow).toContain(`ref: ${deploymentHeadShaExpression}`);
+    expect(workflow).toContain(`uses: ${downloadArtifactRef}`);
+    expect(workflow).toContain("name: mobile-analysis");
+    expect(workflow).toContain("path: mobile-analysis-output");
+    expect(workflow).toContain(`MOBILE_ANALYSIS_EXPECTED_REVISION: ${deploymentHeadShaExpression}`);
+    expect(workflow).toContain(
+      'readFileSync("mobile-analysis-output/agent-findings.json", "utf8")',
+    );
+    expect(workflow).toContain('report.producer !== "mobile-analysis"');
+    expect(workflow).toContain("report.revision !== expected");
+    expect(workflow).toContain(`uses: ${codingToolingRef}`);
+    expect(workflow).toContain("operation: remediation-plan");
+    expect(workflow).toContain(
+      "report-path: .artifacts/coding-tooling/mobile-remediation-plan.json",
+    );
+    expect(workflow).toContain(`uses: ${uploadArtifactRef}`);
+    expect(workflow).toContain("name: coding-tooling-mobile-remediation");
     expect(mobileFindings(root)).toEqual([]);
   });
 
-  test("accepts equivalent successful orchestration pinned to another exact revision", () => {
+  test("rejects legacy analyzer-only orchestration even when exact-pinned", () => {
     const root = fixture();
     writeConfig(root, "https://example.test/app/", true);
     writePages(root);
     writeFileSync(
       join(root, ".github", "workflows", "mobile-analysis.yml"),
-      `name: Mobile analysis\n\non:\n  workflow_run:\n    workflows:\n      - GitHub Pages\n    types: [completed]\n\njobs:\n  analyze:\n    if: \${{ github.event.workflow_run.conclusion == 'success' }}\n    uses: moritzbrantner/mobile-analysis/.github/workflows/analyze.yml@c80a2a8cf7d9611c34c047d0fc1555a0fbb6409a\n    with:\n      target_url: https://example.test/app/\n      config_path: mobile-analysis.config.json\n      run_unlighthouse: true\n`,
+      `name: Mobile analysis\n\non:\n  workflow_run:\n    workflows:\n      - GitHub Pages\n    types: [completed]\n\njobs:\n  analyze:\n    if: \${{ github.event.workflow_run.conclusion == 'success' }}\n    uses: ${mobileAnalysisRef}\n    with:\n      target_url: https://example.test/app/\n      config_path: mobile-analysis.config.json\n      run_unlighthouse: true\n`,
     );
 
-    expect(mobileFindings(root)).toEqual([]);
+    const findings = mobileFindings(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({
+      expectationId: "mobile-analysis-orchestration",
+      expectationVersion: 2,
+    });
+    expect((findings[0] as { scaffold?: unknown }).scaffold).toBeUndefined();
+    expect((findings[0] as { message: string }).message).toContain("same-run evidence provenance");
   });
 
   test("rejects orchestration that can run after an unsuccessful deployment", () => {
@@ -118,7 +156,7 @@ describe("mobile-analysis orchestration", () => {
     writePages(root);
     writeFileSync(
       join(root, ".github", "workflows", "mobile-analysis.yml"),
-      `name: Mobile analysis\n\non:\n  workflow_run:\n    workflows:\n      - GitHub Pages\n    types: [completed]\n\njobs:\n  analyze:\n    uses: ${mobileAnalysisRef}\n    with:\n      target_url: https://example.test/app/\n      config_path: mobile-analysis.config.json\n      run_unlighthouse: false\n`,
+      `name: Mobile analysis\n\non:\n  workflow_run:\n    workflows:\n      - GitHub Pages\n    types: [completed]\n\njobs:\n  analyze:\n    uses: ${mobileAnalysisRef}\n    with:\n      target_url: https://example.test/app/\n      config_path: mobile-analysis.config.json\n      run_unlighthouse: false\n      revision: ${deploymentRevisionExpression}\n`,
     );
 
     const findings = mobileFindings(root);
@@ -150,7 +188,7 @@ describe("mobile-analysis orchestration", () => {
     writePages(root);
     writeFileSync(
       join(root, ".github", "workflows", "mobile-analysis.yml"),
-      `name: Mobile analysis\n\non:\n  workflow_dispatch:\n\njobs:\n  analyze:\n    uses: ${mobileAnalysisRef}\n    with:\n      target_url: https://wrong.example.test/\n      config_path: mobile-analysis.config.json\n      run_unlighthouse: false\n`,
+      `name: Mobile analysis\n\non:\n  workflow_dispatch:\n\njobs:\n  analyze:\n    uses: ${mobileAnalysisRef}\n    with:\n      target_url: https://wrong.example.test/\n      config_path: mobile-analysis.config.json\n      run_unlighthouse: false\n      revision: ${deploymentRevisionExpression}\n`,
     );
 
     const findings = mobileFindings(root);
