@@ -24,53 +24,41 @@ jobs:
           from pathlib import Path
 
           detector = Path("src/expectation-detectors.ts")
-          text = detector.read_text()
-          old = '''  {
-            id: "mobile-analysis-orchestration",
-            version: 1,
-            description:
-              "Configured mobile analysis is wired to run automatically after an applicable Pages deployment",
-            defaultSeverity: "warning",
-            policyKind: "advisory",
-            evidenceContract: {
-              basis: "configuration",
-              oracle: "mobile-analysis-config-and-pages-workflow",
-              independenceKey: "mobile-analysis-orchestration",
-              proves:
-                "A repository with explicit mobile-analysis configuration and a recognized Pages deployment has matching post-deployment reusable-workflow wiring.",
-              limitations: [
-                "Does not execute mobile-analysis or prove that the deployed URL is reachable.",
-                "Only GitHub Pages deployment workflows are auto-orchestrated in this version; other hosting systems remain not-applicable.",
-                "Multiple recognized Pages deployment workflows are treated as ambiguous rather than guessed.",
-              ],
-            },
-            detect: mobileAnalysisOrchestrationFindings,
-          },'''
-          new = '''  {
-            id: "mobile-analysis-orchestration",
-            version: 2,
-            description:
-              "Configured mobile analysis continues exact-revision Pages evidence into read-only remediation planning",
-            defaultSeverity: "warning",
-            policyKind: "advisory",
-            evidenceContract: {
-              basis: "configuration",
-              oracle: "mobile-analysis-config-and-pages-workflow",
-              independenceKey: "mobile-analysis-orchestration",
-              proves:
-                "A repository with explicit mobile-analysis configuration and one recognized Pages deployment wires the exact deployed revision into mobile-analysis and feeds its same-run evidence artifact into pinned read-only coding-tooling remediation planning.",
-              limitations: [
-                "Does not execute mobile-analysis or prove that the deployed URL is reachable.",
-                "Manual workflow dispatch may run analysis for inspection but is deliberately excluded from automatic remediation continuation because it lacks a proven Pages deployment revision.",
-                "Only GitHub Pages deployment workflows are auto-orchestrated in this version; other hosting systems remain not-applicable.",
-                "Multiple recognized Pages deployment workflows are treated as ambiguous rather than guessed.",
-              ],
-            },
-            detect: mobileAnalysisOrchestrationFindings,
-          },'''
-          if text.count(old) != 1:
-              raise SystemExit("mobile-analysis detector contract did not match exactly once")
-          detector.write_text(text.replace(old, new))
+          lines = detector.read_text().splitlines(keepends=True)
+          id_line = '    id: "mobile-analysis-orchestration",\n'
+          matches = [index for index, line in enumerate(lines) if line == id_line]
+          if len(matches) != 1:
+              raise SystemExit("mobile-analysis detector id did not match exactly once")
+          start = matches[0] - 1
+          end = next(
+              index for index in range(matches[0], len(lines))
+              if lines[index] == "    detect: mobileAnalysisOrchestrationFindings,\n"
+          ) + 2
+          replacement = [
+              "  {\n",
+              '    id: "mobile-analysis-orchestration",\n',
+              "    version: 2,\n",
+              "    description:\n",
+              '      "Configured mobile analysis continues exact-revision Pages evidence into read-only remediation planning",\n',
+              '    defaultSeverity: "warning",\n',
+              '    policyKind: "advisory",\n',
+              "    evidenceContract: {\n",
+              '      basis: "configuration",\n',
+              '      oracle: "mobile-analysis-config-and-pages-workflow",\n',
+              '      independenceKey: "mobile-analysis-orchestration",\n',
+              "      proves:\n",
+              '        "A repository with explicit mobile-analysis configuration and one recognized Pages deployment wires the exact deployed revision into mobile-analysis and feeds its same-run evidence artifact into pinned read-only coding-tooling remediation planning.",\n',
+              "      limitations: [\n",
+              '        "Does not execute mobile-analysis or prove that the deployed URL is reachable.",\n',
+              '        "Manual workflow dispatch may run analysis for inspection but is deliberately excluded from automatic remediation continuation because it lacks a proven Pages deployment revision.",\n',
+              '        "Only GitHub Pages deployment workflows are auto-orchestrated in this version; other hosting systems remain not-applicable.",\n',
+              '        "Multiple recognized Pages deployment workflows are treated as ambiguous rather than guessed.",\n',
+              "      ],\n",
+              "    },\n",
+              "    detect: mobileAnalysisOrchestrationFindings,\n",
+              "  },\n",
+          ]
+          detector.write_text("".join(lines[:start] + replacement + lines[end:]))
 
           contract_test = Path("tests/expectation-registry-contract.test.ts")
           test_text = contract_test.read_text()
