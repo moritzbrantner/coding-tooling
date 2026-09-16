@@ -23,6 +23,10 @@ import {
   runCommand,
   walkFiles,
 } from "./shared.ts";
+import {
+  collectTestDiscoveryEvidence,
+  reconcileTestScope,
+} from "./test-discovery-evidence.ts";
 import { collectTestExecutionEvidence } from "./test-execution-evidence.ts";
 
 type PackageManifest = {
@@ -303,7 +307,30 @@ function missingDiagnostics(
   }));
 }
 
-function executePlannedCheck(root: string, planned: PlannedCheck) {
+function nestedComponentSubtrees(
+  root: string,
+  plannedPath: string,
+  componentPaths: readonly string[],
+): string[] {
+  const cwd = plannedPath === "." ? root : join(root, plannedPath);
+  const prefix = plannedPath === "." ? "" : `${plannedPath}/`;
+  return [...new Set(componentPaths)]
+    .filter(
+      (path) =>
+        path !== "." &&
+        path !== plannedPath &&
+        (plannedPath === "." || path.startsWith(prefix)),
+    )
+    .map((path) => relativePosix(cwd, join(root, path)))
+    .filter((path) => path !== "." && !path.startsWith("../"))
+    .sort();
+}
+
+function executePlannedCheck(
+  root: string,
+  planned: PlannedCheck,
+  componentPaths: readonly string[],
+) {
   const started = Date.now();
   const cwd = planned.path === "." ? root : join(root, planned.path);
   const result = runCommand(planned.command[0], planned.command.slice(1), cwd);
@@ -319,11 +346,19 @@ function executePlannedCheck(root: string, planned: PlannedCheck) {
     stdout: result.stdout,
     stderr: result.stderr,
   });
+  const testDiscovery = collectTestDiscoveryEvidence({
+    cwd,
+    capability: planned.capability,
+    command: planned.command,
+    excludedSubtrees: nestedComponentSubtrees(root, planned.path, componentPaths),
+  });
+  const testScope = reconcileTestScope(testDiscovery, testExecution);
   const zeroExecutedCases =
     processStatus === "passed" &&
     testExecution?.status === "available" &&
     testExecution.executedCases === 0;
-  const status: ResultStatus = zeroExecutedCases ? "failed" : processStatus;
+  const scopeMismatch = processStatus === "passed" && testScope?.status === "mismatch";
+  const status: ResultStatus = zeroExecutedCases || scopeMismatch ? "failed" : processStatus;
 
   return {
     ...planned,
@@ -335,18 +370,37 @@ function executePlannedCheck(root: string, planned: PlannedCheck) {
     stderr: result.stderr,
     error: result.error,
     testExecution,
-    failureReason: zeroExecutedCases ? "zero-tests-executed" : undefined,
+    testDiscovery,
+    testScope,
+    failureReason: zeroExecutedCases
+      ? "zero-tests-executed"
+      : scopeMismatch
+        ? "test-discovery-execution-mismatch"
+        : undefined,
   };
 }
 
-function testExecutionDiagnostics(completed: ReturnType<typeof executePlannedCheck>): Diagnostic[] {
-  if (completed.failureReason !== "zero-tests-executed") return [];
-  return [
-    {
+function testEvidenceDiagnostics(completed: ReturnType<typeof executePlannedCheck>): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  if ((completed.testDiscovery?.excludedFileCount ?? 0) > 0) {
+    const examples = completed.testDiscovery?.excludedFiles?.slice(0, 3) ?? [];
+    diagnostics.push({
+      code: "test-files-excluded-by-runner",
+      message: `${completed.capability} for ${completed.component} excludes ${completed.testDiscovery!.excludedFileCount} conventional test file(s)${examples.length > 0 ? `: ${examples.join(", ")}` : ""}`,
+    });
+  }
+  if (completed.failureReason === "zero-tests-executed") {
+    diagnostics.push({
       code: "test-zero-executed-cases",
       message: `${completed.capability} for ${completed.component} completed without executing a behavioral test case`,
-    },
-  ];
+    });
+  } else if (completed.failureReason === "test-discovery-execution-mismatch") {
+    diagnostics.push({
+      code: "test-discovery-execution-mismatch",
+      message: `${completed.capability} for ${completed.component} discovered ${completed.testScope?.discoveredFiles ?? "unknown"} test file(s) but execution reported ${completed.testScope?.executedFiles ?? "unknown"}`,
+    });
+  }
+  return diagnostics;
 }
 
 export function runPlan(options: {
@@ -361,6 +415,8 @@ export function runPlan(options: {
   const root = options.root ?? repositoryRoot();
   try {
     const plan = planChecks({ ...options, root });
+    const config = loadConfig(root, options.configPath);
+    const componentPaths = configuredComponents(root, config).map((component) => component.path);
     const selectedComponents = discoverComponents(root).filter(
       (component) =>
         !options.component ||
@@ -387,9 +443,9 @@ export function runPlan(options: {
 
     const results: Array<Record<string, unknown>> = [];
     for (const planned of plan.checks) {
-      const completed = executePlannedCheck(root, planned);
+      const completed = executePlannedCheck(root, planned, componentPaths);
       results.push(completed);
-      diagnostics.push(...testExecutionDiagnostics(completed));
+      diagnostics.push(...testEvidenceDiagnostics(completed));
       if (completed.status !== "passed") break;
     }
     const status: ResultStatus = results.some((result) => result.status === "error")
@@ -442,7 +498,9 @@ export function check(
   const started = Date.now();
   try {
     const config = loadConfig(root);
-    const selected = configuredComponents(root, config).filter(
+    const configured = configuredComponents(root, config);
+    const componentPaths = configured.map((item) => item.path);
+    const selected = configured.filter(
       (item) => !component || item.name === component || item.path === component,
     );
     const checks = selected.flatMap((item) =>
@@ -461,8 +519,8 @@ export function check(
       return envelope("check", "unavailable", started, { capability, results: [] }, [
         { code: "capability-unavailable", message: `${capability} is unavailable` },
       ]);
-    const results = checks.map((item) => executePlannedCheck(root, item));
-    const diagnostics = results.flatMap(testExecutionDiagnostics);
+    const results = checks.map((item) => executePlannedCheck(root, item, componentPaths));
+    const diagnostics = results.flatMap(testEvidenceDiagnostics);
     const status = results.some((item) => item.status === "error")
       ? "error"
       : results.some((item) => item.status === "failed")
