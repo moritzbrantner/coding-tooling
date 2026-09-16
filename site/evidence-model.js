@@ -492,13 +492,22 @@ function resolvePackageScriptValidation(
   if (typeof source !== "string" || !source.trim()) return [];
   const nextSeen = new Set(seen);
   nextSeen.add(script);
+  const segments = boundedPackageScriptSegments(source);
+  if (segments.length === 0) return [];
   const matches = new Set();
-  for (const segment of boundedPackageScriptSegments(source)) {
+  for (const segment of segments) {
+    let bounded = false;
     for (const declared of declaredCommands) {
-      if (shellCommandMatches(segment, declared.command)) matches.add(declared.command);
+      if (!shellCommandMatches(segment, declared.command)) continue;
+      matches.add(declared.command);
+      bounded = true;
     }
     const referencedScript = packageScriptReference(segment, manager);
-    if (!referencedScript) continue;
+    if (!referencedScript) {
+      if (!bounded) return [];
+      continue;
+    }
+    bounded = true;
     const canonicalReference = `${manager} run ${referencedScript}`;
     for (const declared of declaredCommands) {
       if (declared.command === canonicalReference) matches.add(declared.command);

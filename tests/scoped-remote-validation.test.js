@@ -127,6 +127,40 @@ describe("component-scoped remote validation", () => {
     expect(result.workflowEvidence[0].matchedPackageScriptEvidence).toEqual([]);
   });
 
+  test("early-exit package-script segments remain non-validating", () => {
+    const result = validation(
+      `${pullRequestPrefix}      - run: npm run verify\n`,
+      [{ command: "npm run test:unit", workingDirectory: "." }],
+      [
+        {
+          workingDirectory: ".",
+          manager: "npm",
+          scripts: { verify: "exit 0 && npm run test:unit", "test:unit": "vitest run" },
+        },
+      ],
+    );
+
+    expect(result.status).toBe("finding");
+    expect(result.workflowEvidence[0].matchedPackageScriptEvidence).toEqual([]);
+  });
+
+  test("unbounded shell segments keep wrapper evidence unavailable", () => {
+    const result = validation(
+      `${pullRequestPrefix}      - run: npm run verify\n`,
+      [{ command: "npm run test:unit", workingDirectory: "." }],
+      [
+        {
+          workingDirectory: ".",
+          manager: "npm",
+          scripts: { verify: "echo setup && npm run test:unit", "test:unit": "vitest run" },
+        },
+      ],
+    );
+
+    expect(result.status).toBe("finding");
+    expect(result.workflowEvidence[0].matchedPackageScriptEvidence).toEqual([]);
+  });
+
   test("cyclic package-script wrappers remain non-validating", () => {
     const result = validation(
       `${pullRequestPrefix}      - run: npm run verify\n`,

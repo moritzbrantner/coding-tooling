@@ -140,6 +140,22 @@ describe("remote execution evidence", () => {
     expect(evidence.failClosed.status).toBe("finding");
   });
 
+  test("maps explicit-cd wrapper steps into fail-closed evidence", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify app\n        run: cd packages/app && npm run verify || true\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content, "packages/app"),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "all-proven-validation-is-fail-open",
+      }),
+    );
+  });
+
   test("keeps matrix lists outside step evidence", () => {
     const path = ".github/workflows/validate.yml";
     const evidence = remoteExecutionEvidence({
@@ -171,17 +187,17 @@ describe("remote execution evidence", () => {
   });
 });
 
-function wrapperValidation(path, content) {
+function wrapperValidation(path, content, workingDirectory = ".") {
   const result = remoteValidationOutcome({
     workflowPaths: [path],
     workflows: [{ path, content }],
     externalCiPaths: [],
     workflowFetchTruncated: false,
     defaultBranch: "main",
-    declaredCommands: [{ command: "npm run test:unit", workingDirectory: "." }],
+    declaredCommands: [{ command: "npm run test:unit", workingDirectory }],
     packageScripts: [
       {
-        workingDirectory: ".",
+        workingDirectory,
         manager: "npm",
         scripts: { verify: "npm run test:unit", "test:unit": "vitest run" },
       },

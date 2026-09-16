@@ -337,18 +337,14 @@ function failClosedWorkflow(workflowEvidence, content) {
     const matchedCommandEvidence = workflowEvidence.matchedCommandEvidence ?? [];
     const commandMatch =
       matchedCommandEvidence.length > 0
-        ? matchedCommandEvidence.some(
-            (command) =>
-              step.workingDirectory === command.workingDirectory &&
-              step.commands.some((candidate) => shellCommandMatches(candidate, command.command)),
+        ? matchedCommandEvidence.some((command) =>
+            stepRunsCommandInDirectory(step, command.command, command.workingDirectory),
           )
         : (workflowEvidence.matchedCommands ?? []).some((command) =>
             step.commands.some((candidate) => shellCommandMatches(candidate, command)),
           );
-    const wrapperMatch = (workflowEvidence.matchedPackageScriptEvidence ?? []).some(
-      (wrapper) =>
-        step.workingDirectory === wrapper.workingDirectory &&
-        step.commands.some((candidate) => shellCommandMatches(candidate, wrapper.command)),
+    const wrapperMatch = (workflowEvidence.matchedPackageScriptEvidence ?? []).some((wrapper) =>
+      stepRunsCommandInDirectory(step, wrapper.command, wrapper.workingDirectory),
     );
     const actionMatch = workflowEvidence.codingToolingAction && step.codingToolingAction;
     if (!commandMatch && !wrapperMatch && !actionMatch) continue;
@@ -489,6 +485,22 @@ function literalScalar(value) {
     result = result.slice(1, -1).trim();
   }
   return result || null;
+}
+
+function stepRunsCommandInDirectory(step, command, requiredWorkingDirectory) {
+  if (
+    step.workingDirectory === requiredWorkingDirectory &&
+    step.commands.some((candidate) => shellCommandMatches(candidate, command))
+  )
+    return true;
+  if (step.workingDirectory !== "." || requiredWorkingDirectory === ".") return false;
+  const prefix = `cd ${requiredWorkingDirectory} && `;
+  return step.commands.some((candidate) => {
+    const normalized = normalizeCommand(candidate);
+    return (
+      normalized.startsWith(prefix) && shellCommandMatches(normalized.slice(prefix.length), command)
+    );
+  });
 }
 
 function obviousShellSuppression(value) {
