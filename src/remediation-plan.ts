@@ -210,8 +210,9 @@ function mobileAnalysisCandidates(root: string): RemediationCandidate[] {
     const severities = [...new Set(ordered.map((diagnostic) => diagnostic.severity))].sort(
       (left, right) => severityRank[left] - severityRank[right],
     );
-    const categories = [...new Set(ordered.flatMap((diagnostic) => mobileCategory(diagnostic) ?? []))]
-      .sort();
+    const categories = [
+      ...new Set(ordered.flatMap((diagnostic) => mobileCategory(diagnostic) ?? [])),
+    ].sort();
     const relatedFiles = [
       ...new Set(
         ordered.flatMap((diagnostic) => [
@@ -220,11 +221,15 @@ function mobileAnalysisCandidates(root: string): RemediationCandidate[] {
         ]),
       ),
       ...provider.projects,
-    ].filter((value, index, all) => all.indexOf(value) === index).sort();
+    ]
+      .filter((value, index, all) => all.indexOf(value) === index)
+      .sort();
     const subject: Finding["subject"] = {
       kind: "repository",
       key: subjectKey,
-      description: scenarioId ? `mobile scenario ${scenarioId}` : `mobile finding ${ordered[0]!.code}`,
+      description: scenarioId
+        ? `mobile scenario ${scenarioId}`
+        : `mobile finding ${ordered[0]!.code}`,
     };
     const priority = Math.min(...ordered.map((diagnostic) => severityRank[diagnostic.severity]));
     const nonInfo = ordered.some((diagnostic) => diagnostic.severity !== "info");
