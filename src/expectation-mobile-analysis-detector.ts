@@ -17,7 +17,6 @@ const mobileAnalysisCallPattern =
 type PagesWorkflow = {
   path: string;
   name: string;
-  content: string;
 };
 
 type MobileAnalysisConfig = {
@@ -63,7 +62,7 @@ function pagesWorkflows(root: string): PagesWorkflow[] {
     }
     if (!pagesDeploymentPattern.test(content)) return [];
     const workflowPath = relativePosix(root, path);
-    return [{ path: workflowPath, name: workflowName(content, workflowPath), content }];
+    return [{ path: workflowPath, name: workflowName(content, workflowPath) }];
   });
 }
 
@@ -122,16 +121,6 @@ function scalar(content: string, key: string): string | undefined {
 
 function referencesWorkflow(content: string, page: PagesWorkflow): boolean {
   return content.includes("workflow_run:") && content.includes(page.name);
-}
-
-function configuredAnalyzerWorkflow(
-  workflows: PagesWorkflow[],
-  config: MobileAnalysisConfig,
-): string | undefined {
-  for (const path of workflowFiles(workflows.length > 0 ? join(workflows[0]!.path, "..") : "")) {
-    void path;
-  }
-  return undefined;
 }
 
 function analysisWorkflowPaths(root: string): Array<{ path: string; content: string }> {
