@@ -502,7 +502,7 @@ function resolvePackageScriptValidation(
   for (const segment of segments) {
     let bounded = false;
     for (const declared of declaredCommands) {
-      if (!shellCommandMatches(segment, declared.command)) continue;
+      if (!packageScriptDeclaredCommandMatches(segment, declared.command, manager)) continue;
       matches.add(declared.command);
       bounded = true;
     }
@@ -511,22 +511,37 @@ function resolvePackageScriptValidation(
       if (!bounded) return [];
       continue;
     }
-    bounded = true;
+    if (typeof scripts[referencedScript] !== "string" || !scripts[referencedScript].trim()) return [];
     const canonicalReference = `${manager} run ${referencedScript}`;
-    for (const declared of declaredCommands) {
-      if (declared.command === canonicalReference) matches.add(declared.command);
+    const declaredReference = declaredCommands.some(
+      (declared) => declared.command === canonicalReference,
+    );
+    if (declaredReference) {
+      matches.add(canonicalReference);
+      bounded = true;
     }
-    for (const matched of resolvePackageScriptValidation(
+    const nestedMatches = resolvePackageScriptValidation(
       scripts,
       manager,
       referencedScript,
       declaredCommands,
       nextSeen,
-    )) {
-      matches.add(matched);
-    }
+    );
+    if (!declaredReference && nestedMatches.length === 0) return [];
+    for (const matched of nestedMatches) matches.add(matched);
+    bounded = true;
+    if (!bounded) return [];
   }
   return [...matches].toSorted();
+}
+
+function packageScriptDeclaredCommandMatches(segment, command, manager) {
+  const packageScriptCommand =
+    command.startsWith(`${manager} run `) ||
+    (manager === "npm" && /^npm\s+(?:test|start|stop|restart)$/.test(command));
+  return packageScriptCommand
+    ? packageScriptInvocationMatches(segment, command)
+    : shellCommandMatches(segment, command);
 }
 
 function boundedPackageScriptSegments(source) {
