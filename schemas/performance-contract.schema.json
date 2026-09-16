@@ -23,11 +23,7 @@
           "dimensions": {
             "type": "object",
             "additionalProperties": {
-              "oneOf": [
-                { "type": "number" },
-                { "type": "string" },
-                { "type": "boolean" }
-              ]
+              "oneOf": [{ "type": "number" }, { "type": "string" }, { "type": "boolean" }]
             }
           },
           "correctnessEvidence": {
