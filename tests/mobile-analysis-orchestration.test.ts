@@ -100,16 +100,31 @@ describe("mobile-analysis orchestration", () => {
     expect(mobileFindings(root)).toEqual([]);
   });
 
-  test("accepts equivalent orchestration pinned to another exact mobile-analysis revision", () => {
+  test("accepts equivalent successful orchestration pinned to another exact revision", () => {
     const root = fixture();
     writeConfig(root, "https://example.test/app/", true);
     writePages(root);
     writeFileSync(
       join(root, ".github", "workflows", "mobile-analysis.yml"),
-      `name: Mobile analysis\n\non:\n  workflow_run:\n    workflows:\n      - GitHub Pages\n    types: [completed]\n\njobs:\n  analyze:\n    uses: moritzbrantner/mobile-analysis/.github/workflows/analyze.yml@c80a2a8cf7d9611c34c047d0fc1555a0fbb6409a\n    with:\n      target_url: https://example.test/app/\n      config_path: mobile-analysis.config.json\n      run_unlighthouse: true\n`,
+      `name: Mobile analysis\n\non:\n  workflow_run:\n    workflows:\n      - GitHub Pages\n    types: [completed]\n\njobs:\n  analyze:\n    if: \${{ github.event.workflow_run.conclusion == 'success' }}\n    uses: moritzbrantner/mobile-analysis/.github/workflows/analyze.yml@c80a2a8cf7d9611c34c047d0fc1555a0fbb6409a\n    with:\n      target_url: https://example.test/app/\n      config_path: mobile-analysis.config.json\n      run_unlighthouse: true\n`,
     );
 
     expect(mobileFindings(root)).toEqual([]);
+  });
+
+  test("rejects orchestration that can run after an unsuccessful deployment", () => {
+    const root = fixture();
+    writeConfig(root);
+    writePages(root);
+    writeFileSync(
+      join(root, ".github", "workflows", "mobile-analysis.yml"),
+      `name: Mobile analysis\n\non:\n  workflow_run:\n    workflows:\n      - GitHub Pages\n    types: [completed]\n\njobs:\n  analyze:\n    uses: ${mobileAnalysisRef}\n    with:\n      target_url: https://example.test/app/\n      config_path: mobile-analysis.config.json\n      run_unlighthouse: false\n`,
+    );
+
+    const findings = mobileFindings(root);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toMatchObject({ expectationId: "mobile-analysis-orchestration" });
+    expect((findings[0] as { scaffold?: unknown }).scaffold).toBeUndefined();
   });
 
   test("fails closed when the Pages deployment boundary is ambiguous", () => {
