@@ -452,10 +452,14 @@ function workflowPackageScriptValidationEvidence(content, packageEvidence, decla
   for (const script of Object.keys(packageEvidence.scripts).toSorted()) {
     const wrapperCommand = `${packageEvidence.manager} run ${script}`;
     if (
-      !workflowRunsCommand(content, {
-        command: wrapperCommand,
-        workingDirectory: packageEvidence.workingDirectory,
-      })
+      !workflowRunsCommand(
+        content,
+        {
+          command: wrapperCommand,
+          workingDirectory: packageEvidence.workingDirectory,
+        },
+        packageScriptInvocationMatchesInDirectory,
+      )
     ) {
       continue;
     }
@@ -603,7 +607,11 @@ function inlinePushRelevant(value, defaultBranch) {
   return true;
 }
 
-function workflowRunsCommand(content, declaredCommand) {
+function workflowRunsCommand(
+  content,
+  declaredCommand,
+  matchesInDirectory = shellCommandMatchesInDirectory,
+) {
   const needle = normalizeCommand(declaredCommand?.command ?? declaredCommand);
   const requiredWorkingDirectory = normalizeWorkingDirectory(
     declaredCommand?.workingDirectory ?? ".",
@@ -618,9 +626,7 @@ function workflowRunsCommand(content, declaredCommand) {
     const workingDirectory = workflowRunWorkingDirectory(lines, index, indent);
     const inline = match[2].trim();
     if (inline && !new Set(["|", ">", "|-", ">-", "|+", ">+"]).has(inline)) {
-      if (
-        shellCommandMatchesInDirectory(inline, needle, workingDirectory, requiredWorkingDirectory)
-      )
+      if (matchesInDirectory(inline, needle, workingDirectory, requiredWorkingDirectory))
         return true;
       continue;
     }
@@ -631,14 +637,7 @@ function workflowRunsCommand(content, declaredCommand) {
       if (blockIndent <= indent) break;
       const shellLine = blockRaw.trim();
       if (shellLine.startsWith("#")) continue;
-      if (
-        shellCommandMatchesInDirectory(
-          shellLine,
-          needle,
-          workingDirectory,
-          requiredWorkingDirectory,
-        )
-      )
+      if (matchesInDirectory(shellLine, needle, workingDirectory, requiredWorkingDirectory))
         return true;
     }
   }
@@ -688,6 +687,37 @@ function shellCommandMatchesInDirectory(value, command, workingDirectory, requir
   const prefix = `cd ${requiredDirectory} && `;
   return (
     normalized.startsWith(prefix) && shellCommandMatches(normalized.slice(prefix.length), command)
+  );
+}
+
+function packageScriptInvocationMatchesInDirectory(
+  value,
+  command,
+  workingDirectory,
+  requiredDirectory,
+) {
+  if (workingDirectory === requiredDirectory && packageScriptInvocationMatches(value, command))
+    return true;
+  if (workingDirectory !== "." || requiredDirectory === ".") return false;
+  const normalized = normalizeCommand(value);
+  const prefix = `cd ${requiredDirectory} && `;
+  return (
+    normalized.startsWith(prefix) &&
+    packageScriptInvocationMatches(normalized.slice(prefix.length), command)
+  );
+}
+
+function packageScriptInvocationMatches(value, command) {
+  const normalized = normalizeCommand(value);
+  if (normalized === command) return true;
+  if (!normalized.startsWith(`${command} `)) return false;
+  const suffix = normalized.slice(command.length).trimStart();
+  return (
+    suffix === "--" ||
+    suffix.startsWith("-- ") ||
+    suffix.startsWith("#") ||
+    /^(?:&&|\|\|)(?:\s|$)/.test(suffix) ||
+    /^&(?:\s|$)/.test(suffix)
   );
 }
 

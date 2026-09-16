@@ -505,7 +505,7 @@ function stepRunsCommandInDirectory(step, command, requiredWorkingDirectory) {
 
 function obviousShellSuppression(value) {
   const normalized = normalizeCommand(value);
-  return /\|\|\s*(?:true|:)\s*$/.test(normalized);
+  return /\|\|\s*(?:true|:)\s*$/.test(normalized) || /(?:^|\s)&(?:\s|$)/.test(normalized);
 }
 
 function shellCommandMatches(value, command) {

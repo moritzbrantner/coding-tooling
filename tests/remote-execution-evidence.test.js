@@ -129,6 +129,22 @@ describe("remote execution evidence", () => {
     );
   });
 
+  test("maps backgrounded wrapper steps into fail-closed evidence", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify\n        run: npm run verify & true\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "all-proven-validation-is-fail-open",
+      }),
+    );
+  });
+
   test("maps resolved wrappers into shell-suppression fail-closed evidence", () => {
     const path = ".github/workflows/validate.yml";
     const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify\n        run: npm run verify || true\n`;
