@@ -22,7 +22,11 @@ function fixture(): string {
   return root;
 }
 
-function writeConfig(root: string, targetUrl = "https://example.test/app/", unlighthouse = false): void {
+function writeConfig(
+  root: string,
+  targetUrl = "https://example.test/app/",
+  unlighthouse = false,
+): void {
   writeFileSync(
     join(root, "mobile-analysis.config.json"),
     `${JSON.stringify(
@@ -92,7 +96,7 @@ describe("mobile-analysis orchestration", () => {
     expect(workflow).toContain('target_url: "https://example.test/app/"');
     expect(workflow).toContain("config_path: mobile-analysis.config.json");
     expect(workflow).toContain("run_unlighthouse: false");
-    expect(workflow).toContain('github.event.workflow_run.conclusion == \'success\'');
+    expect(workflow).toContain("github.event.workflow_run.conclusion == 'success'");
     expect(mobileFindings(root)).toEqual([]);
   });
 
