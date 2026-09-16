@@ -732,6 +732,23 @@ function validationEvidenceFor(snapshot, paths, components) {
         workingDirectory: component.path,
       })),
   );
+  const packageScripts = components.flatMap((component) => {
+    if (component.kind !== "package") return [];
+    const scripts = component.evidence?.facts?.scripts;
+    if (scripts?.status !== "available") return [];
+    const manager =
+      component.toolchain?.manager === "bun" || component.toolchain?.manager === "npm"
+        ? component.toolchain.manager
+        : packageCommandManager(component.evidence);
+    if (manager !== "bun" && manager !== "npm") return [];
+    return [
+      {
+        workingDirectory: component.path,
+        manager,
+        scripts: scripts.value,
+      },
+    ];
+  });
   const workflows = workflowPaths
     .filter((path) => typeof snapshot.files[path] === "string")
     .map((path) => ({ path, content: snapshot.files[path] }));
@@ -742,6 +759,7 @@ function validationEvidenceFor(snapshot, paths, components) {
     workflowFetchTruncated: Boolean(snapshot.workflowFetchTruncated),
     defaultBranch: snapshot.repository.defaultBranch,
     declaredCommands,
+    packageScripts,
     localActionIsCodingTooling: isCodingToolingAction(snapshot.files["action.yml"]),
   });
 }
