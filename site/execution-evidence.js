@@ -337,16 +337,17 @@ function failClosedWorkflow(workflowEvidence, content) {
     const matchedCommandEvidence = workflowEvidence.matchedCommandEvidence ?? [];
     const commandMatch =
       matchedCommandEvidence.length > 0
-        ? matchedCommandEvidence.some(
-            (command) =>
-              step.workingDirectory === command.workingDirectory &&
-              step.commands.some((candidate) => shellCommandMatches(candidate, command.command)),
+        ? matchedCommandEvidence.some((command) =>
+            stepRunsCommandInDirectory(step, command.command, command.workingDirectory),
           )
         : (workflowEvidence.matchedCommands ?? []).some((command) =>
             step.commands.some((candidate) => shellCommandMatches(candidate, command)),
           );
+    const wrapperMatch = (workflowEvidence.matchedPackageScriptEvidence ?? []).some((wrapper) =>
+      stepRunsCommandInDirectory(step, wrapper.command, wrapper.workingDirectory),
+    );
     const actionMatch = workflowEvidence.codingToolingAction && step.codingToolingAction;
-    if (!commandMatch && !actionMatch) continue;
+    if (!commandMatch && !wrapperMatch && !actionMatch) continue;
     mapped = true;
     if (step.continueOnError || step.commands.some(obviousShellSuppression))
       explicitlySuppressed = true;
@@ -486,9 +487,25 @@ function literalScalar(value) {
   return result || null;
 }
 
+function stepRunsCommandInDirectory(step, command, requiredWorkingDirectory) {
+  if (
+    step.workingDirectory === requiredWorkingDirectory &&
+    step.commands.some((candidate) => shellCommandMatches(candidate, command))
+  )
+    return true;
+  if (step.workingDirectory !== "." || requiredWorkingDirectory === ".") return false;
+  const prefix = `cd ${requiredWorkingDirectory} && `;
+  return step.commands.some((candidate) => {
+    const normalized = normalizeCommand(candidate);
+    return (
+      normalized.startsWith(prefix) && shellCommandMatches(normalized.slice(prefix.length), command)
+    );
+  });
+}
+
 function obviousShellSuppression(value) {
   const normalized = normalizeCommand(value);
-  return /\|\|\s*(?:true|:)\s*$/.test(normalized);
+  return /\|\|\s*(?:true|:)\s*$/.test(normalized) || /(?:^|\s)&(?:\s|$)/.test(normalized);
 }
 
 function shellCommandMatches(value, command) {
