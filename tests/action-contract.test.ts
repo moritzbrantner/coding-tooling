@@ -51,6 +51,23 @@ describe("composite action contract", () => {
     expect(source).not.toContain("inputs.operation == 'dependency-resolution'");
   });
 
+  test("exposes read-only remediation planning", () => {
+    const source = actionSource();
+
+    expect(source).toContain("remediation planning");
+    expect(source).toContain('"$INPUT_OPERATION" == "remediation-plan"');
+    expect(source).toContain('remediation plan --json > "$INPUT_REPORT_PATH"');
+    expect(source).toContain('echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"');
+  });
+
+  test("keeps remediation planning dependency installation disabled", () => {
+    const source = actionSource();
+    const remediationInstallCondition = "inputs.operation == 'remediation-plan'";
+
+    expect(source).toContain("if: inputs.operation == 'run'");
+    expect(source).not.toContain(remediationInstallCondition);
+  });
+
   test("exposes read-only foundation audit capture", () => {
     const source = actionSource();
 
