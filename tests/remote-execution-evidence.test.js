@@ -156,6 +156,38 @@ describe("remote execution evidence", () => {
     expect(evidence.failClosed.status).toBe("finding");
   });
 
+  test("treats exit-zero wrapper fallbacks as explicit suppression", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify\n        run: npm run verify || exit 0\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "all-proven-validation-is-fail-open",
+      }),
+    );
+  });
+
+  test("does not let a workspace-scoped wrapper hide suppression on the proving step", () => {
+    const path = ".github/workflows/validate.yml";
+    const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Root verify\n        run: npm run verify || true\n      - name: Child verify\n        run: npm run verify --workspace child\n`;
+    const evidence = remoteExecutionEvidence({
+      validationEvidence: wrapperValidation(path, content),
+      workflows: [{ path, content }],
+    });
+
+    expect(evidence.failClosed).toEqual(
+      expect.objectContaining({
+        status: "finding",
+        reason: "all-proven-validation-is-fail-open",
+      }),
+    );
+  });
+
   test("maps explicit-cd wrapper steps into fail-closed evidence", () => {
     const path = ".github/workflows/validate.yml";
     const content = `on: [pull_request]\njobs:\n  validate:\n    steps:\n      - name: Verify app\n        run: cd packages/app && npm run verify || true\n`;
