@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { discoverComponents } from "./core.ts";
 import { deploymentRuntimeParitySubjects } from "./expectation-deployment-detector.ts";
 import { productionSourceFiles, workMarkerSourceFiles } from "./expectation-gap-detectors.ts";
+import { mobileAnalysisOrchestrationSubjects } from "./expectation-mobile-analysis-detector.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { ExpectationDescriptor } from "./expectation-detector-types.ts";
 import { explicitCargoTargets } from "./expectation-rust-detector.ts";
@@ -30,6 +31,7 @@ type CoverageTarget =
   | "packages"
   | "consumer-verification-packages"
   | "deployment-workflows"
+  | "mobile-analysis-config"
   | "typescript-source"
   | "typescript-analysis-projects"
   | "dotnet-analysis-projects"
@@ -47,6 +49,7 @@ const coverageTargets: Record<string, CoverageTarget> = {
   "deployment-runtime-parity": "deployment-workflows",
   "dotnet-type-assignability": "dotnet-analysis-projects",
   "javascript-source-test": "javascript-source",
+  "mobile-analysis-orchestration": "mobile-analysis-config",
   "package-aggregate-check": "packages",
   "package-cli-wiring": "packages",
   "package-test-capability": "script-source",
@@ -82,6 +85,8 @@ function detectorSubjects(root: string, context: DetectorContext, target: Covera
       return context.packages.filter(hasConsumerVerificationScript).length;
     case "deployment-workflows":
       return deploymentRuntimeParitySubjects(root).length;
+    case "mobile-analysis-config":
+      return mobileAnalysisOrchestrationSubjects(root).length;
     case "typescript-source":
       return context.packages.reduce(
         (total, packageInfo) => total + packageInfo.sourceFiles.length,
