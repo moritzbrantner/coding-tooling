@@ -1,0 +1,162 @@
+name: Test discovery wrapper normalize
+
+on:
+  push:
+    branches:
+      - feat/test-discovery-scope-evidence
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Preserve wrapper argument uncertainty
+        shell: python
+        run: |
+          from pathlib import Path
+
+          execution_path = Path("src/test-execution-evidence.ts")
+          execution = execution_path.read_text()
+          old_wrapper = '''function wrapperScript(command: string): string | undefined {
+            const match = /^(?:bun|npm)\\s+run\\s+([A-Za-z0-9:_-]+)(?:\\s+--(?:\\s+.*)?)?$/.exec(command.trim());
+            return match?.[1];
+          }'''
+          new_wrapper = '''type PackageScriptWrapper = {
+            script: string;
+            forwardsArguments: boolean;
+          };
+
+          function wrapperScript(command: string): PackageScriptWrapper | undefined {
+            const match = /^(?:bun|npm)\\s+run\\s+([A-Za-z0-9:_-]+)(\\s+--(?:\\s+.*)?)?$/.exec(
+              command.trim(),
+            );
+            if (!match) return undefined;
+            return { script: match[1]!, forwardsArguments: Boolean(match[2]) };
+          }'''
+          assert old_wrapper in execution
+          execution = execution.replace(old_wrapper, new_wrapper, 1)
+
+          old_tail = '''  const wrapped = wrapperScript(command);
+            if (!wrapped)
+              return { runner: null, script, command: null, reason: "package-script-runner-unrecognized" };
+            const nextSeen = new Set(seen);
+            nextSeen.add(script);
+            return resolveScriptRunner(scripts, wrapped, nextSeen);'''
+          new_tail = '''  const wrapped = wrapperScript(command);
+            if (!wrapped)
+              return { runner: null, script, command: null, reason: "package-script-runner-unrecognized" };
+            const nextSeen = new Set(seen);
+            nextSeen.add(script);
+            const resolved = resolveScriptRunner(scripts, wrapped.script, nextSeen);
+            if (wrapped.forwardsArguments && resolved.runner) {
+              return {
+                ...resolved,
+                command: null,
+                reason: "package-script-forwarded-arguments-unresolved",
+              };
+            }
+            return resolved;'''
+          assert old_tail in execution
+          execution = execution.replace(old_tail, new_tail, 1)
+
+          old_return = '''  return resolveScriptRunner(manifest.scripts, script);
+          }'''
+          new_return = '''  const resolved = resolveScriptRunner(manifest.scripts, script);
+            if (command.length > 3 && resolved.runner) {
+              return {
+                ...resolved,
+                command: null,
+                reason: "package-script-invocation-arguments-unresolved",
+              };
+            }
+            return resolved;
+          }'''
+          assert old_return in execution
+          execution_path.write_text(execution.replace(old_return, new_return, 1))
+
+          discovery_path = Path("src/test-discovery-evidence.ts")
+          discovery = discovery_path.read_text()
+          old_reason = '''  if (!resolution.command) {
+            return incompleteEvidence(
+              resolution.runner,
+              candidates,
+              "native-runner-command-not-safely-resolved",
+            );
+          }'''
+          new_reason = '''  if (!resolution.command) {
+            return incompleteEvidence(
+              resolution.runner,
+              candidates,
+              resolution.reason === "native-runner-resolved"
+                ? "native-runner-command-not-safely-resolved"
+                : resolution.reason,
+            );
+          }'''
+          assert old_reason in discovery
+          discovery_path.write_text(discovery.replace(old_reason, new_reason, 1))
+
+          test_path = Path("tests/test-discovery-evidence.test.ts")
+          tests = test_path.read_text()
+          anchor = '''  test("uses Vitest's native files-only listing as authoritative discovery", () => {'''
+          regression = '''  test("keeps forwarded package-script discovery scope incomplete", () => {
+            const root = repository({
+              "test:unit": "bun run test:implementation -- ./tests/alpha.test.ts",
+              "test:implementation": "bun test",
+            });
+            file(root, "tests/alpha.test.ts");
+            file(root, "tests/beta.test.ts");
+            const runner = successfulRunner();
+
+            const discovery = collectTestDiscoveryEvidence(
+              {
+                cwd: root,
+                capability: "test:unit",
+                command: ["bun", "run", "test:unit"],
+              },
+              runner.run,
+            );
+            const execution = collectTestExecutionEvidence({
+              cwd: root,
+              capability: "test:unit",
+              command: ["bun", "run", "test:unit"],
+              stdout: "1 pass\\n0 fail\\nRan 1 test across 1 file.",
+              stderr: "",
+            });
+
+            expect(discovery).toMatchObject({
+              status: "incomplete",
+              runner: "bun",
+              reason: "package-script-forwarded-arguments-unresolved",
+            });
+            expect(runner.calls).toEqual([]);
+            expect(execution).toMatchObject({ status: "available", runner: "bun", executedFiles: 1 });
+          });
+
+          '''
+          assert anchor in tests
+          test_path.write_text(tests.replace(anchor, regression + anchor, 1))
+      - name: Normalize and verify focused slice
+        run: |
+          bun run format:write
+          bun run typecheck
+          bun test tests/test-discovery-evidence.test.ts tests/test-execution-evidence.test.ts tests/test-execution-validation.test.ts
+      - name: Commit normalized slice
+        run: |
+          unexpected="$(git diff --name-only | grep -v -E '^(src/test-execution-evidence\.ts|src/test-discovery-evidence\.ts|tests/test-discovery-evidence\.test\.ts)$' || true)"
+          if [[ -n "$unexpected" ]]; then
+            echo "Unexpected formatter changes:"
+            echo "$unexpected"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/test-execution-evidence.ts src/test-discovery-evidence.ts tests/test-discovery-evidence.test.ts
+          git commit -m "Keep forwarded test scope explicit"
+          git push origin HEAD:feat/test-discovery-scope-evidence
