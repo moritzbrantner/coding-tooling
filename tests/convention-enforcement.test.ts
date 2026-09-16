@@ -196,6 +196,7 @@ describe("installed convention enforcement", () => {
   });
 
   test("parses tracked workflow paths containing newlines", () => {
+    if (process.platform === "win32") return;
     const root = repository();
     enforce(root, "SEC-005", { kind: "builtin", check: "ci-action-pins" });
     execFileSync("git", ["init", "-q"], { cwd: root });
