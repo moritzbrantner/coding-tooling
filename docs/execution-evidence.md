@@ -35,9 +35,9 @@ This evidence does not prove that every dependency source is immutable, availabl
 Existing remote CI evidence already requires a relevant trigger and a recognized repository validation invocation. Execution-linked evidence additionally rejects that invocation as authoritative proof when the same mapped step explicitly suppresses failure through:
 
 - `continue-on-error: true`; or
-- an obvious trailing `|| true` / `|| :` shell suppression.
+- an obvious trailing `|| true`, `|| :`, or `|| exit 0` shell suppression.
 
-If another recognized validation path still propagates failure normally, that independent path remains valid evidence. Complex shell control flow, expressions, traps, and unbounded indirect scripts are not interpreted. A bounded same-component Bun/npm package-script chain may be resolved from fetched `package.json` evidence; fail-closed mapping still uses the invoked wrapper step so `continue-on-error` and obvious shell suppression cannot become false-green validation.
+If another recognized validation path still propagates failure normally, that independent path remains valid evidence. Complex shell control flow, expressions, traps, and unbounded indirect scripts are not interpreted. A bounded same-component Bun/npm package-script chain may be resolved from fetched `package.json` evidence; every prerequisite package script must exist and resolve through the bounded chain before later validation is credited. Execution-scope options such as npm `--workspace` are rejected rather than being attached to the wrong component, while arguments after an explicit `--` passthrough remain part of the selected script invocation. Fail-closed mapping uses the same wrapper-aware scope rules so an unrelated invocation cannot hide suppression on the step that actually proved validation.
 
 This is not a general shell analyzer. The purpose is only to prevent mechanically obvious fail-open execution from being represented as fail-closed merge evidence.
 
