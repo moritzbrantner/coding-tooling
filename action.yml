@@ -39,7 +39,7 @@ inputs:
     required: false
     default: 1.4.0
   install-mode:
-    description: Install dependencies from supported repository-owned lockfiles automatically, or skip installation.
+    description: Install dependencies from supported repository-owned lockfiles automatically, or skip installation. A declared environment-v1 setup is authoritative for run operations.
     required: false
     default: auto
 
@@ -55,8 +55,48 @@ runs:
       uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       with:
         bun-version: ${{ inputs.bun-version }}
+
+    - name: Detect consumer environment-v1
+      id: consumer-environment
+      shell: bash
+      env:
+        INPUT_OPERATION: ${{ inputs.operation }}
+      run: |
+        set -euo pipefail
+        detected=false
+        node_version_file=false
+        if [[ "$INPUT_OPERATION" == "run" && -f .repository-environment.toml && -f scripts/codex-environment.sh ]]; then
+          detected=true
+          if [[ -f .node-version ]]; then
+            node_version_file=true
+          fi
+        fi
+        {
+          echo "detected=$detected"
+          echo "node-version-file=$node_version_file"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Set up consumer Node
+      if: steps.consumer-environment.outputs.node-version-file == 'true'
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version-file: .node-version
+
+    - name: Prepare consumer environment-v1
+      if: steps.consumer-environment.outputs.detected == 'true'
+      shell: bash
+      run: bash scripts/codex-environment.sh setup
+
+    - name: Verify environment-v1 preserves tracked state
+      if: steps.consumer-environment.outputs.detected == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        git diff --exit-code
+        git diff --cached --exit-code
+
     - name: Install consumer dependencies
-      if: inputs.operation == 'run' || inputs.operation == 'public-contract' || inputs.operation == 'score'
+      if: (inputs.operation == 'run' && steps.consumer-environment.outputs.detected != 'true') || inputs.operation == 'public-contract' || inputs.operation == 'score'
       shell: bash
       env:
         INPUT_OPERATION: ${{ inputs.operation }}
@@ -88,6 +128,7 @@ runs:
           echo "::error::package.json exists without bun.lock, bun.lockb, or package-lock.json. Commit a supported lockfile or install dependencies explicitly and set install-mode: none."
           exit 2
         fi
+
     - name: Run coding-tooling
       id: run
       shell: bash
