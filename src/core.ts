@@ -129,6 +129,19 @@ export function discoverComponents(root = repositoryRoot()): Component[] {
     });
   }
 
+  for (const file of files.filter((path) => basename(path) === "pyproject.toml")) {
+    const directory = dirname(file);
+    const path = relativePosix(root, directory);
+    if (components.some((component) => component.path === path)) continue;
+    components.push({
+      name: path === "." ? basename(root) : basename(directory),
+      path,
+      kind: "python",
+      technologies: ["python"],
+      capabilities: {},
+    });
+  }
+
   for (const file of files.filter((path) => basename(path) === "Cargo.toml")) {
     const directory = dirname(file);
     const path = relativePosix(root, directory);
