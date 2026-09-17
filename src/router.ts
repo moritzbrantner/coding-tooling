@@ -3,6 +3,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { agentSummaryCommand } from "./agent-summary.ts";
 import { agentHandoffCommand, agentVerificationCommand, taskPacketCommand } from "./agent-work.ts";
 import { writeReport } from "./core.ts";
 import { entryMain } from "./entry.ts";
@@ -42,6 +43,7 @@ function writeOptionalReport(
 
 function usage(): number {
   console.error(`Additional agent-work commands:
+  coding-tooling agent summary [--root <path>] [--json]
   coding-tooling agent task-packet <path> [--root <path>] [--json]
   coding-tooling agent verify <path> [--root <path>] [--report <path>] [--json]
   coding-tooling agent handoff <path> --verification-report <path> [--root <path>] [--report <path>] [--json]
@@ -80,6 +82,10 @@ export function routerMain(argv = process.argv.slice(2)): number {
 
   if (argv[0] === "agent") {
     const action = argv[1];
+    if (action === "summary") {
+      if (!validFlags(argv, 2, new Set(["--root"]))) return usage();
+      return print(agentSummaryCommand(root), compact);
+    }
     const packetPath = argv[2];
     if (!packetPath || packetPath.startsWith("--")) return usage();
     if (action === "task-packet") {
