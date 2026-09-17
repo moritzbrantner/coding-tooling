@@ -202,3 +202,10 @@ test("parallel siblings cannot consume outputs produced only by another sibling"
     "references contract-bound output diagnosis before it is available",
   );
 });
+
+test("parallel output is available after the parallel join", () => {
+  const root = repositoryWithSteps(
+    `    - id: parallel-work\n      kind: parallel\n      steps:\n        - id: diagnose\n          kind: invoke\n          capability: "general/diagnosing-bugs"\n          output: "diagnosis"\n          output-contract: "agent.diagnosis-envelope/v1"\n        - id: unrelated\n          kind: human-gate\n          prompt: "Inspect unrelated evidence."\n    - id: consume-diagnosis\n      kind: branch\n      condition:\n        source: "diagnosis.confidence"\n        equals: "unresolved"\n      then: []\n      else: []`,
+  );
+  expect(() => buildAgentCapabilityCatalog(root, "test-revision", contractsRoot())).not.toThrow();
+});
