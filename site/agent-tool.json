@@ -87,6 +87,7 @@
     "coding-tooling bootstrap plan --json",
     "coding-tooling conformance --json",
     "coding-tooling findings --json",
+    "coding-tooling agent summary --json",
     "coding-tooling normalize --json",
     "coding-tooling converge --json",
     "coding-tooling run --tier fast --strict --report .artifacts/coding-tooling/run.json --json",
