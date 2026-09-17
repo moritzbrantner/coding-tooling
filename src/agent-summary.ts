@@ -276,7 +276,8 @@ export function agentSummaryCommand(
       activeNewFindings: activeNew.length,
       correlatedEvidenceGroups: evidenceGroups.length,
       collapsedRepresentations: activeNew.length - evidenceGroups.length,
-      activeBaselineFindings: sourceFindings.filter((finding) => finding.state === "baseline").length,
+      activeBaselineFindings: sourceFindings.filter((finding) => finding.state === "baseline")
+        .length,
       remediationCandidates: candidates.length,
     },
     strongestEvidence,
