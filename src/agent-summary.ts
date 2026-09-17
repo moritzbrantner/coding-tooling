@@ -2,22 +2,14 @@ import type { ExpectationRegistryRecord } from "./expectation-detectors.ts";
 import type { Finding, FindingSeverity } from "./expectation-model.ts";
 import { findingsCommand } from "./expectations.ts";
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
-import {
-  planRemediationCandidates,
-  type RemediationCandidate,
-} from "./remediation-plan.ts";
+import { planRemediationCandidates, type RemediationCandidate } from "./remediation-plan.ts";
 import { type CommandResult, runCommand } from "./shared.ts";
 
 export const AGENT_SUMMARY_VERSION = "coding-tooling/agent-summary/v1" as const;
 
 export type AgentSummaryDecision = "clean" | "partial" | "blocked" | "unavailable";
 
-type Runner = (
-  command: string,
-  args?: string[],
-  cwd?: string,
-  inherit?: boolean,
-) => CommandResult;
+type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
 
 export type AgentEvidenceGroup = {
   subject: Finding["subject"];
@@ -125,6 +117,18 @@ export function collapseAgentEvidence(
         left.subject.key.localeCompare(right.subject.key) ||
         left.independenceKey.localeCompare(right.independenceKey),
     );
+}
+
+function compactEvidenceGroup(group: AgentEvidenceGroup): Record<string, unknown> {
+  return {
+    subject: group.subject,
+    independenceKey: group.independenceKey,
+    highestSeverity: group.highestSeverity,
+    findingIds: group.findingIds,
+    expectationIds: group.expectationIds,
+    representationCount: group.representationCount,
+    oracles: group.evidence.oracles,
+  };
 }
 
 function compactCandidate(candidate: RemediationCandidate): AgentNextAction {
@@ -277,7 +281,7 @@ export function agentSummaryCommand(
     },
     strongestEvidence,
     nextAction,
-    evidenceGroups,
+    evidenceGroups: evidenceGroups.map(compactEvidenceGroup),
     drillDown: {
       strongestFinding: strongestEvidence
         ? ["coding-tooling", "finding", strongestEvidence.primaryFinding.id, "--json"]
