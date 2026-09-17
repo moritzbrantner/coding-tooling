@@ -26,11 +26,32 @@ describe("composite action contract", () => {
     const source = actionSource();
     const fingerprintInstallCondition = "inputs.operation == 'environment-fingerprint'";
 
-    expect(source).toContain("if: inputs.operation == 'run'");
+    expect(source).toContain("inputs.operation == 'run'");
     expect(source).not.toContain(fingerprintInstallCondition);
   });
 
-  test("derives run dependency preparation from the selected validation scope", () => {
+  test("prepares a declared environment-v1 before run validation", () => {
+    const source = actionSource();
+
+    expect(source).toContain("Detect consumer environment-v1");
+    expect(source).toContain('"$INPUT_OPERATION" == "run"');
+    expect(source).toContain(".repository-environment.toml");
+    expect(source).toContain("scripts/codex-environment.sh");
+    expect(source).toContain("Set up consumer Node");
+    expect(source).toContain("node-version-file: .node-version");
+    expect(source).toContain("bash scripts/codex-environment.sh setup");
+    expect(source).toContain("Verify environment-v1 preserves tracked state");
+  });
+
+  test("does not duplicate dependency installation after environment-v1 setup", () => {
+    const source = actionSource();
+
+    expect(source).toContain(
+      "inputs.operation == 'run' && steps.consumer-environment.outputs.detected != 'true'",
+    );
+  });
+
+  test("derives fallback run dependency preparation from the selected validation scope", () => {
     const source = actionSource();
 
     expect(source).toContain('if [[ "$INPUT_OPERATION" == "run" ]]');
@@ -64,7 +85,7 @@ describe("composite action contract", () => {
     const source = actionSource();
     const remediationInstallCondition = "inputs.operation == 'remediation-plan'";
 
-    expect(source).toContain("if: inputs.operation == 'run'");
+    expect(source).toContain("inputs.operation == 'run'");
     expect(source).not.toContain(remediationInstallCondition);
   });
 
@@ -81,7 +102,7 @@ describe("composite action contract", () => {
     const source = actionSource();
     const foundationInstallCondition = "inputs.operation == 'foundation'";
 
-    expect(source).toContain("if: inputs.operation == 'run'");
+    expect(source).toContain("inputs.operation == 'run'");
     expect(source).not.toContain(foundationInstallCondition);
   });
 
@@ -98,7 +119,7 @@ describe("composite action contract", () => {
     const source = actionSource();
     const bootstrapPlanInstallCondition = "inputs.operation == 'bootstrap-plan'";
 
-    expect(source).toContain("if: inputs.operation == 'run'");
+    expect(source).toContain("inputs.operation == 'run'");
     expect(source).not.toContain(bootstrapPlanInstallCondition);
   });
 });
