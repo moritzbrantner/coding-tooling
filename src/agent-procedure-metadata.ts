@@ -31,8 +31,11 @@ function strings(
   const result = value as string[];
   if (result.some((entry) => entry.trim() === ""))
     throw new Error(`${label} must not contain empty strings`);
-  if (result.length < (options.minItems ?? 0))
-    throw new Error(`${label} must contain at least ${options.minItems} item${options.minItems === 1 ? "" : "s"}`);
+  if (result.length < (options.minItems ?? 0)) {
+    throw new Error(
+      `${label} must contain at least ${options.minItems} item${options.minItems === 1 ? "" : "s"}`,
+    );
+  }
   if (options.unique && new Set(result).size !== result.length)
     throw new Error(`${label} must not contain duplicates`);
   return result;
@@ -41,9 +44,11 @@ function strings(
 function exactKeys(object: ProcedureMetadataObject, allowed: string[], label: string): void {
   const allowedSet = new Set(allowed);
   const unknown = Object.keys(object).filter((key) => !allowedSet.has(key));
-  if (unknown.length > 0) throw new Error(`${label} has unknown fields: ${unknown.join(", ")}`);
+  if (unknown.length > 0)
+    throw new Error(`${label} has unknown fields: ${unknown.join(", ")}`);
   const missing = allowed.filter((key) => !(key in object));
-  if (missing.length > 0) throw new Error(`${label} is missing fields: ${missing.join(", ")}`);
+  if (missing.length > 0)
+    throw new Error(`${label} is missing fields: ${missing.join(", ")}`);
 }
 
 function artifactIds(value: JsonValue | undefined, label: string): string[] {
