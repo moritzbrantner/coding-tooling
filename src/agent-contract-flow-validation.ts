@@ -16,6 +16,8 @@ type ContractCatalogEntry = {
   schema: string;
 };
 
+type BindingEnvironment = Map<string, OutputBinding>;
+
 function asObject(value: JsonValue | undefined, label: string): JsonObject {
   if (!value || Array.isArray(value) || typeof value !== "object")
     throw new Error(`${label} must be an object`);
@@ -121,6 +123,14 @@ function sameScalar(left: JsonValue | undefined, right: string | number | boolea
   return left === right;
 }
 
+function schemaVariants(value: JsonValue | undefined): JsonObject[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (variant): variant is JsonObject =>
+      Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
+  );
+}
+
 function acceptsScalar(
   node: JsonObject,
   value: string | number | boolean | null,
@@ -128,32 +138,17 @@ function acceptsScalar(
 ): boolean {
   const resolved = dereference(node, root);
 
-  const oneOf = resolved.oneOf;
-  if (Array.isArray(oneOf)) {
-    const variants = oneOf.filter(
-      (variant): variant is JsonObject =>
-        Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
-    );
-    if (variants.length > 0 && !variants.some((variant) => acceptsScalar(variant, value, root)))
-      return false;
+  const oneOf = schemaVariants(resolved.oneOf);
+  if (oneOf.length > 0) {
+    const matches = oneOf.filter((variant) => acceptsScalar(variant, value, root)).length;
+    if (matches !== 1) return false;
   }
-  const anyOf = resolved.anyOf;
-  if (Array.isArray(anyOf)) {
-    const variants = anyOf.filter(
-      (variant): variant is JsonObject =>
-        Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
-    );
-    if (variants.length > 0 && !variants.some((variant) => acceptsScalar(variant, value, root)))
-      return false;
-  }
-  const allOf = resolved.allOf;
-  if (Array.isArray(allOf)) {
-    const variants = allOf.filter(
-      (variant): variant is JsonObject =>
-        Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
-    );
-    if (variants.some((variant) => !acceptsScalar(variant, value, root))) return false;
-  }
+
+  const anyOf = schemaVariants(resolved.anyOf);
+  if (anyOf.length > 0 && !anyOf.some((variant) => acceptsScalar(variant, value, root))) return false;
+
+  const allOf = schemaVariants(resolved.allOf);
+  if (allOf.some((variant) => !acceptsScalar(variant, value, root))) return false;
 
   if (resolved.const !== undefined && !sameScalar(resolved.const, value)) return false;
   if (Array.isArray(resolved.enum) && !resolved.enum.some((entry) => sameScalar(entry, value)))
@@ -173,76 +168,176 @@ function acceptsScalar(
   return true;
 }
 
-function collectOutputBindings(steps: FlowStep[], target: Map<string, OutputBinding>): void {
+function addBinding(
+  environment: BindingEnvironment,
+  output: string,
+  binding: OutputBinding,
+  capabilityId: string,
+): void {
+  const existing = environment.get(output);
+  if (existing && existing.contractId !== binding.contractId) {
+    throw new Error(
+      `${capabilityId} flow output ${output} is rebound from ${existing.contractId} to ${binding.contractId}`,
+    );
+  }
+  environment.set(output, binding);
+}
+
+function guaranteedIntersection(
+  left: BindingEnvironment,
+  right: BindingEnvironment,
+): BindingEnvironment {
+  const result = new Map<string, OutputBinding>();
+  for (const [output, leftBinding] of left) {
+    const rightBinding = right.get(output);
+    if (rightBinding?.contractId === leftBinding.contractId) result.set(output, leftBinding);
+  }
+  return result;
+}
+
+function mergeParallelEnvironments(
+  base: BindingEnvironment,
+  branches: BindingEnvironment[],
+  capabilityId: string,
+): BindingEnvironment {
+  const result = new Map(base);
+  for (const branch of branches) {
+    for (const [output, binding] of branch) addBinding(result, output, binding, capabilityId);
+  }
+  return result;
+}
+
+function collectContractDeclarations(
+  steps: FlowStep[],
+  contractIds: Set<string>,
+  outputNames: Set<string>,
+): void {
   for (const step of steps) {
     if (step.kind === "invoke") {
       if (step.outputContract && !step.output)
         throw new Error(`invoke step ${step.id} declares output-contract without output`);
       if (step.output && step.outputContract) {
-        const existing = target.get(step.output);
-        if (existing && existing.contractId !== step.outputContract) {
-          throw new Error(
-            `flow output ${step.output} is bound to conflicting contracts ${existing.contractId} and ${step.outputContract}`,
-          );
-        }
-        target.set(step.output, { contractId: step.outputContract, stepId: step.id });
+        contractIds.add(step.outputContract);
+        outputNames.add(step.output);
       }
-    } else if (step.kind === "parallel") collectOutputBindings(step.steps, target);
-    else if (step.kind === "branch") {
-      collectOutputBindings(step.whenTrue, target);
-      if (step.whenFalse) collectOutputBindings(step.whenFalse, target);
+    } else if (step.kind === "parallel") {
+      collectContractDeclarations(step.steps, contractIds, outputNames);
+    } else if (step.kind === "branch") {
+      collectContractDeclarations(step.whenTrue, contractIds, outputNames);
+      if (step.whenFalse) collectContractDeclarations(step.whenFalse, contractIds, outputNames);
     }
   }
 }
 
-function validateBranchConditions(
-  steps: FlowStep[],
-  outputs: Map<string, OutputBinding>,
+function validateCondition(
+  step: Extract<FlowStep, { kind: "branch" }>,
+  environment: BindingEnvironment,
+  allContractOutputs: Set<string>,
   schemas: Map<string, JsonObject>,
   capabilityId: string,
 ): void {
-  for (const step of steps) {
-    if (step.kind === "branch") {
-      const [outputName, ...fieldPath] = step.condition.source.split(".");
-      const binding = outputs.get(outputName);
-      if (binding) {
-        const schema = schemas.get(binding.contractId);
-        if (!schema)
-          throw new Error(`${capabilityId} output contract ${binding.contractId} is unresolved`);
-        const candidates = fieldPath.length === 0 ? [schema] : schemasAtPath(schema, fieldPath);
-        if (candidates.length === 0) {
-          throw new Error(
-            `${capabilityId} branch ${step.id} source ${step.condition.source} is not present in ${binding.contractId}`,
-          );
-        }
-        if (
-          !candidates.some((candidate) => acceptsScalar(candidate, step.condition.equals, schema))
-        ) {
-          throw new Error(
-            `${capabilityId} branch ${step.id} value ${JSON.stringify(step.condition.equals)} is not accepted by ${binding.contractId} at ${step.condition.source}`,
-          );
-        }
-      }
-      validateBranchConditions(step.whenTrue, outputs, schemas, capabilityId);
-      if (step.whenFalse) validateBranchConditions(step.whenFalse, outputs, schemas, capabilityId);
-    } else if (step.kind === "parallel")
-      validateBranchConditions(step.steps, outputs, schemas, capabilityId);
+  const [outputName, ...fieldPath] = step.condition.source.split(".");
+  const binding = environment.get(outputName);
+  if (!binding) {
+    if (allContractOutputs.has(outputName)) {
+      throw new Error(
+        `${capabilityId} branch ${step.id} references contract-bound output ${outputName} before it is available`,
+      );
+    }
+    return;
   }
+
+  const schema = schemas.get(binding.contractId);
+  if (!schema) throw new Error(`${capabilityId} output contract ${binding.contractId} is unresolved`);
+  const candidates = fieldPath.length === 0 ? [schema] : schemasAtPath(schema, fieldPath);
+  if (candidates.length === 0) {
+    throw new Error(
+      `${capabilityId} branch ${step.id} source ${step.condition.source} is not present in ${binding.contractId}`,
+    );
+  }
+  if (!candidates.some((candidate) => acceptsScalar(candidate, step.condition.equals, schema))) {
+    throw new Error(
+      `${capabilityId} branch ${step.id} value ${JSON.stringify(step.condition.equals)} is not accepted by ${binding.contractId} at ${step.condition.source}`,
+    );
+  }
+}
+
+function validateSequence(
+  steps: FlowStep[],
+  initial: BindingEnvironment,
+  allContractOutputs: Set<string>,
+  schemas: Map<string, JsonObject>,
+  capabilityId: string,
+): BindingEnvironment {
+  let environment = new Map(initial);
+
+  for (const step of steps) {
+    if (step.kind === "invoke") {
+      if (step.output && step.outputContract) {
+        addBinding(
+          environment,
+          step.output,
+          { contractId: step.outputContract, stepId: step.id },
+          capabilityId,
+        );
+      }
+      continue;
+    }
+
+    if (step.kind === "branch") {
+      validateCondition(step, environment, allContractOutputs, schemas, capabilityId);
+      const trueEnvironment = validateSequence(
+        step.whenTrue,
+        new Map(environment),
+        allContractOutputs,
+        schemas,
+        capabilityId,
+      );
+      const falseEnvironment = step.whenFalse
+        ? validateSequence(
+            step.whenFalse,
+            new Map(environment),
+            allContractOutputs,
+            schemas,
+            capabilityId,
+          )
+        : new Map(environment);
+      environment = guaranteedIntersection(trueEnvironment, falseEnvironment);
+      continue;
+    }
+
+    if (step.kind === "parallel") {
+      const base = new Map(environment);
+      const branches = step.steps.map((parallelStep) =>
+        validateSequence(
+          [parallelStep],
+          new Map(base),
+          allContractOutputs,
+          schemas,
+          capabilityId,
+        ),
+      );
+      environment = mergeParallelEnvironments(base, branches, capabilityId);
+    }
+  }
+
+  return environment;
 }
 
 export function validateContractBoundFlowConditions(
   catalog: AgentCapabilityCatalogFragment,
   contractsRoot?: string,
 ): void {
-  const outputsByCapability = new Map<string, Map<string, OutputBinding>>();
   const requiredContractIds = new Set<string>();
+  const outputsByCapability = new Map<string, Set<string>>();
+
   for (const capability of catalog.capabilities) {
     if (!capability.flow) continue;
-    const outputs = new Map<string, OutputBinding>();
-    collectOutputBindings(capability.flow.steps, outputs);
+    const outputs = new Set<string>();
+    collectContractDeclarations(capability.flow.steps, requiredContractIds, outputs);
     outputsByCapability.set(capability.id, outputs);
-    for (const binding of outputs.values()) requiredContractIds.add(binding.contractId);
   }
+
   if (requiredContractIds.size === 0) return;
   if (!contractsRoot)
     throw new Error("contract-bound capability outputs require an explicit agent-contracts root");
@@ -251,6 +346,7 @@ export function validateContractBoundFlowConditions(
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const schemas = new Map<string, JsonObject>();
   const root = resolve(contractsRoot);
+
   for (const contractId of requiredContractIds) {
     const entry = byId.get(contractId);
     if (!entry) throw new Error(`agent-contracts catalog does not contain ${contractId}`);
@@ -266,9 +362,10 @@ export function validateContractBoundFlowConditions(
 
   for (const capability of catalog.capabilities) {
     if (!capability.flow) continue;
-    validateBranchConditions(
+    validateSequence(
       capability.flow.steps,
-      outputsByCapability.get(capability.id) ?? new Map(),
+      new Map(),
+      outputsByCapability.get(capability.id) ?? new Set(),
       schemas,
       capability.id,
     );
