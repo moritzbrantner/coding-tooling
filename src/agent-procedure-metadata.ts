@@ -58,7 +58,8 @@ export function normalizeAgentProcedureMetadata(
   value: ProcedureMetadataObject,
   label: string,
 ): ProcedureMetadataObject {
-  exactKeys(value, ["routing", "termination", "artifacts"], label);
+  exactKeys(value, ["schemaVersion", "routing", "termination", "artifacts"], label);
+  if (value.schemaVersion !== 1) throw new Error(`${label}.schemaVersion must be 1`);
 
   const routing = asObject(value.routing, `${label}.routing`);
   exactKeys(
@@ -91,6 +92,7 @@ export function normalizeAgentProcedureMetadata(
   exactKeys(artifacts, ["consumes", "produces"], `${label}.artifacts`);
 
   return {
+    schemaVersion: 1,
     routing: {
       useWhen: strings(routing.useWhen, `${label}.routing.useWhen`, { minItems: 1 }),
       doNotUseWhen: strings(routing.doNotUseWhen, `${label}.routing.doNotUseWhen`),
