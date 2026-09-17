@@ -55,7 +55,9 @@ test("requires the v1 procedure metadata discriminator", () => {
 test("rejects an unknown approval boundary", () => {
   expect(() =>
     buildAgentCapabilityCatalog(
-      repository(validMetadata.replace('approvalBoundary: "none"', 'approvalBoundary: "sometimes"')),
+      repository(
+        validMetadata.replace('approvalBoundary: "none"', 'approvalBoundary: "sometimes"'),
+      ),
       "test-revision",
     ),
   ).toThrow("approvalBoundary must be none, conditional, or required");
@@ -78,7 +80,9 @@ test("requires evidence for procedure completion", () => {
 test("rejects malformed artifact identities", () => {
   expect(() =>
     buildAgentCapabilityCatalog(
-      repository(validMetadata.replace('produces: ["sample-result"]', 'produces: ["Not Valid"]')),
+      repository(
+        validMetadata.replace('produces: ["sample-result"]', 'produces: ["Not Valid"]'),
+      ),
       "test-revision",
     ),
   ).toThrow("artifacts.produces contains invalid artifact ID Not Valid");
