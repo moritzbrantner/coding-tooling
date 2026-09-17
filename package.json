@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "format": "oxfmt --check .",
-    "format:check": "oxfmt --check . || (cp src/agent-summary.ts /tmp/agent-summary-before.ts && oxfmt src/agent-summary.ts && git diff --no-index /tmp/agent-summary-before.ts src/agent-summary.ts; exit 1)",
+    "format:check": "oxfmt --check .",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
