@@ -79,7 +79,7 @@ function repository(
   const outputContractLine = outputContract ? `      output-contract: "${outputContract}"\n` : "";
   writeFileSync(
     join(fix, "FLOW.md"),
-    `---\nid: "general/fix-bug"\nname: "fix-bug"\ndescription: "Fix a bug."\nkind: "flow"\nmaturity: "stable"\nentry-point: true\nintents: ["bug", "fix"]\nrequires: []\nrelated-to: ["general/diagnosing-bugs"]\nreadiness: []\nflow:\n  steps:\n    - id: diagnose\n      kind: invoke\n      capability: "general/diagnosing-bugs"\n${outputLine}${outputContractLine}    - id: condition\n      kind: branch\n      condition:\n        source: "diagnosis.confidence"\n        equals: "${conditionValue}"\n      then: []\n      else: []\nextensions: {}\n---\n\n# Fix\n`,
+    `---\nid: "general/fix-bug"\nname: "fix-bug"\ndescription: "Fix a bug."\nkind: "flow"\nmaturity: "stable"\nentry-point: true\nintents: ["bug", "fix"]\nrequires: []\nrelated-to: ["general/diagnosing-bugs"]\nreadiness: []\nflow:\n  steps:\n    - id: diagnose\n      kind: invoke\n      capability: "general/diagnosing-bugs"\n${outputLine}${outputContractLine}    - id: condition\n      kind: branch\n      condition:\n        source: "${conditionSource}"\n        equals: "${conditionValue}"\n      then: []\n      else: []\nextensions: {}\n---\n\n# Fix\n`,
   );
   return root;
 }
