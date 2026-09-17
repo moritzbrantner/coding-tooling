@@ -156,7 +156,7 @@ function usage(): never {
   coding-tooling source-deps <activate|status|deactivate> [--config <path>] [--json]
   coding-tooling dependencies audit [--config <path>] [--strict] [--json]
   coding-tooling dependencies resolve [--static] [--strict] [--json]
-  coding-tooling agent-capabilities <validate|catalog|profile> [profile-name] [--root <path>] [--json]
+  coding-tooling agent-capabilities <validate|catalog|profile> [profile-name] [--root <path>] [--contracts-root <path>] [--json]
   coding-tooling conventions init [module...] [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions add <module...> [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions check [--root <path>] [--json]
@@ -279,10 +279,12 @@ export function main(argv = process.argv.slice(2)): number {
     const action = positional[0];
     if (action !== "validate" && action !== "catalog" && action !== "profile") return usage();
     if (action === "profile" && !positional[1]) return usage();
+    const contractsRoot = stringOption(options, "contracts-root");
     result = agentCapabilitiesCommand(
       resolve(stringOption(options, "root") ?? root),
       action,
       positional[1],
+      contractsRoot ? resolve(contractsRoot) : undefined,
     );
   } else if (command === "conventions") {
     const action = positional[0];

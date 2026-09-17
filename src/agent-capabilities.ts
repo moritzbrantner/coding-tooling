@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
+import { validateContractBoundFlowConditions } from "./agent-contract-flow-validation.ts";
 import { normalizeAgentProcedureMetadata } from "./agent-procedure-metadata.ts";
 import type { ResultEnvelope } from "./model.ts";
 import { runCommand } from "./shared.ts";
@@ -25,6 +26,7 @@ export type FlowStep =
       capability: string;
       inputs?: Record<string, string>;
       output?: string;
+      outputContract?: string;
     }
   | { id: string; kind: "action"; action: string; optional?: boolean; fallback?: "skip" | "agent" }
   | { id: string; kind: "human-gate"; prompt: string }
@@ -67,6 +69,7 @@ export type AgentCapabilityCatalogFragment = {
 };
 
 const capabilityIdPattern = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
+const contractIdPattern = /^[a-z0-9][a-z0-9._-]*\/v[1-9][0-9]*$/;
 const namespacePattern = /^[a-z0-9][a-z0-9._-]*$/;
 const namePattern = /^[a-z0-9][a-z0-9-]*$/;
 const actionPattern = /^[a-z0-9][a-z0-9._-]*$/;
@@ -279,7 +282,11 @@ function normalizeFlowStep(value: JsonValue, label: string): FlowStep {
   const id = asString(object.id, `${label}.id`);
   const kind = asString(object.kind, `${label}.kind`);
   if (kind === "invoke") {
-    unknownKeys(object, new Set(["id", "kind", "capability", "inputs", "output"]), label);
+    unknownKeys(
+      object,
+      new Set(["id", "kind", "capability", "inputs", "output", "output-contract"]),
+      label,
+    );
     const rawInputs = object.inputs;
     let inputs: Record<string, string> | undefined;
     if (rawInputs !== undefined) {
@@ -291,12 +298,19 @@ function normalizeFlowStep(value: JsonValue, label: string): FlowStep {
         ]),
       );
     }
+    const output = optionalString(object.output, `${label}.output`);
+    const outputContract = optionalString(object["output-contract"], `${label}.output-contract`);
+    if (outputContract && !contractIdPattern.test(outputContract))
+      throw new Error(`${label}.output-contract must be a stable contract ID`);
+    if (outputContract && !output)
+      throw new Error(`${label}.output-contract requires a named output`);
     return {
       id,
       kind,
       capability: asString(object.capability, `${label}.capability`),
       inputs,
-      output: optionalString(object.output, `${label}.output`),
+      output,
+      outputContract,
     };
   }
   if (kind === "action") {
@@ -577,6 +591,7 @@ function validateCatalog(catalog: AgentCapabilityCatalogFragment): void {
 export function buildAgentCapabilityCatalog(
   root: string,
   revision = detectedRevision(root),
+  contractsRoot?: string,
 ): AgentCapabilityCatalogFragment {
   const paths = [...filesIn(root, "skills", "SKILL.md"), ...filesIn(root, "flows", "FLOW.md")];
   if (paths.length === 0) throw new Error(`${root}: no skills/*/SKILL.md or flows/*/FLOW.md found`);
@@ -601,6 +616,7 @@ export function buildAgentCapabilityCatalog(
     profiles,
   };
   validateCatalog(catalog);
+  validateContractBoundFlowConditions(catalog, contractsRoot);
   return catalog;
 }
 
@@ -669,10 +685,11 @@ export function agentCapabilitiesCommand(
   root: string,
   action: string,
   profile?: string,
+  contractsRoot?: string,
 ): ResultEnvelope<Record<string, unknown>> {
   const started = performance.now();
   try {
-    const catalog = buildAgentCapabilityCatalog(root);
+    const catalog = buildAgentCapabilityCatalog(root, detectedRevision(root), contractsRoot);
     const data: Record<string, unknown> =
       action === "catalog"
         ? { catalog }
