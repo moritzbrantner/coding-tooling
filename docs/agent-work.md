@@ -2,6 +2,28 @@
 
 `coding-tooling` provides deterministic, ephemeral evidence for coding-agent work. It does not own durable queues, scheduling, conversation history, or orchestration state.
 
+## Agent summary
+
+Start with the compact consumption surface when an agent needs to decide what the repository evidence currently says:
+
+```sh
+coding-tooling agent summary --json
+```
+
+The summary is a read-only projection over existing findings and remediation evidence. It does not add another oracle or confidence score. It records the current Git candidate SHA, whether the worktree is clean, a repository decision (`clean`, `partial`, or `blocked`), the strongest evidence group, and the strongest existing remediation candidate.
+
+Findings are collapsed only when they describe the same subject and share the same evidence `independenceKey`. Correlated representations therefore do not look like independent confirmations, while distinct files, packages, or repository subjects remain separate actionable observations.
+
+The summary keeps the full audit surfaces available through explicit drill-down commands:
+
+```sh
+coding-tooling finding <finding-id> --json
+coding-tooling findings --json
+coding-tooling remediation plan --json
+```
+
+Use those larger envelopes when the compact projection is insufficient. The summary should be the normal first read for an agent; the audit surfaces remain authoritative for the underlying details.
+
 ## Task packet
 
 A task packet records the bounded capability being changed and the constraints that must survive the change.
@@ -31,11 +53,13 @@ coding-tooling agent task-packet .artifacts/coding-tooling/task.json --json
 
 Task packets should normally live under an ignored `.artifacts/` path. They are execution evidence, not a second project backlog.
 
+Use a task packet when work is delegated or resumable, crosses a repository/protocol boundary, or has preservation constraints that a later run must verify exactly. A small local mechanical repair does not need a task packet merely to satisfy ceremony; the ordinary findings, summary, and canonical validation path remain sufficient.
+
 ## Change classification
 
 `changeKinds` derives risk-appropriate evidence instead of making each agent invent a validation plan. The current mapping distinguishes behavior, refactoring, performance, protocol, persistence, browser, mobile, dependency, security, deterministic replay, and documentation changes. Explicit acceptance capabilities and semantic review requirements are additive.
 
-A missing required capability is unavailable evidence, not a passing result. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence.
+A missing required capability is unavailable evidence, not a passing result. Semantic review requirements are carried into handoff/integration review and are never presented as machine-verified evidence.
 
 ## Exact-head verification
 
