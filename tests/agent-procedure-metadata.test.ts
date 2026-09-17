@@ -74,7 +74,7 @@ test("requires evidence for procedure completion", () => {
       ),
       "test-revision",
     ),
-  ).toThrow("evidenceRequired must contain at least one item");
+  ).toThrow("evidenceRequired must contain at least 1 item");
 });
 
 test("rejects malformed artifact identities", () => {
