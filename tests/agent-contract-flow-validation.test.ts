@@ -64,6 +64,7 @@ function repository(
   conditionSource: string,
   conditionValue: string,
   outputContract: string | undefined = "agent.diagnosis-envelope/v1",
+  namedOutput = true,
 ): string {
   const root = mkdtempSync(join(tmpdir(), "agent-flow-contract-"));
   const diagnose = join(root, "skills", "diagnosing-bugs");
@@ -74,10 +75,11 @@ function repository(
     join(diagnose, "SKILL.md"),
     `---\nid: "general/diagnosing-bugs"\nname: "diagnosing-bugs"\ndescription: "Diagnose a bug."\nkind: "skill"\nmaturity: "stable"\nentry-point: true\nintents: ["bug"]\nrequires: []\nrelated-to: ["general/fix-bug"]\nreadiness: []\nextensions: {}\n---\n\n# Diagnose\n`,
   );
+  const outputLine = namedOutput ? '      output: "diagnosis"\n' : "";
   const outputContractLine = outputContract ? `      output-contract: "${outputContract}"\n` : "";
   writeFileSync(
     join(fix, "FLOW.md"),
-    `---\nid: "general/fix-bug"\nname: "fix-bug"\ndescription: "Fix a bug."\nkind: "flow"\nmaturity: "stable"\nentry-point: true\nintents: ["bug", "fix"]\nrequires: []\nrelated-to: ["general/diagnosing-bugs"]\nreadiness: []\nflow:\n  steps:\n    - id: diagnose\n      kind: invoke\n      capability: "general/diagnosing-bugs"\n      output: "diagnosis"\n${outputContractLine}    - id: condition\n      kind: branch\n      condition:\n        source: "${conditionSource}"\n        equals: "${conditionValue}"\n      then: []\n      else: []\nextensions: {}\n---\n\n# Fix\n`,
+    `---\nid: "general/fix-bug"\nname: "fix-bug"\ndescription: "Fix a bug."\nkind: "flow"\nmaturity: "stable"\nentry-point: true\nintents: ["bug", "fix"]\nrequires: []\nrelated-to: ["general/diagnosing-bugs"]\nreadiness: []\nflow:\n  steps:\n    - id: diagnose\n      kind: invoke\n      capability: "general/diagnosing-bugs"\n${outputLine}${outputContractLine}    - id: condition\n      kind: branch\n      condition:\n        source: "diagnosis.confidence"\n        equals: "${conditionValue}"\n      then: []\n      else: []\nextensions: {}\n---\n\n# Fix\n`,
   );
   return root;
 }
@@ -136,4 +138,14 @@ test("rejects a declared output contract absent from the local contract catalog"
       contractsRoot(),
     ),
   ).toThrow("agent-contracts catalog does not contain agent.missing-diagnosis-envelope/v1");
+});
+
+test("requires a named output when an invoke step declares an output contract", () => {
+  expect(() =>
+    buildAgentCapabilityCatalog(
+      repository("diagnosis.confidence", "unresolved", "agent.diagnosis-envelope/v1", false),
+      "test-revision",
+      contractsRoot(),
+    ),
+  ).toThrow("output-contract requires a named output");
 });
