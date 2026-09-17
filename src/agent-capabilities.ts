@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
+import { normalizeAgentProcedureMetadata } from "./agent-procedure-metadata.ts";
 import type { ResultEnvelope } from "./model.ts";
 import { runCommand } from "./shared.ts";
 
@@ -388,7 +389,14 @@ function normalizeCapability(frontmatter: JsonObject, path: string): AgentCapabi
   for (const [namespace, value] of Object.entries(extensionsRaw)) {
     if (!namespacePattern.test(namespace))
       throw new Error(`${path}.extensions has invalid namespace ${namespace}`);
-    extensions[namespace] = asObject(value, `${path}.extensions.${namespace}`);
+    const extension = asObject(value, `${path}.extensions.${namespace}`);
+    extensions[namespace] =
+      namespace === "agent.procedure"
+        ? (normalizeAgentProcedureMetadata(
+            extension,
+            `${path}.extensions.${namespace}`,
+          ) as JsonObject)
+        : extension;
   }
 
   let flow: { steps: FlowStep[] } | undefined;
