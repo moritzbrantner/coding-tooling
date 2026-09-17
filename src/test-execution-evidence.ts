@@ -13,6 +13,7 @@ export type TestExecutionEvidence = {
   runner: NativeTestRunner | null;
   script: string | null;
   executedCases: number | null;
+  executedFiles: number | null;
   passedCases: number | null;
   failedCases: number | null;
   skippedCases: number | null;
@@ -24,9 +25,10 @@ type PackageManifest = {
   scripts?: Record<string, string>;
 };
 
-type RunnerResolution = {
+export type TestRunnerResolution = {
   runner: NativeTestRunner | null;
   script: string | null;
+  command: string[] | null;
   reason: string;
 };
 
@@ -40,7 +42,7 @@ export type TestExecutionInput = {
 
 const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
-function testCapability(capability: Capability): boolean {
+export function isTestCapability(capability: Capability): boolean {
   return capability === "test" || capability.startsWith("test:");
 }
 
@@ -57,52 +59,97 @@ function directRunner(command: string): NativeTestRunner | undefined {
   return undefined;
 }
 
-function wrapperScript(command: string): string | undefined {
-  const match = /^(?:bun|npm)\s+run\s+([A-Za-z0-9:_-]+)(?:\s+--(?:\s+.*)?)?$/.exec(command.trim());
-  return match?.[1];
+function simpleCommandTokens(command: string): string[] | null {
+  const value = command.trim();
+  if (!value || /["'`$;&|<>\\\r\n]/.test(value)) return null;
+  const tokens = value.split(/\s+/).filter(Boolean);
+  return tokens.length > 0 ? tokens : null;
+}
+
+type PackageScriptWrapper = {
+  script: string;
+  forwardsArguments: boolean;
+};
+
+function wrapperScript(command: string): PackageScriptWrapper | undefined {
+  const match = /^(?:bun|npm)\s+run\s+([A-Za-z0-9:_-]+)(\s+--(?:\s+.*)?)?$/.exec(command.trim());
+  if (!match) return undefined;
+  return { script: match[1]!, forwardsArguments: Boolean(match[2]) };
 }
 
 function resolveScriptRunner(
   scripts: Record<string, string>,
   script: string,
   seen = new Set<string>(),
-): RunnerResolution {
-  if (seen.has(script)) return { runner: null, script, reason: "package-script-cycle" };
+): TestRunnerResolution {
+  if (seen.has(script))
+    return { runner: null, script, command: null, reason: "package-script-cycle" };
   const command = scripts[script];
   if (typeof command !== "string" || !command.trim()) {
-    return { runner: null, script, reason: "package-script-missing" };
+    return { runner: null, script, command: null, reason: "package-script-missing" };
   }
 
   const runner = directRunner(command);
-  if (runner) return { runner, script, reason: "native-runner-resolved" };
+  if (runner) {
+    return {
+      runner,
+      script,
+      command: simpleCommandTokens(command),
+      reason: "native-runner-resolved",
+    };
+  }
 
   const wrapped = wrapperScript(command);
-  if (!wrapped) return { runner: null, script, reason: "package-script-runner-unrecognized" };
+  if (!wrapped)
+    return { runner: null, script, command: null, reason: "package-script-runner-unrecognized" };
   const nextSeen = new Set(seen);
   nextSeen.add(script);
-  return resolveScriptRunner(scripts, wrapped, nextSeen);
+  const resolved = resolveScriptRunner(scripts, wrapped.script, nextSeen);
+  if (wrapped.forwardsArguments && resolved.runner) {
+    return {
+      ...resolved,
+      command: null,
+      reason: "package-script-forwarded-arguments-unresolved",
+    };
+  }
+  return resolved;
 }
 
-function resolveRunner(cwd: string, command: readonly string[]): RunnerResolution {
+export function resolveTestRunner(cwd: string, command: readonly string[]): TestRunnerResolution {
   if (command[0] === "bun" && command[1] === "test") {
-    return { runner: "bun", script: null, reason: "native-command" };
+    return { runner: "bun", script: null, command: [...command], reason: "native-command" };
   }
   if (
     (command[0] === "vitest" || command[0] === "bunx" || command[0] === "npx") &&
     (command[0] === "vitest" || command[1] === "vitest")
   ) {
-    return { runner: "vitest", script: null, reason: "native-command" };
+    return { runner: "vitest", script: null, command: [...command], reason: "native-command" };
   }
 
   const script = packageScriptName(command);
-  if (!script) return { runner: null, script: null, reason: "test-command-runner-unrecognized" };
+  if (!script)
+    return {
+      runner: null,
+      script: null,
+      command: null,
+      reason: "test-command-runner-unrecognized",
+    };
   const manifestPath = join(cwd, "package.json");
   if (!existsSync(manifestPath)) {
-    return { runner: null, script, reason: "package-manifest-unavailable" };
+    return { runner: null, script, command: null, reason: "package-manifest-unavailable" };
   }
   const manifest = readJson<PackageManifest>(manifestPath);
-  if (!manifest?.scripts) return { runner: null, script, reason: "package-scripts-unavailable" };
-  return resolveScriptRunner(manifest.scripts, script);
+  if (!manifest?.scripts)
+    return { runner: null, script, command: null, reason: "package-scripts-unavailable" };
+  const resolved = resolveScriptRunner(manifest.scripts, script);
+  if (command.length > 3 && resolved.runner) {
+    return {
+      ...resolved,
+      command: null,
+      reason: "package-script-invocation-arguments-unresolved",
+    };
+  }
+  return resolved;
 }
 
 function count(text: string, pattern: RegExp): number | null {
@@ -119,6 +166,7 @@ function evidence(
     failed: number | null;
     skipped: number | null;
     todo: number | null;
+    files: number | null;
   },
   reason: string,
 ): TestExecutionEvidence {
@@ -129,6 +177,7 @@ function evidence(
     runner,
     script,
     executedCases: hasExecutedCounts ? (values.passed ?? 0) + (values.failed ?? 0) : null,
+    executedFiles: values.files,
     passedCases: values.passed,
     failedCases: values.failed,
     skippedCases: values.skipped,
@@ -146,22 +195,28 @@ function bunEvidence(text: string, script: string | null): TestExecutionEvidence
   const failed = count(text, /\b(\d+)\s+fail\b/g);
   const skipped = count(text, /\b(\d+)\s+skip\b/g);
   const todo = count(text, /\b(\d+)\s+todo\b/g);
+  const files = count(text, /\bRan\s+\d+\s+tests?\s+across\s+(\d+)\s+files?\b/g);
 
   if (passed !== null || failed !== null) {
-    return evidence("bun", script, { passed, failed, skipped, todo }, "bun-summary");
+    return evidence("bun", script, { passed, failed, skipped, todo, files }, "bun-summary");
   }
 
   const noTests = outputLines(text).some((line) =>
     /^\s*(?:no tests found!?|0 tests?\b|ran 0 tests?\b)/i.test(line),
   );
   if (noTests) {
-    return evidence("bun", script, { passed: 0, failed: 0, skipped, todo }, "bun-summary");
+    return evidence(
+      "bun",
+      script,
+      { passed: 0, failed: 0, skipped, todo, files: files ?? 0 },
+      "bun-summary",
+    );
   }
 
   return evidence(
     "bun",
     script,
-    { passed: null, failed: null, skipped, todo },
+    { passed: null, failed: null, skipped, todo, files },
     "bun-summary-unavailable",
   );
 }
@@ -175,7 +230,7 @@ function vitestEvidence(text: string, script: string | null): TestExecutionEvide
     return evidence(
       "vitest",
       script,
-      { passed: 0, failed: 0, skipped: 0, todo: 0 },
+      { passed: 0, failed: 0, skipped: 0, todo: 0, files: 0 },
       "vitest-summary",
     );
   }
@@ -184,10 +239,21 @@ function vitestEvidence(text: string, script: string | null): TestExecutionEvide
     return evidence(
       "vitest",
       script,
-      { passed: null, failed: null, skipped: null, todo: null },
+      { passed: null, failed: null, skipped: null, todo: null, files: null },
       "vitest-summary-unavailable",
     );
   }
+
+  const testFilesLine = lines.filter((line) => /^\s*Test Files\s+/i.test(line)).at(-1);
+  const fileTotal = testFilesLine ? count(testFilesLine, /\((\d+)\)\s*$/g) : null;
+  const filePassed = testFilesLine ? count(testFilesLine, /\b(\d+)\s+passed\b/g) : null;
+  const fileFailed = testFilesLine ? count(testFilesLine, /\b(\d+)\s+failed\b/g) : null;
+  const fileSkipped = testFilesLine ? count(testFilesLine, /\b(\d+)\s+skipped\b/g) : null;
+  const files =
+    fileTotal ??
+    (filePassed !== null || fileFailed !== null || fileSkipped !== null
+      ? (filePassed ?? 0) + (fileFailed ?? 0) + (fileSkipped ?? 0)
+      : null);
 
   const passed = count(testsLine, /\b(\d+)\s+passed\b/g);
   const failed = count(testsLine, /\b(\d+)\s+failed\b/g);
@@ -203,7 +269,7 @@ function vitestEvidence(text: string, script: string | null): TestExecutionEvide
     return evidence(
       "vitest",
       script,
-      { passed: null, failed: null, skipped: null, todo: null },
+      { passed: null, failed: null, skipped: null, todo: null, files },
       "vitest-summary-unavailable",
     );
   }
@@ -216,6 +282,7 @@ function vitestEvidence(text: string, script: string | null): TestExecutionEvide
       failed: failed ?? 0,
       skipped,
       todo,
+      files,
     },
     "vitest-summary",
   );
@@ -224,8 +291,8 @@ function vitestEvidence(text: string, script: string | null): TestExecutionEvide
 export function collectTestExecutionEvidence(
   input: TestExecutionInput,
 ): TestExecutionEvidence | undefined {
-  if (!testCapability(input.capability)) return undefined;
-  const resolution = resolveRunner(input.cwd, input.command);
+  if (!isTestCapability(input.capability)) return undefined;
+  const resolution = resolveTestRunner(input.cwd, input.command);
   if (!resolution.runner) {
     return {
       schemaVersion: 1,
@@ -233,6 +300,7 @@ export function collectTestExecutionEvidence(
       runner: null,
       script: resolution.script,
       executedCases: null,
+      executedFiles: null,
       passedCases: null,
       failedCases: null,
       skippedCases: null,
