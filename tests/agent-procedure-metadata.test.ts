@@ -80,9 +80,7 @@ test("requires evidence for procedure completion", () => {
 test("rejects malformed artifact identities", () => {
   expect(() =>
     buildAgentCapabilityCatalog(
-      repository(
-        validMetadata.replace('produces: ["sample-result"]', 'produces: ["Not Valid"]'),
-      ),
+      repository(validMetadata.replace('produces: ["sample-result"]', 'produces: ["Not Valid"]')),
       "test-revision",
     ),
   ).toThrow("artifacts.produces contains invalid artifact ID Not Valid");

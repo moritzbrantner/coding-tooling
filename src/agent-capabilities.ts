@@ -392,7 +392,10 @@ function normalizeCapability(frontmatter: JsonObject, path: string): AgentCapabi
     const extension = asObject(value, `${path}.extensions.${namespace}`);
     extensions[namespace] =
       namespace === "agent.procedure"
-        ? (normalizeAgentProcedureMetadata(extension, `${path}.extensions.${namespace}`) as JsonObject)
+        ? (normalizeAgentProcedureMetadata(
+            extension,
+            `${path}.extensions.${namespace}`,
+          ) as JsonObject)
         : extension;
   }
 

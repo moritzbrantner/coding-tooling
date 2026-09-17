@@ -44,11 +44,9 @@ function strings(
 function exactKeys(object: ProcedureMetadataObject, allowed: string[], label: string): void {
   const allowedSet = new Set(allowed);
   const unknown = Object.keys(object).filter((key) => !allowedSet.has(key));
-  if (unknown.length > 0)
-    throw new Error(`${label} has unknown fields: ${unknown.join(", ")}`);
+  if (unknown.length > 0) throw new Error(`${label} has unknown fields: ${unknown.join(", ")}`);
   const missing = allowed.filter((key) => !(key in object));
-  if (missing.length > 0)
-    throw new Error(`${label} is missing fields: ${missing.join(", ")}`);
+  if (missing.length > 0) throw new Error(`${label} is missing fields: ${missing.join(", ")}`);
 }
 
 function artifactIds(value: JsonValue | undefined, label: string): string[] {
@@ -72,10 +70,7 @@ export function normalizeAgentProcedureMetadata(
     ["useWhen", "doNotUseWhen", "mutates", "approvalBoundary"],
     `${label}.routing`,
   );
-  const approvalBoundary = asString(
-    routing.approvalBoundary,
-    `${label}.routing.approvalBoundary`,
-  );
+  const approvalBoundary = asString(routing.approvalBoundary, `${label}.routing.approvalBoundary`);
   if (!approvalBoundaries.has(approvalBoundary))
     throw new Error(`${label}.routing.approvalBoundary must be none, conditional, or required`);
 
