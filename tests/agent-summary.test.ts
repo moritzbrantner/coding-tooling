@@ -37,11 +37,7 @@ function finding(
   };
 }
 
-function registry(
-  id: string,
-  independenceKey: string,
-  oracle: string,
-): ExpectationRegistryRecord {
+function registry(id: string, independenceKey: string, oracle: string): ExpectationRegistryRecord {
   return {
     id,
     version: 1,
