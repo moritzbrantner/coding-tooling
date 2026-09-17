@@ -32,10 +32,7 @@ function contractsRoot(): string {
         properties: {
           confidence: { enum: ["confirmed", "probable", "unresolved"] },
           payload: {
-            oneOf: [
-              { $ref: "#/$defs/bugPayload" },
-              { $ref: "#/$defs/performancePayload" },
-            ],
+            oneOf: [{ $ref: "#/$defs/bugPayload" }, { $ref: "#/$defs/performancePayload" }],
           },
         },
         $defs: {
@@ -77,9 +74,7 @@ function repository(
     join(diagnose, "SKILL.md"),
     `---\nid: "general/diagnosing-bugs"\nname: "diagnosing-bugs"\ndescription: "Diagnose a bug."\nkind: "skill"\nmaturity: "stable"\nentry-point: true\nintents: ["bug"]\nrequires: []\nrelated-to: ["general/fix-bug"]\nreadiness: []\nextensions: {}\n---\n\n# Diagnose\n`,
   );
-  const outputContractLine = outputContract
-    ? `      output-contract: "${outputContract}"\n`
-    : "";
+  const outputContractLine = outputContract ? `      output-contract: "${outputContract}"\n` : "";
   writeFileSync(
     join(fix, "FLOW.md"),
     `---\nid: "general/fix-bug"\nname: "fix-bug"\ndescription: "Fix a bug."\nkind: "flow"\nmaturity: "stable"\nentry-point: true\nintents: ["bug", "fix"]\nrequires: []\nrelated-to: ["general/diagnosing-bugs"]\nreadiness: []\nflow:\n  steps:\n    - id: diagnose\n      kind: invoke\n      capability: "general/diagnosing-bugs"\n      output: "diagnosis"\n${outputContractLine}    - id: condition\n      kind: branch\n      condition:\n        source: "${conditionSource}"\n        equals: "${conditionValue}"\n      then: []\n      else: []\nextensions: {}\n---\n\n# Fix\n`,
@@ -129,21 +124,14 @@ test("resolves nested paths through oneOf and local refs", () => {
 
 test("requires an explicit contracts root for contract-bound outputs", () => {
   expect(() =>
-    buildAgentCapabilityCatalog(
-      repository("diagnosis.confidence", "unresolved"),
-      "test-revision",
-    ),
+    buildAgentCapabilityCatalog(repository("diagnosis.confidence", "unresolved"), "test-revision"),
   ).toThrow("require an explicit agent-contracts root");
 });
 
 test("rejects a declared output contract absent from the local contract catalog", () => {
   expect(() =>
     buildAgentCapabilityCatalog(
-      repository(
-        "diagnosis.confidence",
-        "unresolved",
-        "agent.missing-diagnosis-envelope/v1",
-      ),
+      repository("diagnosis.confidence", "unresolved", "agent.missing-diagnosis-envelope/v1"),
       "test-revision",
       contractsRoot(),
     ),

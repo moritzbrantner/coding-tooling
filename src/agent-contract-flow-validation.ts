@@ -27,14 +27,17 @@ function readJson(path: string, label: string): JsonObject {
     return asObject(JSON.parse(readFileSync(path, "utf8")) as JsonValue, label);
   } catch (error) {
     if (error instanceof Error && error.message.startsWith(`${label} must`)) throw error;
-    throw new Error(`${label} could not be read: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `${label} could not be read: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
 function contractEntries(contractsRoot: string): ContractCatalogEntry[] {
   const catalog = readJson(resolve(contractsRoot, "CATALOG.json"), "agent-contracts CATALOG.json");
   const rawContracts = catalog.contracts;
-  if (!Array.isArray(rawContracts)) throw new Error("agent-contracts CATALOG.json contracts must be an array");
+  if (!Array.isArray(rawContracts))
+    throw new Error("agent-contracts CATALOG.json contracts must be an array");
   return rawContracts.map((entry, index) => {
     const object = asObject(entry, `agent-contracts CATALOG.json contracts[${index}]`);
     if (typeof object.id !== "string" || object.id === "")
@@ -74,7 +77,11 @@ function propertySchemas(
   visited.add(resolved);
 
   const matches: JsonObject[] = [];
-  if (resolved.properties && !Array.isArray(resolved.properties) && typeof resolved.properties === "object") {
+  if (
+    resolved.properties &&
+    !Array.isArray(resolved.properties) &&
+    typeof resolved.properties === "object"
+  ) {
     const properties = resolved.properties as JsonObject;
     const candidate = properties[property];
     if (candidate && !Array.isArray(candidate) && typeof candidate === "object")
@@ -124,27 +131,33 @@ function acceptsScalar(
   const oneOf = resolved.oneOf;
   if (Array.isArray(oneOf)) {
     const variants = oneOf.filter(
-      (variant): variant is JsonObject => Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
+      (variant): variant is JsonObject =>
+        Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
     );
-    if (variants.length > 0 && !variants.some((variant) => acceptsScalar(variant, value, root))) return false;
+    if (variants.length > 0 && !variants.some((variant) => acceptsScalar(variant, value, root)))
+      return false;
   }
   const anyOf = resolved.anyOf;
   if (Array.isArray(anyOf)) {
     const variants = anyOf.filter(
-      (variant): variant is JsonObject => Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
+      (variant): variant is JsonObject =>
+        Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
     );
-    if (variants.length > 0 && !variants.some((variant) => acceptsScalar(variant, value, root))) return false;
+    if (variants.length > 0 && !variants.some((variant) => acceptsScalar(variant, value, root)))
+      return false;
   }
   const allOf = resolved.allOf;
   if (Array.isArray(allOf)) {
     const variants = allOf.filter(
-      (variant): variant is JsonObject => Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
+      (variant): variant is JsonObject =>
+        Boolean(variant) && !Array.isArray(variant) && typeof variant === "object",
     );
     if (variants.some((variant) => !acceptsScalar(variant, value, root))) return false;
   }
 
   if (resolved.const !== undefined && !sameScalar(resolved.const, value)) return false;
-  if (Array.isArray(resolved.enum) && !resolved.enum.some((entry) => sameScalar(entry, value))) return false;
+  if (Array.isArray(resolved.enum) && !resolved.enum.some((entry) => sameScalar(entry, value)))
+    return false;
 
   const rawType = resolved.type;
   if (typeof rawType === "string" && !scalarTypeMatches(rawType, value)) return false;
@@ -194,14 +207,17 @@ function validateBranchConditions(
       const binding = outputs.get(outputName);
       if (binding) {
         const schema = schemas.get(binding.contractId);
-        if (!schema) throw new Error(`${capabilityId} output contract ${binding.contractId} is unresolved`);
+        if (!schema)
+          throw new Error(`${capabilityId} output contract ${binding.contractId} is unresolved`);
         const candidates = fieldPath.length === 0 ? [schema] : schemasAtPath(schema, fieldPath);
         if (candidates.length === 0) {
           throw new Error(
             `${capabilityId} branch ${step.id} source ${step.condition.source} is not present in ${binding.contractId}`,
           );
         }
-        if (!candidates.some((candidate) => acceptsScalar(candidate, step.condition.equals, schema))) {
+        if (
+          !candidates.some((candidate) => acceptsScalar(candidate, step.condition.equals, schema))
+        ) {
           throw new Error(
             `${capabilityId} branch ${step.id} value ${JSON.stringify(step.condition.equals)} is not accepted by ${binding.contractId} at ${step.condition.source}`,
           );
@@ -209,7 +225,8 @@ function validateBranchConditions(
       }
       validateBranchConditions(step.whenTrue, outputs, schemas, capabilityId);
       if (step.whenFalse) validateBranchConditions(step.whenFalse, outputs, schemas, capabilityId);
-    } else if (step.kind === "parallel") validateBranchConditions(step.steps, outputs, schemas, capabilityId);
+    } else if (step.kind === "parallel")
+      validateBranchConditions(step.steps, outputs, schemas, capabilityId);
   }
 }
 
@@ -238,7 +255,11 @@ export function validateContractBoundFlowConditions(
     const entry = byId.get(contractId);
     if (!entry) throw new Error(`agent-contracts catalog does not contain ${contractId}`);
     const schemaPath = resolve(root, entry.schema);
-    if (schemaPath !== root && !schemaPath.startsWith(`${root}/`) && !schemaPath.startsWith(`${root}\\`))
+    if (
+      schemaPath !== root &&
+      !schemaPath.startsWith(`${root}/`) &&
+      !schemaPath.startsWith(`${root}\\`)
+    )
       throw new Error(`agent-contracts schema path escapes root: ${entry.schema}`);
     schemas.set(contractId, readJson(schemaPath, `${contractId} schema`));
   }
