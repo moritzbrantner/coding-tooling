@@ -129,7 +129,7 @@ function conventionalCandidates(
   excludedSubtrees: readonly string[],
 ): string[] {
   const pattern = runner === "bun" ? bunTestFilePattern : vitestCandidateFilePattern;
-  return walkFiles(cwd, 12, { includeIgnoredDirectories: ["fixtures"] })
+  return walkFiles(cwd, Number.MAX_SAFE_INTEGER, { includeIgnoredDirectories: ["fixtures"] })
     .filter((path) => {
       try {
         return lstatSync(path).isFile();
