@@ -215,17 +215,12 @@ export function agentSummaryCommand(
   try {
     candidates = planRemediationCandidates(sourceFindings, { root });
   } catch (error) {
-    return envelope(
-      "error",
-      started,
-      { root, candidateSha },
-      [
-        {
-          code: "agent-summary-remediation-planning-failed",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      ],
-    );
+    return envelope("error", started, { root, candidateSha }, [
+      {
+        code: "agent-summary-remediation-planning-failed",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ]);
   }
 
   const endingSha = exactHead(root, runner);
