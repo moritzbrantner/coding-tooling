@@ -191,9 +191,7 @@ test("accepts output produced with the same contract in both branch arms", () =>
   const root = repositoryWithSteps(
     `    - id: choose-diagnosis\n      kind: branch\n      condition:\n        source: "decision.kind"\n        equals: "primary"\n      then:\n        - id: primary-diagnosis\n          kind: invoke\n          capability: "general/diagnosing-bugs"\n          output: "diagnosis"\n          output-contract: "agent.diagnosis-envelope/v1"\n      else:\n        - id: alternate-diagnosis\n          kind: invoke\n          capability: "general/diagnosing-bugs"\n          output: "diagnosis"\n          output-contract: "agent.diagnosis-envelope/v1"\n    - id: consume-diagnosis\n      kind: branch\n      condition:\n        source: "diagnosis.confidence"\n        equals: "unresolved"\n      then: []\n      else: []`,
   );
-  expect(() =>
-    buildAgentCapabilityCatalog(root, "test-revision", contractsRoot()),
-  ).not.toThrow();
+  expect(() => buildAgentCapabilityCatalog(root, "test-revision", contractsRoot())).not.toThrow();
 });
 
 test("parallel siblings cannot consume outputs produced only by another sibling", () => {

@@ -145,7 +145,8 @@ function acceptsScalar(
   }
 
   const anyOf = schemaVariants(resolved.anyOf);
-  if (anyOf.length > 0 && !anyOf.some((variant) => acceptsScalar(variant, value, root))) return false;
+  if (anyOf.length > 0 && !anyOf.some((variant) => acceptsScalar(variant, value, root)))
+    return false;
 
   const allOf = schemaVariants(resolved.allOf);
   if (allOf.some((variant) => !acceptsScalar(variant, value, root))) return false;
@@ -248,7 +249,8 @@ function validateCondition(
   }
 
   const schema = schemas.get(binding.contractId);
-  if (!schema) throw new Error(`${capabilityId} output contract ${binding.contractId} is unresolved`);
+  if (!schema)
+    throw new Error(`${capabilityId} output contract ${binding.contractId} is unresolved`);
   const candidates = fieldPath.length === 0 ? [schema] : schemasAtPath(schema, fieldPath);
   if (candidates.length === 0) {
     throw new Error(
@@ -309,13 +311,7 @@ function validateSequence(
     if (step.kind === "parallel") {
       const base = new Map(environment);
       const branches = step.steps.map((parallelStep) =>
-        validateSequence(
-          [parallelStep],
-          new Map(base),
-          allContractOutputs,
-          schemas,
-          capabilityId,
-        ),
+        validateSequence([parallelStep], new Map(base), allContractOutputs, schemas, capabilityId),
       );
       environment = mergeParallelEnvironments(base, branches, capabilityId);
     }

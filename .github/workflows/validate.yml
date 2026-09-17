@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: validate-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -18,28 +18,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 2
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
-      - name: Format contract-flow validation source
-        if: github.event_name == 'pull_request' && github.head_ref == 'feature/contract-bound-flow-validation'
-        run: |
-          bunx oxfmt --write src/agent-contract-flow-validation.ts tests/agent-contract-flow-validation.test.ts
-          git show HEAD^:.github/workflows/validate.yml > .github/workflows/validate.yml
-          git add src/agent-contract-flow-validation.ts tests/agent-contract-flow-validation.test.ts .github/workflows/validate.yml
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Format contract-bound flow validation"
-          git push origin HEAD:${{ github.head_ref }}
       - name: Validate through the local Action
         uses: ./
         with:
