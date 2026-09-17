@@ -2,7 +2,10 @@ import type { ExpectationRegistryRecord } from "./expectation-detectors.ts";
 import type { Finding, FindingSeverity } from "./expectation-model.ts";
 import { findingsCommand } from "./expectations.ts";
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
-import { remediationPlanCommand, type RemediationCandidate } from "./remediation-plan.ts";
+import {
+  planRemediationCandidates,
+  type RemediationCandidate,
+} from "./remediation-plan.ts";
 import { type CommandResult, runCommand } from "./shared.ts";
 
 export const AGENT_SUMMARY_VERSION = "coding-tooling/agent-summary/v1" as const;
@@ -197,9 +200,28 @@ export function agentSummaryCommand(
   if (findings.status === "error") {
     return envelope("error", started, { root, candidateSha }, findings.diagnostics);
   }
-  const remediation = remediationPlanCommand(root);
-  if (remediation.status === "error") {
-    return envelope("error", started, { root, candidateSha }, remediation.diagnostics);
+
+  const sourceFindings = Array.isArray(findings.data.findings)
+    ? (findings.data.findings as Finding[])
+    : [];
+  const registry = Array.isArray(findings.data.registry)
+    ? (findings.data.registry as ExpectationRegistryRecord[])
+    : [];
+  let candidates: RemediationCandidate[];
+  try {
+    candidates = planRemediationCandidates(sourceFindings, { root });
+  } catch (error) {
+    return envelope(
+      "error",
+      started,
+      { root, candidateSha },
+      [
+        {
+          code: "agent-summary-remediation-planning-failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    );
   }
 
   const endingSha = exactHead(root, runner);
@@ -224,19 +246,10 @@ export function agentSummaryCommand(
     );
   }
 
-  const sourceFindings = Array.isArray(findings.data.findings)
-    ? (findings.data.findings as Finding[])
-    : [];
-  const registry = Array.isArray(findings.data.registry)
-    ? (findings.data.registry as ExpectationRegistryRecord[])
-    : [];
   const activeNew = sourceFindings.filter(
     (finding) => finding.disposition === "active" && finding.state === "new",
   );
   const evidenceGroups = collapseAgentEvidence(activeNew, registry);
-  const candidates = Array.isArray(remediation.data.candidates)
-    ? (remediation.data.candidates as RemediationCandidate[])
-    : [];
   const hasError =
     activeNew.some((finding) => finding.severity === "error") ||
     candidates.some((candidate) => candidate.severities.includes("error"));
@@ -274,7 +287,7 @@ export function agentSummaryCommand(
     },
     audit: {
       findingsStatus: findings.status,
-      remediationStatus: remediation.status,
+      candidateSource: "existing-remediation-planner",
       note: "This summary projects existing evidence; it does not add an independent oracle.",
     },
   });
