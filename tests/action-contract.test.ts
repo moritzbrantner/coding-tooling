@@ -89,6 +89,17 @@ describe("composite action contract", () => {
     expect(source).not.toContain(remediationInstallCondition);
   });
 
+  test("exposes compact agent summary without pre-installing consumer dependencies", () => {
+    const source = actionSource();
+    const agentSummaryInstallCondition = "inputs.operation == 'agent-summary'";
+
+    expect(source).toContain("compact agent evidence summaries");
+    expect(source).toContain('"$INPUT_OPERATION" == "agent-summary"');
+    expect(source).toContain('agent summary --json > "$INPUT_REPORT_PATH"');
+    expect(source).toContain('echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"');
+    expect(source).not.toContain(agentSummaryInstallCondition);
+  });
+
   test("exposes read-only foundation audit capture", () => {
     const source = actionSource();
 
