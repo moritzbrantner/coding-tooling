@@ -1,9 +1,5 @@
 import { analysisErrorMessage, analysisMessage } from "../analysis-message.js";
-import {
-  analysisApiEnvelope,
-  apiErrorEnvelope,
-  envelopeRequested,
-} from "../api-envelope.js";
+import { analysisApiEnvelope, apiErrorEnvelope, envelopeRequested } from "../api-envelope.js";
 import { analysisQueryJson } from "../analysis-query.js";
 
 const started = Date.now();
@@ -18,9 +14,7 @@ analysisParams.delete("envelope");
 try {
   if (!repository) throw new Error("Missing required ?repo=owner/repository query parameter.");
   const analysis = await analysisQueryJson(repository, analysisParams);
-  const result = useEnvelope
-    ? analysisApiEnvelope(analysis, Date.now() - started)
-    : analysis;
+  const result = useEnvelope ? analysisApiEnvelope(analysis, Date.now() - started) : analysis;
   target.textContent = `${JSON.stringify(result, null, 2)}\n`;
   document.title = `${analysis.repository.fullName} · analysis.json`;
   postToParent(analysisMessage(repository, result));
