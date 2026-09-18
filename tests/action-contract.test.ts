@@ -30,6 +30,26 @@ describe("composite action contract", () => {
     expect(source).not.toContain(fingerprintInstallCondition);
   });
 
+  test("reuses declared environment-v1 caches by semantic fingerprint", () => {
+    const source = actionSource();
+
+    expect(source).toContain("Resolve consumer environment-v1 cache");
+    expect(source).toContain("environment fingerprint");
+    expect(source).toContain('config.get("cache", {}).get("paths", [])');
+    expect(source).toContain("Restore consumer environment-v1 cache");
+    expect(source).toContain("actions/cache@caa296126883cff596d87d8935842f9db880ef25");
+    expect(source).toContain("consumer-environment-cache.outputs.fingerprint");
+    expect(source).not.toContain("restore-keys:");
+  });
+
+  test("skips setup-bun when the requested Bun is already installed", () => {
+    const source = actionSource();
+
+    expect(source).toContain("Detect coding-tooling Bun");
+    expect(source).toContain('[[ "$(bun --version)" == "$INPUT_BUN_VERSION" ]]');
+    expect(source).toContain("if: steps.tooling-bun.outputs.ready != 'true'");
+  });
+
   test("prepares environment-v1 without happy-path environment verification", () => {
     const source = actionSource();
 
