@@ -263,13 +263,19 @@ export function agentSummaryCommand(
   const activeNew = sourceFindings.filter(
     (finding) => finding.disposition === "active" && finding.state === "new",
   );
+  const activeBaseline = sourceFindings.filter(
+    (finding) => finding.disposition === "active" && finding.state === "baseline",
+  );
   const evidenceGroups = collapseAgentEvidence(activeNew, registry);
   const hasError =
     activeNew.some((finding) => finding.severity === "error") ||
     candidates.some((candidate) => candidate.severities.includes("error"));
   const decision: AgentSummaryDecision = hasError
     ? "blocked"
-    : activeNew.length > 0 || candidates.length > 0 || expectationReconciliationIssues > 0
+    : activeNew.length > 0 ||
+        activeBaseline.length > 0 ||
+        candidates.length > 0 ||
+        expectationReconciliationIssues > 0
       ? "partial"
       : "clean";
   const status: ResultStatus = decision === "blocked" ? "failed" : "passed";
@@ -290,8 +296,7 @@ export function agentSummaryCommand(
       activeNewFindings: activeNew.length,
       correlatedEvidenceGroups: evidenceGroups.length,
       collapsedRepresentations: activeNew.length - evidenceGroups.length,
-      activeBaselineFindings: sourceFindings.filter((finding) => finding.state === "baseline")
-        .length,
+      activeBaselineFindings: activeBaseline.length,
       deferredActiveFindings: sourceFindings.filter(
         (finding) =>
           finding.disposition === "active" && finding.deferralEvidence !== undefined,
