@@ -85,6 +85,7 @@ export function parseAnalysisQuery(parameters) {
 export async function analysisQueryJson(value, parameters, options = {}) {
   const query = parseAnalysisQuery(parameters);
   const analysis = await analysisJson(value, options);
+  if (queryIsIdentity(query)) return analysis;
   const changeContext = queryNeedsChangeContext(query)
     ? await remoteChangeCommand(value, changeArgv(query), options)
     : null;
@@ -156,6 +157,18 @@ export function projectAnalysis(analysis, query, changeContext = null) {
     agentHandoff: analysis.agentHandoff,
     drillDown: drillDown(analysis.repository.fullName, query, findings, changeContext),
   };
+}
+
+export function queryIsIdentity(query) {
+  return (
+    query.view === "full" &&
+    query.focus.length === 0 &&
+    query.scope.length === 0 &&
+    query.minSeverity === "low" &&
+    query.limit === 100 &&
+    query.finding === null &&
+    !queryNeedsChangeContext(query)
+  );
 }
 
 export function queryNeedsChangeContext(query) {
