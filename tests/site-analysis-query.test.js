@@ -322,6 +322,7 @@ describe("parameterized Pages analysis", () => {
     });
     expect(result.drillDown.affectedAnalysis).toContain("affected.json/");
     expect(result.drillDown.affectedAnalysis).toContain("changed-file=src%2Fapp.ts");
-    expect(result.drillDown.affectedAnalysis).not.toContain("&file=");\n    expect(result.drillDown.affectedAnalysis).not.toContain("?file=");
+    expect(result.drillDown.affectedAnalysis).not.toContain("&file=");
+    expect(result.drillDown.affectedAnalysis).not.toContain("?file=");
   });
 });
