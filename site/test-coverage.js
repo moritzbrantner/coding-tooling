@@ -26,33 +26,27 @@ export async function testCoverageJson(value, options = {}) {
     fetchImpl,
     signal,
   );
+  const requestedRef = String(options.ref ?? repository.default_branch).trim();
+  const commit = await githubJson(
+    `/repos/${reference.owner}/${reference.name}/commits/${encodeURIComponent(requestedRef)}`,
+    fetchImpl,
+    signal,
+  );
+  const resolvedSha = commit?.sha;
+  if (!/^[0-9a-f]{40}$/i.test(resolvedSha ?? ""))
+    throw new Error(`GitHub did not resolve ref to an exact commit SHA: ${requestedRef}`);
 
   const published = await readPublishedCoverage(reference, repository, fetchImpl, signal);
-  if (published) {
-    if (published.status === "unreadable") {
-      return resultEnvelope(repository, now, {
-        status: "incomplete",
-        coverage: null,
-        sources: [published.source],
-        source: null,
-        publication: null,
-        treeTruncated: false,
-      });
-    }
-
-    const defaultBranch = await githubJson(
-      `/repos/${reference.owner}/${reference.name}/branches/${encodeURIComponent(repository.default_branch)}`,
-      fetchImpl,
-      signal,
-    );
-    const freshness =
-      published.snapshot.repository.revision === defaultBranch.commit?.sha ? "current" : "stale";
+  if (published?.status === "read" && published.snapshot.repository.revision === resolvedSha) {
+    const freshness = "current";
     const source = {
       path: publishedCoverage.path,
       branch: publishedCoverage.branch,
       format: publishedCoverage.format,
     };
     return resultEnvelope(repository, now, {
+      requestedRef,
+      resolvedSha,
       status: "available",
       coverage: published.snapshot.coverage,
       sources: [{ ...source, status: "read" }],
@@ -67,7 +61,7 @@ export async function testCoverageJson(value, options = {}) {
   }
 
   const tree = await githubJson(
-    `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`,
+    `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(resolvedSha)}?recursive=1`,
     fetchImpl,
     signal,
   );
@@ -93,6 +87,8 @@ export async function testCoverageJson(value, options = {}) {
       const coverage = parseCoverage(content, candidate.format);
       sources.push({ path: candidate.path, format: candidate.format, status: "read" });
       return resultEnvelope(repository, now, {
+        requestedRef,
+        resolvedSha,
         status: "available",
         coverage,
         sources,
@@ -112,6 +108,8 @@ export async function testCoverageJson(value, options = {}) {
   }
 
   return resultEnvelope(repository, now, {
+    requestedRef,
+    resolvedSha,
     status: tree.truncated || sources.length > 0 ? "incomplete" : "unavailable",
     coverage: null,
     sources,
@@ -295,7 +293,18 @@ function resultEnvelope(repository, now, observation) {
     repository: {
       fullName: repository.full_name,
       defaultBranch: repository.default_branch,
+      requestedRef: observation.requestedRef,
+      revision: observation.resolvedSha,
       htmlUrl: repository.html_url,
+    },
+    source: {
+      requestedRef: observation.requestedRef,
+      resolvedSha: observation.resolvedSha,
+      canonicalUrl: observation.resolvedSha
+        ? `https://moritzbrantner.github.io/coding-tooling/test-coverage.json/?repo=${encodeURIComponent(
+            repository.full_name,
+          )}&ref=${observation.resolvedSha}`
+        : null,
     },
     summary: {
       status: observation.status,
@@ -307,7 +316,7 @@ function resultEnvelope(repository, now, observation) {
     sources: observation.sources,
     limitations: [
       "This browser-only observation does not execute repository tests or generate coverage.",
-      "Schema version 1 prefers a normalized snapshot published on coding-tooling-observations and falls back to recognized reports committed on the default branch.",
+      "Schema version 1 uses a normalized published snapshot only when its revision matches the resolved ref and otherwise reads recognized reports from that exact commit.",
       "Missing coverage evidence is reported as unavailable rather than inferred as zero coverage.",
       ...(observation.treeTruncated
         ? ["GitHub truncated the recursive tree, so coverage discovery may be incomplete."]
