@@ -377,12 +377,7 @@ export function analyzeExpectations(
   const verifiedFindings = applyVerificationEvidence(materialized, verificationResolution);
   const deferralResolution = resolveDeferrals(config, verifiedFindings);
   const allFindings = applyDeferralEvidence(verifiedFindings, deferralResolution);
-  const reconciliation = reconcile(
-    config,
-    allFindings,
-    verificationResolution,
-    deferralResolution,
-  );
+  const reconciliation = reconcile(config, allFindings, verificationResolution, deferralResolution);
   const coverage = analyzeFindingsCoverage(root, context, expectationDescriptors);
   const visible = options.includeSuppressed
     ? allFindings
