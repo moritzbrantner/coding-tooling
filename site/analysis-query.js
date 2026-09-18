@@ -214,8 +214,7 @@ function findingFocus(id) {
   if (id.startsWith("REMOTE-GOVERNANCE-")) return ["governance", "automation"];
   if (id.startsWith("REMOTE-CI-") || id.startsWith("REMOTE-EXECUTION-")) return ["automation"];
   if (id.startsWith("REMOTE-ENV-")) return ["environment", "dependencies"];
-  if (id.startsWith("REMOTE-DEPENDENCY-") || id.startsWith("REMOTE-LOCK-"))
-    return ["dependencies"];
+  if (id.startsWith("REMOTE-DEPENDENCY-") || id.startsWith("REMOTE-LOCK-")) return ["dependencies"];
   if (
     id.startsWith("REMOTE-FOUNDATION-") ||
     id.startsWith("REMOTE-AGENT-") ||
