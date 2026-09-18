@@ -24,6 +24,7 @@ export type AgentEvidenceGroup = {
     severity: FindingSeverity;
     message: string;
     requirement: Finding["requirement"];
+    suppressionEvidence?: Finding["suppressionEvidence"];
   };
   evidence: {
     bases: string[];
@@ -42,6 +43,7 @@ export type AgentNextAction = {
   deterministicCommands: string[][];
   verification: string[][];
   verificationDeclarations: RemediationCandidate["verificationDeclarations"];
+  suppressionPolicyMatches: RemediationCandidate["suppressionPolicyMatches"];
   deferrals: Array<{ findingId: string; reason: string }>;
   fullyDeferred: boolean;
   suggestedBranch: string;
@@ -103,6 +105,7 @@ export function collapseAgentEvidence(
           severity: primary.severity,
           message: primary.message,
           requirement: primary.requirement,
+          suppressionEvidence: primary.suppressionEvidence,
         },
         evidence: {
           bases: uniqueSorted(descriptors.map((entry) => entry.evidenceContract.basis)),
@@ -144,6 +147,7 @@ function compactCandidate(candidate: RemediationCandidate): AgentNextAction {
     deterministicCommands: candidate.scaffolds.map((scaffold) => scaffold.command),
     verification: candidate.verification,
     verificationDeclarations: candidate.verificationDeclarations,
+    suppressionPolicyMatches: candidate.suppressionPolicyMatches,
     deferrals: candidate.deferrals,
     fullyDeferred: candidate.fullyDeferred,
     suggestedBranch: candidate.suggestedBranch,
@@ -302,6 +306,12 @@ export function agentSummaryCommand(
       activeBaselineFindings: activeBaseline.length,
       deferredActiveFindings: sourceFindings.filter(
         (finding) => finding.disposition === "active" && finding.deferralEvidence !== undefined,
+      ).length,
+      newSuppressionPolicyMatches: sourceFindings.filter(
+        (finding) =>
+          finding.disposition === "active" &&
+          finding.suppressionEvidence?.applied === false &&
+          finding.suppressionEvidence.scope !== "finding",
       ).length,
       remediationCandidates: candidates.length,
       deferredRemediationCandidates: deferredActions.length,
