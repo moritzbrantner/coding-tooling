@@ -76,17 +76,18 @@ describe("artifact reuse economics", () => {
 
   test("rejects stale exact-head evidence", () => {
     const { root } = writeReceipt(
-      fixture({
-        expectedConsumers: 3,
-        setupMs: 1,
-        buildMs: 10,
-        uploadMs: 1,
-        artifactBytes: 10,
-        estimatedAvoidedBuildMs: 20,
-        producerOverheadMs: 2,
-        recommended: true,
-        reason: "build-cost-dominates-reuse-overhead",
-      },
+      fixture(
+        {
+          expectedConsumers: 3,
+          setupMs: 1,
+          buildMs: 10,
+          uploadMs: 1,
+          artifactBytes: 10,
+          estimatedAvoidedBuildMs: 20,
+          producerOverheadMs: 2,
+          recommended: true,
+          reason: "build-cost-dominates-reuse-overhead",
+        },
         "b".repeat(40),
       ),
     );
