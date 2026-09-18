@@ -113,7 +113,8 @@ export function projectAnalysis(analysis, query, changeContext = null) {
   const querySummary = {
     sourceStatus: analysis.summary?.status ?? "unknown",
     selectionStatus:
-      changeContext?.status === "error"
+      analysis.summary?.status === "incomplete" ||
+      (changeContext !== null && changeContext.status !== "passed")
         ? "incomplete"
         : findings.some((finding) => finding.severity === "high")
           ? "needs-attention"
