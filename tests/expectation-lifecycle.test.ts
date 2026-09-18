@@ -118,7 +118,7 @@ describe("expectation lifecycle", () => {
     expect(findingCommand(root, finding.id).data.result).toBe("suppressed");
   });
 
-  test("uses explicit repository verification as auditable evidence instead of suppression", () => {
+  test("keeps an explicit repository verifier as an auditable declaration until it executes", () => {
     const root = fixture("bun test");
     const finding = sourceTestFinding(root);
     addVerifierScript(root);
@@ -143,25 +143,23 @@ describe("expectation lifecycle", () => {
       )}\n`,
     );
 
-    expect(analyzeExpectations(root).findings.some((item) => item.id === finding.id)).toBeFalse();
-    const all = analyzeExpectations(root, { includeSuppressed: true }).findings;
-    expect(all).toContainEqual(
-      expect.objectContaining({
-        id: finding.id,
-        disposition: "verified",
-        verificationEvidence: {
-          id: "VERIFY-SERVICE",
-          version: 1,
-          command: ["bun", "run", "verify:service"],
-          reason: "repository-owned contract verifies the generated metadata",
-        },
-      }),
-    );
-    expect(findingCommand(root, finding.id).data.result).toBe("verified");
+    const active = analyzeExpectations(root).findings.find((item) => item.id === finding.id);
+    expect(active).toMatchObject({
+      id: finding.id,
+      disposition: "active",
+      verificationDeclaration: {
+        id: "VERIFY-SERVICE",
+        version: 1,
+        command: ["bun", "run", "verify:service"],
+        reason: "repository-owned contract verifies the generated metadata",
+      },
+    });
+    expect(active?.verificationEvidence).toBeUndefined();
+    expect(findingCommand(root, finding.id).data.result).toBe("active");
     expect(
       (findingsCommand(root, { includeSuppressed: true }).data.counts as Record<string, number>)
         .verified,
-    ).toBe(1);
+    ).toBe(0);
   });
 
   test("invalid verification commands cannot silence findings", () => {
