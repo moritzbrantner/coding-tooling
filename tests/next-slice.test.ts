@@ -78,7 +78,6 @@ test("does not select lower-priority local work when PR inventory is unavailable
   expect(result.data.blockedBy).toBe("pull-request-inventory");
 });
 
-
 test("keeps fully deferred capability gaps visible without selecting them again", () => {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-next-"));
   mkdirSync(join(root, "src"), { recursive: true });
@@ -142,7 +141,12 @@ test("keeps fully deferred capability gaps visible without selecting them again"
       if (args[0] === "issue") {
         return { command: ["gh", ...args], status: 0, stdout: "[]", stderr: "" };
       }
-      return { command: ["gh", ...args], status: 1, stdout: "", stderr: "unexpected command" };
+      return {
+        command: ["gh", ...args],
+        status: 1,
+        stdout: "",
+        stderr: "unexpected command",
+      };
     },
   });
 
