@@ -30,7 +30,7 @@ describe("composite action contract", () => {
     expect(source).not.toContain(fingerprintInstallCondition);
   });
 
-  test("prepares a declared environment-v1 before run validation", () => {
+  test("prepares environment-v1 without happy-path environment verification", () => {
     const source = actionSource();
 
     expect(source).toContain("Detect consumer environment-v1");
@@ -40,7 +40,19 @@ describe("composite action contract", () => {
     expect(source).toContain("Set up consumer Node");
     expect(source).toContain("node-version-file: .node-version");
     expect(source).toContain("bash scripts/codex-environment.sh setup");
-    expect(source).toContain("Verify environment-v1 preserves tracked state");
+    expect(source).not.toContain("Verify environment-v1 preserves tracked state");
+  });
+
+  test("verifies environment-v1 only after a run failure", () => {
+    const source = actionSource();
+
+    expect(source).toContain("Diagnose environment-v1 after run failure");
+    expect(source).toContain(
+      "failure() && inputs.operation == 'run' && steps.consumer-environment.outputs.detected == 'true'",
+    );
+    expect(source).toContain("environment verify");
+    expect(source).toContain("environment-failure-diagnostic.json");
+    expect(source).toContain("tracked_state=clean");
   });
 
   test("does not duplicate dependency installation after environment-v1 setup", () => {
