@@ -11,6 +11,7 @@ export type FindingVerificationReceiptOutcome = "passed" | "failed" | "error" | 
 
 export type FindingVerificationReceipt = {
   schemaVersion: typeof FINDING_VERIFICATION_RECEIPT_VERSION;
+  runId: string;
   findingId: string;
   verificationId: string;
   candidateSha: string;
@@ -97,6 +98,8 @@ export function readFindingVerificationReceipt(
     return undefined;
   }
   if (
+    typeof value.runId !== "string" ||
+    !value.runId.trim() ||
     typeof value.findingId !== "string" ||
     typeof value.verificationId !== "string" ||
     !isSha(value.candidateSha) ||
@@ -153,6 +156,7 @@ export function applyFindingVerificationEvidence(
       command: [...declaration.command],
       reason: declaration.reason,
       candidateSha,
+      runId: receipt.runId,
       component: declaration.component,
       runner: receipt.runner,
       artifactPath: relativePosix(root, findingVerificationReceiptPath(root, finding.id)),
