@@ -44,10 +44,10 @@ The browser-only machine view is also available directly:
 https://moritzbrantner.github.io/coding-tooling/affected.json/?repo=owner/repository&base=main&head=feature&tier=fast
 ```
 
-Explicit paths use repeated `file` query parameters:
+Explicit paths use repeated canonical `changed-file` query parameters (`file` remains a compatibility alias):
 
 ```text
-https://moritzbrantner.github.io/coding-tooling/affected.json/?repo=owner/repository&file=src/a.ts&file=tests/a.test.ts
+https://moritzbrantner.github.io/coding-tooling/affected.json/?repo=owner/repository&changed-file=src/a.ts&changed-file=tests/a.test.ts
 ```
 
 As with the other Pages JSON views, this is a browser-executed static page rather than a server-side `application/json` API.
