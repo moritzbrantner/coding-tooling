@@ -71,7 +71,9 @@ describe("parameterized Pages analysis", () => {
     const operation = manifest.operations.find((entry) => entry.id === "analysis-agent-json");
 
     expect(operation?.transport).toBe("browser-json-view");
-    expect(operation?.hrefTemplate).toContain(\n      "analysis.json/?repo={owner}/{repository}&view=agent",\n    );
+    expect(operation?.hrefTemplate).toContain(
+      "analysis.json/?repo={owner}/{repository}&view=agent",
+    );
     expect(operation?.description).toContain("focus/scope");
   });
 
