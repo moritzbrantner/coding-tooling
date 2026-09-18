@@ -1,4 +1,5 @@
 import { analyzeFindingsCoverage, type FindingsCoverage } from "./expectation-coverage.ts";
+import { applyFindingVerificationEvidence } from "./finding-verification-evidence.ts";
 import { applyGeneratorPlan } from "./generator-apply.ts";
 import {
   createDetectorContext,
@@ -239,11 +240,21 @@ function resolveVerifications(
       invalidVerifications.push({ index, id: verification.id, reason: invalid });
       continue;
     }
+    const packageInfo = owningPackage(context, finding);
+    if (!packageInfo) {
+      invalidVerifications.push({
+        index,
+        id: verification.id,
+        reason: "finding subject is not owned by a discovered package",
+      });
+      continue;
+    }
     declarationByFindingId.set(finding.id, {
       id: verification.id,
       version: verification.version,
       command: verification.command,
       reason: verification.reason,
+      component: packageInfo.path,
     });
   }
 
@@ -373,7 +384,7 @@ function reconcile(
 
 export function analyzeExpectations(
   root: string,
-  options: { includeSuppressed?: boolean } = {},
+  options: { includeSuppressed?: boolean; includeVerificationEvidence?: boolean } = {},
 ): {
   findings: Finding[];
   config: ExpectationConfig;
@@ -394,8 +405,12 @@ export function analyzeExpectations(
     );
   const verificationResolution = resolveVerifications(config, materialized, context);
   const declaredFindings = applyVerificationDeclarations(materialized, verificationResolution);
-  const deferralResolution = resolveDeferrals(config, declaredFindings);
-  const allFindings = applyDeferralEvidence(declaredFindings, deferralResolution);
+  const evidencedFindings =
+    options.includeVerificationEvidence === false
+      ? declaredFindings
+      : applyFindingVerificationEvidence(root, declaredFindings);
+  const deferralResolution = resolveDeferrals(config, evidencedFindings);
+  const allFindings = applyDeferralEvidence(evidencedFindings, deferralResolution);
   const reconciliation = reconcile(config, allFindings, verificationResolution, deferralResolution);
   const coverage = analyzeFindingsCoverage(root, context, expectationDescriptors);
   const visible = options.includeSuppressed
