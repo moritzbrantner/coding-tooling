@@ -4,6 +4,7 @@ import { findingsCommand } from "./expectations.ts";
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { planRemediationCandidates, type RemediationCandidate } from "./remediation-plan.ts";
 import { type CommandResult, runCommand } from "./shared.ts";
+import { sourceRevision } from "./source-context.ts";
 
 export const AGENT_SUMMARY_VERSION = "coding-tooling/agent-summary/v1" as const;
 
@@ -159,11 +160,6 @@ function gitValue(root: string, runner: Runner, args: string[]): string | undefi
   return result.status === 0 ? result.stdout.trim() : undefined;
 }
 
-function exactHead(root: string, runner: Runner): string | undefined {
-  const value = gitValue(root, runner, ["rev-parse", "HEAD"]);
-  return value && /^[0-9a-f]{40}$/i.test(value) ? value.toLowerCase() : undefined;
-}
-
 function worktreeState(root: string, runner: Runner): string | undefined {
   return gitValue(root, runner, ["status", "--porcelain"]);
 }
@@ -198,7 +194,7 @@ export function agentSummaryCommand(
 ): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const runner = dependencies.run ?? runCommand;
-  const candidateSha = exactHead(root, runner);
+  const candidateSha = sourceRevision(root, runner);
   const initialWorktree = worktreeState(root, runner);
   if (!candidateSha || initialWorktree === undefined) {
     return envelope(
@@ -212,7 +208,8 @@ export function agentSummaryCommand(
       [
         {
           code: "agent-summary-identity-unavailable",
-          message: "Could not bind the summary to the current Git HEAD and worktree state",
+          message:
+            "Could not bind the summary to the caller source revision (or local Git fallback) and worktree state",
         },
       ],
     );
@@ -243,7 +240,7 @@ export function agentSummaryCommand(
     ]);
   }
 
-  const endingSha = exactHead(root, runner);
+  const endingSha = sourceRevision(root, runner);
   const endingWorktree = worktreeState(root, runner);
   if (endingSha !== candidateSha || endingWorktree !== initialWorktree) {
     return envelope(
