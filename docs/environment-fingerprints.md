@@ -52,4 +52,10 @@ expectedFingerprint == verifiedFingerprint
 
 A failed or unavailable receipt keeps `verifiedFingerprint = null` and includes machine-readable diagnostics describing the mismatch.
 
-The same receipt is embedded in `coding-tooling conformance --json`, so agents can distinguish environment mismatch from repository/test failures before interpreting the latter as regressions.
+The same receipt is embedded in `coding-tooling conformance --json`, so explicit conformance runs can distinguish environment mismatch from repository/test failures.
+
+## Pipeline policy
+
+Ordinary `operation: run` execution does not spend a separate semantic environment-verification step on successful validation. It performs only the setup required to execute the repository's declared commands and assumes that environment remains valid on the happy path.
+
+When a `run` fails and environment-v1 is declared, the composite Action performs `environment verify` as failure-only diagnostic escalation and reports whether setup also changed tracked repository state. Those diagnostics explain whether the environment plausibly caused the observed failure; they do not replace or erase the original failed command. Scheduled or manually requested environment canaries can still verify environment integrity independently without sitting on the normal PR critical path.
