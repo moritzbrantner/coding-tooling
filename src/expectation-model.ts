@@ -388,13 +388,6 @@ export function matchingSuppression(
   });
 }
 
-export function matchingDeferral(
-  finding: Pick<Finding, "id">,
-  config: ExpectationConfig,
-): ExpectationDeferral | undefined {
-  return (config.deferrals ?? []).find((deferral) => deferral.id === finding.id);
-}
-
 export function duplicateValues(values: string[]): string[] {
   const seen = new Set<string>();
   const duplicates = new Set<string>();
