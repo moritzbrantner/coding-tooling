@@ -2,11 +2,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  parseAnalysisQuery,
-  projectAnalysis,
-  queryIsIdentity,
-} from "../site/analysis-query.js";
+import { parseAnalysisQuery, projectAnalysis, queryIsIdentity } from "../site/analysis-query.js";
 
 function analysis() {
   return {
@@ -74,9 +70,7 @@ describe("parameterized Pages analysis", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("../site/agent-tool.json", import.meta.url), "utf8"),
     );
-    const operation = manifest.operations.find(
-      (entry) => entry.id === "analysis-agent-json",
-    );
+    const operation = manifest.operations.find((entry) => entry.id === "analysis-agent-json");
 
     expect(operation?.transport).toBe("browser-json-view");
     expect(operation?.hrefTemplate).toContain(
@@ -87,9 +81,7 @@ describe("parameterized Pages analysis", () => {
 
   test("recognizes the unparameterized compatibility path", () => {
     const query = parseAnalysisQuery(new URLSearchParams("repo=example/project"));
-    const tailored = parseAnalysisQuery(
-      new URLSearchParams("repo=example/project&view=agent"),
-    );
+    const tailored = parseAnalysisQuery(new URLSearchParams("repo=example/project&view=agent"));
 
     expect(queryIsIdentity(query)).toBe(true);
     expect(queryIsIdentity(tailored)).toBe(false);
@@ -125,31 +117,15 @@ describe("parameterized Pages analysis", () => {
   });
 
   test("fails closed for unsupported query semantics", () => {
-    const invalidView = new URLSearchParams(
-      "repo=example/project&view=magic",
-    );
-    const invalidFocus = new URLSearchParams(
-      "repo=example/project&focus=semantic-vibes",
-    );
-    const invalidHead = new URLSearchParams(
-      "repo=example/project&head=feature",
-    );
-    const unknown = new URLSearchParams(
-      "repo=example/project&surprise=yes",
-    );
+    const invalidView = new URLSearchParams("repo=example/project&view=magic");
+    const invalidFocus = new URLSearchParams("repo=example/project&focus=semantic-vibes");
+    const invalidHead = new URLSearchParams("repo=example/project&head=feature");
+    const unknown = new URLSearchParams("repo=example/project&surprise=yes");
 
-    expect(() => parseAnalysisQuery(invalidView)).toThrow(
-      "view must be full or agent",
-    );
-    expect(() => parseAnalysisQuery(invalidFocus)).toThrow(
-      "focus must use one or more of",
-    );
-    expect(() => parseAnalysisQuery(invalidHead)).toThrow(
-      "head requires base",
-    );
-    expect(() => parseAnalysisQuery(unknown)).toThrow(
-      "Unsupported analysis query parameter",
-    );
+    expect(() => parseAnalysisQuery(invalidView)).toThrow("view must be full or agent");
+    expect(() => parseAnalysisQuery(invalidFocus)).toThrow("focus must use one or more of");
+    expect(() => parseAnalysisQuery(invalidHead)).toThrow("head requires base");
+    expect(() => parseAnalysisQuery(unknown)).toThrow("Unsupported analysis query parameter");
   });
 
   test("agent view filters by focus and severity and keeps output compact", () => {
@@ -187,9 +163,7 @@ describe("parameterized Pages analysis", () => {
 
   test("scope selects exact components without guessing finding ownership", () => {
     const query = parseAnalysisQuery(
-      new URLSearchParams(
-        "repo=example/project&view=agent&scope=packages/worker",
-      ),
+      new URLSearchParams("repo=example/project&view=agent&scope=packages/worker"),
     );
     const result = projectAnalysis(analysis(), query);
 
@@ -205,13 +179,9 @@ describe("parameterized Pages analysis", () => {
     expect(result.findings).toHaveLength(4);
 
     const invalidScope = parseAnalysisQuery(
-      new URLSearchParams(
-        "repo=example/project&view=agent&scope=missing-component",
-      ),
+      new URLSearchParams("repo=example/project&view=agent&scope=missing-component"),
     );
-    expect(() => projectAnalysis(analysis(), invalidScope)).toThrow(
-      "Unknown analysis scope",
-    );
+    expect(() => projectAnalysis(analysis(), invalidScope)).toThrow("Unknown analysis scope");
   });
 
   test("limits findings after deterministic severity ordering", () => {
@@ -220,10 +190,7 @@ describe("parameterized Pages analysis", () => {
     );
     const result = projectAnalysis(analysis(), query);
 
-    expect(result.findings.map((item) => item.id)).toEqual([
-      "REMOTE-CI-002",
-      "REMOTE-ENV-005",
-    ]);
+    expect(result.findings.map((item) => item.id)).toEqual(["REMOTE-CI-002", "REMOTE-ENV-005"]);
     expect(result.summary).toEqual(
       expect.objectContaining({
         matchingFindingCount: 4,
@@ -275,10 +242,7 @@ describe("parameterized Pages analysis", () => {
         validationPlan: {
           tier: "fast",
           complete: true,
-          checks: [
-            { capability: "lint" },
-            { capability: "test:unit" },
-          ],
+          checks: [{ capability: "lint" }, { capability: "test:unit" }],
           missing: [],
         },
       },
@@ -318,8 +282,6 @@ describe("parameterized Pages analysis", () => {
       },
     });
     expect(result.drillDown.affectedAnalysis).toContain("affected.json/");
-    expect(result.drillDown.affectedAnalysis).toContain(
-      "file=src%2Fapp.ts",
-    );
+    expect(result.drillDown.affectedAnalysis).toContain("file=src%2Fapp.ts");
   });
 });
