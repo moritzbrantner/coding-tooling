@@ -122,45 +122,45 @@ describe("expectation lifecycle", () => {
     "keeps an explicit repository verifier as an auditable declaration until it executes",
     () => {
       const root = fixture("bun test");
-    const finding = sourceTestFinding(root);
-    addVerifierScript(root);
-    writeFileSync(
-      join(root, ".coding-tooling.expectations.json"),
-      `${JSON.stringify(
-        {
-          schemaVersion: 1,
-          verifications: [
-            {
-              id: "VERIFY-SERVICE",
-              version: 1,
-              expectation: "typescript-source-test",
-              subject: "src/service.ts",
-              command: ["bun", "run", "verify:service"],
-              reason: "repository-owned contract verifies the generated metadata",
-            },
-          ],
-        },
-        null,
-        2,
-      )}\n`,
-    );
+      const finding = sourceTestFinding(root);
+      addVerifierScript(root);
+      writeFileSync(
+        join(root, ".coding-tooling.expectations.json"),
+        `${JSON.stringify(
+          {
+            schemaVersion: 1,
+            verifications: [
+              {
+                id: "VERIFY-SERVICE",
+                version: 1,
+                expectation: "typescript-source-test",
+                subject: "src/service.ts",
+                command: ["bun", "run", "verify:service"],
+                reason: "repository-owned contract verifies the generated metadata",
+              },
+            ],
+          },
+          null,
+          2,
+        )}\n`,
+      );
 
-    const active = analyzeExpectations(root).findings.find((item) => item.id === finding.id);
-    expect(active).toMatchObject({
-      id: finding.id,
-      disposition: "active",
-      verificationDeclaration: {
-        id: "VERIFY-SERVICE",
-        version: 1,
-        command: ["bun", "run", "verify:service"],
-        reason: "repository-owned contract verifies the generated metadata",
-      },
-    });
-    expect(active?.verificationEvidence).toBeUndefined();
-    expect(findingCommand(root, finding.id).data.result).toBe("active");
-    expect(
-      (findingsCommand(root, { includeSuppressed: true }).data.counts as Record<string, number>)
-        .verified,
+      const active = analyzeExpectations(root).findings.find((item) => item.id === finding.id);
+      expect(active).toMatchObject({
+        id: finding.id,
+        disposition: "active",
+        verificationDeclaration: {
+          id: "VERIFY-SERVICE",
+          version: 1,
+          command: ["bun", "run", "verify:service"],
+          reason: "repository-owned contract verifies the generated metadata",
+        },
+      });
+      expect(active?.verificationEvidence).toBeUndefined();
+      expect(findingCommand(root, finding.id).data.result).toBe("active");
+      expect(
+        (findingsCommand(root, { includeSuppressed: true }).data.counts as Record<string, number>)
+          .verified,
       ).toBe(0);
     },
   );
