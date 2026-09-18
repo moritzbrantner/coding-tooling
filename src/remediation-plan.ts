@@ -93,20 +93,22 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
         }),
     ).values(),
   ].sort((left, right) => left.id.localeCompare(right.id));
-  const automaticScaffoldable =
-    allScaffoldable && convergenceRules.every((rule) => rule.mode === "apply");
-  const nonInfo = ordered.some((finding) => finding.severity !== "info");
-  const kind: RemediationCandidateKind = automaticScaffoldable
-    ? "deterministic-scaffold"
-    : nonInfo
-      ? "implementation"
-      : "review";
   const deferrals = ordered.flatMap((finding) =>
     finding.deferralEvidence
       ? [{ findingId: finding.id, reason: finding.deferralEvidence.reason }]
       : [],
   );
   const fullyDeferred = deferrals.length === ordered.length;
+  const automaticScaffoldable =
+    deferrals.length === 0 &&
+    allScaffoldable &&
+    convergenceRules.every((rule) => rule.mode === "apply");
+  const nonInfo = ordered.some((finding) => finding.severity !== "info");
+  const kind: RemediationCandidateKind = automaticScaffoldable
+    ? "deterministic-scaffold"
+    : nonInfo
+      ? "implementation"
+      : "review";
   const priority =
     Math.min(
       ...ordered.map(
