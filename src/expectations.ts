@@ -23,6 +23,7 @@ import {
   type Finding,
   type FindingDeferralEvidence,
   type FindingState,
+  type FindingSuppressionEvidence,
   type FindingVerificationDeclaration,
   type FindingVerificationEvidence,
   type ReconciliationReport,
