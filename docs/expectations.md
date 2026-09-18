@@ -91,9 +91,9 @@ A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold i
 }
 ```
 
-A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject. A deferral is intentionally narrower: it names one exact finding ID, requires a reason, and leaves that finding active. It records that the finding was considered without claiming the requirement is satisfied. Deferred findings remain visible in normal findings output, remain unresolved debt, are sorted behind otherwise actionable remediation, and are excluded from deterministic auto-scaffolding until explicitly resumed. A verification is intentionally different: it is an explicitly versioned relationship that must identify one exact expectation and semantic subject and point to an existing repository package script through `bun`, `npm`, `pnpm`, or `yarn` using exactly `run <script>`. `coding-tooling` does not infer verification from script names and does not accept arbitrary shell commands as evidence in this contract.
+A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject. A deferral is intentionally narrower: it names one exact finding ID, requires a reason, and leaves that finding active. It records that the finding was considered without claiming the requirement is satisfied. Deferred findings remain visible in normal findings output, remain unresolved debt, are sorted behind otherwise actionable remediation, and are excluded from deterministic auto-scaffolding until explicitly resumed. A verification declaration is intentionally different: it is an explicitly versioned relationship that must identify one exact expectation and semantic subject and point to an existing repository package script through `bun`, `npm`, `pnpm`, or `yarn` using exactly `run <script>`. `coding-tooling` does not infer verification from script names and does not accept arbitrary shell commands in this declaration contract.
 
-A valid verification changes the finding disposition to `verified` and preserves the verifier ID, relationship version, exact command, and rationale on the finding. Missing scripts, unsupported command shapes, stale relationships, duplicate relationships, unknown expectations, and simultaneous suppression-plus-verification metadata are reported through reconciliation instead of silently satisfying debt. Invariants are explicit repository knowledge for agents; the analyzer does not synthesize them.
+A valid declaration is attached as `verificationDeclaration` but leaves the finding `active`. Script existence proves only that a repository-owned verifier is declared; it does not prove that verifier ran or passed on the current candidate revision. The separate `verified` disposition is reserved for execution-backed evidence that is bound to the exact candidate revision. Missing scripts, unsupported command shapes, stale relationships, duplicate relationships, unknown expectations, and simultaneous suppression-plus-verification metadata are reported through reconciliation. Invariants are explicit repository knowledge for agents; the analyzer does not synthesize them.
 
 Persistent metadata is reconciled against the current deterministic finding stream. Reports identify orphaned baseline IDs, stale suppressions, verifications, and deferrals, invalid verifier commands, conflicting or duplicate deferrals, duplicate metadata, and references to unknown expectation IDs so accepted debt and decision records do not silently become a graveyard.
 
@@ -121,7 +121,8 @@ Each finding contains:
 - a semantic subject and missing requirement;
 - deterministic evidence and related files;
 - focused verification commands when derivable;
-- explicit non-test `verificationEvidence` with a relationship version when repository metadata satisfies the requirement;
+- explicit `verificationDeclaration` when repository metadata declares how the requirement can be checked;
+- execution-backed `verificationEvidence` only when a verifier has actually succeeded for the exact candidate revision;
 - explicit `deferralEvidence` when a caller has considered but intentionally postponed an active finding;
 - deterministic relationships to other findings when known;
 - an optional explicit scaffold action.
