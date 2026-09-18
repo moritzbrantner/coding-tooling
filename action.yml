@@ -42,6 +42,10 @@ inputs:
     description: Install dependencies from supported repository-owned lockfiles automatically, or skip installation. A declared environment-v1 setup is authoritative for run operations.
     required: false
     default: auto
+  source-sha:
+    description: Caller-established source revision. GitHub Actions pushes github.sha when this input is omitted.
+    required: false
+    default: ""
 
 outputs:
   report-path:
@@ -141,6 +145,7 @@ runs:
         INPUT_REPORT_PATH: ${{ inputs.report-path }}
         INPUT_VALIDATION_REPORT: ${{ inputs.validation-report }}
         INPUT_STRICT: ${{ inputs.strict }}
+        CODING_TOOLING_SOURCE_SHA: ${{ inputs.source-sha != '' && inputs.source-sha || github.sha }}
       run: |
         if [[ "$INPUT_OPERATION" == "agent-capabilities-validate" ]]; then
           bun "${{ github.action_path }}/src/cli.ts" agent-capabilities validate .
