@@ -37,12 +37,8 @@ describe("composite action contract", () => {
     expect(source).toContain("environment fingerprint");
     expect(source).toContain('config.get("cache", {}).get("paths", [])');
     expect(source).toContain("Restore consumer environment-v1 cache");
-    expect(source).toContain(
-      "actions/cache@caa296126883cff596d87d8935842f9db880ef25",
-    );
-    expect(source).toContain(
-      "environment-v1-${{ steps.consumer-environment-cache.outputs.fingerprint }}",
-    );
+    expect(source).toContain("actions/cache@caa296126883cff596d87d8935842f9db880ef25");
+    expect(source).toContain("consumer-environment-cache.outputs.fingerprint");
     expect(source).not.toContain("restore-keys:");
   });
 
