@@ -41,6 +41,8 @@ export type AgentNextAction = {
   findingIds: string[];
   deterministicCommands: string[][];
   verification: string[][];
+  deferrals: Array<{ findingId: string; reason: string }>;
+  fullyDeferred: boolean;
   suggestedBranch: string;
 };
 
@@ -140,6 +142,8 @@ function compactCandidate(candidate: RemediationCandidate): AgentNextAction {
     findingIds: candidate.findingIds,
     deterministicCommands: candidate.scaffolds.map((scaffold) => scaffold.command),
     verification: candidate.verification,
+    deferrals: candidate.deferrals,
+    fullyDeferred: candidate.fullyDeferred,
     suggestedBranch: candidate.suggestedBranch,
   };
 }
@@ -259,7 +263,11 @@ export function agentSummaryCommand(
       : "clean";
   const status: ResultStatus = decision === "blocked" ? "failed" : "passed";
   const strongestEvidence = evidenceGroups[0] ?? null;
-  const nextAction = candidates[0] ? compactCandidate(candidates[0]) : null;
+  const actionableCandidate = candidates.find((candidate) => !candidate.fullyDeferred);
+  const nextAction = actionableCandidate ? compactCandidate(actionableCandidate) : null;
+  const deferredActions = candidates
+    .filter((candidate) => candidate.fullyDeferred)
+    .map(compactCandidate);
 
   return envelope(status, started, {
     schemaVersion: AGENT_SUMMARY_VERSION,
@@ -273,10 +281,16 @@ export function agentSummaryCommand(
       collapsedRepresentations: activeNew.length - evidenceGroups.length,
       activeBaselineFindings: sourceFindings.filter((finding) => finding.state === "baseline")
         .length,
+      deferredActiveFindings: sourceFindings.filter(
+        (finding) =>
+          finding.disposition === "active" && finding.deferralEvidence !== undefined,
+      ).length,
       remediationCandidates: candidates.length,
+      deferredRemediationCandidates: deferredActions.length,
     },
     strongestEvidence,
     nextAction,
+    deferredActions,
     evidenceGroups: evidenceGroups.map(compactEvidenceGroup),
     drillDown: {
       strongestFinding: strongestEvidence
