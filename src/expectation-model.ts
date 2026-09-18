@@ -64,6 +64,11 @@ export type FindingVerificationEvidence = {
   reason: string;
 };
 
+export type FindingDeferralEvidence = {
+  version: 1;
+  reason: string;
+};
+
 export type Finding = {
   id: string;
   expectationId: string;
@@ -75,6 +80,7 @@ export type Finding = {
   disposition: FindingDisposition;
   suppressionReason?: string;
   verificationEvidence?: FindingVerificationEvidence;
+  deferralEvidence?: FindingDeferralEvidence;
   subject: FindingSubject;
   requirement: FindingRequirement;
   message: string;
@@ -102,6 +108,12 @@ export type ExpectationVerification = {
   reason: string;
 };
 
+export type ExpectationDeferral = {
+  id: string;
+  version: 1;
+  reason: string;
+};
+
 export type RepositoryInvariant = {
   id: string;
   scope: string;
@@ -114,6 +126,7 @@ export type ExpectationConfig = {
   baseline?: string[];
   suppressions?: ExpectationSuppression[];
   verifications?: ExpectationVerification[];
+  deferrals?: ExpectationDeferral[];
   invariants?: RepositoryInvariant[];
   enforcement?: Record<string, FindingSeverity>;
 };
@@ -132,10 +145,13 @@ export type ReconciliationReport = {
   staleSuppressions: Array<{ index: number; reason: string }>;
   staleVerifications: Array<{ index: number; id: string }>;
   invalidVerifications: Array<{ index: number; id: string; reason: string }>;
+  staleDeferrals: Array<{ index: number; id: string }>;
+  conflictingDeferrals: Array<{ index: number; id: string; reason: string }>;
   unknownExpectations: string[];
   duplicateBaseline: string[];
   duplicateSuppressions: number[];
   duplicateVerifications: number[];
+  duplicateDeferrals: number[];
   duplicateInvariants: string[];
 };
 
@@ -245,6 +261,30 @@ export function loadExpectationConfig(
     });
   }
 
+  let deferrals: ExpectationDeferral[] | undefined;
+  if (value.deferrals !== undefined) {
+    if (!Array.isArray(value.deferrals)) {
+      throw new Error(`${configuredPath}.deferrals must be an array`);
+    }
+    deferrals = value.deferrals.map((item, index) => {
+      if (
+        !isRecord(item) ||
+        item.version !== 1 ||
+        typeof item.id !== "string" ||
+        !findingIdPattern.test(item.id) ||
+        typeof item.reason !== "string" ||
+        !item.reason.trim()
+      ) {
+        throw new Error(`${configuredPath}.deferrals[${index}] is invalid`);
+      }
+      return {
+        id: item.id,
+        version: 1,
+        reason: item.reason,
+      };
+    });
+  }
+
   let invariants: RepositoryInvariant[] | undefined;
   if (value.invariants !== undefined) {
     if (!Array.isArray(value.invariants)) {
@@ -295,7 +335,15 @@ export function loadExpectationConfig(
     }
   }
 
-  return { schemaVersion: 1, baseline, suppressions, verifications, invariants, enforcement };
+  return {
+    schemaVersion: 1,
+    baseline,
+    suppressions,
+    verifications,
+    deferrals,
+    invariants,
+    enforcement,
+  };
 }
 
 export function writeExpectationConfig(
@@ -332,6 +380,13 @@ export function matchingSuppression(
     if (suppression.subject && suppression.subject !== finding.subject.key) return false;
     return true;
   });
+}
+
+export function matchingDeferral(
+  finding: Pick<Finding, "id">,
+  config: ExpectationConfig,
+): ExpectationDeferral | undefined {
+  return (config.deferrals ?? []).find((deferral) => deferral.id === finding.id);
 }
 
 export function duplicateValues(values: string[]): string[] {
