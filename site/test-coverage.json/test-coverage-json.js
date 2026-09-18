@@ -1,8 +1,4 @@
-import {
-  apiErrorEnvelope,
-  coverageApiEnvelope,
-  envelopeRequested,
-} from "../api-envelope.js";
+import { apiErrorEnvelope, coverageApiEnvelope, envelopeRequested } from "../api-envelope.js";
 import { testCoverageJson } from "../test-coverage.js";
 
 const started = Date.now();
@@ -15,9 +11,7 @@ const useEnvelope = envelopeRequested(parameters);
 try {
   if (!repository) throw new Error("Missing required ?repo=owner/repository query parameter.");
   const coverage = await testCoverageJson(repository, { ref });
-  const result = useEnvelope
-    ? coverageApiEnvelope(coverage, Date.now() - started)
-    : coverage;
+  const result = useEnvelope ? coverageApiEnvelope(coverage, Date.now() - started) : coverage;
   target.textContent = `${JSON.stringify(result, null, 2)}\n`;
   document.title = `${coverage.repository.fullName} · test-coverage.json`;
 } catch (error) {
