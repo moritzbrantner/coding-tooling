@@ -74,7 +74,11 @@ export async function testCoverageJson(value, options = {}) {
     });
   }
 
-  if (\n    requestedRef &&\n    published?.status === "read" &&\n    published.snapshot.repository.revision === resolvedSha\n  ) {
+  if (
+    requestedRef &&
+    published?.status === "read" &&
+    published.snapshot.repository.revision === resolvedSha
+  ) {
     const source = {
       path: publishedCoverage.path,
       branch: publishedCoverage.branch,
