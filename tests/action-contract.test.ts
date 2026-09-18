@@ -15,6 +15,7 @@ describe("composite action contract", () => {
 
     expect(source).toContain("source-sha:");
     expect(source).toContain("CODING_TOOLING_SOURCE_SHA:");
+    expect(source).toContain("CODING_TOOLING_SOURCE_ROOT: ${{ github.workspace }}");
     expect(source).toContain("inputs.source-sha != '' && inputs.source-sha || github.sha");
   });
 
