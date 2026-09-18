@@ -23,7 +23,6 @@ import {
   type FindingDeferralEvidence,
   type FindingState,
   type FindingVerificationDeclaration,
-  type FindingVerificationEvidence,
   type ReconciliationReport,
 } from "./expectation-model.ts";
 import type { DetectorContext, PackageInfo } from "./expectation-package-context.ts";
