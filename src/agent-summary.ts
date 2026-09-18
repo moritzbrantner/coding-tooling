@@ -299,8 +299,7 @@ export function agentSummaryCommand(
       collapsedRepresentations: activeNew.length - evidenceGroups.length,
       activeBaselineFindings: activeBaseline.length,
       deferredActiveFindings: sourceFindings.filter(
-        (finding) =>
-          finding.disposition === "active" && finding.deferralEvidence !== undefined,
+        (finding) => finding.disposition === "active" && finding.deferralEvidence !== undefined,
       ).length,
       remediationCandidates: candidates.length,
       deferredRemediationCandidates: deferredActions.length,
