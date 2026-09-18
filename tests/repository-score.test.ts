@@ -93,7 +93,7 @@ describe("repository score", () => {
     });
   });
 
-  test("does not reward suppression or baselining while verified evidence can satisfy a finding", () => {
+  test("does not reward suppression while execution-backed verified evidence can satisfy a finding", () => {
     const score = scoreExpectationEvidence(
       [
         finding("typescript-source-test", "src/active.ts", "active"),
