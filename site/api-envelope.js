@@ -30,9 +30,10 @@ export function apiErrorEnvelope(operation, code, message, data = {}, durationMs
 
 export function analysisApiEnvelope(analysis, durationMs = 0) {
   const state =
+    analysis?.querySummary?.selectionStatus ??
+    analysis?.summary?.selectionStatus ??
     analysis?.summary?.status ??
     analysis?.summary?.sourceStatus ??
-    analysis?.querySummary?.sourceStatus ??
     "unknown";
   const complete = state !== "incomplete";
   const status = !complete ? "unavailable" : state === "needs-attention" ? "failed" : "passed";
