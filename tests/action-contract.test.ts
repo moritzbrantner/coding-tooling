@@ -46,16 +46,13 @@ describe("composite action contract", () => {
     expect(source).not.toContain("restore-keys:");
   });
 
-  test(
-    "does not reinstall the coding-tooling Bun when the exact version is already available",
-    () => {
-      const source = actionSource();
+  test("skips setup-bun when the requested Bun is already installed", () => {
+    const source = actionSource();
 
-      expect(source).toContain("Detect coding-tooling Bun");
-      expect(source).toContain('[[ "$(bun --version)" == "$INPUT_BUN_VERSION" ]]');
-      expect(source).toContain("if: steps.tooling-bun.outputs.ready != 'true'");
-    },
-  );
+    expect(source).toContain("Detect coding-tooling Bun");
+    expect(source).toContain('[[ "$(bun --version)" == "$INPUT_BUN_VERSION" ]]');
+    expect(source).toContain("if: steps.tooling-bun.outputs.ready != 'true'");
+  });
 
   test("prepares environment-v1 without happy-path environment verification", () => {
     const source = actionSource();
