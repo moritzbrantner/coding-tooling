@@ -27,6 +27,8 @@ export type RemediationCandidate = {
   verification: string[][];
   scaffolds: Array<{ findingId: string; path: string; command: string[] }>;
   convergenceRules: Array<{ id: string; mode: ConvergenceRuleMode }>;
+  deferrals: Array<{ findingId: string; reason: string }>;
+  fullyDeferred: boolean;
   requiresAgent: boolean;
   suggestedBranch: string;
 };
@@ -91,19 +93,28 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
         }),
     ).values(),
   ].sort((left, right) => left.id.localeCompare(right.id));
+  const deferrals = ordered.flatMap((finding) =>
+    finding.deferralEvidence
+      ? [{ findingId: finding.id, reason: finding.deferralEvidence.reason }]
+      : [],
+  );
+  const fullyDeferred = deferrals.length === ordered.length;
   const automaticScaffoldable =
-    allScaffoldable && convergenceRules.every((rule) => rule.mode === "apply");
+    deferrals.length === 0 &&
+    allScaffoldable &&
+    convergenceRules.every((rule) => rule.mode === "apply");
   const nonInfo = ordered.some((finding) => finding.severity !== "info");
   const kind: RemediationCandidateKind = automaticScaffoldable
     ? "deterministic-scaffold"
     : nonInfo
       ? "implementation"
       : "review";
-  const priority = Math.min(
-    ...ordered.map(
-      (finding) => severityRank[finding.severity] + (finding.state === "baseline" ? 50 : 0),
-    ),
-  );
+  const priority =
+    Math.min(
+      ...ordered.map(
+        (finding) => severityRank[finding.severity] + (finding.state === "baseline" ? 50 : 0),
+      ),
+    ) + (fullyDeferred ? 100 : 0);
   const expectationIds = [...new Set(ordered.map((finding) => finding.expectationId))].sort();
   const severities = [...new Set(ordered.map((finding) => finding.severity))].sort(
     (left, right) => severityRank[left] - severityRank[right],
@@ -144,6 +155,8 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
     verification,
     scaffolds,
     convergenceRules,
+    deferrals,
+    fullyDeferred,
     requiresAgent: !automaticScaffoldable,
     suggestedBranch: `remediate/${branchToken(subject.key)}-${id.slice(-6).toLowerCase()}`,
   };
@@ -247,6 +260,8 @@ function mobileAnalysisCandidates(root: string): RemediationCandidate[] {
       verification: [["coding-tooling", "analyze", "--json"]],
       scaffolds: [],
       convergenceRules: [],
+      deferrals: [],
+      fullyDeferred: false,
       requiresAgent: true,
       suggestedBranch: `remediate/${branchToken(subject.key)}-${id.slice(-6).toLowerCase()}`,
     };

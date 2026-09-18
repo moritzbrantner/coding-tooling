@@ -42,13 +42,14 @@ function finding(
 function findingsEnvelope(
   findings: Finding[],
   status: ResultStatus = "passed",
+  data: Record<string, unknown> = {},
 ): ExpectationEnvelope {
   return {
     schemaVersion: 1,
     operation: "findings",
     status,
     durationMs: 0,
-    data: { findings },
+    data: { findings, ...data },
     diagnostics: [],
   };
 }
@@ -169,6 +170,78 @@ test("stops at a deterministic fixed point and returns remaining work as an agen
         relatedFiles: ["src/feature.generated.ts"],
       },
     ],
+  });
+});
+
+test("does not auto-scaffold a finding that was explicitly deferred", () => {
+  const deferred = finding(
+    "CT-121212121212",
+    "src/deferred.ts",
+    {
+      kind: "create-file",
+      path: "tests/deferred.test.ts",
+      content: "deferred\n",
+    },
+    {
+      deferralEvidence: { version: 1, reason: "composition coverage is sufficient for now" },
+    },
+  );
+  let scaffoldCalls = 0;
+  const dependencies: ConvergenceDependencies = {
+    findings: () => findingsEnvelope([deferred]),
+    scaffold: () => {
+      scaffoldCalls += 1;
+      return scaffoldEnvelope();
+    },
+    verify: (_root, tier) => verificationEnvelope("passed", tier),
+  };
+
+  const result = convergeRepository("/repo", {}, dependencies);
+
+  expect(scaffoldCalls).toBe(0);
+  expect(result.status).toBe("passed");
+  expect(result.data).toMatchObject({
+    result: "partial",
+    handoff: [
+      {
+        kind: "implementation",
+        fullyDeferred: true,
+        deferrals: [
+          {
+            findingId: "CT-121212121212",
+            reason: "composition coverage is sufficient for now",
+          },
+        ],
+      },
+    ],
+  });
+});
+
+test("fails closed when expectation metadata does not reconcile", () => {
+  let verificationCalls = 0;
+  const dependencies: ConvergenceDependencies = {
+    findings: () =>
+      findingsEnvelope([], "passed", {
+        reconciliation: {
+          staleDeferrals: [{ index: 0, id: "CT-343434343434" }],
+          duplicateDeferrals: [],
+        },
+      }),
+    scaffold: () => scaffoldEnvelope(),
+    verify: () => {
+      verificationCalls += 1;
+      return verificationEnvelope();
+    },
+  };
+
+  const result = convergeRepository("/repo", {}, dependencies);
+
+  expect(verificationCalls).toBe(0);
+  expect(result.status).toBe("failed");
+  expect(result.data).toMatchObject({
+    result: "blocked",
+    reason: "expectation-reconciliation-incomplete",
+    expectationReconciliationIssues: [{ category: "staleDeferrals", count: 1 }],
   });
 });
 

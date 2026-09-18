@@ -5,8 +5,10 @@ import { join } from "node:path";
 
 import {
   analyzeExpectations,
+  deferFinding,
   findingCommand,
   findingsCommand,
+  resumeFinding,
   scaffoldFinding,
   type Finding,
   type ReconciliationReport,
@@ -347,6 +349,112 @@ describe("expectation lifecycle", () => {
     expect(reconciliation.staleSuppressions).toHaveLength(3);
     expect(reconciliation.staleVerifications).toEqual([]);
     expect(reconciliation.invalidVerifications).toEqual([]);
+  });
+
+  test("records a deferral without silencing the active finding", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+
+    const deferred = deferFinding(
+      root,
+      finding.id,
+      "covered by a broader composition test for now",
+    );
+
+    expect(deferred.status).toBe("passed");
+    const active = analyzeExpectations(root).findings.find((item) => item.id === finding.id);
+    expect(active).toMatchObject({
+      id: finding.id,
+      disposition: "active",
+      deferralEvidence: {
+        version: 1,
+        reason: "covered by a broader composition test for now",
+      },
+    });
+    expect((findingsCommand(root).data.counts as Record<string, number>).deferred).toBe(1);
+
+    const scaffold = scaffoldFinding(root, finding.id);
+    expect(scaffold.status).toBe("unavailable");
+    expect(scaffold.diagnostics[0]?.code).toBe("finding-deferred");
+
+    expect(resumeFinding(root, finding.id).status).toBe("passed");
+    expect(
+      analyzeExpectations(root).findings.find((item) => item.id === finding.id)?.deferralEvidence,
+    ).toBeUndefined();
+  });
+
+  test("updates a deferral in place while removing duplicate records", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          deferrals: [
+            { id: finding.id, version: 1, reason: "original rationale" },
+            { id: "CT-111111111111", version: 1, reason: "unrelated stale decision" },
+            { id: finding.id, version: 1, reason: "duplicate rationale" },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(deferFinding(root, finding.id, "updated rationale").status).toBe("passed");
+    expect(analyzeExpectations(root).config.deferrals).toEqual([
+      { id: finding.id, version: 1, reason: "updated rationale" },
+      { id: "CT-111111111111", version: 1, reason: "unrelated stale decision" },
+    ]);
+  });
+
+  test("reconciles stale, duplicate, and conflicting deferrals", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suppressions: [{ id: finding.id, reason: "intentionally not required" }],
+          deferrals: [
+            { id: finding.id, version: 1, reason: "defer once" },
+            { id: finding.id, version: 1, reason: "duplicate deferral" },
+            { id: "CT-111111111111", version: 1, reason: "stale work item" },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const reconciliation = analyzeExpectations(root, { includeSuppressed: true }).reconciliation;
+    expect(reconciliation.duplicateDeferrals).toEqual([1]);
+    expect(reconciliation.staleDeferrals).toEqual([{ index: 2, id: "CT-111111111111" }]);
+    expect(reconciliation.conflictingDeferrals).toEqual([
+      {
+        index: 0,
+        id: finding.id,
+        reason: "finding is suppressed; only active findings can be deferred",
+      },
+    ]);
+  });
+
+  test("reports a deferral as stale after the underlying finding is resolved", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    expect(deferFinding(root, finding.id, "revisit after adjacent work").status).toBe("passed");
+
+    mkdirSync(join(root, "tests"), { recursive: true });
+    writeFileSync(
+      join(root, "tests", "service.test.ts"),
+      'import { service } from "../src/service.ts";\nvoid service;\n',
+    );
+
+    expect(
+      analyzeExpectations(root, { includeSuppressed: true }).reconciliation.staleDeferrals,
+    ).toEqual([{ index: 0, id: finding.id }]);
   });
 
   test("returns an explicit absent state for a valid inactive finding id", () => {

@@ -9,8 +9,10 @@ import { main } from "./cli.ts";
 import { writeReport } from "./core.ts";
 import {
   baselineFindings,
+  deferFinding,
   findingCommand,
   findingsCommand,
+  resumeFinding,
   scaffoldFinding,
   type ExpectationEnvelope,
   type FindingState,
@@ -52,6 +54,8 @@ function expectationUsage(): never {
   coding-tooling remediation plan [--include-baseline] [--json]
   coding-tooling findings [--new|--baseline] [--all] [--json]
   coding-tooling finding <finding-id> [--json]
+  coding-tooling defer <finding-id> --reason <text> [--json]
+  coding-tooling resume <finding-id> [--json]
   coding-tooling baseline [--json]
   coding-tooling scaffold <finding-id> [--json]
   coding-tooling calibration [--json]
@@ -248,6 +252,8 @@ export function entryMain(argv = process.argv.slice(2)): number {
   if (
     command !== "findings" &&
     command !== "finding" &&
+    command !== "defer" &&
+    command !== "resume" &&
     command !== "baseline" &&
     command !== "scaffold" &&
     command !== "calibration"
@@ -275,6 +281,24 @@ export function entryMain(argv = process.argv.slice(2)): number {
     const id = argv[1];
     if (!id || argv.slice(2).some((value) => value !== "--json")) return expectationUsage();
     result = findingCommand(root, id);
+  } else if (command === "defer") {
+    const id = argv[1];
+    const reason = option(argv, "reason");
+    const knownFlags = new Set(["--json", "--reason"]);
+    for (let index = 2; index < argv.length; index += 1) {
+      const value = argv[index]!;
+      if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
+      if (value === "--reason") {
+        if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
+        index += 1;
+      }
+    }
+    if (!id || !reason) return expectationUsage();
+    result = deferFinding(root, id, reason);
+  } else if (command === "resume") {
+    const id = argv[1];
+    if (!id || argv.slice(2).some((value) => value !== "--json")) return expectationUsage();
+    result = resumeFinding(root, id);
   } else if (command === "baseline") {
     if (argv.slice(1).some((value) => value !== "--json")) return expectationUsage();
     result = baselineFindings(root);

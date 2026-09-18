@@ -78,6 +78,36 @@ test("marks fully scaffoldable subjects as deterministic without claiming automa
   });
 });
 
+test("keeps deferred work visible but out of deterministic auto-remediation", () => {
+  const deferred = finding("CT-666666666666", "src/deferred.ts", {
+    deferralEvidence: { version: 1, reason: "covered at the composition layer for now" },
+    scaffold: {
+      kind: "create-file",
+      path: "src/deferred.test.ts",
+      content: "export {};\n",
+    },
+  });
+  const actionable = finding("CT-777777777777", "src/actionable.ts", { severity: "info" });
+
+  const candidates = planRemediationCandidates([deferred, actionable]);
+
+  expect(candidates.map((candidate) => candidate.subject.key)).toEqual([
+    "src/actionable.ts",
+    "src/deferred.ts",
+  ]);
+  expect(candidates[1]).toMatchObject({
+    kind: "implementation",
+    fullyDeferred: true,
+    requiresAgent: true,
+    deferrals: [
+      {
+        findingId: "CT-666666666666",
+        reason: "covered at the composition layer for now",
+      },
+    ],
+  });
+});
+
 test("excludes suppressed, verified, and baseline findings by default", () => {
   const candidates = planRemediationCandidates([
     finding("CT-DDDDDDDDDDDD", "src/new.ts"),

@@ -91,6 +91,29 @@ function findingsFrom(envelope: ExpectationEnvelope): Finding[] {
   return Array.isArray(envelope.data.findings) ? (envelope.data.findings as Finding[]) : [];
 }
 
+type ExpectationReconciliationIssue = {
+  category: string;
+  count: number;
+};
+
+function expectationReconciliationIssues(
+  envelope: ExpectationEnvelope,
+): ExpectationReconciliationIssue[] {
+  const reconciliation = envelope.data.reconciliation;
+  if (
+    typeof reconciliation !== "object" ||
+    reconciliation === null ||
+    Array.isArray(reconciliation)
+  ) {
+    return [];
+  }
+  return Object.entries(reconciliation as Record<string, unknown>)
+    .flatMap(([category, value]) =>
+      Array.isArray(value) && value.length > 0 ? [{ category, count: value.length }] : [],
+    )
+    .sort((left, right) => left.category.localeCompare(right.category));
+}
+
 function selectedFindings(findings: Finding[], includeBaseline: boolean): Finding[] {
   return findings
     .filter(
@@ -308,11 +331,17 @@ function readSelectedFindings(
   includeBaseline: boolean,
   dependencies: ConvergenceDependencies,
   reason: string,
-): { findings?: Finding[]; envelope: ExpectationEnvelope; reason: string } {
+): {
+  findings?: Finding[];
+  envelope: ExpectationEnvelope;
+  reason: string;
+  reconciliationIssues: ExpectationReconciliationIssue[];
+} {
   const envelope = dependencies.findings(root);
   return {
     envelope,
     reason,
+    reconciliationIssues: expectationReconciliationIssues(envelope),
     findings:
       envelope.status === "error" || envelope.status === "unavailable"
         ? undefined
@@ -360,6 +389,20 @@ export function convergeRepository(
       dependencies,
       "findings-unavailable",
     );
+    if (observed.reconciliationIssues.length > 0) {
+      return blocked(
+        started,
+        root,
+        "expectation-reconciliation-incomplete",
+        "Expectation metadata must reconcile before convergence can mutate or declare a fixed point",
+        initialFindingIds,
+        findingsFrom(observed.envelope),
+        rounds,
+        normalizations,
+        resolvedOptions,
+        { expectationReconciliationIssues: observed.reconciliationIssues },
+      );
+    }
     if (!observed.findings) {
       return {
         schemaVersion: 1,
@@ -425,6 +468,20 @@ export function convergeRepository(
         dependencies,
         "findings-unavailable-after-normalization",
       );
+      if (normalizedObservation.reconciliationIssues.length > 0) {
+        return blocked(
+          started,
+          root,
+          "expectation-reconciliation-incomplete",
+          "Expectation metadata must reconcile after normalization before convergence can continue",
+          initialFindingIds,
+          findingsFrom(normalizedObservation.envelope),
+          rounds,
+          normalizations,
+          resolvedOptions,
+          { expectationReconciliationIssues: normalizedObservation.reconciliationIssues },
+        );
+      }
       if (!normalizedObservation.findings) {
         return {
           schemaVersion: 1,
@@ -515,6 +572,20 @@ export function convergeRepository(
       dependencies,
       "findings-unavailable-after-scaffold",
     );
+    if (afterObservation.reconciliationIssues.length > 0) {
+      return blocked(
+        started,
+        root,
+        "expectation-reconciliation-incomplete",
+        "Expectation metadata must reconcile after scaffolding before convergence can continue",
+        initialFindingIds,
+        findingsFrom(afterObservation.envelope),
+        rounds,
+        normalizations,
+        resolvedOptions,
+        { expectationReconciliationIssues: afterObservation.reconciliationIssues },
+      );
+    }
     if (!afterObservation.findings) {
       return {
         schemaVersion: 1,

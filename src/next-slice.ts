@@ -308,7 +308,10 @@ function selectKnownCandidate(
   if (gaps.source.status !== "passed") {
     return { selected: null, blockedBy: "capability-gap-inventory" };
   }
-  return { selected: rankNextSliceCandidates(gaps.candidates)[0] ?? null, blockedBy: null };
+  const actionableGaps = gaps.candidates.filter(
+    (candidate) => candidate.source.fullyDeferred !== true,
+  );
+  return { selected: rankNextSliceCandidates(actionableGaps)[0] ?? null, blockedBy: null };
 }
 
 export function nextSliceCommand(
@@ -358,7 +361,12 @@ export function nextSliceCommand(
           count: issues.candidates.length,
         },
         todos: { count: todos.length },
-        capabilityGaps: { status: gaps.source.status, count: gaps.candidates.length },
+        capabilityGaps: {
+          status: gaps.source.status,
+          count: gaps.candidates.length,
+          deferred: gaps.candidates.filter((candidate) => candidate.source.fullyDeferred === true)
+            .length,
+        },
       },
       policy: {
         ordering: ["blocking-open-pr", "open-pr", "roadmap", "issue", "todo", "capability-gap"],

@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { analyzeExpectations } from "../src/expectations.ts";
 import {
   nextSliceCommand,
   rankNextSliceCandidates,
@@ -75,4 +76,89 @@ test("does not select lower-priority local work when PR inventory is unavailable
   expect(result.status).toBe("unavailable");
   expect(result.data.selected).toBeNull();
   expect(result.data.blockedBy).toBe("pull-request-inventory");
+});
+
+test("keeps fully deferred capability gaps visible without selecting them again", () => {
+  const root = mkdtempSync(join(tmpdir(), "coding-tooling-next-"));
+  mkdirSync(join(root, "src"), { recursive: true });
+  writeFileSync(
+    join(root, ".repository.toml"),
+    [
+      "schema_version = 1",
+      'id = "example/repository"',
+      'kind = "library"',
+      'status = "active"',
+      "depends_on = []",
+      "consumed_by = []",
+      "supersedes = []",
+      "replaced_by = []",
+      "",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({ name: "fixture", scripts: { test: "bun test" } }, null, 2),
+  );
+  writeFileSync(join(root, "bun.lock"), "");
+  writeFileSync(join(root, "tsconfig.json"), "{}\n");
+  writeFileSync(join(root, "src", "service.ts"), "export const service = true;\n");
+
+  const finding = analyzeExpectations(root).findings.find(
+    (entry) => entry.expectationId === "typescript-source-test",
+  );
+  expect(finding).toBeDefined();
+  writeFileSync(
+    join(root, ".coding-tooling.expectations.json"),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        deferrals: [
+          {
+            id: finding!.id,
+            version: 1,
+            reason: "already considered for this convergence pass",
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  const result = nextSliceCommand(root, {
+    run: (_command, args = []) => {
+      if (args[0] === "repo") {
+        return {
+          command: ["gh", ...args],
+          status: 0,
+          stdout: JSON.stringify({ defaultBranchRef: { name: "main" } }),
+          stderr: "",
+        };
+      }
+      if (args[0] === "pr") {
+        return { command: ["gh", ...args], status: 0, stdout: "[]", stderr: "" };
+      }
+      if (args[0] === "issue") {
+        return { command: ["gh", ...args], status: 0, stdout: "[]", stderr: "" };
+      }
+      return {
+        command: ["gh", ...args],
+        status: 1,
+        stdout: "",
+        stderr: "unexpected command",
+      };
+    },
+  });
+
+  const candidates = result.data.candidates as NextSliceCandidate[];
+  expect(candidates).toContainEqual(
+    expect.objectContaining({
+      kind: "capability-gap",
+      source: expect.objectContaining({ fullyDeferred: true }),
+    }),
+  );
+  expect(result.data.selected).toBeNull();
+  expect(result.data.sources).toMatchObject({
+    capabilityGaps: { deferred: 1 },
+  });
 });

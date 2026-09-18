@@ -69,6 +69,13 @@ A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold i
   "schemaVersion": 1,
   "baseline": [],
   "suppressions": [],
+  "deferrals": [
+    {
+      "id": "CT-0123456789AB",
+      "version": 1,
+      "reason": "already covered through a broader composition test; revisit if that boundary changes"
+    }
+  ],
   "verifications": [
     {
       "id": "VERIFY-TOKENS",
@@ -84,11 +91,11 @@ A Bun lockfile alone does not imply the Bun test runner: a `bun:test` scaffold i
 }
 ```
 
-A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject. A verification is intentionally different: it is an explicitly versioned relationship that must identify one exact expectation and semantic subject and point to an existing repository package script through `bun`, `npm`, `pnpm`, or `yarn` using exactly `run <script>`. `coding-tooling` does not infer verification from script names and does not accept arbitrary shell commands as evidence in this contract.
+A suppression must include a reason and identify either one finding ID or an expectation, optionally narrowed to a semantic subject. A deferral is intentionally narrower: it names one exact finding ID, requires a reason, and leaves that finding active. It records that the finding was considered without claiming the requirement is satisfied. Deferred findings remain visible in normal findings output, remain unresolved debt, are sorted behind otherwise actionable remediation, and are excluded from deterministic auto-scaffolding until explicitly resumed. A verification is intentionally different: it is an explicitly versioned relationship that must identify one exact expectation and semantic subject and point to an existing repository package script through `bun`, `npm`, `pnpm`, or `yarn` using exactly `run <script>`. `coding-tooling` does not infer verification from script names and does not accept arbitrary shell commands as evidence in this contract.
 
 A valid verification changes the finding disposition to `verified` and preserves the verifier ID, relationship version, exact command, and rationale on the finding. Missing scripts, unsupported command shapes, stale relationships, duplicate relationships, unknown expectations, and simultaneous suppression-plus-verification metadata are reported through reconciliation instead of silently satisfying debt. Invariants are explicit repository knowledge for agents; the analyzer does not synthesize them.
 
-Persistent metadata is reconciled against the current deterministic finding stream. Reports identify orphaned baseline IDs, stale suppressions and verifications, invalid verifier commands, duplicate metadata, and references to unknown expectation IDs so accepted debt and evidence do not silently become a graveyard.
+Persistent metadata is reconciled against the current deterministic finding stream. Reports identify orphaned baseline IDs, stale suppressions, verifications, and deferrals, invalid verifier commands, conflicting or duplicate deferrals, duplicate metadata, and references to unknown expectation IDs so accepted debt and decision records do not silently become a graveyard.
 
 ## Finding lifecycle
 
@@ -97,7 +104,11 @@ Findings have two independent lifecycle dimensions:
 - `state: "new" | "baseline"` describes whether active debt has been accepted into the current baseline.
 - `disposition: "active" | "suppressed" | "verified"` distinguishes actionable findings, intentionally suppressed findings, and findings satisfied by explicit deterministic non-test evidence.
 
-Normal `findings` output includes only active findings. `findings --all` and `finding <id>` keep suppressed and verified findings inspectable together with their suppression reason or verification evidence. Baselining does not hide debt, and verified findings are not added to a newly written baseline because they are already satisfied by explicit evidence.
+Normal `findings` output includes only active findings, including deferred active findings with their `deferralEvidence`. `findings --all` and `finding <id>` keep suppressed and verified findings inspectable together with their suppression reason or verification evidence. Baselining does not hide debt, and verified findings are not added to a newly written baseline because they are already satisfied by explicit evidence.
+
+Agents can record a deliberate temporary decision with `coding-tooling defer CT-... --reason "..."` and clear it with `coding-tooling resume CT-...`. Deferral is not suppression: it neither changes the finding disposition nor makes an error non-blocking. Fully deferred remediation stays in inventories and handoff evidence but is not selected as a fresh next slice or executed by deterministic convergence until resumed.
+
+Convergence treats non-empty expectation reconciliation reports as a fail-closed metadata boundary. Stale, duplicate, or conflicting decision/evidence records must be reconciled before deterministic mutation or a clean fixed point can be claimed.
 
 Only an active, new finding promoted to `error` makes `findings` fail. Re-running `baseline` rewrites the baseline from the current active finding set, so resolved or verified debt does not linger there.
 
@@ -111,6 +122,7 @@ Each finding contains:
 - deterministic evidence and related files;
 - focused verification commands when derivable;
 - explicit non-test `verificationEvidence` with a relationship version when repository metadata satisfies the requirement;
+- explicit `deferralEvidence` when a caller has considered but intentionally postponed an active finding;
 - deterministic relationships to other findings when known;
 - an optional explicit scaffold action.
 

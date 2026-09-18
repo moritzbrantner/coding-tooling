@@ -41,6 +41,8 @@ export type AgentNextAction = {
   findingIds: string[];
   deterministicCommands: string[][];
   verification: string[][];
+  deferrals: Array<{ findingId: string; reason: string }>;
+  fullyDeferred: boolean;
   suggestedBranch: string;
 };
 
@@ -140,6 +142,8 @@ function compactCandidate(candidate: RemediationCandidate): AgentNextAction {
     findingIds: candidate.findingIds,
     deterministicCommands: candidate.scaffolds.map((scaffold) => scaffold.command),
     verification: candidate.verification,
+    deferrals: candidate.deferrals,
+    fullyDeferred: candidate.fullyDeferred,
     suggestedBranch: candidate.suggestedBranch,
   };
 }
@@ -156,6 +160,14 @@ function exactHead(root: string, runner: Runner): string | undefined {
 
 function worktreeState(root: string, runner: Runner): string | undefined {
   return gitValue(root, runner, ["status", "--porcelain"]);
+}
+
+function reconciliationIssueCount(value: unknown): number {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return 0;
+  return Object.values(value as Record<string, unknown>).reduce<number>(
+    (count, item) => count + (Array.isArray(item) ? item.length : 0),
+    0,
+  );
 }
 
 function envelope(
@@ -211,6 +223,8 @@ export function agentSummaryCommand(
   const registry = Array.isArray(findings.data.registry)
     ? (findings.data.registry as ExpectationRegistryRecord[])
     : [];
+  const expectationReconciliation = findings.data.reconciliation ?? null;
+  const expectationReconciliationIssues = reconciliationIssueCount(expectationReconciliation);
   let candidates: RemediationCandidate[];
   try {
     candidates = planRemediationCandidates(sourceFindings, { root });
@@ -248,18 +262,30 @@ export function agentSummaryCommand(
   const activeNew = sourceFindings.filter(
     (finding) => finding.disposition === "active" && finding.state === "new",
   );
+  const activeBaseline = sourceFindings.filter(
+    (finding) => finding.disposition === "active" && finding.state === "baseline",
+  );
   const evidenceGroups = collapseAgentEvidence(activeNew, registry);
   const hasError =
     activeNew.some((finding) => finding.severity === "error") ||
     candidates.some((candidate) => candidate.severities.includes("error"));
+  const hasOutstandingWork =
+    activeNew.length > 0 ||
+    activeBaseline.length > 0 ||
+    candidates.length > 0 ||
+    expectationReconciliationIssues > 0;
   const decision: AgentSummaryDecision = hasError
     ? "blocked"
-    : activeNew.length > 0 || candidates.length > 0
+    : hasOutstandingWork
       ? "partial"
       : "clean";
   const status: ResultStatus = decision === "blocked" ? "failed" : "passed";
   const strongestEvidence = evidenceGroups[0] ?? null;
-  const nextAction = candidates[0] ? compactCandidate(candidates[0]) : null;
+  const actionableCandidate = candidates.find((candidate) => !candidate.fullyDeferred);
+  const nextAction = actionableCandidate ? compactCandidate(actionableCandidate) : null;
+  const deferredActions = candidates
+    .filter((candidate) => candidate.fullyDeferred)
+    .map(compactCandidate);
 
   return envelope(status, started, {
     schemaVersion: AGENT_SUMMARY_VERSION,
@@ -271,12 +297,17 @@ export function agentSummaryCommand(
       activeNewFindings: activeNew.length,
       correlatedEvidenceGroups: evidenceGroups.length,
       collapsedRepresentations: activeNew.length - evidenceGroups.length,
-      activeBaselineFindings: sourceFindings.filter((finding) => finding.state === "baseline")
-        .length,
+      activeBaselineFindings: activeBaseline.length,
+      deferredActiveFindings: sourceFindings.filter(
+        (finding) => finding.disposition === "active" && finding.deferralEvidence !== undefined,
+      ).length,
       remediationCandidates: candidates.length,
+      deferredRemediationCandidates: deferredActions.length,
+      expectationReconciliationIssues,
     },
     strongestEvidence,
     nextAction,
+    deferredActions,
     evidenceGroups: evidenceGroups.map(compactEvidenceGroup),
     drillDown: {
       strongestFinding: strongestEvidence
@@ -287,6 +318,7 @@ export function agentSummaryCommand(
     },
     audit: {
       findingsStatus: findings.status,
+      expectationReconciliation,
       candidateSource: "existing-remediation-planner",
       note: "This summary projects existing evidence; it does not add an independent oracle.",
     },

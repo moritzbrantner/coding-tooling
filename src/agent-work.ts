@@ -616,11 +616,17 @@ export function agentHandoffCommand(
   const candidates = Array.isArray(remediation.data.candidates)
     ? (remediation.data.candidates as Array<Record<string, unknown>>)
     : [];
-  const strongestNextAction =
-    candidates.length > 0
+  const actionableCandidate = candidates.find((candidate) => candidate.fullyDeferred !== true);
+  const deferredCandidate = candidates.find((candidate) => candidate.fullyDeferred === true);
+  const strongestNextAction = actionableCandidate
+    ? {
+        kind: "remediation",
+        candidate: actionableCandidate,
+      }
+    : deferredCandidate
       ? {
-          kind: "remediation",
-          candidate: candidates[0],
+          kind: "deferred-remediation",
+          candidate: deferredCandidate,
         }
       : {
           kind: "integration-review",
