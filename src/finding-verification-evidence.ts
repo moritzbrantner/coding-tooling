@@ -25,12 +25,7 @@ export type FindingVerificationReceipt = {
   exitCode: number | null;
 };
 
-type Runner = (
-  command: string,
-  args?: string[],
-  cwd?: string,
-  inherit?: boolean,
-) => CommandResult;
+type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
