@@ -1,6 +1,6 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { execFileSync } from "node:child_process";
 
 import type { Diagnostic, ResultEnvelope } from "./model.ts";
 
@@ -86,7 +86,12 @@ export function artifactReuseEconomics(
       "unavailable",
       started,
       { profile: "ci-artifact-reuse/v1", receiptPath },
-      [{ code: "artifact-reuse-evidence-missing", message: `No build-artifact receipt at ${receiptPath}` }],
+      [
+        {
+          code: "artifact-reuse-evidence-missing",
+          message: `No build-artifact receipt at ${receiptPath}`,
+        },
+      ],
     );
 
   let receipt: Receipt;
@@ -152,7 +157,12 @@ export function artifactReuseEconomics(
     });
 
   if (diagnostics.length > 0)
-    return envelope("unavailable", started, { profile: "ci-artifact-reuse/v1", receiptPath }, diagnostics);
+    return envelope(
+      "unavailable",
+      started,
+      { profile: "ci-artifact-reuse/v1", receiptPath },
+      diagnostics,
+    );
 
   const classification = metrics!.recommended
     ? "recommended"
@@ -165,7 +175,8 @@ export function artifactReuseEconomics(
   if (!metrics!.recommended)
     diagnostics.push({
       code: "artifact-reuse-not-recommended",
-      message: `Artifact reuse is advisory-only and currently ${classification}: ${metrics!.reason}.`,
+      message:
+        `Artifact reuse is advisory-only and currently ${classification}: ${metrics!.reason}.`,
     });
 
   return envelope(
