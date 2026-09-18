@@ -70,6 +70,21 @@ Repository-backed Pages operations accept an optional `ref=<branch|tag|sha>` sou
 
 The machine discovery document now describes operation parameters structurally, including requiredness, repeatability, enum values, bounds, authority, and completeness. Agents should consume those fields rather than parsing prose or URL templates.
 
+### Canonical result envelope
+
+Registry-driven agents should use the canonical URLs from `agent-tool.json`, which opt into `envelope=1`. These views return the shared `coding-tooling/result-envelope/v1` shape:
+
+```text
+schemaVersion
+operation
+status
+durationMs
+data
+diagnostics
+```
+
+The transport status remains one of `passed | failed | unavailable | error`. Domain evidence state stays inside `data`, with `data.evidence.complete` distinguishing complete evidence from bounded or incomplete observation. Existing browser URLs without `envelope=1` retain their legacy payload shapes for compatibility.
+
 ### Parameterized analysis projection
 
 The unparameterized `analysis.json/?repo=owner/repository` path remains the original `remote-preflight` contract. Tailoring begins only when an analysis parameter is present, at which point the view returns `operation: "remote-preflight-query"`.
@@ -78,7 +93,7 @@ Supported parameters are deliberately bounded:
 
 - `view=full|agent` selects the original rich evidence shape or a compact agent-first projection.
 - repeated `focus=` values select deterministic evidence families: `architecture`, `automation`, `browser`, `dependencies`, `environment`, `governance`, `mobile`, `performance`, or `testing`;
-- repeated `scope=` values select discovered components by exact name or path;
+- repeated `component=` values select discovered components by exact name or path; `scope=` remains a compatibility alias;
 - `min-severity=low|medium|high` and `limit=1..100` bound the finding surface;
 - `finding=REMOTE-...` drills into one existing remote finding;
 - `base=`, optional `head=`, repeated `changed-file=`, and optional `tier=` compose the existing change-aware Pages analyzer into the result rather than duplicating compare/component logic.
@@ -87,12 +102,12 @@ Examples:
 
 ```text
 https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository&view=agent&focus=testing&min-severity=medium
-https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository&view=agent&scope=packages/app&limit=5
+https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository&view=agent&component=packages/app&limit=5
 https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository&view=agent&base=main&head=feature&tier=fast
 https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository&view=agent&changed-file=src/app.ts&changed-file=tests/app.test.ts
 ```
 
-The projection never creates a new finding or evidence oracle. Focus values classify existing remote finding families, scope filters only exact discovered components and does not guess finding ownership, and change context is delegated to the existing `affected` implementation. Unknown parameters, focus values, scopes, or invalid bounds fail closed.
+The projection never creates a new finding or evidence oracle. Focus values classify existing remote finding families, component filters only exact discovered components and does not guess finding ownership, and change context is delegated to the existing `affected` implementation. Unknown parameters, focus values, components, or invalid bounds fail closed.
 
 The compact agent view retains the source repository/revision, selected findings, compact component capabilities, explicit limitations, local handoff, optional change-aware evidence, and canonical drill-down links back to the full analysis, the strongest finding, and `affected.json`.
 
