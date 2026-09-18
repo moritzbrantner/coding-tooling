@@ -10,6 +10,14 @@ function actionSource(): string {
 }
 
 describe("composite action contract", () => {
+  test("pushes the caller source revision into coding-tooling operations", () => {
+    const source = actionSource();
+
+    expect(source).toContain("source-sha:");
+    expect(source).toContain("CODING_TOOLING_SOURCE_SHA:");
+    expect(source).toContain("inputs.source-sha != '' && inputs.source-sha || github.sha");
+  });
+
   test("exposes read-only environment fingerprint capture", () => {
     const source = actionSource();
 
