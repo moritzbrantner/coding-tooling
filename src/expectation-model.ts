@@ -397,9 +397,7 @@ export function semanticFindingId(
   return `CT-${digest}`;
 }
 
-export function suppressionScope(
-  suppression: ExpectationSuppression,
-): FindingSuppressionScope {
+export function suppressionScope(suppression: ExpectationSuppression): FindingSuppressionScope {
   if (suppression.id) return "finding";
   return suppression.subject ? "subject" : "expectation";
 }
@@ -416,13 +414,13 @@ export function matchingSuppression(
   return (config.suppressions ?? [])
     .filter((suppression) => {
       if (suppression.id && suppression.id !== finding.id) return false;
-      if (suppression.expectation && suppression.expectation !== finding.expectationId) return false;
+      if (suppression.expectation && suppression.expectation !== finding.expectationId)
+        return false;
       if (suppression.subject && suppression.subject !== finding.subject.key) return false;
       return true;
     })
     .sort(
-      (left, right) =>
-        specificity[suppressionScope(left)] - specificity[suppressionScope(right)],
+      (left, right) => specificity[suppressionScope(left)] - specificity[suppressionScope(right)],
     )[0];
 }
 
