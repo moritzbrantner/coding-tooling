@@ -165,7 +165,7 @@ function worktreeState(root: string, runner: Runner): string | undefined {
 
 function reconciliationIssueCount(value: unknown): number {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return 0;
-  return Object.values(value as Record<string, unknown>).reduce(
+  return Object.values(value as Record<string, unknown>).reduce<number>(
     (count, item) => count + (Array.isArray(item) ? item.length : 0),
     0,
   );
