@@ -206,15 +206,23 @@ function matchesFocus(finding, focus) {
 }
 
 function findingFocus(id) {
-  if (/^REMOTE-(?:TEST|COVERAGE)-/.test(id)) return ["testing"];
-  if (/^REMOTE-(?:PERFORMANCE|BENCH)/.test(id)) return ["performance"];
-  if (/^REMOTE-MOBILE-/.test(id)) return ["mobile"];
-  if (/^REMOTE-DEPLOY-/.test(id)) return ["browser", "automation"];
-  if (/^REMOTE-GOVERNANCE-/.test(id)) return ["governance", "automation"];
-  if (/^REMOTE-(?:CI|EXECUTION)-/.test(id)) return ["automation"];
-  if (/^REMOTE-ENV-/.test(id)) return ["environment", "dependencies"];
-  if (/^REMOTE-(?:DEPENDENCY|LOCK)-/.test(id)) return ["dependencies"];
-  if (/^REMOTE-(?:FOUNDATION|AGENT|CAPABILITY|SOURCE)-/.test(id)) return ["architecture"];
+  if (id.startsWith("REMOTE-TEST-") || id.startsWith("REMOTE-COVERAGE-")) return ["testing"];
+  if (id.startsWith("REMOTE-PERFORMANCE-") || id.startsWith("REMOTE-BENCH-"))
+    return ["performance"];
+  if (id.startsWith("REMOTE-MOBILE-")) return ["mobile"];
+  if (id.startsWith("REMOTE-DEPLOY-")) return ["browser", "automation"];
+  if (id.startsWith("REMOTE-GOVERNANCE-")) return ["governance", "automation"];
+  if (id.startsWith("REMOTE-CI-") || id.startsWith("REMOTE-EXECUTION-")) return ["automation"];
+  if (id.startsWith("REMOTE-ENV-")) return ["environment", "dependencies"];
+  if (id.startsWith("REMOTE-DEPENDENCY-") || id.startsWith("REMOTE-LOCK-"))
+    return ["dependencies"];
+  if (
+    id.startsWith("REMOTE-FOUNDATION-") ||
+    id.startsWith("REMOTE-AGENT-") ||
+    id.startsWith("REMOTE-CAPABILITY-") ||
+    id.startsWith("REMOTE-SOURCE-")
+  )
+    return ["architecture"];
   return [];
 }
 
