@@ -103,6 +103,36 @@ test("marks fully scaffoldable subjects as deterministic without claiming automa
   });
 });
 
+test("turns a new broad suppression policy match into agent review instead of auto-scaffolding", () => {
+  const candidates = planRemediationCandidates([
+    finding("CT-787878787878", "src/policy-match.ts", {
+      suppressionEvidence: {
+        scope: "expectation",
+        reason: "repository policy usually exempts generated metadata",
+        applied: false,
+        expectation: "source-test-reachability",
+      },
+      scaffold: {
+        kind: "create-file",
+        path: "src/policy-match.test.ts",
+        content: "export {};\n",
+      },
+    }),
+  ]);
+
+  expect(candidates[0]).toMatchObject({
+    kind: "review",
+    requiresAgent: true,
+    suppressionPolicyMatches: [
+      {
+        findingId: "CT-787878787878",
+        scope: "expectation",
+        reason: "repository policy usually exempts generated metadata",
+      },
+    ],
+  });
+});
+
 test("keeps deferred work visible but out of deterministic auto-remediation", () => {
   const deferred = finding("CT-666666666666", "src/deferred.ts", {
     deferralEvidence: { version: 1, reason: "covered at the composition layer for now" },
