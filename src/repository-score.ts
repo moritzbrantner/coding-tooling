@@ -467,7 +467,7 @@ export function scoreExpectationEvidence(
       "Scores are versioned structural evidence summaries, not claims of semantic correctness or repository value.",
       "Detector scan coverage and score subjects are separate: scoring uses detector-specific requirement units such as files, packages, configured capabilities, Cargo targets, or TypeScript projects.",
       "Only modeled audits with applicable score subjects contribute; unavailable coverage or a missing score model marks the result incomplete instead of counting as zero.",
-      "Baselining does not improve the score, and suppressed findings remain score-relevant; explicit verification evidence can satisfy a finding.",
+      "Baselining does not improve the score, and suppressed findings remain score-relevant; verifier declarations do not satisfy findings, while execution-backed verification evidence can.",
       "Audit scores are the percentage of applicable score subjects without unresolved findings; the overall score is a severity-weighted average of applicable audits.",
     ],
   };

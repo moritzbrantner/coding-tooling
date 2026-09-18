@@ -54,6 +54,31 @@ test("groups related active findings into one subject-scoped candidate", () => {
   expect(candidates[0]?.verification).toEqual([["bun", "run", "test"]]);
 });
 
+test("surfaces declared verifiers without treating them as satisfied evidence", () => {
+  const candidates = planRemediationCandidates([
+    finding("CT-898989898989", "src/verified-by-contract.ts", {
+      verificationDeclaration: {
+        id: "VERIFY-CONTRACT",
+        version: 1,
+        command: ["bun", "run", "verify:contract"],
+        reason: "repository-owned contract checks the generated metadata",
+      },
+    }),
+  ]);
+
+  expect(candidates[0]).toMatchObject({
+    kind: "implementation",
+    verificationDeclarations: [
+      {
+        findingId: "CT-898989898989",
+        id: "VERIFY-CONTRACT",
+        command: ["bun", "run", "verify:contract"],
+        reason: "repository-owned contract checks the generated metadata",
+      },
+    ],
+  });
+});
+
 test("marks fully scaffoldable subjects as deterministic without claiming automatic mutation", () => {
   const candidates = planRemediationCandidates([
     finding("CT-CCCCCCCCCCCC", "src/widget.ts", {

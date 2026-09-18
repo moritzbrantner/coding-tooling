@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "typescript-explicit-verifier",
+  "id": "typescript-declared-verifier",
   "detector": "typescript-source-test",
   "fixture": "calibration/fixtures/verification-evidence",
   "coverage": "applied",
@@ -8,8 +8,7 @@
     {
       "subject": "src/token-metadata.ts",
       "requirement": "tests/token-metadata.test.ts",
-      "expected": "satisfied",
-      "disposition": "verified"
+      "expected": "finding"
     }
   ]
 }

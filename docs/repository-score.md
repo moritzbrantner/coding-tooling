@@ -78,7 +78,7 @@ This deliberately avoids rewarding configuration changes that merely hide debt:
 
 - baselining a finding does not improve the score;
 - suppressing a finding does not improve the score;
-- explicit verification evidence attached to a finding can satisfy it because it supplies positive deterministic evidence;
+- a verifier declaration alone does not improve the score; only execution-backed verification evidence can satisfy a finding;
 - audits with no applicable score subjects do not enter the numeric denominator;
 - unavailable or unsupported detector coverage marks structural evidence `incomplete` rather than treating unknown evidence as `0` or `100`;
 - an applied detector without an explicit score-subject model also marks structural evidence incomplete.

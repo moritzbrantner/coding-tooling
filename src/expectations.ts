@@ -22,7 +22,7 @@ import {
   type Finding,
   type FindingDeferralEvidence,
   type FindingState,
-  type FindingVerificationEvidence,
+  type FindingVerificationDeclaration,
   type ReconciliationReport,
 } from "./expectation-model.ts";
 import type { DetectorContext, PackageInfo } from "./expectation-package-context.ts";
@@ -53,6 +53,7 @@ export type {
   FindingSeverity,
   FindingState,
   FindingSubject,
+  FindingVerificationDeclaration,
   FindingVerificationEvidence,
   ReconciliationReport,
   RepositoryInvariant,
@@ -158,7 +159,7 @@ function validateVerificationCommand(
 }
 
 type VerificationResolution = {
-  evidenceByFindingId: Map<string, FindingVerificationEvidence>;
+  declarationByFindingId: Map<string, FindingVerificationDeclaration>;
   staleVerifications: Array<{ index: number; id: string }>;
   invalidVerifications: Array<{ index: number; id: string; reason: string }>;
   duplicateVerifications: number[];
@@ -171,7 +172,7 @@ function resolveVerifications(
   context: DetectorContext,
 ): VerificationResolution {
   const knownExpectations = new Set(expectationDescriptors.map((descriptor) => descriptor.id));
-  const evidenceByFindingId = new Map<string, FindingVerificationEvidence>();
+  const declarationByFindingId = new Map<string, FindingVerificationDeclaration>();
   const staleVerifications: Array<{ index: number; id: string }> = [];
   const invalidVerifications: Array<{ index: number; id: string; reason: string }> = [];
   const duplicateVerifications: number[] = [];
@@ -203,8 +204,7 @@ function resolveVerifications(
       invalidVerifications.push({
         index,
         id: verification.id,
-        reason:
-          "finding is also suppressed; remove suppression before declaring verification evidence",
+        reason: "finding is also suppressed; remove suppression before declaring verification",
       });
       continue;
     }
@@ -213,7 +213,7 @@ function resolveVerifications(
       invalidVerifications.push({ index, id: verification.id, reason: invalid });
       continue;
     }
-    evidenceByFindingId.set(finding.id, {
+    declarationByFindingId.set(finding.id, {
       id: verification.id,
       version: verification.version,
       command: verification.command,
@@ -222,7 +222,7 @@ function resolveVerifications(
   }
 
   return {
-    evidenceByFindingId,
+    declarationByFindingId,
     staleVerifications,
     invalidVerifications,
     duplicateVerifications,
@@ -230,19 +230,13 @@ function resolveVerifications(
   };
 }
 
-function applyVerificationEvidence(
+function applyVerificationDeclarations(
   findings: Finding[],
   resolution: VerificationResolution,
 ): Finding[] {
   return findings.map((finding) => {
-    const verificationEvidence = resolution.evidenceByFindingId.get(finding.id);
-    if (!verificationEvidence) return finding;
-    return {
-      ...finding,
-      disposition: "verified" as const,
-      suppressionReason: undefined,
-      verificationEvidence,
-    };
+    const verificationDeclaration = resolution.declarationByFindingId.get(finding.id);
+    return verificationDeclaration ? { ...finding, verificationDeclaration } : finding;
   });
 }
 
@@ -373,9 +367,9 @@ export function analyzeExpectations(
         left.id.localeCompare(right.id),
     );
   const verificationResolution = resolveVerifications(config, materialized, context);
-  const verifiedFindings = applyVerificationEvidence(materialized, verificationResolution);
-  const deferralResolution = resolveDeferrals(config, verifiedFindings);
-  const allFindings = applyDeferralEvidence(verifiedFindings, deferralResolution);
+  const declaredFindings = applyVerificationDeclarations(materialized, verificationResolution);
+  const deferralResolution = resolveDeferrals(config, declaredFindings);
+  const allFindings = applyDeferralEvidence(declaredFindings, deferralResolution);
   const reconciliation = reconcile(config, allFindings, verificationResolution, deferralResolution);
   const coverage = analyzeFindingsCoverage(root, context, expectationDescriptors);
   const visible = options.includeSuppressed

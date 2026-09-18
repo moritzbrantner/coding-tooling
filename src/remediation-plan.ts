@@ -25,6 +25,12 @@ export type RemediationCandidate = {
   severities: FindingSeverity[];
   relatedFiles: string[];
   verification: string[][];
+  verificationDeclarations: Array<{
+    findingId: string;
+    id: string;
+    command: string[];
+    reason: string;
+  }>;
   scaffolds: Array<{ findingId: string; path: string; command: string[] }>;
   convergenceRules: Array<{ id: string; mode: ConvergenceRuleMode }>;
   deferrals: Array<{ findingId: string; reason: string }>;
@@ -129,6 +135,18 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
     ),
   ].sort();
   const verification = uniqueCommands(ordered.flatMap((finding) => finding.verification));
+  const verificationDeclarations = ordered.flatMap((finding) =>
+    finding.verificationDeclaration
+      ? [
+          {
+            findingId: finding.id,
+            id: finding.verificationDeclaration.id,
+            command: finding.verificationDeclaration.command,
+            reason: finding.verificationDeclaration.reason,
+          },
+        ]
+      : [],
+  );
   const scaffolds = ordered.flatMap((finding) =>
     finding.scaffold
       ? [
@@ -153,6 +171,7 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
     severities,
     relatedFiles,
     verification,
+    verificationDeclarations,
     scaffolds,
     convergenceRules,
     deferrals,
@@ -258,6 +277,7 @@ function mobileAnalysisCandidates(root: string): RemediationCandidate[] {
       severities,
       relatedFiles,
       verification: [["coding-tooling", "analyze", "--json"]],
+      verificationDeclarations: [],
       scaffolds: [],
       convergenceRules: [],
       deferrals: [],
