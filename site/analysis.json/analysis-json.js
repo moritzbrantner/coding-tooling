@@ -1,5 +1,5 @@
-import { analysisJson } from "../github-analysis.js";
 import { analysisErrorMessage, analysisMessage } from "../analysis-message.js";
+import { analysisQueryJson } from "../analysis-query.js";
 
 const target = document.querySelector("#analysis");
 const params = new URL(location.href).searchParams;
@@ -8,7 +8,7 @@ const postMessageRequested = params.get("postMessage") === "1";
 
 try {
   if (!repository) throw new Error("Missing required ?repo=owner/repository query parameter.");
-  const analysis = await analysisJson(repository);
+  const analysis = await analysisQueryJson(repository, params);
   target.textContent = `${JSON.stringify(analysis, null, 2)}\n`;
   document.title = `${analysis.repository.fullName} · analysis.json`;
   postToParent(analysisMessage(repository, analysis));
@@ -17,7 +17,7 @@ try {
   target.textContent = `${JSON.stringify(
     {
       schemaVersion: 1,
-      operation: "remote-preflight",
+      operation: "remote-preflight-query",
       summary: { status: "error" },
       error: { message },
     },
