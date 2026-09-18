@@ -26,19 +26,55 @@ export async function testCoverageJson(value, options = {}) {
     fetchImpl,
     signal,
   );
-  const requestedRef = String(options.ref ?? repository.default_branch).trim();
-  const commit = await githubJson(
-    `/repos/${reference.owner}/${reference.name}/commits/${encodeURIComponent(requestedRef)}`,
-    fetchImpl,
-    signal,
-  );
-  const resolvedSha = commit?.sha;
-  if (!/^[0-9a-f]{40}$/i.test(resolvedSha ?? ""))
-    throw new Error(`GitHub did not resolve ref to an exact commit SHA: ${requestedRef}`);
+  const requestedRef = String(options.ref ?? "").trim() || null;
+  const resolvedSha = requestedRef
+    ? await resolveCoverageRevision(reference, requestedRef, fetchImpl, signal)
+    : null;
 
   const published = await readPublishedCoverage(reference, repository, fetchImpl, signal);
-  if (published?.status === "read" && published.snapshot.repository.revision === resolvedSha) {
-    const freshness = "current";
+  if (!requestedRef && published) {
+    if (published.status === "unreadable") {
+      return resultEnvelope(repository, now, {
+        requestedRef: null,
+        resolvedSha: null,
+        status: "incomplete",
+        coverage: null,
+        sources: [published.source],
+        source: null,
+        publication: null,
+        treeTruncated: false,
+      });
+    }
+
+    const defaultBranch = await githubJson(
+      `/repos/${reference.owner}/${reference.name}/branches/${encodeURIComponent(repository.default_branch)}`,
+      fetchImpl,
+      signal,
+    );
+    const freshness =
+      published.snapshot.repository.revision === defaultBranch.commit?.sha ? "current" : "stale";
+    const source = {
+      path: publishedCoverage.path,
+      branch: publishedCoverage.branch,
+      format: publishedCoverage.format,
+    };
+    return resultEnvelope(repository, now, {
+      requestedRef: null,
+      resolvedSha: null,
+      status: "available",
+      coverage: published.snapshot.coverage,
+      sources: [{ ...source, status: "read" }],
+      source,
+      publication: {
+        revision: published.snapshot.repository.revision,
+        generatedAt: published.snapshot.generatedAt,
+        freshness,
+      },
+      treeTruncated: false,
+    });
+  }
+
+  if (requestedRef && published?.status === "read" && published.snapshot.repository.revision === resolvedSha) {
     const source = {
       path: publishedCoverage.path,
       branch: publishedCoverage.branch,
@@ -54,14 +90,15 @@ export async function testCoverageJson(value, options = {}) {
       publication: {
         revision: published.snapshot.repository.revision,
         generatedAt: published.snapshot.generatedAt,
-        freshness,
+        freshness: "current",
       },
       treeTruncated: false,
     });
   }
 
+  const treeRef = resolvedSha ?? repository.default_branch;
   const tree = await githubJson(
-    `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(resolvedSha)}?recursive=1`,
+    `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(treeRef)}?recursive=1`,
     fetchImpl,
     signal,
   );
@@ -70,7 +107,7 @@ export async function testCoverageJson(value, options = {}) {
       .filter((entry) => entry.type === "blob" && entry.path && entry.sha)
       .map((entry) => [entry.path, entry]),
   );
-  const sources = published?.status === "unreadable" ? [published.source] : [];
+  const sources = requestedRef && published?.status === "unreadable" ? [published.source] : [];
 
   for (const candidate of coverageCandidates) {
     const entry = blobs.get(candidate.path);
@@ -117,6 +154,18 @@ export async function testCoverageJson(value, options = {}) {
     publication: null,
     treeTruncated: Boolean(tree.truncated),
   });
+}
+
+async function resolveCoverageRevision(reference, ref, fetchImpl, signal) {
+  const commit = await githubJson(
+    `/repos/${reference.owner}/${reference.name}/commits/${encodeURIComponent(ref)}`,
+    fetchImpl,
+    signal,
+  );
+  const sha = commit?.sha;
+  if (!/^[0-9a-f]{40}$/i.test(sha ?? ""))
+    throw new Error(`GitHub did not resolve ref to an exact commit SHA: ${ref}`);
+  return sha;
 }
 
 async function readPublishedCoverage(reference, repository, fetchImpl, signal) {
