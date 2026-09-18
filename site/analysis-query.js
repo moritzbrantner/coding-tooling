@@ -32,7 +32,8 @@ const allowedParameters = new Set([
 
 export function parseAnalysisQuery(parameters) {
   for (const key of parameters.keys()) {
-    if (!allowedParameters.has(key))\n      throw new Error(`Unsupported analysis query parameter: ${key}`);
+    if (!allowedParameters.has(key))
+      throw new Error(`Unsupported analysis query parameter: ${key}`);
   }
 
   const view = parameters.get("view") ?? "full";
