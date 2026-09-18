@@ -1,8 +1,4 @@
-import {
-  apiErrorEnvelope,
-  discoveryApiEnvelope,
-  envelopeRequested,
-} from "../api-envelope.js";
+import { apiErrorEnvelope, discoveryApiEnvelope, envelopeRequested } from "../api-envelope.js";
 import { DEFAULT_DISCOVERY_OWNER, discoveryJson } from "../repository-discovery.js";
 
 const started = Date.now();
@@ -13,9 +9,7 @@ const useEnvelope = envelopeRequested(parameters);
 
 try {
   const discovery = await discoveryJson(owner);
-  const result = useEnvelope
-    ? discoveryApiEnvelope(discovery, Date.now() - started)
-    : discovery;
+  const result = useEnvelope ? discoveryApiEnvelope(discovery, Date.now() - started) : discovery;
   target.textContent = `${JSON.stringify(result, null, 2)}\n`;
   document.title = `${discovery.owner} · discovery.json`;
 } catch (error) {
