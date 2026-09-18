@@ -30,6 +30,7 @@ export type RemediationCandidate = {
     id: string;
     command: string[];
     reason: string;
+    component: string;
   }>;
   suppressionPolicyMatches: Array<{
     findingId: string;
@@ -163,6 +164,7 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
             id: finding.verificationDeclaration.id,
             command: finding.verificationDeclaration.command,
             reason: finding.verificationDeclaration.reason,
+            component: finding.verificationDeclaration.component,
           },
         ]
       : [],

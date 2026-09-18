@@ -17,6 +17,7 @@ import {
   type ExpectationEnvelope,
   type FindingState,
 } from "./expectations.ts";
+import { verifyFinding } from "./finding-verification.ts";
 import { foundationAudit } from "./foundation-audit.ts";
 import { fleetMergeReadiness } from "./merge-readiness.ts";
 import type { ResultStatus } from "./model.ts";
@@ -54,6 +55,7 @@ function expectationUsage(): never {
   coding-tooling remediation plan [--include-baseline] [--json]
   coding-tooling findings [--new|--baseline] [--all] [--json]
   coding-tooling finding <finding-id> [--json]
+  coding-tooling finding verify <finding-id> [--json]
   coding-tooling defer <finding-id> --reason <text> [--json]
   coding-tooling resume <finding-id> [--json]
   coding-tooling baseline [--json]
@@ -278,9 +280,15 @@ export function entryMain(argv = process.argv.slice(2)): number {
     const state: FindingState | undefined = onlyNew ? "new" : onlyBaseline ? "baseline" : undefined;
     result = findingsCommand(root, { state, includeSuppressed });
   } else if (command === "finding") {
-    const id = argv[1];
-    if (!id || argv.slice(2).some((value) => value !== "--json")) return expectationUsage();
-    result = findingCommand(root, id);
+    if (argv[1] === "verify") {
+      const id = argv[2];
+      if (!id || argv.slice(3).some((value) => value !== "--json")) return expectationUsage();
+      result = verifyFinding(root, id);
+    } else {
+      const id = argv[1];
+      if (!id || argv.slice(2).some((value) => value !== "--json")) return expectationUsage();
+      result = findingCommand(root, id);
+    }
   } else if (command === "defer") {
     const id = argv[1];
     const reason = option(argv, "reason");

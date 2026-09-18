@@ -62,6 +62,7 @@ export type FindingVerificationDeclaration = {
   version: 1;
   command: string[];
   reason: string;
+  component: string;
 };
 
 export type FindingVerificationEvidence = {
@@ -70,6 +71,13 @@ export type FindingVerificationEvidence = {
   command: string[];
   reason: string;
   candidateSha: string;
+  runId: string;
+  component: string;
+  runner: {
+    name: string;
+    version: string | null;
+  };
+  artifactPath: string;
 };
 
 export type FindingSuppressionScope = "finding" | "subject" | "expectation";
@@ -179,6 +187,7 @@ export type ReconciliationReport = {
 export type ExpectationOperation =
   | "findings"
   | "finding"
+  | "finding-verify"
   | "defer"
   | "resume"
   | "baseline"
