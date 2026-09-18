@@ -13,6 +13,7 @@ import {
   loadExpectationConfig,
   matchingSuppression,
   semanticFindingId,
+  suppressionScope,
   writeExpectationConfig,
   type ExpectationConfig,
   type ExpectationDeferral,
@@ -54,6 +55,8 @@ export type {
   FindingSeverity,
   FindingState,
   FindingSubject,
+  FindingSuppressionEvidence,
+  FindingSuppressionScope,
   FindingVerificationDeclaration,
   FindingVerificationEvidence,
   ReconciliationReport,
@@ -73,10 +76,22 @@ function materializeFinding(
     raw.subject.key,
     raw.requirement.key,
   );
+  const state: FindingState = config.baseline?.includes(id) ? "baseline" : "new";
   const suppression = matchingSuppression(
     { id, expectationId: descriptor.id, subject: raw.subject },
     config,
   );
+  const suppressionEvidence: FindingSuppressionEvidence | undefined = suppression
+    ? {
+        scope: suppressionScope(suppression),
+        reason: suppression.reason,
+        applied: Boolean(suppression.id) || state === "baseline",
+        ...(suppression.id ? { id: suppression.id } : {}),
+        ...(suppression.expectation ? { expectation: suppression.expectation } : {}),
+        ...(suppression.subject ? { subject: suppression.subject } : {}),
+      }
+    : undefined;
+  const suppressed = suppressionEvidence?.applied === true;
   return {
     ...raw,
     id,
@@ -85,9 +100,10 @@ function materializeFinding(
     policyKind: descriptor.policyKind,
     conventionId: descriptor.conventionId,
     severity: config.enforcement?.[descriptor.id] ?? descriptor.defaultSeverity,
-    state: config.baseline?.includes(id) ? "baseline" : "new",
-    disposition: suppression ? "suppressed" : "active",
-    suppressionReason: suppression?.reason,
+    state,
+    disposition: suppressed ? "suppressed" : "active",
+    suppressionReason: suppressed ? suppressionEvidence?.reason : undefined,
+    suppressionEvidence,
     relationships: [],
   };
 }
