@@ -35,11 +35,7 @@ export function analysisApiEnvelope(analysis, durationMs = 0) {
     analysis?.querySummary?.sourceStatus ??
     "unknown";
   const complete = state !== "incomplete";
-  const status = !complete
-    ? "unavailable"
-    : state === "needs-attention"
-      ? "failed"
-      : "passed";
+  const status = !complete ? "unavailable" : state === "needs-attention" ? "failed" : "passed";
   return apiEnvelope(analysis?.operation ?? "remote-preflight-query", analysis, {
     status,
     complete,
