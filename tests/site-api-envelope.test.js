@@ -82,7 +82,7 @@ describe("Pages canonical API envelope", () => {
       candidates: [{ number: 1 }],
     });
 
-    expect(repositories.status).toBe("passed");
+    expect(repositories.status).toBe("unavailable");
     expect(repositories.data.evidence.complete).toBe(false);
     expect(work.status).toBe("unavailable");
     expect(work.data.evidence.complete).toBe(false);
