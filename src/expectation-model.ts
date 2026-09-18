@@ -72,6 +72,17 @@ export type FindingVerificationEvidence = {
   candidateSha: string;
 };
 
+export type FindingSuppressionScope = "finding" | "subject" | "expectation";
+
+export type FindingSuppressionEvidence = {
+  scope: FindingSuppressionScope;
+  reason: string;
+  applied: boolean;
+  id?: string;
+  expectation?: string;
+  subject?: string;
+};
+
 export type FindingDeferralEvidence = {
   version: 1;
   reason: string;
@@ -87,6 +98,7 @@ export type Finding = {
   state: FindingState;
   disposition: FindingDisposition;
   suppressionReason?: string;
+  suppressionEvidence?: FindingSuppressionEvidence;
   verificationDeclaration?: FindingVerificationDeclaration;
   verificationEvidence?: FindingVerificationEvidence;
   deferralEvidence?: FindingDeferralEvidence;
@@ -385,16 +397,31 @@ export function semanticFindingId(
   return `CT-${digest}`;
 }
 
+export function suppressionScope(suppression: ExpectationSuppression): FindingSuppressionScope {
+  if (suppression.id) return "finding";
+  return suppression.subject ? "subject" : "expectation";
+}
+
 export function matchingSuppression(
   finding: Pick<Finding, "id" | "expectationId" | "subject">,
   config: ExpectationConfig,
 ): ExpectationSuppression | undefined {
-  return (config.suppressions ?? []).find((suppression) => {
-    if (suppression.id && suppression.id !== finding.id) return false;
-    if (suppression.expectation && suppression.expectation !== finding.expectationId) return false;
-    if (suppression.subject && suppression.subject !== finding.subject.key) return false;
-    return true;
-  });
+  const specificity: Record<FindingSuppressionScope, number> = {
+    finding: 0,
+    subject: 1,
+    expectation: 2,
+  };
+  return (config.suppressions ?? [])
+    .filter((suppression) => {
+      if (suppression.id && suppression.id !== finding.id) return false;
+      if (suppression.expectation && suppression.expectation !== finding.expectationId)
+        return false;
+      if (suppression.subject && suppression.subject !== finding.subject.key) return false;
+      return true;
+    })
+    .sort(
+      (left, right) => specificity[suppressionScope(left)] - specificity[suppressionScope(right)],
+    )[0];
 }
 
 export function duplicateValues(values: string[]): string[] {

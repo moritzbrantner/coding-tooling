@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import {
   analyzeExpectations,
+  baselineFindings,
   deferFinding,
   findingCommand,
   findingsCommand,
@@ -116,6 +117,230 @@ describe("expectation lifecycle", () => {
       }),
     );
     expect(findingCommand(root, finding.id).data.result).toBe("suppressed");
+  });
+
+  test("keeps a new expectation-wide suppression match active for explicit review", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suppressions: [
+            {
+              expectation: "typescript-source-test",
+              reason: "generated metadata is usually covered elsewhere",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const active = analyzeExpectations(root).findings.find((item) => item.id === finding.id);
+    expect(active).toMatchObject({
+      id: finding.id,
+      state: "new",
+      disposition: "active",
+      suppressionEvidence: {
+        scope: "expectation",
+        reason: "generated metadata is usually covered elsewhere",
+        applied: false,
+        expectation: "typescript-source-test",
+      },
+    });
+    expect(active?.suppressionReason).toBeUndefined();
+    expect(
+      (findingsCommand(root).data.counts as Record<string, number>).suppressionPolicyMatches,
+    ).toBe(1);
+  });
+
+  test("applies a broad suppression only after the matched finding is accepted into baseline", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suppressions: [
+            {
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              reason: "service metadata is intentionally covered by an external contract",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(findingCommand(root, finding.id).data.result).toBe("active");
+    expect(baselineFindings(root).status).toBe("passed");
+
+    const all = analyzeExpectations(root, { includeSuppressed: true }).findings;
+    expect(all).toContainEqual(
+      expect.objectContaining({
+        id: finding.id,
+        state: "baseline",
+        disposition: "suppressed",
+        suppressionReason: "service metadata is intentionally covered by an external contract",
+        suppressionEvidence: {
+          scope: "subject",
+          reason: "service metadata is intentionally covered by an external contract",
+          applied: true,
+          expectation: "typescript-source-test",
+          subject: "src/service.ts",
+        },
+      }),
+    );
+
+    expect(baselineFindings(root).status).toBe("passed");
+    expect(
+      analyzeExpectations(root, { includeSuppressed: true }).findings.find(
+        (item) => item.id === finding.id,
+      ),
+    ).toMatchObject({ state: "baseline", disposition: "suppressed" });
+  });
+
+  test("prefers a subject policy over an expectation-wide policy regardless of config order", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suppressions: [
+            {
+              expectation: "typescript-source-test",
+              reason: "broad expectation policy",
+            },
+            {
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              reason: "specific subject policy",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(analyzeExpectations(root).findings.find((item) => item.id === finding.id)).toMatchObject(
+      {
+        disposition: "active",
+        suppressionEvidence: {
+          scope: "subject",
+          reason: "specific subject policy",
+          applied: false,
+          expectation: "typescript-source-test",
+          subject: "src/service.ts",
+        },
+      },
+    );
+  });
+
+  test("prefers an exact suppression over a broad policy match regardless of config order", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suppressions: [
+            {
+              expectation: "typescript-source-test",
+              reason: "broad policy",
+            },
+            {
+              id: finding.id,
+              reason: "reviewed exact exception",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const all = analyzeExpectations(root, { includeSuppressed: true }).findings;
+    expect(all).toContainEqual(
+      expect.objectContaining({
+        id: finding.id,
+        state: "new",
+        disposition: "suppressed",
+        suppressionReason: "reviewed exact exception",
+        suppressionEvidence: {
+          scope: "finding",
+          reason: "reviewed exact exception",
+          applied: true,
+          id: finding.id,
+        },
+      }),
+    );
+  });
+
+  test("does not combine a new broad suppression policy match with verification metadata", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    addVerifierScript(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suppressions: [
+            {
+              expectation: "typescript-source-test",
+              reason: "repository policy usually exempts this surface",
+            },
+          ],
+          verifications: [
+            {
+              id: "VERIFY-SERVICE",
+              version: 1,
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              command: ["bun", "run", "verify:service"],
+              reason: "repository-owned contract verifies the generated metadata",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const analysis = analyzeExpectations(root, { includeSuppressed: true });
+    expect(analysis.findings).toContainEqual(
+      expect.objectContaining({
+        id: finding.id,
+        disposition: "active",
+        suppressionEvidence: {
+          scope: "expectation",
+          reason: "repository policy usually exempts this surface",
+          applied: false,
+          expectation: "typescript-source-test",
+        },
+      }),
+    );
+    expect(
+      analysis.findings.find((item) => item.id === finding.id)?.verificationDeclaration,
+    ).toBeUndefined();
+    expect(analysis.reconciliation.invalidVerifications).toEqual([
+      {
+        index: 0,
+        id: "VERIFY-SERVICE",
+        reason:
+          "finding also matches suppression policy; remove suppression before declaring verification",
+      },
+    ]);
   });
 
   test("keeps an explicit repository verifier as an auditable declaration until it executes", () => {

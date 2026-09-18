@@ -173,6 +173,55 @@ test("stops at a deterministic fixed point and returns remaining work as an agen
   });
 });
 
+test("does not auto-scaffold a new broad suppression policy match", () => {
+  const matched = finding(
+    "CT-565656565656",
+    "src/policy-match.ts",
+    {
+      kind: "create-file",
+      path: "tests/policy-match.test.ts",
+      content: "policy match\n",
+    },
+    {
+      suppressionEvidence: {
+        scope: "expectation",
+        reason: "repository policy usually exempts this surface",
+        applied: false,
+        expectation: "source-test-reachability",
+      },
+    },
+  );
+  let scaffoldCalls = 0;
+  const dependencies: ConvergenceDependencies = {
+    findings: () => findingsEnvelope([matched]),
+    scaffold: () => {
+      scaffoldCalls += 1;
+      return scaffoldEnvelope();
+    },
+    verify: (_root, tier) => verificationEnvelope("passed", tier),
+  };
+
+  const result = convergeRepository("/repo", {}, dependencies);
+
+  expect(scaffoldCalls).toBe(0);
+  expect(result.status).toBe("passed");
+  expect(result.data).toMatchObject({
+    result: "partial",
+    handoff: [
+      {
+        kind: "review",
+        suppressionPolicyMatches: [
+          {
+            findingId: "CT-565656565656",
+            scope: "expectation",
+            reason: "repository policy usually exempts this surface",
+          },
+        ],
+      },
+    ],
+  });
+});
+
 test("does not auto-scaffold a finding that was explicitly deferred", () => {
   const deferred = finding(
     "CT-121212121212",
