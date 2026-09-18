@@ -1,11 +1,13 @@
 import { testCoverageJson } from "../test-coverage.js";
 
 const target = document.querySelector("#coverage");
-const repository = new URL(location.href).searchParams.get("repo");
+const parameters = new URL(location.href).searchParams;
+const repository = parameters.get("repo");
+const ref = parameters.get("ref");
 
 try {
   if (!repository) throw new Error("Missing required ?repo=owner/repository query parameter.");
-  const coverage = await testCoverageJson(repository);
+  const coverage = await testCoverageJson(repository, { ref });
   target.textContent = `${JSON.stringify(coverage, null, 2)}\n`;
   document.title = `${coverage.repository.fullName} · test-coverage.json`;
 } catch (error) {
