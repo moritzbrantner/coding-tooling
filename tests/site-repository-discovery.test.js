@@ -114,13 +114,20 @@ describe("GitHub Pages repository discovery", () => {
     );
     const operation = manifest.operations.find((entry) => entry.id === "repository-discovery");
 
-    expect(operation).toEqual({
-      id: "repository-discovery",
-      transport: "browser-json-view",
-      hrefTemplate: "https://moritzbrantner.github.io/coding-tooling/discovery.json/?owner={owner}",
-      description:
-        "Browser-executed token-free discovery of bounded public GitHub repository metadata with a deterministic suggested repository candidate.",
-    });
+    expect(operation).toEqual(
+      expect.objectContaining({
+        id: "repository-discovery",
+        transport: "browser-json-view",
+        hrefTemplate:
+          "https://moritzbrantner.github.io/coding-tooling/discovery.json/?owner={owner}",
+        description:
+          "Browser-executed token-free discovery of bounded public GitHub repository metadata with a deterministic suggested repository candidate.",
+      }),
+    );
+    expect(operation?.parameters).toEqual([
+      expect.objectContaining({ name: "owner", required: false }),
+    ]);
+    expect(operation?.authority).toBe("remote-metadata");
     expect(
       manifest.limitations.some((limitation) =>
         limitation.includes("run-json, repository-discovery, affected-json"),

@@ -170,6 +170,43 @@ describe("GitHub Pages test coverage observation", () => {
     expect(requests).toHaveLength(4);
   });
 
+  test("pins coverage lookup to an explicit resolved revision", async () => {
+    const requests = [];
+    const coverage = await testCoverageJson("example/repo", {
+      ref: "feature",
+      fetchImpl: async (url) => {
+        requests.push(url);
+        if (url === "https://api.github.com/repos/example/repo")
+          return jsonResponse(githubRepositoryMetadata());
+        if (url === "https://api.github.com/repos/example/repo/commits/feature")
+          return jsonResponse({ sha: revision });
+        if (url === publishedUrl()) return jsonResponse({}, 404);
+        if (url === `https://api.github.com/repos/example/repo/git/trees/${revision}?recursive=1`)
+          return jsonResponse({
+            tree: [{ path: "coverage/lcov.info", sha: "coverage", type: "blob" }],
+            truncated: false,
+          });
+        if (url === "https://api.github.com/repos/example/repo/git/blobs/coverage")
+          return encodedBlob(sampleLcov());
+        throw new Error(`Unexpected request: ${url}`);
+      },
+    });
+
+    expect(coverage.repository).toEqual(
+      expect.objectContaining({ requestedRef: "feature", revision }),
+    );
+    expect(coverage.source).toEqual(
+      expect.objectContaining({
+        requestedRef: "feature",
+        resolvedSha: revision,
+      }),
+    );
+    expect(coverage.source.canonicalUrl).toContain(`ref=${revision}`);
+    expect(requests).toContain(
+      `https://api.github.com/repos/example/repo/git/trees/${revision}?recursive=1`,
+    );
+  });
+
   test("reports missing coverage as unavailable rather than zero", async () => {
     const coverage = await testCoverageJson("example/repo", {
       fetchImpl: async (url) => {

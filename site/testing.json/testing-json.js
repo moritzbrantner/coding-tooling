@@ -1,11 +1,13 @@
 import { testingJson } from "../testing.js";
 
 const target = document.querySelector("#testing");
-const repository = new URL(location.href).searchParams.get("repo");
+const parameters = new URL(location.href).searchParams;
+const repository = parameters.get("repo");
+const ref = parameters.get("ref");
 
 try {
   if (!repository) throw new Error("Missing required ?repo=owner/repository query parameter.");
-  const plan = await testingJson(repository);
+  const plan = await testingJson(repository, { ref });
   target.textContent = `${JSON.stringify(plan, null, 2)}\n`;
   document.title = `${plan.repository.fullName} · testing.json`;
 } catch (error) {

@@ -18,6 +18,7 @@ const severityRank = { low: 1, medium: 2, high: 3 };
 const allowedParameters = new Set([
   "repo",
   "postMessage",
+  "ref",
   "view",
   "focus",
   "scope",
@@ -36,6 +37,7 @@ export function parseAnalysisQuery(parameters) {
       throw new Error(`Unsupported analysis query parameter: ${key}`);
   }
 
+  const ref = optionalValue(parameters.get("ref"));
   const view = parameters.get("view") ?? "full";
   if (!views.has(view)) throw new Error("view must be full or agent");
 
@@ -68,6 +70,7 @@ export function parseAnalysisQuery(parameters) {
   }
 
   return {
+    ref,
     view,
     focus,
     scope,
@@ -85,7 +88,10 @@ export function parseAnalysisQuery(parameters) {
 
 export async function analysisQueryJson(value, parameters, options = {}) {
   const query = parseAnalysisQuery(parameters);
-  const analysis = await analysisJson(value, options);
+  const analysis = withCanonicalRevision(
+    await analysisJson(value, { ...options, ref: query.ref }),
+    query,
+  );
   if (queryIsIdentity(query)) return analysis;
   const changeContext = queryNeedsChangeContext(query)
     ? await remoteChangeCommand(value, changeArgv(query), options)
@@ -285,6 +291,7 @@ function compactChangeContext(context) {
 
 function queryView(query) {
   return {
+    ref: query.ref,
     view: query.view,
     focus: query.focus,
     scope: query.scope,
@@ -292,6 +299,22 @@ function queryView(query) {
     limit: query.limit,
     finding: query.finding,
     change: query.change,
+  };
+}
+
+function withCanonicalRevision(analysis, query) {
+  const resolvedSha = analysis.repository?.revision ?? null;
+  const canonicalUrl = resolvedSha
+    ? analysisUrl(analysis.repository.fullName, { ...query, ref: resolvedSha })
+    : null;
+  return {
+    ...analysis,
+    source: {
+      ...analysis.source,
+      requestedRef: query.ref,
+      resolvedSha,
+      canonicalUrl,
+    },
   };
 }
 
@@ -311,6 +334,7 @@ function drillDown(repository, query, findings, changeContext) {
 function analysisUrl(repository, query) {
   const parameters = new URLSearchParams();
   parameters.set("repo", repository);
+  if (query.ref) parameters.set("ref", query.ref);
   parameters.set("view", query.view);
   for (const value of query.focus) parameters.append("focus", value);
   for (const value of query.scope) parameters.append("scope", value);

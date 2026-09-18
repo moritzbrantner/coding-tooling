@@ -9,73 +9,443 @@
       "id": "tool-registry",
       "transport": "static-json",
       "href": "https://moritzbrantner.github.io/coding-tooling/tools.json",
-      "description": "Discover the other public coding-agent tools and their stable agent-tool.json contracts."
+      "description": "Discover the other public coding-agent tools and their stable agent-tool.json contracts.",
+      "authority": "published-static-contract",
+      "completeness": "complete-for-published-registry",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": []
     },
     {
       "id": "cli-run-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/run.json/?repo={owner}/{repository}&argv={urlEncodedArgv}",
-      "description": "Invoke a CLI-style coding-tooling argv through the browser. Remote-safe read-only commands return normal CLI envelopes; execution or mutation commands fail closed with a local-command handoff."
+      "description": "Invoke a CLI-style coding-tooling argv through the browser. Remote-safe read-only commands return normal CLI envelopes; execution or mutation commands fail closed with a local-command handoff.",
+      "authority": "remote-structural",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": [
+        {
+          "name": "repo",
+          "type": "repository",
+          "required": true,
+          "repeatable": false
+        },
+        {
+          "name": "ref",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "argv",
+          "type": "string",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "arg",
+          "type": "string",
+          "required": false,
+          "repeatable": true
+        }
+      ]
     },
     {
       "id": "repository-discovery",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/discovery.json/?owner={owner}",
-      "description": "Browser-executed token-free discovery of bounded public GitHub repository metadata with a deterministic suggested repository candidate."
+      "description": "Browser-executed token-free discovery of bounded public GitHub repository metadata with a deterministic suggested repository candidate.",
+      "authority": "remote-metadata",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": [
+        {
+          "name": "owner",
+          "type": "string",
+          "required": false,
+          "repeatable": false
+        }
+      ]
     },
     {
       "id": "next-work-discovery",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/next-work.json/?repo={owner}/{repository}",
-      "description": "Browser-executed token-free ranking of bounded open pull requests and issues, with fail-closed observed CI evidence for the highest-ranked pull-request candidates."
+      "description": "Browser-executed token-free ranking of bounded open pull requests and issues, with fail-closed observed CI evidence for the highest-ranked pull-request candidates.",
+      "authority": "remote-metadata",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": [
+        {
+          "name": "repo",
+          "type": "repository",
+          "required": true,
+          "repeatable": false
+        }
+      ]
     },
     {
       "id": "affected-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/affected.json/?repo={owner}/{repository}&base={baseRef}&head={headRef}&tier=fast",
-      "description": "Browser-executed change-aware affected-component analysis with governing contracts, advisory component test evidence, candidate tests, declared merge authority, and a component-scoped validation plan. Repeated file parameters can supply changed paths directly instead of using GitHub compare."
+      "description": "Browser-executed change-aware affected-component analysis with governing contracts, advisory component test evidence, candidate tests, declared merge authority, and a component-scoped validation plan. Repeated file parameters can supply changed paths directly instead of using GitHub compare.",
+      "authority": "remote-structural",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": [
+        {
+          "name": "repo",
+          "type": "repository",
+          "required": true,
+          "repeatable": false
+        },
+        {
+          "name": "base",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "head",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "changed-file",
+          "type": "string",
+          "required": false,
+          "repeatable": true
+        },
+        {
+          "name": "component",
+          "type": "string",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "tier",
+          "type": "string",
+          "required": false,
+          "repeatable": false,
+          "default": "fast"
+        }
+      ]
     },
     {
       "id": "analyze-repository",
       "transport": "html",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/?repo={owner}/{repository}",
-      "description": "Human-readable public GitHub repository preflight."
+      "description": "Human-readable public GitHub repository preflight.",
+      "authority": "human-readable-projection",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": [
+        {
+          "name": "repo",
+          "type": "repository",
+          "required": true,
+          "repeatable": false
+        },
+        {
+          "name": "ref",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        }
+      ]
     },
     {
       "id": "analysis-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}",
-      "description": "Browser-executed schema-v1 remote-preflight JSON for coding agents."
+      "description": "Browser-executed schema-v1 remote-preflight JSON for coding agents.",
+      "authority": "remote-structural",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1,
+        "operation": "remote-preflight"
+      },
+      "parameters": [
+        {
+          "name": "repo",
+          "type": "repository",
+          "required": true,
+          "repeatable": false
+        },
+        {
+          "name": "ref",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "view",
+          "type": "string",
+          "enum": ["full", "agent"],
+          "required": false,
+          "repeatable": false,
+          "default": "full"
+        },
+        {
+          "name": "focus",
+          "type": "string",
+          "enum": [
+            "architecture",
+            "automation",
+            "browser",
+            "dependencies",
+            "environment",
+            "governance",
+            "mobile",
+            "performance",
+            "testing"
+          ],
+          "required": false,
+          "repeatable": true
+        },
+        {
+          "name": "scope",
+          "type": "string",
+          "required": false,
+          "repeatable": true
+        },
+        {
+          "name": "min-severity",
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "required": false,
+          "repeatable": false,
+          "default": "low"
+        },
+        {
+          "name": "limit",
+          "type": "positiveLimit",
+          "required": false,
+          "repeatable": false,
+          "default": 100
+        },
+        {
+          "name": "finding",
+          "type": "string",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "base",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "head",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "changed-file",
+          "type": "string",
+          "required": false,
+          "repeatable": true
+        },
+        {
+          "name": "tier",
+          "type": "string",
+          "required": false,
+          "repeatable": false,
+          "default": "fast"
+        }
+      ]
     },
     {
       "id": "analysis-agent-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}&view=agent",
-      "description": "Compact agent-first projection of existing remote-preflight evidence. Optional repeated focus/scope plus severity/limit/finding and change-aware base/head/changed-file parameters deterministically narrow the view without adding another evidence oracle."
+      "description": "Compact agent-first projection of existing remote-preflight evidence. Optional repeated focus/scope plus severity/limit/finding and change-aware base/head/changed-file parameters deterministically narrow the view without adding another evidence oracle.",
+      "authority": "remote-structural",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1,
+        "operation": "remote-preflight-query"
+      },
+      "parameters": [
+        {
+          "name": "repo",
+          "type": "repository",
+          "required": true,
+          "repeatable": false
+        },
+        {
+          "name": "ref",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "view",
+          "type": "string",
+          "enum": ["full", "agent"],
+          "required": false,
+          "repeatable": false,
+          "default": "agent"
+        },
+        {
+          "name": "focus",
+          "type": "string",
+          "enum": [
+            "architecture",
+            "automation",
+            "browser",
+            "dependencies",
+            "environment",
+            "governance",
+            "mobile",
+            "performance",
+            "testing"
+          ],
+          "required": false,
+          "repeatable": true
+        },
+        {
+          "name": "scope",
+          "type": "string",
+          "required": false,
+          "repeatable": true
+        },
+        {
+          "name": "min-severity",
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "required": false,
+          "repeatable": false,
+          "default": "low"
+        },
+        {
+          "name": "limit",
+          "type": "positiveLimit",
+          "required": false,
+          "repeatable": false,
+          "default": 12
+        },
+        {
+          "name": "finding",
+          "type": "string",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "base",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "head",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        },
+        {
+          "name": "changed-file",
+          "type": "string",
+          "required": false,
+          "repeatable": true
+        },
+        {
+          "name": "tier",
+          "type": "string",
+          "required": false,
+          "repeatable": false,
+          "default": "fast"
+        }
+      ]
     },
     {
       "id": "testing-scaffold-plan",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/testing.json/?repo={owner}/{repository}",
-      "description": "Browser-executed deterministic testing-scaffold plan with setup actions, TypeScript test targets, React Storybook candidates, PR ordering, and explicit confidence boundaries."
+      "description": "Browser-executed deterministic testing-scaffold plan with setup actions, TypeScript test targets, React Storybook candidates, PR ordering, and explicit confidence boundaries.",
+      "authority": "remote-structural",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": [
+        {
+          "name": "repo",
+          "type": "repository",
+          "required": true,
+          "repeatable": false
+        },
+        {
+          "name": "ref",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        }
+      ]
     },
     {
       "id": "test-coverage",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/test-coverage.json/?repo={owner}/{repository}",
-      "description": "Browser-executed test-coverage observation that prefers standardized CI-published snapshots and falls back to recognized committed reports."
+      "description": "Browser-executed test-coverage observation that prefers standardized CI-published snapshots and falls back to recognized committed reports.",
+      "authority": "remote-structural",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": [
+        {
+          "name": "repo",
+          "type": "repository",
+          "required": true,
+          "repeatable": false
+        },
+        {
+          "name": "ref",
+          "type": "gitRef",
+          "required": false,
+          "repeatable": false
+        }
+      ]
     },
     {
       "id": "repository-score-history",
       "transport": "html",
       "href": "https://moritzbrantner.github.io/coding-tooling/score/",
-      "description": "Human-readable per-commit repository progress score history with structural and verification trends."
+      "description": "Human-readable per-commit repository progress score history with structural and verification trends.",
+      "authority": "published-history",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": []
     },
     {
       "id": "repository-score-history-json",
       "transport": "static-json",
       "href": "https://raw.githubusercontent.com/moritzbrantner/coding-tooling/score-history/history.json",
-      "description": "Versioned coding-tooling/score-history/v1 snapshots retained on the dedicated score-history branch."
+      "description": "Versioned coding-tooling/score-history/v1 snapshots retained on the dedicated score-history branch.",
+      "authority": "published-history",
+      "completeness": "may-be-incomplete",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": []
     }
   ],
   "remoteCliCommands": [
@@ -114,5 +484,22 @@
     "Score history is a per-commit trend for the versioned scoring profile; scoring-profile expansion can change what 100 means.",
     "Parameterized analysis is a projection over existing Pages evidence: focus classification does not create new findings, scope filters exact discovered components without guessing finding ownership, and change context delegates to the existing affected analyzer.",
     "The run-json, repository-discovery, affected-json, next-work-discovery, analysis-json, testing-scaffold-plan, and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
-  ]
+  ],
+  "contractVersion": "coding-tooling/agent-tool/v1",
+  "parameterTypes": {
+    "repository": {
+      "type": "string",
+      "description": "Public GitHub repository in owner/name form."
+    },
+    "gitRef": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Git branch, tag, or commit accepted by GitHub and resolved to one exact commit SHA before analysis."
+    },
+    "positiveLimit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100
+    }
+  }
 }

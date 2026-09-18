@@ -77,6 +77,15 @@ describe("parameterized Pages analysis", () => {
       "analysis.json/?repo={owner}/{repository}&view=agent",
     );
     expect(operation?.description).toContain("focus/scope");
+    expect(operation?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "repo", required: true }),
+        expect.objectContaining({ name: "ref", type: "gitRef" }),
+        expect.objectContaining({ name: "focus", repeatable: true }),
+        expect.objectContaining({ name: "limit", type: "positiveLimit" }),
+      ]),
+    );
+    expect(operation?.authority).toBe("remote-structural");
   });
 
   test("recognizes the unparameterized compatibility path", () => {
@@ -101,6 +110,7 @@ describe("parameterized Pages analysis", () => {
     );
 
     expect(parseAnalysisQuery(parameters)).toEqual({
+      ref: null,
       view: "agent",
       focus: ["automation", "testing"],
       scope: ["packages/worker"],
@@ -114,6 +124,13 @@ describe("parameterized Pages analysis", () => {
         tier: "fast",
       },
     });
+  });
+
+  test("accepts a revision ref without changing the default projection", () => {
+    const query = parseAnalysisQuery(new URLSearchParams("repo=example/project&ref=feature"));
+
+    expect(query.ref).toBe("feature");
+    expect(queryIsIdentity(query)).toBe(true);
   });
 
   test("fails closed for unsupported query semantics", () => {

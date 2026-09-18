@@ -58,8 +58,12 @@ export async function loadSnapshot(reference, options = {}) {
         status: "unavailable",
         reason: "repository-governance-metadata-unavailable",
       };
-  const revision = defaultBranchRevision(defaultBranch);
-  const treeRef = revision ?? repository.default_branch;
+  const requestedRef = normalizeRequestedRef(options.ref);
+  const defaultRevision = defaultBranchRevision(defaultBranch);
+  const resolvedRevision = requestedRef
+    ? await resolveRequestedRevision(reference, requestedRef, fetchImpl, signal)
+    : defaultRevision;
+  const treeRef = resolvedRevision ?? repository.default_branch;
   const tree = await githubJson(
     `/repos/${reference.owner}/${reference.name}/git/trees/${encodeURIComponent(treeRef)}?recursive=1`,
     fetchImpl,
@@ -111,7 +115,8 @@ export async function loadSnapshot(reference, options = {}) {
       name: repository.name,
       fullName: repository.full_name,
       defaultBranch: repository.default_branch,
-      revision,
+      revision: resolvedRevision,
+      requestedRef,
       htmlUrl: repository.html_url,
       description: repository.description,
       archived: repository.archived,
@@ -123,7 +128,7 @@ export async function loadSnapshot(reference, options = {}) {
     tree: entries,
     files,
     treeTruncated: Boolean(tree.truncated),
-    revisionUnavailable: inspectDefaultBranch && !revision,
+    revisionUnavailable: requestedRef ? false : inspectDefaultBranch && !resolvedRevision,
     manifestFetchTruncated: !manifestAcquisition.complete,
     manifestAcquisition: {
       byteBudget: manifestAcquisition.byteBudget,
@@ -210,6 +215,23 @@ function declaredMergeAuthorityFromSnapshot(snapshot) {
       observedEnforcement: "not-evaluated",
     };
   }
+}
+
+function normalizeRequestedRef(value) {
+  const ref = String(value ?? "").trim();
+  return ref || null;
+}
+
+async function resolveRequestedRevision(reference, ref, fetchImpl, signal) {
+  const commit = await githubJson(
+    `/repos/${reference.owner}/${reference.name}/commits/${encodeURIComponent(ref)}`,
+    fetchImpl,
+    signal,
+  );
+  const sha = commit?.sha;
+  if (!/^[0-9a-f]{40}$/i.test(sha ?? ""))
+    throw new Error(`GitHub did not resolve ref to an exact commit SHA: ${ref}`);
+  return sha;
 }
 
 function defaultBranchRevision(observation) {

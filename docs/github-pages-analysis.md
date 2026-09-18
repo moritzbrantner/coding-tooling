@@ -62,6 +62,14 @@ https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/reposi
 
 It renders only the JSON envelope and is intended for browser-capable agents and tools that can execute the page JavaScript.
 
+### Exact revision pinning
+
+Repository-backed Pages operations accept an optional `ref=<branch|tag|sha>` source selector. The ref is resolved through GitHub to one exact 40-character commit SHA before repository tree evidence is read. Responses expose the requested ref, resolved SHA, and—when available—a canonical URL pinned to that SHA.
+
+`ref` changes only the repository revision being observed. It does not select a different analyzer, increase evidence authority, or replace exact-head repository CI. Omitting `ref` preserves the existing default-branch behavior.
+
+The machine discovery document now describes operation parameters structurally, including requiredness, repeatability, enum values, bounds, authority, and completeness. Agents should consume those fields rather than parsing prose or URL templates.
+
 ### Parameterized analysis projection
 
 The unparameterized `analysis.json/?repo=owner/repository` path remains the original `remote-preflight` contract. Tailoring begins only when an analysis parameter is present, at which point the view returns `operation: "remote-preflight-query"`.

@@ -30,7 +30,21 @@ export async function testingJson(value, options = {}) {
     throw new Error("Enter owner/repository or a github.com repository URL.");
 
   const snapshot = await loadSnapshot(reference, options);
-  return testingPlan(snapshot, options.now ?? new Date());
+  const plan = testingPlan(snapshot, options.now ?? new Date());
+  const resolvedSha = snapshot.repository.revision ?? null;
+  return {
+    ...plan,
+    source: {
+      ...plan.source,
+      requestedRef: snapshot.repository.requestedRef ?? null,
+      resolvedSha,
+      canonicalUrl: resolvedSha
+        ? `https://moritzbrantner.github.io/coding-tooling/testing.json/?repo=${encodeURIComponent(
+            snapshot.repository.fullName,
+          )}&ref=${resolvedSha}`
+        : null,
+    },
+  };
 }
 
 export function testingPlan(snapshot, now = new Date()) {
@@ -193,6 +207,8 @@ export function testingPlan(snapshot, now = new Date()) {
       provider: "github",
       repository: snapshot.repository.fullName,
       defaultBranch: snapshot.repository.defaultBranch,
+      requestedRef: snapshot.repository.requestedRef ?? null,
+      resolvedSha: snapshot.repository.revision ?? null,
       treeTruncated: snapshot.treeTruncated,
       manifestFetchTruncated: snapshot.manifestFetchTruncated,
       unreadablePaths: snapshot.unreadablePaths,
