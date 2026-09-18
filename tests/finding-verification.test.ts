@@ -93,6 +93,7 @@ describe("execution-backed finding verification", () => {
       result: "verified",
       artifactPath: `.artifacts/coding-tooling/finding-verification/${findingId}.json`,
       receipt: {
+        runId: expect.any(String),
         findingId,
         verificationId: "VERIFY-SERVICE",
         candidateSha: head,
@@ -109,6 +110,7 @@ describe("execution-backed finding verification", () => {
       verificationEvidence: {
         id: "VERIFY-SERVICE",
         candidateSha: head,
+        runId: expect.any(String),
         component: ".",
         runner: { name: "bun" },
         artifactPath: `.artifacts/coding-tooling/finding-verification/${findingId}.json`,
