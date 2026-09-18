@@ -71,6 +71,7 @@ export type FindingVerificationEvidence = {
   command: string[];
   reason: string;
   candidateSha: string;
+  runId: string;
   component: string;
   runner: {
     name: string;
