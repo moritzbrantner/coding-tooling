@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseAnalysisQuery, projectAnalysis } from "../site/analysis-query.js";
+import {
+  parseAnalysisQuery,
+  projectAnalysis,
+  queryIsIdentity,
+} from "../site/analysis-query.js";
 
 function analysis() {
   return {
@@ -58,6 +62,14 @@ function finding(id, severity, title) {
 }
 
 describe("parameterized Pages analysis", () => {
+  test("recognizes the unparameterized compatibility path", () => {
+    const query = parseAnalysisQuery(new URLSearchParams("repo=example/project"));
+    expect(queryIsIdentity(query)).toBe(true);
+    expect(queryIsIdentity(parseAnalysisQuery(new URLSearchParams("repo=example/project&view=agent")))).toBe(
+      false,
+    );
+  });
+
   test("parses a bounded agent query deterministically", () => {
     const parameters = new URLSearchParams(
       "repo=example/project&view=agent&focus=testing&focus=automation&scope=packages/worker&min-severity=medium&limit=5",
