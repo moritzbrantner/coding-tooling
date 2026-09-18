@@ -161,6 +161,16 @@ describe("parameterized Pages analysis", () => {
     expect(result).not.toHaveProperty("kpis");
   });
 
+  test("does not present an empty focused selection as proven clear", () => {
+    const query = parseAnalysisQuery(
+      new URLSearchParams("repo=example/project&view=agent&focus=performance"),
+    );
+    const result = projectAnalysis(analysis(), query);
+
+    expect(result.summary.selectionStatus).toBe("no-matching-findings");
+    expect(result.findings).toEqual([]);
+  });
+
   test("scope selects exact components without guessing finding ownership", () => {
     const query = parseAnalysisQuery(
       new URLSearchParams("repo=example/project&view=agent&scope=packages/worker"),
