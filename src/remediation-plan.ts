@@ -31,6 +31,11 @@ export type RemediationCandidate = {
     command: string[];
     reason: string;
   }>;
+  suppressionPolicyMatches: Array<{
+    findingId: string;
+    scope: "subject" | "expectation";
+    reason: string;
+  }>;
   scaffolds: Array<{ findingId: string; path: string; command: string[] }>;
   convergenceRules: Array<{ id: string; mode: ConvergenceRuleMode }>;
   deferrals: Array<{ findingId: string; reason: string }>;
@@ -105,16 +110,31 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
       : [],
   );
   const fullyDeferred = deferrals.length === ordered.length;
+  const suppressionPolicyMatches = ordered.flatMap((finding) => {
+    const suppression = finding.suppressionEvidence;
+    return suppression && suppression.applied === false && suppression.scope !== "finding"
+      ? [
+          {
+            findingId: finding.id,
+            scope: suppression.scope,
+            reason: suppression.reason,
+          },
+        ]
+      : [];
+  });
   const automaticScaffoldable =
     deferrals.length === 0 &&
+    suppressionPolicyMatches.length === 0 &&
     allScaffoldable &&
     convergenceRules.every((rule) => rule.mode === "apply");
   const nonInfo = ordered.some((finding) => finding.severity !== "info");
   const kind: RemediationCandidateKind = automaticScaffoldable
     ? "deterministic-scaffold"
-    : nonInfo
-      ? "implementation"
-      : "review";
+    : suppressionPolicyMatches.length > 0
+      ? "review"
+      : nonInfo
+        ? "implementation"
+        : "review";
   const priority =
     Math.min(
       ...ordered.map(
@@ -165,13 +185,17 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
     kind,
     priority,
     subject,
-    summary: `Resolve ${expectationIds.join(", ")} for ${subject.description}`,
+    summary:
+      suppressionPolicyMatches.length > 0
+        ? `Review suppression policy match for ${subject.description}`
+        : `Resolve ${expectationIds.join(", ")} for ${subject.description}`,
     findingIds: ids,
     expectationIds,
     severities,
     relatedFiles,
     verification,
     verificationDeclarations,
+    suppressionPolicyMatches,
     scaffolds,
     convergenceRules,
     deferrals,
@@ -278,6 +302,7 @@ function mobileAnalysisCandidates(root: string): RemediationCandidate[] {
       relatedFiles,
       verification: [["coding-tooling", "analyze", "--json"]],
       verificationDeclarations: [],
+      suppressionPolicyMatches: [],
       scaffolds: [],
       convergenceRules: [],
       deferrals: [],
