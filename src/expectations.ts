@@ -544,9 +544,7 @@ export function deferFinding(root: string, id: string, reason: string): Expectat
 
     const deferral: ExpectationDeferral = { id, version: 1, reason: reason.trim() };
     const existing = analysis.config.deferrals ?? [];
-    const deferrals = existing.some((item) => item.id === id)
-      ? existing.map((item) => (item.id === id ? deferral : item))
-      : [...existing, deferral];
+    const deferrals = [...existing.filter((item) => item.id !== id), deferral];
     writeExpectationConfig(root, { ...analysis.config, deferrals });
 
     const updated = findingCommand(root, id);
@@ -607,13 +605,19 @@ export function resumeFinding(root: string, id: string): ExpectationEnvelope {
       };
     }
     writeExpectationConfig(root, { ...config, deferrals });
+    const updated = findingCommand(root, id);
     return {
       schemaVersion: 1,
       operation: "resume",
-      status: "passed",
+      status: updated.status,
       durationMs: Date.now() - started,
-      data: { root, id, result: "active" },
-      diagnostics: [],
+      data: {
+        root,
+        id,
+        result: updated.data.result,
+        finding: updated.data.finding,
+      },
+      diagnostics: updated.diagnostics,
     };
   } catch (error) {
     return {
