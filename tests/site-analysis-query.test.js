@@ -82,6 +82,7 @@ describe("parameterized Pages analysis", () => {
         expect.objectContaining({ name: "repo", required: true }),
         expect.objectContaining({ name: "ref", type: "gitRef" }),
         expect.objectContaining({ name: "focus", repeatable: true }),
+        expect.objectContaining({ name: "component", aliases: ["scope"] }),
         expect.objectContaining({ name: "limit", type: "positiveLimit" }),
       ]),
     );
@@ -188,9 +189,20 @@ describe("parameterized Pages analysis", () => {
     expect(result.findings).toEqual([]);
   });
 
+  test("accepts scope as a compatibility alias for canonical component", () => {
+    const canonical = parseAnalysisQuery(
+      new URLSearchParams("repo=example/project&component=packages/worker"),
+    );
+    const alias = parseAnalysisQuery(
+      new URLSearchParams("repo=example/project&scope=packages/worker"),
+    );
+
+    expect(alias.scope).toEqual(canonical.scope);
+  });
+
   test("scope selects exact components without guessing finding ownership", () => {
     const query = parseAnalysisQuery(
-      new URLSearchParams("repo=example/project&view=agent&scope=packages/worker"),
+      new URLSearchParams("repo=example/project&view=agent&component=packages/worker"),
     );
     const result = projectAnalysis(analysis(), query);
 
@@ -309,6 +321,7 @@ describe("parameterized Pages analysis", () => {
       },
     });
     expect(result.drillDown.affectedAnalysis).toContain("affected.json/");
-    expect(result.drillDown.affectedAnalysis).toContain("file=src%2Fapp.ts");
+    expect(result.drillDown.affectedAnalysis).toContain("changed-file=src%2Fapp.ts");
+    expect(result.drillDown.affectedAnalysis).not.toContain("file=src%2Fapp.ts");
   });
 });
