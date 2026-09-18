@@ -1,8 +1,4 @@
-import {
-  apiErrorEnvelope,
-  envelopeRequested,
-  nextWorkApiEnvelope,
-} from "../api-envelope.js";
+import { apiErrorEnvelope, envelopeRequested, nextWorkApiEnvelope } from "../api-envelope.js";
 import { nextWorkJson } from "../next-work.js";
 
 const started = Date.now();
