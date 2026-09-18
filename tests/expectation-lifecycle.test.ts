@@ -234,7 +234,7 @@ describe("expectation lifecycle", () => {
         index: 0,
         id: "VERIFY-SERVICE",
         reason:
-          "finding is also suppressed; remove suppression before declaring verification evidence",
+          "finding is also suppressed; remove suppression before declaring verification",
       },
     ]);
   });
