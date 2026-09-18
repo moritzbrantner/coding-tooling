@@ -197,6 +197,13 @@ describe("expectation lifecycle", () => {
         },
       }),
     );
+
+    expect(baselineFindings(root).status).toBe("passed");
+    expect(
+      analyzeExpectations(root, { includeSuppressed: true }).findings.find(
+        (item) => item.id === finding.id,
+      ),
+    ).toMatchObject({ state: "baseline", disposition: "suppressed" });
   });
 
   test("prefers an exact suppression over a broad policy match regardless of config order", () => {
