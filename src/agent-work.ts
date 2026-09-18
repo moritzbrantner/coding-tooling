@@ -9,6 +9,7 @@ import type { Capability, Diagnostic, ResultEnvelope, ResultStatus } from "./mod
 import { capabilities } from "./model.ts";
 import { remediationPlanCommand } from "./remediation-plan.ts";
 import { type CommandResult, runCommand } from "./shared.ts";
+import { sourceRevision } from "./source-context.ts";
 
 export const TASK_PACKET_VERSION = "coding-tooling/task-packet/v1" as const;
 export const AGENT_VERIFICATION_VERSION = "coding-tooling/agent-verification/v1" as const;
@@ -309,12 +310,6 @@ function envelope(
   };
 }
 
-function gitSha(root: string, runner: Runner, ref = "HEAD"): string | undefined {
-  const result = runner("git", ["rev-parse", ref], root);
-  const value = result.status === 0 ? result.stdout.trim() : "";
-  return isSha(value) ? value.toLowerCase() : undefined;
-}
-
 function cleanWorktree(root: string, runner: Runner): { clean?: boolean; diagnostic?: Diagnostic } {
   const result = runner("git", ["status", "--porcelain"], root);
   if (result.status !== 0) {
@@ -378,14 +373,17 @@ export function agentVerificationCommand(
     return envelope("agent-verification", "unavailable", started, { root, packetPath }, [
       {
         code: "verification-dirty-worktree",
-        message: "Exact-head verification requires a clean worktree",
+        message: "Source-bound verification requires a clean worktree",
       },
     ]);
   }
-  const candidateSha = gitSha(root, runner);
+  const candidateSha = sourceRevision(root, runner);
   if (!candidateSha) {
     return envelope("agent-verification", "error", started, { root, packetPath }, [
-      { code: "verification-head-unavailable", message: "Could not resolve exact candidate HEAD" },
+      {
+        code: "verification-head-unavailable",
+        message: "Could not resolve the caller source revision or local Git fallback",
+      },
     ]);
   }
   const baselineExists = runner(
@@ -416,7 +414,7 @@ export function agentVerificationCommand(
     capability,
     result: check(root, capability),
   }));
-  const endingSha = gitSha(root, runner);
+  const endingSha = sourceRevision(root, runner);
   if (endingSha !== candidateSha) {
     return envelope(
       "agent-verification",
@@ -427,7 +425,7 @@ export function agentVerificationCommand(
         {
           code: "verification-head-moved",
           message:
-            "HEAD changed while verification was running; discard the stale evidence and rerun",
+            "Source revision context changed while verification was running; discard the stale evidence and rerun",
         },
       ],
     );
@@ -532,13 +530,13 @@ export function agentHandoffCommand(
   if (!read.packet || !read.digest) {
     return envelope("agent-handoff", "failed", started, { root, packetPath }, read.diagnostics);
   }
-  const candidateSha = gitSha(root, runner);
+  const candidateSha = sourceRevision(root, runner);
   const worktree = cleanWorktree(root, runner);
   if (!candidateSha || worktree.clean !== true) {
     return envelope("agent-handoff", "unavailable", started, { root, packetPath }, [
       {
         code: "handoff-candidate-not-stable",
-        message: "Handoff requires a clean worktree at an exact Git HEAD",
+        message: "Handoff requires a clean worktree bound to a source revision",
       },
     ]);
   }
