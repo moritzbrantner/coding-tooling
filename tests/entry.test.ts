@@ -74,7 +74,10 @@ describe("expectation CLI boundary", () => {
       expect(deferred.exitCode).toBe(0);
       const deferredResult = JSON.parse(deferred.stdout) as {
         operation?: unknown;
-        data?: { result?: unknown; finding?: { disposition?: unknown; deferralEvidence?: unknown } };
+        data?: {
+          result?: unknown;
+          finding?: { disposition?: unknown; deferralEvidence?: unknown };
+        };
       };
       expect(deferredResult.operation).toBe("defer");
       expect(deferredResult.data).toMatchObject({
