@@ -3,9 +3,9 @@
   "kind": "coding-tooling-test-coverage-detail",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "79b9bbdae81ab294438e961cb9ab6918026ff7e8"
+    "revision": "1f35235ac01563c60773494bb5799c8f5285d2be"
   },
-  "generatedAt": "2026-09-18T19:06:13.000Z",
+  "generatedAt": "2026-09-18T19:21:25.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1
@@ -106170,7 +106170,7 @@
         },
         {
           "line": 332,
-          "hits": 72,
+          "hits": 89,
           "covered": true
         },
         {
@@ -106185,7 +106185,7 @@
         },
         {
           "line": 335,
-          "hits": 23,
+          "hits": 64,
           "covered": true
         },
         {
@@ -106750,27 +106750,27 @@
         },
         {
           "line": 466,
-          "hits": 42,
-          "covered": true
-        },
-        {
-          "line": 467,
           "hits": 37,
           "covered": true
         },
         {
-          "line": 468,
+          "line": 467,
           "hits": 63,
           "covered": true
         },
         {
-          "line": 469,
+          "line": 468,
           "hits": 11,
           "covered": true
         },
         {
-          "line": 470,
+          "line": 469,
           "hits": 63,
+          "covered": true
+        },
+        {
+          "line": 470,
+          "hits": 11,
           "covered": true
         },
         {
@@ -106780,207 +106780,207 @@
         },
         {
           "line": 472,
-          "hits": 11,
-          "covered": true
-        },
-        {
-          "line": 473,
           "hits": 12,
           "covered": true
         },
         {
-          "line": 474,
+          "line": 473,
           "hits": 11,
+          "covered": true
+        },
+        {
+          "line": 474,
+          "hits": 16,
           "covered": true
         },
         {
           "line": 475,
-          "hits": 16,
-          "covered": true
-        },
-        {
-          "line": 476,
           "hits": 21,
           "covered": true
         },
         {
-          "line": 477,
+          "line": 476,
           "hits": 1,
           "covered": true
         },
         {
-          "line": 480,
+          "line": 479,
           "hits": 18,
           "covered": true
         },
         {
-          "line": 481,
+          "line": 480,
           "hits": 69,
           "covered": true
         },
         {
-          "line": 482,
+          "line": 481,
           "hits": 70,
           "covered": true
         },
         {
-          "line": 483,
+          "line": 482,
           "hits": 65,
+          "covered": true
+        },
+        {
+          "line": 483,
+          "hits": 62,
           "covered": true
         },
         {
           "line": 484,
-          "hits": 62,
-          "covered": true
-        },
-        {
-          "line": 485,
           "hits": 82,
           "covered": true
         },
         {
-          "line": 486,
+          "line": 485,
           "hits": 2,
           "covered": true
         },
         {
-          "line": 487,
+          "line": 486,
           "hits": 62,
           "covered": true
         },
         {
-          "line": 488,
+          "line": 487,
           "hits": 17,
           "covered": true
         },
         {
-          "line": 489,
+          "line": 488,
           "hits": 11,
           "covered": true
         },
         {
-          "line": 490,
+          "line": 489,
           "hits": 7,
           "covered": true
         },
         {
-          "line": 491,
+          "line": 490,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 492,
+          "line": 491,
           "hits": 47,
           "covered": true
         },
         {
-          "line": 493,
+          "line": 492,
           "hits": 89,
           "covered": true
         },
         {
-          "line": 494,
+          "line": 493,
           "hits": 5,
           "covered": true
         },
         {
-          "line": 495,
+          "line": 494,
           "hits": 3,
           "covered": true
         },
         {
-          "line": 496,
+          "line": 495,
           "hits": 49,
           "covered": true
         },
         {
-          "line": 497,
+          "line": 496,
           "hits": 1,
           "covered": true
         },
         {
-          "line": 498,
+          "line": 497,
           "hits": 2,
           "covered": true
         },
         {
-          "line": 500,
+          "line": 499,
           "hits": 65,
           "covered": true
         },
         {
-          "line": 501,
+          "line": 500,
           "hits": 26,
           "covered": true
         },
         {
-          "line": 502,
+          "line": 501,
           "hits": 68,
           "covered": true
         },
         {
-          "line": 503,
+          "line": 502,
           "hits": 86,
           "covered": true
         },
         {
-          "line": 504,
+          "line": 503,
           "hits": 17,
           "covered": true
         },
         {
-          "line": 505,
+          "line": 504,
           "hits": 91,
           "covered": true
         },
         {
-          "line": 506,
+          "line": 505,
           "hits": 13,
           "covered": true
         },
         {
-          "line": 507,
+          "line": 506,
           "hits": 5,
           "covered": true
         },
         {
-          "line": 508,
+          "line": 507,
           "hits": 20,
           "covered": true
         },
         {
-          "line": 509,
+          "line": 508,
           "hits": 16,
           "covered": true
         },
         {
-          "line": 510,
+          "line": 509,
           "hits": 20,
           "covered": true
         },
         {
-          "line": 511,
+          "line": 510,
           "hits": 56,
           "covered": true
         },
         {
-          "line": 512,
+          "line": 511,
           "hits": 54,
           "covered": true
         },
         {
-          "line": 513,
+          "line": 512,
           "hits": 46,
           "covered": true
         },
         {
-          "line": 514,
+          "line": 513,
           "hits": 34,
           "covered": true
         },
         {
-          "line": 515,
+          "line": 514,
           "hits": 19,
+          "covered": true
+        },
+        {
+          "line": 515,
+          "hits": 1,
           "covered": true
         },
         {
@@ -106989,99 +106989,99 @@
           "covered": true
         },
         {
-          "line": 517,
-          "hits": 1,
+          "line": 519,
+          "hits": 10,
           "covered": true
         },
         {
           "line": 520,
-          "hits": 10,
-          "covered": true
-        },
-        {
-          "line": 521,
           "hits": 56,
           "covered": true
         },
         {
-          "line": 522,
+          "line": 521,
           "hits": 33,
           "covered": true
         },
         {
-          "line": 523,
+          "line": 522,
           "hits": 14,
           "covered": true
         },
         {
-          "line": 524,
+          "line": 523,
           "hits": 79,
           "covered": true
         },
         {
-          "line": 525,
+          "line": 524,
           "hits": 1,
           "covered": true
         },
         {
-          "line": 526,
+          "line": 525,
           "hits": 2,
           "covered": true
         },
         {
-          "line": 527,
+          "line": 526,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 528,
+          "line": 527,
           "hits": 36,
           "covered": true
         },
         {
-          "line": 529,
+          "line": 528,
           "hits": 14,
           "covered": true
         },
         {
-          "line": 530,
+          "line": 529,
           "hits": 45,
           "covered": true
         },
         {
-          "line": 531,
+          "line": 530,
           "hits": 43,
           "covered": true
         },
         {
-          "line": 532,
+          "line": 531,
           "hits": 32,
           "covered": true
         },
         {
-          "line": 533,
+          "line": 532,
           "hits": 76,
           "covered": true
         },
         {
-          "line": 534,
+          "line": 533,
           "hits": 73,
           "covered": true
         },
         {
-          "line": 535,
+          "line": 534,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 536,
+          "line": 535,
           "hits": 10,
           "covered": true
         },
         {
-          "line": 537,
+          "line": 536,
           "hits": 1,
           "covered": true
+        },
+        {
+          "line": 537,
+          "hits": 0,
+          "covered": false
         },
         {
           "line": 538,
@@ -107129,53 +107129,53 @@
           "covered": false
         },
         {
-          "line": 547,
-          "hits": 0,
-          "covered": false
-        },
-        {
-          "line": 551,
+          "line": 550,
           "hits": 18,
           "covered": true
         },
         {
-          "line": 552,
+          "line": 551,
           "hits": 44,
           "covered": true
         },
         {
-          "line": 553,
+          "line": 552,
           "hits": 46,
           "covered": true
         },
         {
-          "line": 554,
+          "line": 553,
           "hits": 33,
           "covered": true
         },
         {
-          "line": 555,
+          "line": 554,
           "hits": 39,
           "covered": true
         },
         {
-          "line": 556,
+          "line": 555,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 557,
+          "line": 556,
           "hits": 50,
           "covered": true
         },
         {
-          "line": 558,
+          "line": 557,
           "hits": 67,
           "covered": true
         },
         {
-          "line": 559,
+          "line": 558,
           "hits": 5,
+          "covered": true
+        },
+        {
+          "line": 559,
+          "hits": 2,
           "covered": true
         },
         {
@@ -107184,193 +107184,193 @@
           "covered": true
         },
         {
-          "line": 561,
-          "hits": 2,
-          "covered": true
-        },
-        {
-          "line": 563,
+          "line": 562,
           "hits": 22,
           "covered": true
         },
         {
-          "line": 564,
+          "line": 563,
           "hits": 41,
           "covered": true
         },
         {
-          "line": 565,
+          "line": 564,
           "hits": 93,
           "covered": true
         },
         {
-          "line": 566,
+          "line": 565,
           "hits": 44,
           "covered": true
         },
         {
-          "line": 567,
+          "line": 566,
           "hits": 19,
           "covered": true
         },
         {
-          "line": 568,
+          "line": 567,
           "hits": 62,
           "covered": true
         },
         {
-          "line": 569,
+          "line": 568,
           "hits": 65,
           "covered": true
         },
         {
-          "line": 570,
+          "line": 569,
           "hits": 23,
           "covered": true
         },
         {
-          "line": 571,
+          "line": 570,
           "hits": 35,
+          "covered": true
+        },
+        {
+          "line": 571,
+          "hits": 30,
           "covered": true
         },
         {
           "line": 572,
-          "hits": 30,
-          "covered": true
-        },
-        {
-          "line": 573,
           "hits": 19,
           "covered": true
         },
         {
-          "line": 574,
+          "line": 573,
           "hits": 54,
           "covered": true
         },
         {
-          "line": 575,
+          "line": 574,
           "hits": 37,
           "covered": true
         },
         {
-          "line": 576,
+          "line": 575,
           "hits": 7,
           "covered": true
         },
         {
-          "line": 577,
+          "line": 576,
           "hits": 4,
           "covered": true
         },
         {
-          "line": 578,
+          "line": 577,
           "hits": 64,
           "covered": true
         },
         {
-          "line": 579,
+          "line": 578,
           "hits": 31,
           "covered": true
         },
         {
-          "line": 580,
+          "line": 579,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 581,
+          "line": 580,
           "hits": 86,
           "covered": true
         },
         {
-          "line": 582,
+          "line": 581,
           "hits": 87,
           "covered": true
         },
         {
-          "line": 583,
+          "line": 582,
           "hits": 4,
           "covered": true
         },
         {
-          "line": 584,
+          "line": 583,
           "hits": 15,
           "covered": true
         },
         {
-          "line": 585,
+          "line": 584,
           "hits": 13,
           "covered": true
         },
         {
-          "line": 586,
+          "line": 585,
           "hits": 11,
           "covered": true
         },
         {
-          "line": 587,
+          "line": 586,
           "hits": 39,
           "covered": true
         },
         {
-          "line": 588,
+          "line": 587,
           "hits": 34,
           "covered": true
         },
         {
-          "line": 589,
+          "line": 588,
           "hits": 30,
           "covered": true
         },
         {
-          "line": 590,
+          "line": 589,
           "hits": 11,
           "covered": true
         },
         {
-          "line": 592,
+          "line": 591,
           "hits": 16,
           "covered": true
         },
         {
-          "line": 593,
+          "line": 592,
           "hits": 25,
           "covered": true
         },
         {
-          "line": 594,
+          "line": 593,
           "hits": 37,
           "covered": true
         },
         {
-          "line": 595,
+          "line": 594,
           "hits": 32,
           "covered": true
         },
         {
-          "line": 596,
+          "line": 595,
           "hits": 21,
           "covered": true
         },
         {
-          "line": 597,
+          "line": 596,
           "hits": 35,
           "covered": true
         },
         {
-          "line": 598,
+          "line": 597,
           "hits": 28,
           "covered": true
         },
         {
-          "line": 599,
+          "line": 598,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 600,
+          "line": 599,
           "hits": 4,
+          "covered": true
+        },
+        {
+          "line": 600,
+          "hits": 2,
           "covered": true
         },
         {
@@ -107379,138 +107379,138 @@
           "covered": true
         },
         {
-          "line": 602,
-          "hits": 2,
+          "line": 603,
+          "hits": 13,
           "covered": true
         },
         {
           "line": 604,
-          "hits": 13,
+          "hits": 17,
           "covered": true
         },
         {
           "line": 605,
-          "hits": 17,
+          "hits": 39,
           "covered": true
         },
         {
           "line": 606,
-          "hits": 39,
-          "covered": true
-        },
-        {
-          "line": 607,
           "hits": 49,
           "covered": true
         },
         {
-          "line": 608,
+          "line": 607,
           "hits": 46,
           "covered": true
         },
         {
-          "line": 609,
+          "line": 608,
           "hits": 4,
           "covered": true
         },
         {
-          "line": 610,
+          "line": 609,
           "hits": 81,
           "covered": true
         },
         {
-          "line": 611,
+          "line": 610,
           "hits": 63,
           "covered": true
         },
         {
-          "line": 612,
+          "line": 611,
           "hits": 61,
           "covered": true
         },
         {
-          "line": 613,
+          "line": 612,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 614,
+          "line": 613,
           "hits": 61,
           "covered": true
         },
         {
-          "line": 615,
+          "line": 614,
           "hits": 54,
           "covered": true
         },
         {
-          "line": 616,
+          "line": 615,
           "hits": 74,
           "covered": true
         },
         {
-          "line": 617,
+          "line": 616,
           "hits": 5,
           "covered": true
         },
         {
-          "line": 618,
+          "line": 617,
           "hits": 84,
           "covered": true
         },
         {
-          "line": 619,
+          "line": 618,
           "hits": 13,
           "covered": true
         },
         {
-          "line": 620,
+          "line": 619,
           "hits": 17,
           "covered": true
         },
         {
-          "line": 621,
+          "line": 620,
           "hits": 2,
           "covered": true
         },
         {
-          "line": 624,
+          "line": 623,
           "hits": 10,
           "covered": true
         },
         {
-          "line": 625,
+          "line": 624,
           "hits": 64,
           "covered": true
         },
         {
-          "line": 626,
+          "line": 625,
           "hits": 55,
           "covered": true
         },
         {
-          "line": 627,
+          "line": 626,
           "hits": 21,
           "covered": true
         },
         {
-          "line": 628,
+          "line": 627,
           "hits": 39,
           "covered": true
         },
         {
-          "line": 629,
+          "line": 628,
           "hits": 44,
           "covered": true
         },
         {
-          "line": 630,
+          "line": 629,
           "hits": 64,
           "covered": true
         },
         {
-          "line": 631,
+          "line": 630,
           "hits": 27,
+          "covered": true
+        },
+        {
+          "line": 631,
+          "hits": 2,
           "covered": true
         },
         {
@@ -107519,124 +107519,124 @@
           "covered": true
         },
         {
-          "line": 633,
-          "hits": 2,
-          "covered": true
-        },
-        {
-          "line": 635,
+          "line": 634,
           "hits": 4,
           "covered": true
         },
         {
-          "line": 636,
+          "line": 635,
           "hits": 34,
           "covered": true
         },
         {
-          "line": 637,
+          "line": 636,
           "hits": 72,
           "covered": true
         },
         {
-          "line": 638,
+          "line": 637,
           "hits": 2,
+          "covered": true
+        },
+        {
+          "line": 638,
+          "hits": 5,
           "covered": true
         },
         {
           "line": 639,
-          "hits": 5,
-          "covered": true
-        },
-        {
-          "line": 640,
           "hits": 17,
           "covered": true
         },
         {
-          "line": 641,
+          "line": 640,
           "hits": 15,
           "covered": true
         },
         {
-          "line": 642,
+          "line": 641,
           "hits": 7,
           "covered": true
         },
         {
-          "line": 643,
+          "line": 642,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 644,
+          "line": 643,
           "hits": 55,
           "covered": true
         },
         {
-          "line": 645,
+          "line": 644,
           "hits": 94,
           "covered": true
         },
         {
-          "line": 646,
+          "line": 645,
           "hits": 22,
           "covered": true
         },
         {
-          "line": 647,
+          "line": 646,
           "hits": 5,
           "covered": true
         },
         {
-          "line": 648,
+          "line": 647,
           "hits": 3,
           "covered": true
         },
         {
-          "line": 649,
+          "line": 648,
           "hits": 39,
           "covered": true
         },
         {
-          "line": 650,
+          "line": 649,
           "hits": 1,
           "covered": true
         },
         {
-          "line": 651,
+          "line": 650,
           "hits": 2,
           "covered": true
         },
         {
-          "line": 653,
+          "line": 652,
           "hits": 12,
           "covered": true
         },
         {
-          "line": 654,
+          "line": 653,
           "hits": 34,
           "covered": true
         },
         {
-          "line": 655,
+          "line": 654,
           "hits": 0,
           "covered": false
         },
         {
-          "line": 656,
+          "line": 655,
           "hits": 11,
           "covered": true
         },
         {
-          "line": 657,
+          "line": 656,
           "hits": 45,
           "covered": true
         },
         {
-          "line": 659,
+          "line": 658,
           "hits": 64,
           "covered": true
+        },
+        {
+          "line": 659,
+          "hits": 0,
+          "covered": false
         },
         {
           "line": 660,
@@ -107670,72 +107670,72 @@
         },
         {
           "line": 666,
-          "hits": 0,
-          "covered": false
-        },
-        {
-          "line": 667,
           "hits": 2,
           "covered": true
         },
         {
-          "line": 669,
+          "line": 668,
           "hits": 37,
           "covered": true
         },
         {
-          "line": 670,
+          "line": 669,
           "hits": 4,
           "covered": true
         },
         {
-          "line": 671,
+          "line": 670,
           "hits": 32,
           "covered": true
         },
         {
-          "line": 672,
+          "line": 671,
           "hits": 57,
           "covered": true
         },
         {
-          "line": 673,
+          "line": 672,
           "hits": 40,
           "covered": true
         },
         {
-          "line": 674,
+          "line": 673,
           "hits": 5,
           "covered": true
         },
         {
-          "line": 675,
+          "line": 674,
           "hits": 35,
           "covered": true
         },
         {
-          "line": 676,
+          "line": 675,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 677,
+          "line": 676,
           "hits": 51,
           "covered": true
         },
         {
-          "line": 678,
+          "line": 677,
           "hits": 64,
           "covered": true
         },
         {
-          "line": 679,
+          "line": 678,
           "hits": 22,
           "covered": true
         },
         {
-          "line": 680,
+          "line": 679,
           "hits": 5,
+          "covered": true
+        },
+        {
+          "line": 680,
+          "hits": 2,
           "covered": true
         },
         {
@@ -107744,188 +107744,188 @@
           "covered": true
         },
         {
-          "line": 682,
-          "hits": 2,
+          "line": 683,
+          "hits": 37,
           "covered": true
         },
         {
           "line": 684,
-          "hits": 37,
+          "hits": 15,
           "covered": true
         },
         {
           "line": 685,
-          "hits": 15,
-          "covered": true
-        },
-        {
-          "line": 686,
           "hits": 28,
           "covered": true
         },
         {
-          "line": 687,
+          "line": 686,
           "hits": 31,
           "covered": true
         },
         {
-          "line": 688,
+          "line": 687,
           "hits": 59,
           "covered": true
         },
         {
-          "line": 689,
+          "line": 688,
           "hits": 2,
           "covered": true
         },
         {
-          "line": 692,
+          "line": 691,
           "hits": 16,
+          "covered": true
+        },
+        {
+          "line": 692,
+          "hits": 77,
           "covered": true
         },
         {
           "line": 693,
-          "hits": 77,
-          "covered": true
-        },
-        {
-          "line": 694,
           "hits": 86,
           "covered": true
         },
         {
-          "line": 695,
+          "line": 694,
           "hits": 77,
           "covered": true
         },
         {
-          "line": 696,
+          "line": 695,
           "hits": 16,
           "covered": true
         },
         {
-          "line": 699,
+          "line": 698,
           "hits": 34,
           "covered": true
         },
         {
-          "line": 700,
+          "line": 699,
           "hits": 29,
           "covered": true
         },
         {
-          "line": 701,
+          "line": 700,
           "hits": 37,
           "covered": true
         },
         {
-          "line": 702,
+          "line": 701,
           "hits": 9,
           "covered": true
         },
         {
-          "line": 703,
+          "line": 702,
           "hits": 47,
           "covered": true
         },
         {
-          "line": 704,
+          "line": 703,
           "hits": 26,
           "covered": true
         },
         {
-          "line": 705,
+          "line": 704,
           "hits": 50,
           "covered": true
         },
         {
-          "line": 706,
+          "line": 705,
           "hits": 33,
           "covered": true
         },
         {
-          "line": 707,
+          "line": 706,
           "hits": 63,
           "covered": true
         },
         {
-          "line": 708,
+          "line": 707,
           "hits": 66,
           "covered": true
         },
         {
-          "line": 709,
+          "line": 708,
           "hits": 41,
           "covered": true
         },
         {
-          "line": 710,
+          "line": 709,
           "hits": 6,
           "covered": true
         },
         {
-          "line": 711,
+          "line": 710,
           "hits": 45,
           "covered": true
         },
         {
-          "line": 712,
+          "line": 711,
           "hits": 67,
           "covered": true
         },
         {
-          "line": 713,
+          "line": 712,
           "hits": 14,
           "covered": true
         },
         {
-          "line": 714,
+          "line": 713,
           "hits": 23,
           "covered": true
         },
         {
-          "line": 715,
+          "line": 714,
           "hits": 30,
           "covered": true
         },
         {
-          "line": 716,
+          "line": 715,
           "hits": 35,
           "covered": true
         },
         {
-          "line": 717,
+          "line": 716,
           "hits": 39,
           "covered": true
         },
         {
-          "line": 718,
+          "line": 717,
           "hits": 15,
           "covered": true
         },
         {
-          "line": 719,
+          "line": 718,
           "hits": 25,
           "covered": true
         },
         {
-          "line": 720,
+          "line": 719,
           "hits": 27,
           "covered": true
         },
         {
-          "line": 721,
+          "line": 720,
           "hits": 47,
           "covered": true
         },
         {
-          "line": 722,
+          "line": 721,
           "hits": 19,
           "covered": true
         },
         {
-          "line": 723,
+          "line": 722,
           "hits": 20,
+          "covered": true
+        },
+        {
+          "line": 723,
+          "hits": 77,
           "covered": true
         },
         {
@@ -107940,33 +107940,33 @@
         },
         {
           "line": 726,
-          "hits": 77,
-          "covered": true
-        },
-        {
-          "line": 727,
           "hits": 82,
           "covered": true
         },
         {
-          "line": 728,
+          "line": 727,
           "hits": 7,
           "covered": true
         },
         {
-          "line": 729,
+          "line": 728,
           "hits": 8,
           "covered": true
         },
         {
-          "line": 730,
+          "line": 729,
           "hits": 15,
           "covered": true
         },
         {
-          "line": 731,
+          "line": 730,
           "hits": 1,
           "covered": true
+        },
+        {
+          "line": 731,
+          "hits": 0,
+          "covered": false
         },
         {
           "line": 732,
@@ -108050,11 +108050,6 @@
         },
         {
           "line": 748,
-          "hits": 0,
-          "covered": false
-        },
-        {
-          "line": 749,
           "hits": 0,
           "covered": false
         }
