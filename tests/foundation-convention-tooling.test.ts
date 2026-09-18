@@ -293,7 +293,7 @@ describe("foundation convention executable tooling", () => {
     );
   });
 
-  test("fails closed when the selected lint capability cannot consume installed Oxlint rules", () => {
+  test("keeps adapter composition gaps diagnostic when direct convention enforcement is available", () => {
     const result = foundationAudit(
       repository(
         {
@@ -305,8 +305,8 @@ describe("foundation convention executable tooling", () => {
     );
     const tooling = executableTooling(result);
 
-    expect(result.status).toBe("failed");
-    expect(tooling.status).toBe("invalid");
+    expect(result.status).toBe("passed");
+    expect(tooling.status).toBe("adopted");
     expect(tooling.requiredExecutables.map((item) => [item.name, item.status])).toEqual([
       ["oxlint", "adopted"],
       ["oxlint-tsgolint", "adopted"],
@@ -319,12 +319,12 @@ describe("foundation convention executable tooling", () => {
     ).toHaveLength(0);
   });
 
-  test("fails closed when an applicable convention has no selected capability command", () => {
+  test("still requires direct convention executables without a selected capability command", () => {
     const result = foundationAudit(repository(undefined, null, false));
     const tooling = executableTooling(result);
 
     expect(result.status).toBe("failed");
-    expect(tooling.status).toBe("invalid");
+    expect(tooling.status).toBe("missing");
     expect(tooling.requiredExecutables.map((item) => [item.name, item.status])).toEqual([
       ["oxlint", "missing"],
       ["oxlint-tsgolint", "missing"],
@@ -333,10 +333,39 @@ describe("foundation convention executable tooling", () => {
       result.diagnostics.filter((item) => item.code === "foundation-convention-adapter-unresolved"),
     ).toHaveLength(2);
     expect(
+      result.diagnostics.filter((item) => item.code === "foundation-convention-tool-missing"),
+    ).toHaveLength(2);
+    expect(
       result.diagnostics.filter(
         (item) => item.code === "foundation-required-capability-unresolved",
       ),
     ).toHaveLength(0);
+  });
+
+  test("does not require every workspace package to own a lint command", () => {
+    const root = repository({
+      oxlint: "1.81.0",
+      "oxlint-tsgolint": "7.0.2001",
+    });
+    writeJson(join(root, "packages", "nested-app", "package.json"), {
+      name: "nested-app",
+      devDependencies: {
+        typescript: "5.9.2",
+      },
+    });
+    writeFileSync(join(root, "packages", "nested-app", "tsconfig.json"), "{}\n");
+
+    const result = foundationAudit(root);
+    const tooling = executableTooling(result);
+
+    expect(result.status).toBe("passed");
+    expect(tooling.status).toBe("adopted");
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "foundation-convention-adapter-unresolved",
+        path: "packages/nested-app",
+      }),
+    );
   });
 
   test("requires type-aware tooling for enforcement-only installed rules", () => {
