@@ -13,12 +13,7 @@ import {
 } from "./finding-verification-evidence.ts";
 import { runCommand, type CommandResult } from "./shared.ts";
 
-type Runner = (
-  command: string,
-  args?: string[],
-  cwd?: string,
-  inherit?: boolean,
-) => CommandResult;
+type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
 
 export type FindingVerificationDependencies = {
   run?: Runner;
