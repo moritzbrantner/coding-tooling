@@ -4,6 +4,7 @@ import { remoteCommand } from "../remote-command.js";
 const target = document.querySelector("#result");
 const parameters = new URL(location.href).searchParams;
 const repository = parameters.get("repo");
+const ref = parameters.get("ref");
 const repeatedArgs = parameters.getAll("arg");
 const argv = repeatedArgs.length > 0 ? repeatedArgs : parameters.get("argv");
 
@@ -16,7 +17,7 @@ try {
 
   const result = isChangeAwareArgv(argv)
     ? await remoteChangeCommand(repository, argv)
-    : await remoteCommand(repository, argv);
+    : await remoteCommand(repository, argv, { ref });
   target.textContent = `${JSON.stringify(result, null, 2)}\n`;
   document.title = `${repository} · ${result.operation} · run.json`;
 } catch (error) {
@@ -27,7 +28,7 @@ try {
       operation: "remote-command",
       status: "error",
       durationMs: 0,
-      data: { repository, requestedArgv: argv ?? null },
+      data: { repository, ref, requestedArgv: argv ?? null },
       diagnostics: [{ code: "invalid-run-url", message }],
     },
     null,
