@@ -286,6 +286,63 @@ describe("expectation lifecycle", () => {
     );
   });
 
+  test("does not combine a new broad suppression policy match with verification metadata", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    addVerifierScript(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suppressions: [
+            {
+              expectation: "typescript-source-test",
+              reason: "repository policy usually exempts this surface",
+            },
+          ],
+          verifications: [
+            {
+              id: "VERIFY-SERVICE",
+              version: 1,
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              command: ["bun", "run", "verify:service"],
+              reason: "repository-owned contract verifies the generated metadata",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const analysis = analyzeExpectations(root, { includeSuppressed: true });
+    expect(analysis.findings).toContainEqual(
+      expect.objectContaining({
+        id: finding.id,
+        disposition: "active",
+        suppressionEvidence: {
+          scope: "expectation",
+          reason: "repository policy usually exempts this surface",
+          applied: false,
+          expectation: "typescript-source-test",
+        },
+      }),
+    );
+    expect(
+      analysis.findings.find((item) => item.id === finding.id)?.verificationDeclaration,
+    ).toBeUndefined();
+    expect(analysis.reconciliation.invalidVerifications).toEqual([
+      {
+        index: 0,
+        id: "VERIFY-SERVICE",
+        reason:
+          "finding also matches suppression policy; remove suppression before declaring verification",
+      },
+    ]);
+  });
+
   test("keeps an explicit repository verifier as an auditable declaration until it executes", () => {
     const root = fixture("bun test");
     const finding = sourceTestFinding(root);
