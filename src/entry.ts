@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { analyzeRepository } from "./analysis.ts";
+import { artifactReuseEconomics } from "./artifact-reuse-economics.ts";
 import { calibrationCommand, type CalibrationEnvelope } from "./calibration.ts";
 import { main } from "./cli.ts";
 import { writeReport } from "./core.ts";
@@ -50,6 +51,7 @@ function option(argv: string[], name: string): string | undefined {
 function expectationUsage(): never {
   console.error(`Usage:
   coding-tooling analyze [--json]
+  coding-tooling artifact-reuse [--receipt <path>] [--json]
   coding-tooling score [--validation-report <path>] [--json]
   coding-tooling remediation plan [--include-baseline] [--json]
   coding-tooling findings [--new|--baseline] [--all] [--json]
@@ -90,6 +92,23 @@ export function entryMain(argv = process.argv.slice(2)): number {
     });
     const report = option(argv, "report");
     if (report) writeReport(result, resolve(root, report));
+    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
+    return resultExitCode(result.status);
+  }
+
+  if (command === "artifact-reuse") {
+    const knownFlags = new Set(["--json", "--receipt"]);
+    for (let index = 1; index < argv.length; index += 1) {
+      const value = argv[index]!;
+      if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
+      if (value === "--receipt") {
+        if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
+        index += 1;
+      }
+    }
+    const result = artifactReuseEconomics(repositoryRoot(), {
+      receiptPath: option(argv, "receipt"),
+    });
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }
