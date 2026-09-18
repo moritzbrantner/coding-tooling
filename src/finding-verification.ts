@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 import type { ExpectationEnvelope } from "./expectation-model.ts";
@@ -115,6 +116,7 @@ export function verifyFinding(
 
   const receipt: FindingVerificationReceipt = {
     schemaVersion: "coding-tooling/finding-verification-receipt/v1",
+    runId: randomUUID(),
     findingId: id,
     verificationId: declaration.id,
     candidateSha,
