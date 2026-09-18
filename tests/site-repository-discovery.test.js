@@ -119,7 +119,7 @@ describe("GitHub Pages repository discovery", () => {
         id: "repository-discovery",
         transport: "browser-json-view",
         hrefTemplate:
-          "https://moritzbrantner.github.io/coding-tooling/discovery.json/?owner={owner}",
+          "https://moritzbrantner.github.io/coding-tooling/discovery.json/?owner={owner}&envelope=1",
         description:
           "Browser-executed token-free discovery of bounded public GitHub repository metadata with a deterministic suggested repository candidate.",
       }),
@@ -128,6 +128,7 @@ describe("GitHub Pages repository discovery", () => {
       expect.objectContaining({ name: "owner", required: false }),
     ]);
     expect(operation?.authority).toBe("remote-metadata");
+    expect(operation?.response?.envelope).toBe("coding-tooling/result-envelope/v1");
     expect(
       manifest.limitations.some((limitation) =>
         limitation.includes("run-json, repository-discovery, affected-json"),
