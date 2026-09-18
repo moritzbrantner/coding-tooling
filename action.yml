@@ -146,6 +146,7 @@ runs:
         INPUT_VALIDATION_REPORT: ${{ inputs.validation-report }}
         INPUT_STRICT: ${{ inputs.strict }}
         CODING_TOOLING_SOURCE_SHA: ${{ inputs.source-sha != '' && inputs.source-sha || github.sha }}
+        CODING_TOOLING_SOURCE_ROOT: ${{ github.workspace }}
       run: |
         if [[ "$INPUT_OPERATION" == "agent-capabilities-validate" ]]; then
           bun "${{ github.action_path }}/src/cli.ts" agent-capabilities validate .
