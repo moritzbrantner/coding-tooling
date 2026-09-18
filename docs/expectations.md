@@ -95,6 +95,8 @@ A suppression must include a reason and identify either one exact finding ID or 
 
 A valid declaration is attached as `verificationDeclaration` but leaves the finding `active`. Script existence proves only that a repository-owned verifier is declared; it does not prove that verifier ran or passed on the current candidate revision. The separate `verified` disposition is reserved for execution-backed evidence that is bound to the exact candidate revision. Missing scripts, unsupported command shapes, stale relationships, duplicate relationships, unknown expectations, and simultaneous suppression-plus-verification metadata are reported through reconciliation. Invariants are explicit repository knowledge for agents; the analyzer does not synthesize them.
 
+Run a declared verifier explicitly with `coding-tooling finding verify CT-... --json`. Verification requires a clean worktree and an exact Git HEAD, executes only the declared package script in its owning component, records the runner identity/version and exit status, then confirms that HEAD and tracked source state did not change. The disposable receipt is written under `.artifacts/coding-tooling/finding-verification/` and is accepted only for the same finding, verifier declaration, component, command, and candidate SHA. Failed, invalid, stale, or missing receipts leave the finding active. Because the receipt is ignored workspace evidence rather than persistent repository policy, advancing HEAD automatically invalidates the earlier verification without rewriting expectation configuration.
+
 Persistent metadata is reconciled against the current deterministic finding stream. Reports identify orphaned baseline IDs, stale suppressions, verifications, and deferrals, invalid verifier commands, conflicting or duplicate deferrals, duplicate metadata, and references to unknown expectation IDs so accepted debt and decision records do not silently become a graveyard.
 
 ## Finding lifecycle
@@ -128,7 +130,7 @@ Each finding contains:
 - deterministic relationships to other findings when known;
 - an optional explicit scaffold action.
 
-`coding-tooling finding CT-... --json` deterministically reports whether one finding is `active`, `suppressed`, `verified`, or `absent`. This lets an orchestrator revalidate a work item without rediscovering repository context.
+`coding-tooling finding CT-... --json` deterministically reports whether one finding is `active`, `suppressed`, `verified`, or `absent`. `coding-tooling finding verify CT-... --json` is the separate execution boundary for a repository-declared verifier. This lets an orchestrator revalidate a work item without rediscovering repository context while keeping inspection read-only.
 
 Task management remains outside `coding-tooling`. A coordinator may persist a relationship such as `TASK-123 -> CT-0123456789AB`, but `coding-tooling` owns only whether the finding currently exists and what deterministic evidence supports it.
 
