@@ -62,6 +62,32 @@ https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/reposi
 
 It renders only the JSON envelope and is intended for browser-capable agents and tools that can execute the page JavaScript.
 
+### Parameterized analysis projection
+
+The unparameterized `analysis.json/?repo=owner/repository` path remains the original `remote-preflight` contract. Tailoring begins only when an analysis parameter is present, at which point the view returns `operation: "remote-preflight-query"`.
+
+Supported parameters are deliberately bounded:
+
+- `view=full|agent` selects the original rich evidence shape or a compact agent-first projection.
+- repeated `focus=` values select deterministic evidence families: `architecture`, `automation`, `browser`, `dependencies`, `environment`, `governance`, `mobile`, `performance`, or `testing`;
+- repeated `scope=` values select discovered components by exact name or path;
+- `min-severity=low|medium|high` and `limit=1..100` bound the finding surface;
+- `finding=REMOTE-...` drills into one existing remote finding;
+- `base=`, optional `head=`, repeated `changed-file=`, and optional `tier=` compose the existing change-aware Pages analyzer into the result rather than duplicating compare/component logic.
+
+Examples:
+
+```text
+https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository&view=agent&focus=testing&min-severity=medium
+https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository&view=agent&scope=packages/app&limit=5
+https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository&view=agent&base=main&head=feature&tier=fast
+https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=owner/repository&view=agent&changed-file=src/app.ts&changed-file=tests/app.test.ts
+```
+
+The projection never creates a new finding or evidence oracle. Focus values classify existing remote finding families, scope filters only exact discovered components and does not guess finding ownership, and change context is delegated to the existing `affected` implementation. Unknown parameters, focus values, scopes, or invalid bounds fail closed.
+
+The compact agent view retains the source repository/revision, selected findings, compact component capabilities, explicit limitations, local handoff, optional change-aware evidence, and canonical drill-down links back to the full analysis, the strongest finding, and `affected.json`.
+
 This is deliberately not described as a conventional HTTP JSON API. GitHub Pages cannot execute server-side code, so a plain `curl` request receives the static HTML shell rather than a dynamically generated `application/json` response. The same limitation applies to `run.json`. A true HTTP endpoint would require a separate serverless/runtime deployment and should be introduced only if that additional operational dependency is justified.
 
 ## `test-coverage.json` observation
