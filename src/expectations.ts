@@ -247,7 +247,6 @@ function applyVerificationEvidence(
   });
 }
 
-
 type DeferralResolution = {
   evidenceByFindingId: Map<string, FindingDeferralEvidence>;
   staleDeferrals: Array<{ index: number; id: string }>;
