@@ -14,7 +14,9 @@ The first report version covers:
 - `.coding-tooling.json` schema and required capability declarations;
 - repository-owned capability commands that can be resolved from supported components and explicit overrides;
 - environment-v1 config/script shape and exact declared toolchain pins;
-- installed convention manifest/lock/snapshot integrity;
+- installed convention manifest/lock/snapshot integrity and exact repository-owned executables required by direct convention enforcement;
 - Renovate JSON consumer configuration and the shared `coding-agent-conventions` preset.
+
+Convention adapter composition into repository-owned lint/format commands is reported as diagnostic evidence, not as foundation invalidity. Coding-tooling enforces installed convention rules directly; a workspace package is not required to invent its own lint command merely so the adapter can compose into it. Missing or invalid executables needed by direct convention enforcement remain blocking.
 
 This result is intended as the stable read-only input for fleet reporting and `platform-upgrader boring-foundation-v1`. Mutation remains owned by the upgrader; heuristic repository analysis remains a separate capability.

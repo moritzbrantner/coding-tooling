@@ -463,7 +463,6 @@ function conventionExecutableAudit(
     });
 
   const status: ConventionExecutableStatus =
-    adapterEvidence.diagnostics.length > 0 ||
     inspection.diagnostics.length > 0 ||
     requiredExecutables.some((entry) => entry.status === "invalid")
       ? "invalid"
