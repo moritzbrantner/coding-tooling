@@ -71,7 +71,7 @@ describe("parameterized Pages analysis", () => {
     const operation = manifest.operations.find((entry) => entry.id === "analysis-agent-json");
 
     expect(operation?.transport).toBe("browser-json-view");
-    expect(operation?.hrefTemplate).toContain("analysis.json/?repo={owner}/{repository}&view=agent");
+    expect(operation?.hrefTemplate).toContain(\n      "analysis.json/?repo={owner}/{repository}&view=agent",\n    );
     expect(operation?.description).toContain("focus/scope");
   });
 
@@ -85,7 +85,7 @@ describe("parameterized Pages analysis", () => {
 
   test("parses a bounded agent query deterministically", () => {
     const parameters = new URLSearchParams(
-      "repo=example/project&view=agent&focus=testing&focus=automation&scope=packages/worker&min-severity=medium&limit=5",
+      "repo=example/project&view=agent&focus=testing&focus=automation&scope=packages/worker&" +\n        "min-severity=medium&limit=5",
     );
 
     expect(parseAnalysisQuery(parameters)).toEqual({
