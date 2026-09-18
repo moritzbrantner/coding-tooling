@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -62,6 +64,17 @@ function finding(id, severity, title) {
 }
 
 describe("parameterized Pages analysis", () => {
+  test("advertises the compact query surface to registry-driven agents", () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL("../site/agent-tool.json", import.meta.url), "utf8"),
+    );
+    const operation = manifest.operations.find((entry) => entry.id === "analysis-agent-json");
+
+    expect(operation?.transport).toBe("browser-json-view");
+    expect(operation?.hrefTemplate).toContain("analysis.json/?repo={owner}/{repository}&view=agent");
+    expect(operation?.description).toContain("focus/scope");
+  });
+
   test("recognizes the unparameterized compatibility path", () => {
     const query = parseAnalysisQuery(new URLSearchParams("repo=example/project"));
     expect(queryIsIdentity(query)).toBe(true);
