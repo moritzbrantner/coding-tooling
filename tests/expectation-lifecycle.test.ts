@@ -152,9 +152,9 @@ describe("expectation lifecycle", () => {
       },
     });
     expect(active?.suppressionReason).toBeUndefined();
-    expect((findingsCommand(root).data.counts as Record<string, number>).suppressionPolicyMatches).toBe(
-      1,
-    );
+    expect(
+      (findingsCommand(root).data.counts as Record<string, number>).suppressionPolicyMatches,
+    ).toBe(1);
   });
 
   test("applies a broad suppression only after the matched finding is accepted into baseline", () => {
@@ -231,16 +231,18 @@ describe("expectation lifecycle", () => {
       )}\n`,
     );
 
-    expect(analyzeExpectations(root).findings.find((item) => item.id === finding.id)).toMatchObject({
-      disposition: "active",
-      suppressionEvidence: {
-        scope: "subject",
-        reason: "specific subject policy",
-        applied: false,
-        expectation: "typescript-source-test",
-        subject: "src/service.ts",
+    expect(analyzeExpectations(root).findings.find((item) => item.id === finding.id)).toMatchObject(
+      {
+        disposition: "active",
+        suppressionEvidence: {
+          scope: "subject",
+          reason: "specific subject policy",
+          applied: false,
+          expectation: "typescript-source-test",
+          subject: "src/service.ts",
+        },
       },
-    });
+    );
   });
 
   test("prefers an exact suppression over a broad policy match regardless of config order", () => {
