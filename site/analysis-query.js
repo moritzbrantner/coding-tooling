@@ -47,10 +47,7 @@ export function parseAnalysisQuery(parameters) {
     throw new Error(`focus must use one or more of: ${[...focusKinds].join(", ")}`);
   }
 
-  const scope = uniqueValues([
-    ...parameters.getAll("component"),
-    ...parameters.getAll("scope"),
-  ]);
+  const scope = uniqueValues([...parameters.getAll("component"), ...parameters.getAll("scope")]);
   const minSeverity = parameters.get("min-severity") ?? "low";
   if (!severities.has(minSeverity)) throw new Error("min-severity must be low, medium, or high");
 
