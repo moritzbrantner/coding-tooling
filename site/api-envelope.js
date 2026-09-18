@@ -1,31 +1,27 @@
+export function resultEnvelope(operation, status, data, diagnostics = [], durationMs = 0) {
+  return { schemaVersion: 1, operation, status, durationMs, data, diagnostics };
+}
+
 export function apiEnvelope(operation, result, options = {}) {
   const { schemaVersion: _schemaVersion, operation: _operation, ...data } = result ?? {};
   const evidenceState = options.evidenceState ?? result?.summary?.status ?? null;
-  return {
-    schemaVersion: 1,
+  return resultEnvelope(
     operation,
-    status: options.status ?? "passed",
-    durationMs: options.durationMs ?? 0,
-    data: {
+    options.status ?? "passed",
+    {
       ...data,
       evidence: {
         complete: options.complete ?? true,
         state: evidenceState,
       },
     },
-    diagnostics: options.diagnostics ?? [],
-  };
+    options.diagnostics ?? [],
+    options.durationMs ?? 0,
+  );
 }
 
 export function apiErrorEnvelope(operation, code, message, data = {}, durationMs = 0) {
-  return {
-    schemaVersion: 1,
-    operation,
-    status: "error",
-    durationMs,
-    data,
-    diagnostics: [{ code, message }],
-  };
+  return resultEnvelope(operation, "error", data, [{ code, message }], durationMs);
 }
 
 export function analysisApiEnvelope(analysis, durationMs = 0) {
