@@ -118,8 +118,10 @@ describe("expectation lifecycle", () => {
     expect(findingCommand(root, finding.id).data.result).toBe("suppressed");
   });
 
-  test("keeps an explicit repository verifier as an auditable declaration until it executes", () => {
-    const root = fixture("bun test");
+  test(
+    "keeps an explicit repository verifier as an auditable declaration until it executes",
+    () => {
+      const root = fixture("bun test");
     const finding = sourceTestFinding(root);
     addVerifierScript(root);
     writeFileSync(
@@ -159,8 +161,9 @@ describe("expectation lifecycle", () => {
     expect(
       (findingsCommand(root, { includeSuppressed: true }).data.counts as Record<string, number>)
         .verified,
-    ).toBe(0);
-  });
+      ).toBe(0);
+    },
+  );
 
   test("invalid verification commands cannot silence findings", () => {
     const root = fixture("bun test");
