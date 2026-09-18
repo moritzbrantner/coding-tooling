@@ -9,12 +9,13 @@ import {
 } from "../site/api-envelope.js";
 
 describe("Pages canonical API envelope", () => {
-  test("normalizes analysis status while preserving domain evidence state", () => {
+  test("normalizes queried analysis from selection status rather than source-wide status", () => {
     const result = analysisApiEnvelope({
       schemaVersion: 1,
       operation: "remote-preflight-query",
       summary: {
-        sourceStatus: "needs-attention",
+        sourceStatus: "ready",
+        selectionStatus: "needs-attention",
         selectedFindingCount: 1,
       },
       findings: [{ id: "REMOTE-CI-001" }],
@@ -27,7 +28,8 @@ describe("Pages canonical API envelope", () => {
       durationMs: 0,
       data: {
         summary: {
-          sourceStatus: "needs-attention",
+          sourceStatus: "ready",
+          selectionStatus: "needs-attention",
           selectedFindingCount: 1,
         },
         findings: [{ id: "REMOTE-CI-001" }],
@@ -37,6 +39,26 @@ describe("Pages canonical API envelope", () => {
         },
       },
       diagnostics: [],
+    });
+  });
+
+  test("keeps unrelated source findings from failing a clean query selection", () => {
+    const result = analysisApiEnvelope({
+      schemaVersion: 1,
+      operation: "remote-preflight-query",
+      summary: { status: "needs-attention" },
+      querySummary: {
+        sourceStatus: "needs-attention",
+        selectionStatus: "no-matching-findings",
+        selectedFindingCount: 0,
+      },
+      findings: [],
+    });
+
+    expect(result.status).toBe("passed");
+    expect(result.data.evidence).toEqual({
+      complete: true,
+      state: "no-matching-findings",
     });
   });
 
