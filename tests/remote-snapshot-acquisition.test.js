@@ -107,6 +107,36 @@ describe("immutable remote snapshot acquisition", () => {
     );
   });
 
+  test("pins an explicit ref to one exact revision before reading the tree", async () => {
+    const pinnedRevision = "b".repeat(40);
+    const requests = [];
+    const snapshot = await loadSnapshot(
+      { owner: "example", name: "repo" },
+      {
+        ref: "feature",
+        fetchImpl: async (url) => {
+          requests.push(url);
+          if (url === "https://api.github.com/repos/example/repo")
+            return jsonResponse(repositoryMetadata());
+          if (url === "https://api.github.com/repos/example/repo/branches/main")
+            return jsonResponse(branchMetadata());
+          if (url === "https://api.github.com/repos/example/repo/commits/feature")
+            return jsonResponse({ sha: pinnedRevision });
+          if (url === `https://api.github.com/repos/example/repo/git/trees/${pinnedRevision}?recursive=1`)
+            return jsonResponse({ tree: [], truncated: false });
+          throw new Error(`Unexpected request: ${url}`);
+        },
+      },
+    );
+
+    expect(snapshot.repository.requestedRef).toBe("feature");
+    expect(snapshot.repository.revision).toBe(pinnedRevision);
+    expect(snapshot.revisionUnavailable).toBe(false);
+    expect(requests).toContain(
+      `https://api.github.com/repos/example/repo/git/trees/${pinnedRevision}?recursive=1`,
+    );
+  });
+
   test("marks the analysis incomplete when exact revision observation fails", async () => {
     const snapshot = await loadSnapshot(
       { owner: "example", name: "repo" },
