@@ -136,12 +136,14 @@ export function artifactReuseEconomics(
       message: "Receipt does not contain a valid metrics.artifactReuse payload.",
     });
 
-  const sourceSha = typeof receipt.source?.sha === "string" ? receipt.source.sha.toLowerCase() : "";
+  const sourceSha =
+    typeof receipt.source?.sha === "string" ? receipt.source.sha.toLowerCase() : "";
   const expectedHead = (options.expectedHeadSha ?? currentHead(root)).toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(sourceSha) || sourceSha !== expectedHead)
     diagnostics.push({
       code: "artifact-reuse-evidence-stale",
-      message: `Receipt source ${sourceSha || "unknown"} does not match exact HEAD ${expectedHead}.`,
+      message:
+        `Receipt source ${sourceSha || "unknown"} does not match exact HEAD ${expectedHead}.`,
     });
 
   const artifacts = Array.isArray(receipt.evidence)
@@ -153,7 +155,8 @@ export function artifactReuseEconomics(
   if (artifacts.length !== 1 || identities.length !== 1)
     diagnostics.push({
       code: "artifact-reuse-evidence-identity-invalid",
-      message: "Receipt must contain exactly one built-artifact and one artifact-identity evidence entry.",
+      message:
+        "Receipt must contain exactly one built-artifact and one artifact-identity evidence entry.",
     });
 
   if (diagnostics.length > 0)
