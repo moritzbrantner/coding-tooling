@@ -21,9 +21,10 @@ form.addEventListener("submit", (event) => {
 
 const searchParams = new URL(location.href).searchParams;
 const initial = searchParams.get("repo");
+const initialRef = searchParams.get("ref");
 if (initial) {
   input.value = initial;
-  void run(initial);
+  void run(initial, initialRef);
 } else {
   discovery.hidden = false;
   void loadDiscovery(searchParams.get("owner") ?? DEFAULT_DISCOVERY_OWNER);
@@ -196,15 +197,19 @@ function workAction(action) {
   return "implementation candidate";
 }
 
-async function run(value) {
+async function run(value, ref = null) {
   controller?.abort();
   controller = new AbortController();
   setStatus("Reading public GitHub metadata, structural evidence, and published KPIs…");
   output.hidden = true;
 
   try {
-    const analysis = await analysisJson(value, { signal: controller.signal });
-    history.replaceState(null, "", `?repo=${encodeURIComponent(analysis.repository.fullName)}`);
+    const analysis = await analysisJson(value, { signal: controller.signal, ref });
+    const nextUrl = new URL(location.href);
+    nextUrl.search = "";
+    nextUrl.searchParams.set("repo", analysis.repository.fullName);
+    if (analysis.repository.revision) nextUrl.searchParams.set("ref", analysis.repository.revision);
+    history.replaceState(null, "", nextUrl);
     input.value = analysis.repository.fullName;
     render(analysis);
     setStatus(`Analyzed ${analysis.repository.fullName}.`);
@@ -243,6 +248,7 @@ function render(analysis) {
     download(`${analysis.repository.name}-coding-tooling-preflight.json`, json);
   const machineUrl = new URL("./analysis.json/", location.href);
   machineUrl.searchParams.set("repo", analysis.repository.fullName);
+  if (analysis.repository.revision) machineUrl.searchParams.set("ref", analysis.repository.revision);
   document.querySelector("#analysis-json-link").href = machineUrl.href;
 }
 
