@@ -96,6 +96,8 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
       provider: "github",
       repository: snapshot.repository.fullName,
       defaultBranch: snapshot.repository.defaultBranch,
+      requestedRef: snapshot.repository.requestedRef ?? null,
+      resolvedSha: snapshot.repository.revision ?? null,
       treeTruncated: snapshot.treeTruncated,
       revisionUnavailable: Boolean(snapshot.revisionUnavailable),
       manifestFetchTruncated: snapshot.manifestFetchTruncated,
