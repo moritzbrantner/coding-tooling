@@ -122,7 +122,10 @@ describe("immutable remote snapshot acquisition", () => {
             return jsonResponse(branchMetadata());
           if (url === "https://api.github.com/repos/example/repo/commits/feature")
             return jsonResponse({ sha: pinnedRevision });
-          if (url === `https://api.github.com/repos/example/repo/git/trees/${pinnedRevision}?recursive=1`)
+          if (
+            url ===
+            `https://api.github.com/repos/example/repo/git/trees/${pinnedRevision}?recursive=1`
+          )
             return jsonResponse({ tree: [], truncated: false });
           throw new Error(`Unexpected request: ${url}`);
         },
