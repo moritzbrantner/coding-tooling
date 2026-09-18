@@ -127,9 +127,7 @@ describe("parameterized Pages analysis", () => {
   });
 
   test("accepts a revision ref without changing the default projection", () => {
-    const query = parseAnalysisQuery(
-      new URLSearchParams("repo=example/project&ref=feature"),
-    );
+    const query = parseAnalysisQuery(new URLSearchParams("repo=example/project&ref=feature"));
 
     expect(query.ref).toBe("feature");
     expect(queryIsIdentity(query)).toBe(true);
