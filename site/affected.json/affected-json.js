@@ -7,13 +7,15 @@ const base = parameters.get("base");
 const head = parameters.get("head");
 const tier = parameters.get("tier") ?? "fast";
 const component = parameters.get("component");
-const changedFiles = parameters.getAll("file");
+const changedFiles = [
+  ...new Set([...parameters.getAll("changed-file"), ...parameters.getAll("file")]),
+].toSorted();
 
 try {
   if (!repository) throw new Error("Missing required ?repo=owner/repository query parameter.");
   if (!base && changedFiles.length === 0)
     throw new Error(
-      "Provide ?base=<git-ref> or at least one repeated ?file=<changed-path> parameter.",
+      "Provide ?base=<git-ref> or at least one repeated ?changed-file=<changed-path> parameter.",
     );
 
   const argv = ["affected", "--tier", tier, "--json"];
