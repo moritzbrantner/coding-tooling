@@ -1,3 +1,4 @@
+import { resultEnvelope as envelope } from "./api-envelope.js";
 import { applyExecutionEvidence } from "./execution-evidence.js";
 import { loadSnapshot } from "./github-analysis.js";
 import { analyzeSnapshot, parseRepositoryReference } from "./preflight.js";
@@ -460,10 +461,6 @@ function shellQuote(value) {
 
 function remoteRoot(snapshot) {
   return `github:${snapshot.repository.fullName}@${snapshot.repository.defaultBranch}`;
-}
-
-function envelope(operation, status, data, diagnostics = []) {
-  return { schemaVersion: 1, operation, status, durationMs: 0, data, diagnostics };
 }
 
 function timed(result, started) {
