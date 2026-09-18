@@ -699,6 +699,21 @@ export function scaffoldFinding(root: string, id: string): ExpectationEnvelope {
         diagnostics: [{ code: "finding-not-found", message: `Finding ${id} is not active` }],
       };
     }
+    if (finding.deferralEvidence) {
+      return {
+        schemaVersion: 1,
+        operation: "scaffold",
+        status: "unavailable",
+        durationMs: Date.now() - started,
+        data: { root, id, finding },
+        diagnostics: [
+          {
+            code: "finding-deferred",
+            message: `Finding ${id} is deferred; resume it before scaffolding`,
+          },
+        ],
+      };
+    }
     if (!finding.scaffold) {
       return {
         schemaVersion: 1,
