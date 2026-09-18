@@ -11,14 +11,17 @@ import {
   duplicateValues,
   findingIdPattern,
   loadExpectationConfig,
+  matchingDeferral,
   matchingSuppression,
   semanticFindingId,
   writeExpectationConfig,
   type ExpectationConfig,
+  type ExpectationDeferral,
   type ExpectationEnvelope,
   type ExpectationSuppression,
   type ExpectationVerification,
   type Finding,
+  type FindingDeferralEvidence,
   type FindingState,
   type FindingVerificationEvidence,
   type ReconciliationReport,
@@ -34,12 +37,14 @@ export type {
 } from "./expectation-coverage.ts";
 export type {
   ExpectationConfig,
+  ExpectationDeferral,
   ExpectationEnvelope,
   ExpectationOperation,
   ExpectationRegistryEntry,
   ExpectationSuppression,
   ExpectationVerification,
   Finding,
+  FindingDeferralEvidence,
   FindingDisposition,
   FindingEvidence,
   FindingRelationship,
@@ -242,10 +247,67 @@ function applyVerificationEvidence(
   });
 }
 
+
+type DeferralResolution = {
+  evidenceByFindingId: Map<string, FindingDeferralEvidence>;
+  staleDeferrals: Array<{ index: number; id: string }>;
+  conflictingDeferrals: Array<{ index: number; id: string; reason: string }>;
+  duplicateDeferrals: number[];
+};
+
+function resolveDeferrals(config: ExpectationConfig, findings: Finding[]): DeferralResolution {
+  const evidenceByFindingId = new Map<string, FindingDeferralEvidence>();
+  const staleDeferrals: Array<{ index: number; id: string }> = [];
+  const conflictingDeferrals: Array<{ index: number; id: string; reason: string }> = [];
+  const duplicateDeferrals: number[] = [];
+  const seenIds = new Set<string>();
+
+  for (const [index, deferral] of (config.deferrals ?? []).entries()) {
+    if (seenIds.has(deferral.id)) {
+      duplicateDeferrals.push(index);
+      continue;
+    }
+    seenIds.add(deferral.id);
+
+    const finding = findings.find((candidate) => candidate.id === deferral.id);
+    if (!finding) {
+      staleDeferrals.push({ index, id: deferral.id });
+      continue;
+    }
+    if (finding.disposition !== "active") {
+      conflictingDeferrals.push({
+        index,
+        id: deferral.id,
+        reason: `finding is ${finding.disposition}; only active findings can be deferred`,
+      });
+      continue;
+    }
+    evidenceByFindingId.set(finding.id, {
+      version: deferral.version,
+      reason: deferral.reason,
+    });
+  }
+
+  return {
+    evidenceByFindingId,
+    staleDeferrals,
+    conflictingDeferrals,
+    duplicateDeferrals,
+  };
+}
+
+function applyDeferralEvidence(findings: Finding[], resolution: DeferralResolution): Finding[] {
+  return findings.map((finding) => {
+    const deferralEvidence = resolution.evidenceByFindingId.get(finding.id);
+    return deferralEvidence ? { ...finding, deferralEvidence } : finding;
+  });
+}
+
 function reconcile(
   config: ExpectationConfig,
   allFindings: Finding[],
   verificationResolution: VerificationResolution,
+  deferralResolution: DeferralResolution,
 ): ReconciliationReport {
   const allIds = new Set(allFindings.map((finding) => finding.id));
   const knownExpectations = new Set(expectationDescriptors.map((descriptor) => descriptor.id));
@@ -278,10 +340,13 @@ function reconcile(
     staleSuppressions,
     staleVerifications: verificationResolution.staleVerifications,
     invalidVerifications: verificationResolution.invalidVerifications,
+    staleDeferrals: deferralResolution.staleDeferrals,
+    conflictingDeferrals: deferralResolution.conflictingDeferrals,
     unknownExpectations: [...unknownExpectations].sort(),
     duplicateBaseline: duplicateValues(config.baseline ?? []),
     duplicateSuppressions,
     duplicateVerifications: verificationResolution.duplicateVerifications,
+    duplicateDeferrals: deferralResolution.duplicateDeferrals,
     duplicateInvariants: duplicateValues(
       (config.invariants ?? []).map((invariant) => invariant.id),
     ),
@@ -310,8 +375,15 @@ export function analyzeExpectations(
         left.id.localeCompare(right.id),
     );
   const verificationResolution = resolveVerifications(config, materialized, context);
-  const allFindings = applyVerificationEvidence(materialized, verificationResolution);
-  const reconciliation = reconcile(config, allFindings, verificationResolution);
+  const verifiedFindings = applyVerificationEvidence(materialized, verificationResolution);
+  const deferralResolution = resolveDeferrals(config, verifiedFindings);
+  const allFindings = applyDeferralEvidence(verifiedFindings, deferralResolution);
+  const reconciliation = reconcile(
+    config,
+    allFindings,
+    verificationResolution,
+    deferralResolution,
+  );
   const coverage = analyzeFindingsCoverage(root, context, expectationDescriptors);
   const visible = options.includeSuppressed
     ? allFindings
@@ -325,6 +397,9 @@ function findingCounts(findings: Finding[]): Record<string, number> {
     active: findings.filter((finding) => finding.disposition === "active").length,
     suppressed: findings.filter((finding) => finding.disposition === "suppressed").length,
     verified: findings.filter((finding) => finding.disposition === "verified").length,
+    deferred: findings.filter(
+      (finding) => finding.disposition === "active" && finding.deferralEvidence !== undefined,
+    ).length,
     new: findings.filter((finding) => finding.state === "new").length,
     baseline: findings.filter((finding) => finding.state === "baseline").length,
     info: findings.filter((finding) => finding.severity === "info").length,
@@ -422,6 +497,134 @@ export function findingCommand(root: string, id: string): ExpectationEnvelope {
       diagnostics: [
         {
           code: "finding-lookup-failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  }
+}
+
+export function deferFinding(root: string, id: string, reason: string): ExpectationEnvelope {
+  const started = Date.now();
+  if (!findingIdPattern.test(id) || !reason.trim()) {
+    return {
+      schemaVersion: 1,
+      operation: "defer",
+      status: "unavailable",
+      durationMs: Date.now() - started,
+      data: { root, id },
+      diagnostics: [
+        {
+          code: !findingIdPattern.test(id) ? "invalid-finding-id" : "deferral-reason-required",
+          message: !findingIdPattern.test(id)
+            ? `Invalid finding ID: ${id}`
+            : "A non-empty deferral reason is required",
+        },
+      ],
+    };
+  }
+  try {
+    const analysis = analyzeExpectations(root, { includeSuppressed: true });
+    const finding = analysis.findings.find((item) => item.id === id);
+    if (!finding || finding.disposition !== "active") {
+      return {
+        schemaVersion: 1,
+        operation: "defer",
+        status: "unavailable",
+        durationMs: Date.now() - started,
+        data: { root, id, finding },
+        diagnostics: [
+          {
+            code: "finding-not-active",
+            message: `Finding ${id} must be active before it can be deferred`,
+          },
+        ],
+      };
+    }
+
+    const deferral: ExpectationDeferral = { id, version: 1, reason: reason.trim() };
+    const existing = analysis.config.deferrals ?? [];
+    const deferrals = existing.some((item) => item.id === id)
+      ? existing.map((item) => (item.id === id ? deferral : item))
+      : [...existing, deferral];
+    writeExpectationConfig(root, { ...analysis.config, deferrals });
+
+    const updated = findingCommand(root, id);
+    return {
+      schemaVersion: 1,
+      operation: "defer",
+      status: "passed",
+      durationMs: Date.now() - started,
+      data: {
+        root,
+        id,
+        result: "deferred",
+        finding: updated.data.finding,
+      },
+      diagnostics: [],
+    };
+  } catch (error) {
+    return {
+      schemaVersion: 1,
+      operation: "defer",
+      status: "error",
+      durationMs: Date.now() - started,
+      data: { root, id },
+      diagnostics: [
+        {
+          code: "deferral-failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  }
+}
+
+export function resumeFinding(root: string, id: string): ExpectationEnvelope {
+  const started = Date.now();
+  if (!findingIdPattern.test(id)) {
+    return {
+      schemaVersion: 1,
+      operation: "resume",
+      status: "unavailable",
+      durationMs: Date.now() - started,
+      data: { root, id },
+      diagnostics: [{ code: "invalid-finding-id", message: `Invalid finding ID: ${id}` }],
+    };
+  }
+  try {
+    const config = loadExpectationConfig(root);
+    const before = config.deferrals ?? [];
+    const deferrals = before.filter((item) => item.id !== id);
+    if (deferrals.length === before.length) {
+      return {
+        schemaVersion: 1,
+        operation: "resume",
+        status: "passed",
+        durationMs: Date.now() - started,
+        data: { root, id, result: "not-deferred" },
+        diagnostics: [],
+      };
+    }
+    writeExpectationConfig(root, { ...config, deferrals });
+    return {
+      schemaVersion: 1,
+      operation: "resume",
+      status: "passed",
+      durationMs: Date.now() - started,
+      data: { root, id, result: "active" },
+      diagnostics: [],
+    };
+  } catch (error) {
+    return {
+      schemaVersion: 1,
+      operation: "resume",
+      status: "error",
+      durationMs: Date.now() - started,
+      data: { root, id },
+      diagnostics: [
+        {
+          code: "resume-failed",
           message: error instanceof Error ? error.message : String(error),
         },
       ],
