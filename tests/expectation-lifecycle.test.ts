@@ -383,6 +383,32 @@ describe("expectation lifecycle", () => {
     ).toBeUndefined();
   });
 
+  test("updates a deferral in place while removing duplicate records", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          deferrals: [
+            { id: finding.id, version: 1, reason: "original rationale" },
+            { id: "CT-111111111111", version: 1, reason: "unrelated stale decision" },
+            { id: finding.id, version: 1, reason: "duplicate rationale" },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(deferFinding(root, finding.id, "updated rationale").status).toBe("passed");
+    expect(analyzeExpectations(root).config.deferrals).toEqual([
+      { id: finding.id, version: 1, reason: "updated rationale" },
+      { id: "CT-111111111111", version: 1, reason: "unrelated stale decision" },
+    ]);
+  });
+
   test("reconciles stale, duplicate, and conflicting deferrals", () => {
     const root = fixture("bun test");
     const finding = sourceTestFinding(root);
