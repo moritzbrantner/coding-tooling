@@ -91,7 +91,6 @@ function findingsFrom(envelope: ExpectationEnvelope): Finding[] {
   return Array.isArray(envelope.data.findings) ? (envelope.data.findings as Finding[]) : [];
 }
 
-
 type ExpectationReconciliationIssue = {
   category: string;
   count: number;
@@ -101,7 +100,11 @@ function expectationReconciliationIssues(
   envelope: ExpectationEnvelope,
 ): ExpectationReconciliationIssue[] {
   const reconciliation = envelope.data.reconciliation;
-  if (typeof reconciliation !== "object" || reconciliation === null || Array.isArray(reconciliation)) {
+  if (
+    typeof reconciliation !== "object" ||
+    reconciliation === null ||
+    Array.isArray(reconciliation)
+  ) {
     return [];
   }
   return Object.entries(reconciliation as Record<string, unknown>)
