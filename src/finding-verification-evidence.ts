@@ -61,7 +61,7 @@ export function sourceWorktreeState(
     .filter(
       (line) =>
         !line.startsWith("?? .artifacts/coding-tooling/finding-verification/") &&
-        !line.startsWith("?? \".artifacts/coding-tooling/finding-verification/"),
+        !line.startsWith('?? ".artifacts/coding-tooling/finding-verification/'),
     )
     .sort();
 }
