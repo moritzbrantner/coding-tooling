@@ -222,7 +222,7 @@ function normalizeRequestedRef(value) {
   return ref || null;
 }
 
-async function resolveRequestedRevision(reference, ref, fetchImpl, signal) {
+export async function resolveRequestedRevision(reference, ref, fetchImpl, signal) {
   const commit = await githubJson(
     `/repos/${reference.owner}/${reference.name}/commits/${encodeURIComponent(ref)}`,
     fetchImpl,
