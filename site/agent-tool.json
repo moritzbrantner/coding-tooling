@@ -99,7 +99,7 @@
       "id": "affected-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/affected.json/?repo={owner}/{repository}&base={baseRef}&head={headRef}&tier=fast",
-      "description": "Browser-executed change-aware affected-component analysis with governing contracts, advisory component test evidence, candidate tests, declared merge authority, and a component-scoped validation plan. Repeated file parameters can supply changed paths directly instead of using GitHub compare.",
+      "description": "Browser-executed change-aware affected-component analysis with governing contracts, advisory component test evidence, candidate tests, declared merge authority, and a component-scoped validation plan. Repeated changed-file parameters can supply changed paths directly instead of using GitHub compare; file remains a compatibility alias.",
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
@@ -292,7 +292,7 @@
       "id": "analysis-agent-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}&view=agent&envelope=1",
-      "description": "Compact agent-first projection of existing remote-preflight evidence. Optional repeated focus/scope plus severity/limit/finding and change-aware base/head/changed-file parameters deterministically narrow the view without adding another evidence oracle.",
+      "description": "Compact agent-first projection of existing remote-preflight evidence. Optional repeated focus/component plus severity/limit/finding and change-aware base/head/changed-file parameters deterministically narrow the view without adding another evidence oracle. The legacy scope parameter remains an accepted alias for component.",
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
