@@ -11,7 +11,6 @@ import {
   duplicateValues,
   findingIdPattern,
   loadExpectationConfig,
-  matchingDeferral,
   matchingSuppression,
   semanticFindingId,
   writeExpectationConfig,
