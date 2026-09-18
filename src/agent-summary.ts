@@ -162,7 +162,6 @@ function worktreeState(root: string, runner: Runner): string | undefined {
   return gitValue(root, runner, ["status", "--porcelain"]);
 }
 
-
 function reconciliationIssueCount(value: unknown): number {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return 0;
   return Object.values(value as Record<string, unknown>).reduce<number>(
@@ -270,12 +269,14 @@ export function agentSummaryCommand(
   const hasError =
     activeNew.some((finding) => finding.severity === "error") ||
     candidates.some((candidate) => candidate.severities.includes("error"));
+  const hasOutstandingWork =
+    activeNew.length > 0 ||
+    activeBaseline.length > 0 ||
+    candidates.length > 0 ||
+    expectationReconciliationIssues > 0;
   const decision: AgentSummaryDecision = hasError
     ? "blocked"
-    : activeNew.length > 0 ||
-        activeBaseline.length > 0 ||
-        candidates.length > 0 ||
-        expectationReconciliationIssues > 0
+    : hasOutstandingWork
       ? "partial"
       : "clean";
   const status: ResultStatus = decision === "blocked" ? "failed" : "passed";
