@@ -537,22 +537,43 @@ export function deferFinding(root: string, id: string, reason: string): Expectat
 
     const deferral: ExpectationDeferral = { id, version: 1, reason: reason.trim() };
     const existing = analysis.config.deferrals ?? [];
-    const deferrals = [...existing.filter((item) => item.id !== id), deferral];
+    let replaced = false;
+    const deferrals = existing.flatMap((item) => {
+      if (item.id !== id) return [item];
+      if (replaced) return [];
+      replaced = true;
+      return [deferral];
+    });
+    if (!replaced) deferrals.push(deferral);
     writeExpectationConfig(root, { ...analysis.config, deferrals });
 
     const updated = findingCommand(root, id);
+    const updatedFinding = updated.data.finding as Finding | undefined;
+    const applied =
+      updated.status === "passed" &&
+      updatedFinding?.disposition === "active" &&
+      updatedFinding.deferralEvidence?.version === 1 &&
+      updatedFinding.deferralEvidence.reason === deferral.reason;
     return {
       schemaVersion: 1,
       operation: "defer",
-      status: "passed",
+      status: applied ? "passed" : "failed",
       durationMs: Date.now() - started,
       data: {
         root,
         id,
-        result: "deferred",
-        finding: updated.data.finding,
+        result: applied ? "deferred" : "not-applied",
+        finding: updatedFinding,
       },
-      diagnostics: [],
+      diagnostics: applied
+        ? []
+        : [
+            ...updated.diagnostics,
+            {
+              code: "deferral-incomplete",
+              message: `Finding ${id} did not retain the requested active deferral`,
+            },
+          ],
     };
   } catch (error) {
     return {
