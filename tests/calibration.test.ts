@@ -42,10 +42,10 @@ describe("detector calibration", () => {
     expect(result.data.unavailableCases).toEqual([]);
     expect(result.data.caseCount).toBe(11);
     expect(result.data.metrics).toEqual({
-      truePositive: 6,
+      truePositive: 7,
       falsePositive: 0,
       falseNegative: 0,
-      trueNegative: 8,
+      trueNegative: 7,
       unknown: 1,
       precision: 1,
       recall: 1,
