@@ -225,6 +225,15 @@ function resolveVerifications(
       });
       continue;
     }
+    if (finding.suppressionEvidence) {
+      invalidVerifications.push({
+        index,
+        id: verification.id,
+        reason:
+          "finding also matches suppression policy; remove suppression before declaring verification",
+      });
+      continue;
+    }
     const invalid = validateVerificationCommand(verification, finding, context);
     if (invalid) {
       invalidVerifications.push({ index, id: verification.id, reason: invalid });
