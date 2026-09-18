@@ -402,6 +402,12 @@ function findingCounts(findings: Finding[]): Record<string, number> {
     active: findings.filter((finding) => finding.disposition === "active").length,
     suppressed: findings.filter((finding) => finding.disposition === "suppressed").length,
     verified: findings.filter((finding) => finding.disposition === "verified").length,
+    suppressionPolicyMatches: findings.filter(
+      (finding) =>
+        finding.disposition === "active" &&
+        finding.suppressionEvidence?.applied === false &&
+        finding.suppressionEvidence.scope !== "finding",
+    ).length,
     deferred: findings.filter(
       (finding) => finding.disposition === "active" && finding.deferralEvidence !== undefined,
     ).length,
