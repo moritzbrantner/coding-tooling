@@ -76,7 +76,7 @@ describe("parameterized Pages analysis", () => {
     expect(operation?.hrefTemplate).toContain(
       "analysis.json/?repo={owner}/{repository}&view=agent",
     );
-    expect(operation?.description).toContain("focus/scope");
+    expect(operation?.description).toContain("focus/component");
     expect(operation?.parameters).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "repo", required: true }),
@@ -322,6 +322,6 @@ describe("parameterized Pages analysis", () => {
     });
     expect(result.drillDown.affectedAnalysis).toContain("affected.json/");
     expect(result.drillDown.affectedAnalysis).toContain("changed-file=src%2Fapp.ts");
-    expect(result.drillDown.affectedAnalysis).not.toContain("file=src%2Fapp.ts");
+    expect(result.drillDown.affectedAnalysis).not.toContain("&file=");\n    expect(result.drillDown.affectedAnalysis).not.toContain("?file=");
   });
 });
