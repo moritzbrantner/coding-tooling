@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { findingCommand } from "../src/expectations.ts";
 import { verifyFinding } from "../src/finding-verification.ts";
-import { sourceRevision } from "../src/finding-verification-evidence.ts";
+import { sourceRevision } from "../src/source-context.ts";
 import { analyzeExpectations } from "../src/expectations.ts";
 import { runCommand } from "../src/shared.ts";
 
