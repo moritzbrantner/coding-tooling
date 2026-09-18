@@ -194,10 +194,7 @@
         {
           "name": "view",
           "type": "string",
-          "enum": [
-            "full",
-            "agent"
-          ],
+          "enum": ["full", "agent"],
           "required": false,
           "repeatable": false,
           "default": "full"
@@ -228,11 +225,7 @@
         {
           "name": "min-severity",
           "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high"
-          ],
+          "enum": ["low", "medium", "high"],
           "required": false,
           "repeatable": false,
           "default": "low"
@@ -304,10 +297,7 @@
         {
           "name": "view",
           "type": "string",
-          "enum": [
-            "full",
-            "agent"
-          ],
+          "enum": ["full", "agent"],
           "required": false,
           "repeatable": false,
           "default": "agent"
@@ -338,11 +328,7 @@
         {
           "name": "min-severity",
           "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high"
-          ],
+          "enum": ["low", "medium", "high"],
           "required": false,
           "repeatable": false,
           "default": "low"
