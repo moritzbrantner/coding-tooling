@@ -69,7 +69,9 @@ describe("artifact reuse economics", () => {
     const result = artifactReuseEconomics(root, { expectedHeadSha: SHA });
     expect(result.status).toBe("passed");
     expect(result.data.classification).toBe("not-cost-effective");
-    expect(result.diagnostics.some((item) => item.code === "artifact-reuse-not-recommended")).toBe(true);
+    expect(
+      result.diagnostics.some((item) => item.code === "artifact-reuse-not-recommended"),
+    ).toBe(true);
   });
 
   test("rejects stale exact-head evidence", () => {
@@ -84,10 +86,14 @@ describe("artifact reuse economics", () => {
         producerOverheadMs: 2,
         recommended: true,
         reason: "build-cost-dominates-reuse-overhead",
-      }, "b".repeat(40)),
+      },
+        "b".repeat(40),
+      ),
     );
     const result = artifactReuseEconomics(root, { expectedHeadSha: SHA });
     expect(result.status).toBe("unavailable");
-    expect(result.diagnostics.some((item) => item.code === "artifact-reuse-evidence-stale")).toBe(true);
+    expect(
+      result.diagnostics.some((item) => item.code === "artifact-reuse-evidence-stale"),
+    ).toBe(true);
   });
 });
