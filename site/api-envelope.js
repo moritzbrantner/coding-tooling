@@ -70,9 +70,10 @@ export function coverageApiEnvelope(coverage, durationMs = 0) {
 
 export function discoveryApiEnvelope(discovery, durationMs = 0) {
   const state = discovery?.summary?.status ?? "unknown";
+  const complete = !discovery?.source?.truncated;
   return apiEnvelope("repository-discovery", discovery, {
-    status: "passed",
-    complete: !discovery?.source?.truncated,
+    status: complete ? "passed" : "unavailable",
+    complete,
     evidenceState: state,
     durationMs,
   });
