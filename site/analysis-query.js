@@ -119,7 +119,7 @@ export function projectAnalysis(analysis, query, changeContext = null) {
         ? "incomplete"
         : findings.some((finding) => finding.severity === "high")
           ? "needs-attention"
-          : "clear",
+          : "no-matching-findings",
     selectedFindingCount: findings.length,
     matchingFindingCount: matchingFindings.length,
     selectedComponentCount: scopedComponents.length,
