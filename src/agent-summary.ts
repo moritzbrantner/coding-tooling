@@ -41,6 +41,7 @@ export type AgentNextAction = {
   findingIds: string[];
   deterministicCommands: string[][];
   verification: string[][];
+  verificationDeclarations: RemediationCandidate["verificationDeclarations"];
   deferrals: Array<{ findingId: string; reason: string }>;
   fullyDeferred: boolean;
   suggestedBranch: string;
@@ -142,6 +143,7 @@ function compactCandidate(candidate: RemediationCandidate): AgentNextAction {
     findingIds: candidate.findingIds,
     deterministicCommands: candidate.scaffolds.map((scaffold) => scaffold.command),
     verification: candidate.verification,
+    verificationDeclarations: candidate.verificationDeclarations,
     deferrals: candidate.deferrals,
     fullyDeferred: candidate.fullyDeferred,
     suggestedBranch: candidate.suggestedBranch,
