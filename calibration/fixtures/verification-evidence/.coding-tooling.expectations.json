@@ -7,7 +7,7 @@
       "expectation": "typescript-source-test",
       "subject": "src/token-metadata.ts",
       "command": ["bun", "run", "verify:tokens"],
-      "reason": "Calibration fixture models explicit repository-owned verification evidence."
+      "reason": "Calibration fixture models a declared repository-owned verifier, not execution evidence."
     }
   ]
 }
