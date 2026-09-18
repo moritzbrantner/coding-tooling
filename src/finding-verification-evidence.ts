@@ -40,13 +40,7 @@ function commandsEqual(left: readonly string[], right: readonly string[]): boole
 }
 
 export function findingVerificationReceiptPath(root: string, findingId: string): string {
-  return join(
-    root,
-    ".artifacts",
-    "coding-tooling",
-    "finding-verification",
-    `${findingId}.json`,
-  );
+  return join(root, ".artifacts", "coding-tooling", "finding-verification", `${findingId}.json`);
 }
 
 export function exactHead(root: string, runner: Runner = runCommand): string | undefined {
