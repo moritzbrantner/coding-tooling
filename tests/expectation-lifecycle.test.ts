@@ -206,6 +206,43 @@ describe("expectation lifecycle", () => {
     ).toMatchObject({ state: "baseline", disposition: "suppressed" });
   });
 
+  test("prefers a subject policy over an expectation-wide policy regardless of config order", () => {
+    const root = fixture("bun test");
+    const finding = sourceTestFinding(root);
+    writeFileSync(
+      join(root, ".coding-tooling.expectations.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          suppressions: [
+            {
+              expectation: "typescript-source-test",
+              reason: "broad expectation policy",
+            },
+            {
+              expectation: "typescript-source-test",
+              subject: "src/service.ts",
+              reason: "specific subject policy",
+            },
+          ],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(analyzeExpectations(root).findings.find((item) => item.id === finding.id)).toMatchObject({
+      disposition: "active",
+      suppressionEvidence: {
+        scope: "subject",
+        reason: "specific subject policy",
+        applied: false,
+        expectation: "typescript-source-test",
+        subject: "src/service.ts",
+      },
+    });
+  });
+
   test("prefers an exact suppression over a broad policy match regardless of config order", () => {
     const root = fixture("bun test");
     const finding = sourceTestFinding(root);
