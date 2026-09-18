@@ -355,7 +355,11 @@ describe("expectation lifecycle", () => {
     const root = fixture("bun test");
     const finding = sourceTestFinding(root);
 
-    const deferred = deferFinding(root, finding.id, "covered by a broader composition test for now");
+    const deferred = deferFinding(
+      root,
+      finding.id,
+      "covered by a broader composition test for now",
+    );
 
     expect(deferred.status).toBe("passed");
     const active = analyzeExpectations(root).findings.find((item) => item.id === finding.id);
@@ -422,9 +426,9 @@ describe("expectation lifecycle", () => {
       'import { service } from "../src/service.ts";\nvoid service;\n',
     );
 
-    expect(analyzeExpectations(root, { includeSuppressed: true }).reconciliation.staleDeferrals).toEqual([
-      { index: 0, id: finding.id },
-    ]);
+    expect(
+      analyzeExpectations(root, { includeSuppressed: true }).reconciliation.staleDeferrals,
+    ).toEqual([{ index: 0, id: finding.id }]);
   });
 
   test("returns an explicit absent state for a valid inactive finding id", () => {
