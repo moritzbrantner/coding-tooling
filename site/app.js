@@ -248,7 +248,8 @@ function render(analysis) {
     download(`${analysis.repository.name}-coding-tooling-preflight.json`, json);
   const machineUrl = new URL("./analysis.json/", location.href);
   machineUrl.searchParams.set("repo", analysis.repository.fullName);
-  if (analysis.repository.revision)\n    machineUrl.searchParams.set("ref", analysis.repository.revision);
+  if (analysis.repository.revision)
+    machineUrl.searchParams.set("ref", analysis.repository.revision);
   document.querySelector("#analysis-json-link").href = machineUrl.href;
 }
 
