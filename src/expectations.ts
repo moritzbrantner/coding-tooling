@@ -671,8 +671,17 @@ export function resumeFinding(root: string, id: string): ExpectationEnvelope {
 export function baselineFindings(root: string): ExpectationEnvelope {
   const started = Date.now();
   try {
-    const analysis = analyzeExpectations(root);
-    const baseline = analysis.findings.map((finding) => finding.id).sort();
+    const analysis = analyzeExpectations(root, { includeSuppressed: true });
+    const baseline = analysis.findings
+      .filter(
+        (finding) =>
+          finding.disposition === "active" ||
+          (finding.disposition === "suppressed" &&
+            finding.suppressionEvidence?.applied === true &&
+            finding.suppressionEvidence.scope !== "finding"),
+      )
+      .map((finding) => finding.id)
+      .sort();
     writeExpectationConfig(root, { ...analysis.config, baseline });
     return {
       schemaVersion: 1,
