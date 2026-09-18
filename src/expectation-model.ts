@@ -57,11 +57,19 @@ export type FindingScaffold = {
   content: string;
 };
 
+export type FindingVerificationDeclaration = {
+  id: string;
+  version: 1;
+  command: string[];
+  reason: string;
+};
+
 export type FindingVerificationEvidence = {
   id: string;
   version: 1;
   command: string[];
   reason: string;
+  candidateSha: string;
 };
 
 export type FindingDeferralEvidence = {
@@ -79,6 +87,7 @@ export type Finding = {
   state: FindingState;
   disposition: FindingDisposition;
   suppressionReason?: string;
+  verificationDeclaration?: FindingVerificationDeclaration;
   verificationEvidence?: FindingVerificationEvidence;
   deferralEvidence?: FindingDeferralEvidence;
   subject: FindingSubject;
