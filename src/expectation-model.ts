@@ -155,7 +155,13 @@ export type ReconciliationReport = {
   duplicateInvariants: string[];
 };
 
-export type ExpectationOperation = "findings" | "finding" | "baseline" | "scaffold";
+export type ExpectationOperation =
+  | "findings"
+  | "finding"
+  | "defer"
+  | "resume"
+  | "baseline"
+  | "scaffold";
 
 export type ExpectationEnvelope = {
   schemaVersion: 1;
