@@ -5,7 +5,7 @@ import type { ExpectationEnvelope } from "./expectation-model.ts";
 import { findingIdPattern } from "./expectation-model.ts";
 import { analyzeExpectations, findingCommand } from "./expectations.ts";
 import {
-  exactHead,
+  sourceRevision,
   sourceWorktreeState,
   writeFindingVerificationReceipt,
   type FindingVerificationReceipt,
@@ -48,13 +48,14 @@ export function verifyFinding(
   }
 
   const runner = dependencies.run ?? runCommand;
-  const candidateSha = exactHead(root, runner);
+  const candidateSha = sourceRevision(root, runner);
   const initialWorktree = sourceWorktreeState(root, runner);
   if (!candidateSha || initialWorktree === undefined) {
     return envelope("unavailable", started, { root, id }, [
       {
         code: "verification-source-unavailable",
-        message: "An exact Git HEAD and observable worktree are required for finding verification",
+        message:
+          "A caller-provided source revision (or local Git HEAD fallback) and observable worktree are required for finding verification",
       },
     ]);
   }
@@ -98,7 +99,7 @@ export function verifyFinding(
       : null;
   const execution = runner(declaration.command[0]!, declaration.command.slice(1), cwd);
 
-  const endingSha = exactHead(root, runner);
+  const endingSha = sourceRevision(root, runner);
   const endingWorktree = sourceWorktreeState(root, runner);
   let outcome: FindingVerificationReceiptOutcome = execution.error
     ? "error"
@@ -131,7 +132,7 @@ export function verifyFinding(
       {
         code: "verification-source-mutated",
         message:
-          "The declared verifier changed repository source state or HEAD; its result cannot verify the finding",
+          "The declared verifier changed repository source state or revision context; its result cannot verify the finding",
       },
     ]);
   }
