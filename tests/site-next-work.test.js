@@ -210,9 +210,10 @@ describe("GitHub Pages next-work discovery", () => {
 
     expect(operation?.transport).toBe("browser-json-view");
     expect(operation?.hrefTemplate).toBe(
-      "https://moritzbrantner.github.io/coding-tooling/next-work.json/?repo={owner}/{repository}",
+      "https://moritzbrantner.github.io/coding-tooling/next-work.json/?repo={owner}/{repository}&envelope=1",
     );
     expect(operation?.description).toContain("fail-closed observed CI evidence");
+    expect(operation?.response?.envelope).toBe("coding-tooling/result-envelope/v1");
     expect(
       manifest.limitations.some((limitation) =>
         limitation.includes("Missing, truncated, pending, unavailable"),
