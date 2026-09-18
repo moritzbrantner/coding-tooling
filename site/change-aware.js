@@ -1,3 +1,4 @@
+import { resultEnvelope as envelope } from "./api-envelope.js";
 import { structuralTestOutcome } from "./evidence-model.js";
 import { analyzeSnapshot, parseRepositoryReference, selectedRemoteFiles } from "./preflight.js";
 
@@ -999,10 +1000,6 @@ function dirname(path) {
 
 function remoteRoot(snapshot, head) {
   return `github:${snapshot.repository.fullName}@${head}`;
-}
-
-function envelope(operation, status, data, diagnostics = []) {
-  return { schemaVersion: 1, operation, status, durationMs: 0, data, diagnostics };
 }
 
 function invalidEnvelope(operation, snapshot, message) {

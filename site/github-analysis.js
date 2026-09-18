@@ -1,4 +1,5 @@
 import { analysisKpisJson } from "./analysis-kpis.js";
+import { resolveRequestedRevision } from "./github-revision.js";
 import { applyExecutionEvidence } from "./execution-evidence.js";
 import { applyHostedMergePolicy } from "./hosted-merge-policy.js";
 import {
@@ -61,7 +62,9 @@ export async function loadSnapshot(reference, options = {}) {
   const requestedRef = normalizeRequestedRef(options.ref);
   const defaultRevision = defaultBranchRevision(defaultBranch);
   const resolvedRevision = requestedRef
-    ? await resolveRequestedRevision(reference, requestedRef, fetchImpl, signal)
+    ? await resolveRequestedRevision(reference, requestedRef, (path) =>
+        githubJson(path, fetchImpl, signal),
+      )
     : defaultRevision;
   const treeRef = resolvedRevision ?? repository.default_branch;
   const tree = await githubJson(
@@ -220,18 +223,6 @@ function declaredMergeAuthorityFromSnapshot(snapshot) {
 function normalizeRequestedRef(value) {
   const ref = String(value ?? "").trim();
   return ref || null;
-}
-
-async function resolveRequestedRevision(reference, ref, fetchImpl, signal) {
-  const commit = await githubJson(
-    `/repos/${reference.owner}/${reference.name}/commits/${encodeURIComponent(ref)}`,
-    fetchImpl,
-    signal,
-  );
-  const sha = commit?.sha;
-  if (!/^[0-9a-f]{40}$/i.test(sha ?? ""))
-    throw new Error(`GitHub did not resolve ref to an exact commit SHA: ${ref}`);
-  return sha;
 }
 
 function defaultBranchRevision(observation) {

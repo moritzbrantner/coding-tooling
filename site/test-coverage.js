@@ -1,3 +1,4 @@
+import { resolveRequestedRevision } from "./github-revision.js";
 import { parseRepositoryReference } from "./preflight.js";
 
 const publishedCoverage = {
@@ -28,7 +29,9 @@ export async function testCoverageJson(value, options = {}) {
   );
   const requestedRef = String(options.ref ?? "").trim() || null;
   const resolvedSha = requestedRef
-    ? await resolveCoverageRevision(reference, requestedRef, fetchImpl, signal)
+    ? await resolveRequestedRevision(reference, requestedRef, (path) =>
+        githubJson(path, fetchImpl, signal),
+      )
     : null;
 
   const published = await readPublishedCoverage(reference, repository, fetchImpl, signal);
@@ -158,18 +161,6 @@ export async function testCoverageJson(value, options = {}) {
     publication: null,
     treeTruncated: Boolean(tree.truncated),
   });
-}
-
-async function resolveCoverageRevision(reference, ref, fetchImpl, signal) {
-  const commit = await githubJson(
-    `/repos/${reference.owner}/${reference.name}/commits/${encodeURIComponent(ref)}`,
-    fetchImpl,
-    signal,
-  );
-  const sha = commit?.sha;
-  if (!/^[0-9a-f]{40}$/i.test(sha ?? ""))
-    throw new Error(`GitHub did not resolve ref to an exact commit SHA: ${ref}`);
-  return sha;
 }
 
 async function readPublishedCoverage(reference, repository, fetchImpl, signal) {

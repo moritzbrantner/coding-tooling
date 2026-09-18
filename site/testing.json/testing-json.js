@@ -1,19 +1,29 @@
+import { apiErrorEnvelope, envelopeRequested, testingApiEnvelope } from "../api-envelope.js";
 import { testingJson } from "../testing.js";
 
+const started = Date.now();
 const target = document.querySelector("#testing");
 const parameters = new URL(location.href).searchParams;
 const repository = parameters.get("repo");
 const ref = parameters.get("ref");
+const useEnvelope = envelopeRequested(parameters);
 
 try {
   if (!repository) throw new Error("Missing required ?repo=owner/repository query parameter.");
   const plan = await testingJson(repository, { ref });
-  target.textContent = `${JSON.stringify(plan, null, 2)}\n`;
+  const result = useEnvelope ? testingApiEnvelope(plan, Date.now() - started) : plan;
+  target.textContent = `${JSON.stringify(result, null, 2)}\n`;
   document.title = `${plan.repository.fullName} · testing.json`;
 } catch (error) {
-  target.textContent = `${JSON.stringify(
-    { status: "error", error: error instanceof Error ? error.message : String(error) },
-    null,
-    2,
-  )}\n`;
+  const message = error instanceof Error ? error.message : String(error);
+  const result = useEnvelope
+    ? apiErrorEnvelope(
+        "remote-testing-scaffold-plan",
+        "invalid-testing-url",
+        message,
+        { repository, ref },
+        Date.now() - started,
+      )
+    : { status: "error", error: message };
+  target.textContent = `${JSON.stringify(result, null, 2)}\n`;
 }

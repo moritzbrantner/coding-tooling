@@ -25,7 +25,8 @@
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
-        "schemaVersion": 1
+        "schemaVersion": 1,
+        "envelope": "coding-tooling/result-envelope/v1"
       },
       "parameters": [
         {
@@ -57,12 +58,13 @@
     {
       "id": "repository-discovery",
       "transport": "browser-json-view",
-      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/discovery.json/?owner={owner}",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/discovery.json/?owner={owner}&envelope=1",
       "description": "Browser-executed token-free discovery of bounded public GitHub repository metadata with a deterministic suggested repository candidate.",
       "authority": "remote-metadata",
       "completeness": "may-be-incomplete",
       "response": {
-        "schemaVersion": 1
+        "schemaVersion": 1,
+        "envelope": "coding-tooling/result-envelope/v1"
       },
       "parameters": [
         {
@@ -76,12 +78,13 @@
     {
       "id": "next-work-discovery",
       "transport": "browser-json-view",
-      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/next-work.json/?repo={owner}/{repository}",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/next-work.json/?repo={owner}/{repository}&envelope=1",
       "description": "Browser-executed token-free ranking of bounded open pull requests and issues, with fail-closed observed CI evidence for the highest-ranked pull-request candidates.",
       "authority": "remote-metadata",
       "completeness": "may-be-incomplete",
       "response": {
-        "schemaVersion": 1
+        "schemaVersion": 1,
+        "envelope": "coding-tooling/result-envelope/v1"
       },
       "parameters": [
         {
@@ -96,11 +99,12 @@
       "id": "affected-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/affected.json/?repo={owner}/{repository}&base={baseRef}&head={headRef}&tier=fast",
-      "description": "Browser-executed change-aware affected-component analysis with governing contracts, advisory component test evidence, candidate tests, declared merge authority, and a component-scoped validation plan. Repeated file parameters can supply changed paths directly instead of using GitHub compare.",
+      "description": "Browser-executed change-aware affected-component analysis with governing contracts, advisory component test evidence, candidate tests, declared merge authority, and a component-scoped validation plan. Repeated changed-file parameters can supply changed paths directly instead of using GitHub compare; file remains a compatibility alias.",
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
-        "schemaVersion": 1
+        "schemaVersion": 1,
+        "envelope": "coding-tooling/result-envelope/v1"
       },
       "parameters": [
         {
@@ -125,7 +129,8 @@
           "name": "changed-file",
           "type": "string",
           "required": false,
-          "repeatable": true
+          "repeatable": true,
+          "aliases": ["file"]
         },
         {
           "name": "component",
@@ -170,13 +175,14 @@
     {
       "id": "analysis-json",
       "transport": "browser-json-view",
-      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}&envelope=1",
       "description": "Browser-executed schema-v1 remote-preflight JSON for coding agents.",
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
         "schemaVersion": 1,
-        "operation": "remote-preflight"
+        "operation": "remote-preflight",
+        "envelope": "coding-tooling/result-envelope/v1"
       },
       "parameters": [
         {
@@ -217,10 +223,11 @@
           "repeatable": true
         },
         {
-          "name": "scope",
+          "name": "component",
           "type": "string",
           "required": false,
-          "repeatable": true
+          "repeatable": true,
+          "aliases": ["scope"]
         },
         {
           "name": "min-severity",
@@ -273,13 +280,14 @@
     {
       "id": "analysis-agent-json",
       "transport": "browser-json-view",
-      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}&view=agent",
-      "description": "Compact agent-first projection of existing remote-preflight evidence. Optional repeated focus/scope plus severity/limit/finding and change-aware base/head/changed-file parameters deterministically narrow the view without adding another evidence oracle.",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}&view=agent&envelope=1",
+      "description": "Compact agent-first projection of existing remote-preflight evidence. Optional repeated focus/component plus severity/limit/finding and change-aware base/head/changed-file parameters deterministically narrow the view without adding another evidence oracle. The legacy scope parameter remains an accepted alias for component.",
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
         "schemaVersion": 1,
-        "operation": "remote-preflight-query"
+        "operation": "remote-preflight-query",
+        "envelope": "coding-tooling/result-envelope/v1"
       },
       "parameters": [
         {
@@ -320,10 +328,11 @@
           "repeatable": true
         },
         {
-          "name": "scope",
+          "name": "component",
           "type": "string",
           "required": false,
-          "repeatable": true
+          "repeatable": true,
+          "aliases": ["scope"]
         },
         {
           "name": "min-severity",
@@ -376,12 +385,13 @@
     {
       "id": "testing-scaffold-plan",
       "transport": "browser-json-view",
-      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/testing.json/?repo={owner}/{repository}",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/testing.json/?repo={owner}/{repository}&envelope=1",
       "description": "Browser-executed deterministic testing-scaffold plan with setup actions, TypeScript test targets, React Storybook candidates, PR ordering, and explicit confidence boundaries.",
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
-        "schemaVersion": 1
+        "schemaVersion": 1,
+        "envelope": "coding-tooling/result-envelope/v1"
       },
       "parameters": [
         {
@@ -401,12 +411,13 @@
     {
       "id": "test-coverage",
       "transport": "browser-json-view",
-      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/test-coverage.json/?repo={owner}/{repository}",
+      "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/test-coverage.json/?repo={owner}/{repository}&envelope=1",
       "description": "Browser-executed test-coverage observation that prefers standardized CI-published snapshots and falls back to recognized committed reports.",
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
-        "schemaVersion": 1
+        "schemaVersion": 1,
+        "envelope": "coding-tooling/result-envelope/v1"
       },
       "parameters": [
         {
@@ -501,5 +512,6 @@
       "minimum": 1,
       "maximum": 100
     }
-  }
+  },
+  "resultEnvelopeVersion": "coding-tooling/result-envelope/v1"
 }

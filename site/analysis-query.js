@@ -21,6 +21,7 @@ const allowedParameters = new Set([
   "ref",
   "view",
   "focus",
+  "component",
   "scope",
   "min-severity",
   "limit",
@@ -46,7 +47,7 @@ export function parseAnalysisQuery(parameters) {
     throw new Error(`focus must use one or more of: ${[...focusKinds].join(", ")}`);
   }
 
-  const scope = uniqueValues(parameters.getAll("scope"));
+  const scope = uniqueValues([...parameters.getAll("component"), ...parameters.getAll("scope")]);
   const minSeverity = parameters.get("min-severity") ?? "low";
   if (!severities.has(minSeverity)) throw new Error("min-severity must be low, medium, or high");
 
@@ -337,7 +338,7 @@ function analysisUrl(repository, query) {
   if (query.ref) parameters.set("ref", query.ref);
   parameters.set("view", query.view);
   for (const value of query.focus) parameters.append("focus", value);
-  for (const value of query.scope) parameters.append("scope", value);
+  for (const value of query.scope) parameters.append("component", value);
   if (query.minSeverity !== "low") parameters.set("min-severity", query.minSeverity);
   if (query.limit !== (query.view === "agent" ? 12 : 100)) {
     parameters.set("limit", String(query.limit));
@@ -355,7 +356,7 @@ function affectedUrl(repository, query) {
   parameters.set("repo", repository);
   if (query.change.base) parameters.set("base", query.change.base);
   if (query.change.head) parameters.set("head", query.change.head);
-  for (const path of query.change.changedFiles) parameters.append("file", path);
+  for (const path of query.change.changedFiles) parameters.append("changed-file", path);
   parameters.set("tier", query.change.tier);
   return `./affected.json/?${parameters.toString()}`;
 }
