@@ -162,6 +162,15 @@ function worktreeState(root: string, runner: Runner): string | undefined {
   return gitValue(root, runner, ["status", "--porcelain"]);
 }
 
+
+function reconciliationIssueCount(value: unknown): number {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return 0;
+  return Object.values(value as Record<string, unknown>).reduce(
+    (count, item) => count + (Array.isArray(item) ? item.length : 0),
+    0,
+  );
+}
+
 function envelope(
   status: ResultStatus,
   started: number,
@@ -215,6 +224,8 @@ export function agentSummaryCommand(
   const registry = Array.isArray(findings.data.registry)
     ? (findings.data.registry as ExpectationRegistryRecord[])
     : [];
+  const expectationReconciliation = findings.data.reconciliation ?? null;
+  const expectationReconciliationIssues = reconciliationIssueCount(expectationReconciliation);
   let candidates: RemediationCandidate[];
   try {
     candidates = planRemediationCandidates(sourceFindings, { root });
@@ -258,7 +269,7 @@ export function agentSummaryCommand(
     candidates.some((candidate) => candidate.severities.includes("error"));
   const decision: AgentSummaryDecision = hasError
     ? "blocked"
-    : activeNew.length > 0 || candidates.length > 0
+    : activeNew.length > 0 || candidates.length > 0 || expectationReconciliationIssues > 0
       ? "partial"
       : "clean";
   const status: ResultStatus = decision === "blocked" ? "failed" : "passed";
@@ -287,6 +298,7 @@ export function agentSummaryCommand(
       ).length,
       remediationCandidates: candidates.length,
       deferredRemediationCandidates: deferredActions.length,
+      expectationReconciliationIssues,
     },
     strongestEvidence,
     nextAction,
@@ -301,6 +313,7 @@ export function agentSummaryCommand(
     },
     audit: {
       findingsStatus: findings.status,
+      expectationReconciliation,
       candidateSource: "existing-remediation-planner",
       note: "This summary projects existing evidence; it does not add an independent oracle.",
     },
