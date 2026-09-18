@@ -1,4 +1,4 @@
-import { resolveRequestedRevision } from "./github-analysis.js";
+import { resolveRequestedRevision } from "./github-revision.js";
 import { parseRepositoryReference } from "./preflight.js";
 
 const publishedCoverage = {
@@ -29,7 +29,9 @@ export async function testCoverageJson(value, options = {}) {
   );
   const requestedRef = String(options.ref ?? "").trim() || null;
   const resolvedSha = requestedRef
-    ? await resolveRequestedRevision(reference, requestedRef, fetchImpl, signal)
+    ? await resolveRequestedRevision(reference, requestedRef, (path) =>
+        githubJson(path, fetchImpl, signal),
+      )
     : null;
 
   const published = await readPublishedCoverage(reference, repository, fetchImpl, signal);
