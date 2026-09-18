@@ -70,7 +70,7 @@ export async function testCoverageJson(value, options = {}) {
       .filter((entry) => entry.type === "blob" && entry.path && entry.sha)
       .map((entry) => [entry.path, entry]),
   );
-  const sources = [];
+  const sources = published?.status === "unreadable" ? [published.source] : [];
 
   for (const candidate of coverageCandidates) {
     const entry = blobs.get(candidate.path);
