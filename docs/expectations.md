@@ -106,7 +106,9 @@ Findings have two independent lifecycle dimensions:
 
 Normal `findings` output includes only active findings, including deferred active findings with their `deferralEvidence`. `findings --all` and `finding <id>` keep suppressed and verified findings inspectable together with their suppression reason or verification evidence. Baselining does not hide debt, and verified findings are not added to a newly written baseline because they are already satisfied by explicit evidence.
 
-Agents can record a deliberate temporary decision with `coding-tooling defer CT-... --reason "..."` and clear it with `coding-tooling resume CT-...`. Deferral is not suppression: it neither changes the finding disposition nor makes an error non-blocking.
+Agents can record a deliberate temporary decision with `coding-tooling defer CT-... --reason "..."` and clear it with `coding-tooling resume CT-...`. Deferral is not suppression: it neither changes the finding disposition nor makes an error non-blocking. Fully deferred remediation stays in inventories and handoff evidence but is not selected as a fresh next slice or executed by deterministic convergence until resumed.
+
+Convergence treats non-empty expectation reconciliation reports as a fail-closed metadata boundary. Stale, duplicate, or conflicting decision/evidence records must be reconciled before deterministic mutation or a clean fixed point can be claimed.
 
 Only an active, new finding promoted to `error` makes `findings` fail. Re-running `baseline` rewrites the baseline from the current active finding set, so resolved or verified debt does not linger there.
 
