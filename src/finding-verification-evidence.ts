@@ -43,10 +43,13 @@ export function findingVerificationReceiptPath(root: string, findingId: string):
   return join(root, ".artifacts", "coding-tooling", "finding-verification", `${findingId}.json`);
 }
 
-export function exactHead(root: string, runner: Runner = runCommand): string | undefined {
+export function sourceRevision(root: string, runner: Runner = runCommand): string | undefined {
+  const pushed = process.env.CODING_TOOLING_SOURCE_SHA?.trim();
+  if (pushed) return isSha(pushed) ? pushed.toLowerCase() : undefined;
+
   const result = runner("git", ["rev-parse", "HEAD"], root);
   const value = result.status === 0 ? result.stdout.trim() : "";
-  return /^[0-9a-f]{40}$/i.test(value) ? value.toLowerCase() : undefined;
+  return isSha(value) ? value.toLowerCase() : undefined;
 }
 
 export function sourceWorktreeState(
@@ -119,7 +122,7 @@ export function applyFindingVerificationEvidence(
   );
   if (withReceipts.length === 0) return findings;
 
-  const candidateSha = exactHead(root, runner);
+  const candidateSha = sourceRevision(root, runner);
   const worktree = sourceWorktreeState(root, runner);
   if (!candidateSha || !worktree || worktree.length > 0) return findings;
 
