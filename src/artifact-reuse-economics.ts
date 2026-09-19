@@ -82,33 +82,23 @@ export function artifactReuseEconomics(
   );
 
   if (!existsSync(receiptPath))
-    return envelope(
-      "unavailable",
-      started,
-      { profile: "ci-artifact-reuse/v1", receiptPath },
-      [
-        {
-          code: "artifact-reuse-evidence-missing",
-          message: `No build-artifact receipt at ${receiptPath}`,
-        },
-      ],
-    );
+    return envelope("unavailable", started, { profile: "ci-artifact-reuse/v1", receiptPath }, [
+      {
+        code: "artifact-reuse-evidence-missing",
+        message: `No build-artifact receipt at ${receiptPath}`,
+      },
+    ]);
 
   let receipt: Receipt;
   try {
     receipt = JSON.parse(readFileSync(receiptPath, "utf8")) as Receipt;
   } catch (error) {
-    return envelope(
-      "error",
-      started,
-      { profile: "ci-artifact-reuse/v1", receiptPath },
-      [
-        {
-          code: "artifact-reuse-evidence-invalid-json",
-          message: error instanceof Error ? error.message : String(error),
-        },
-      ],
-    );
+    return envelope("error", started, { profile: "ci-artifact-reuse/v1", receiptPath }, [
+      {
+        code: "artifact-reuse-evidence-invalid-json",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ]);
   }
 
   const diagnostics: Diagnostic[] = [];
@@ -136,14 +126,12 @@ export function artifactReuseEconomics(
       message: "Receipt does not contain a valid metrics.artifactReuse payload.",
     });
 
-  const sourceSha =
-    typeof receipt.source?.sha === "string" ? receipt.source.sha.toLowerCase() : "";
+  const sourceSha = typeof receipt.source?.sha === "string" ? receipt.source.sha.toLowerCase() : "";
   const expectedHead = (options.expectedHeadSha ?? currentHead(root)).toLowerCase();
   if (!/^[0-9a-f]{40}$/.test(sourceSha) || sourceSha !== expectedHead)
     diagnostics.push({
       code: "artifact-reuse-evidence-stale",
-      message:
-        `Receipt source ${sourceSha || "unknown"} does not match exact HEAD ${expectedHead}.`,
+      message: `Receipt source ${sourceSha || "unknown"} does not match exact HEAD ${expectedHead}.`,
     });
 
   const artifacts = Array.isArray(receipt.evidence)
@@ -172,14 +160,12 @@ export function artifactReuseEconomics(
     : metrics!.expectedConsumers < 3
       ? "insufficient-fan-out"
       : "not-cost-effective";
-  const estimatedNetAvoidedMs =
-    metrics!.estimatedAvoidedBuildMs - metrics!.producerOverheadMs;
+  const estimatedNetAvoidedMs = metrics!.estimatedAvoidedBuildMs - metrics!.producerOverheadMs;
 
   if (!metrics!.recommended)
     diagnostics.push({
       code: "artifact-reuse-not-recommended",
-      message:
-        `Artifact reuse is advisory-only and currently ${classification}: ${metrics!.reason}.`,
+      message: `Artifact reuse is advisory-only and currently ${classification}: ${metrics!.reason}.`,
     });
 
   return envelope(
