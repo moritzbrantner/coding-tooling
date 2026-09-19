@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 
 import type { Finding, FindingVerificationEvidence } from "./expectation-model.ts";
 import { readJson, relativePosix, runCommand, type CommandResult } from "./shared.ts";
+import { sourceRevision } from "./source-context.ts";
 
 export const FINDING_VERIFICATION_RECEIPT_VERSION =
   "coding-tooling/finding-verification-receipt/v1" as const;
@@ -41,15 +42,6 @@ function commandsEqual(left: readonly string[], right: readonly string[]): boole
 
 export function findingVerificationReceiptPath(root: string, findingId: string): string {
   return join(root, ".artifacts", "coding-tooling", "finding-verification", `${findingId}.json`);
-}
-
-export function sourceRevision(root: string, runner: Runner = runCommand): string | undefined {
-  const pushed = process.env.CODING_TOOLING_SOURCE_SHA?.trim();
-  if (pushed) return isSha(pushed) ? pushed.toLowerCase() : undefined;
-
-  const result = runner("git", ["rev-parse", "HEAD"], root);
-  const value = result.status === 0 ? result.stdout.trim() : "";
-  return isSha(value) ? value.toLowerCase() : undefined;
 }
 
 export function sourceWorktreeState(

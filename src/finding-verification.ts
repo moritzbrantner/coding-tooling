@@ -5,13 +5,13 @@ import type { ExpectationEnvelope } from "./expectation-model.ts";
 import { findingIdPattern } from "./expectation-model.ts";
 import { analyzeExpectations, findingCommand } from "./expectations.ts";
 import {
-  sourceRevision,
   sourceWorktreeState,
   writeFindingVerificationReceipt,
   type FindingVerificationReceipt,
   type FindingVerificationReceiptOutcome,
 } from "./finding-verification-evidence.ts";
 import { runCommand, type CommandResult } from "./shared.ts";
+import { sourceRevision } from "./source-context.ts";
 
 type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
 

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { findingCommand } from "../src/expectations.ts";
 import { verifyFinding } from "../src/finding-verification.ts";
-import { sourceRevision } from "../src/finding-verification-evidence.ts";
+import { sourceRevision } from "../src/source-context.ts";
 import { analyzeExpectations } from "../src/expectations.ts";
 import { runCommand } from "../src/shared.ts";
 
@@ -13,6 +13,7 @@ const roots: string[] = [];
 
 afterEach(() => {
   delete process.env.CODING_TOOLING_SOURCE_SHA;
+  delete process.env.CODING_TOOLING_SOURCE_ROOT;
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -86,6 +87,7 @@ describe("execution-backed finding verification", () => {
   test("uses caller-pushed revision context without querying Git", () => {
     const pushed = "a".repeat(40);
     process.env.CODING_TOOLING_SOURCE_SHA = pushed;
+    process.env.CODING_TOOLING_SOURCE_ROOT = process.cwd();
 
     expect(
       sourceRevision(".", () => {
@@ -97,6 +99,7 @@ describe("execution-backed finding verification", () => {
   test("promotes a declared verifier using the caller-pushed source revision", () => {
     const { root, findingId, head } = fixture("process.exit(0);\n");
     process.env.CODING_TOOLING_SOURCE_SHA = head;
+    process.env.CODING_TOOLING_SOURCE_ROOT = root;
 
     const result = verifyFinding(root, findingId);
 

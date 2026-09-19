@@ -16,7 +16,8 @@ import {
   type PublicContractCaseExecution,
   type PublicContractCaseReference,
 } from "./public-contract-case-evidence.ts";
-import { readJson, relativePosix, runCommand, walkFiles } from "./shared.ts";
+import { readJson, relativePosix, walkFiles } from "./shared.ts";
+import { sourceRevision } from "./source-context.ts";
 import {
   prepareTestCaseEvidenceRun,
   readTestCaseEvidence,
@@ -438,8 +439,7 @@ function validateVerifications(
 }
 
 function revision(root: string): string | undefined {
-  const result = runCommand("git", ["rev-parse", "HEAD"], root);
-  return result.status === 0 ? result.stdout.trim() || undefined : undefined;
+  return sourceRevision(root);
 }
 
 function reportEnvelope(

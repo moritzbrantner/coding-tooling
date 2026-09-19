@@ -7,6 +7,7 @@ import { repositoryMergeReadiness, type RepositoryMergeReadiness } from "./merge
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { readRepositoryMetadata } from "./repository-metadata.ts";
 import { runCommand, type CommandResult } from "./shared.ts";
+import { sourceRevision } from "./source-context.ts";
 
 export const REPOSITORY_EVIDENCE_VERSION = "coding-tooling/repository-evidence/v1" as const;
 
@@ -70,13 +71,6 @@ function resultStatus(value: unknown): ResultStatus | undefined {
   return value === "passed" || value === "failed" || value === "unavailable" || value === "error"
     ? value
     : undefined;
-}
-
-function currentRevision(root: string, runner: Runner): string | null {
-  const result = runner("git", ["rev-parse", "HEAD"], root);
-  if (result.status !== 0) return null;
-  const revision = result.stdout.trim();
-  return /^[0-9a-f]{40}$/i.test(revision) ? revision : null;
 }
 
 function readReport(
@@ -213,7 +207,7 @@ export function repositoryEvidenceCommand(
   const collectMergeReadiness = dependencies.collectMergeReadiness ?? repositoryMergeReadiness;
 
   try {
-    const revision = currentRevision(resolvedRoot, runner);
+    const revision = sourceRevision(resolvedRoot, runner) ?? null;
     const metadataRead = metadataReader(resolvedRoot);
     const foundation = collectFoundation(resolvedRoot);
     const merge = collectMergeReadiness(resolvedRoot, { run: runner });
@@ -253,7 +247,7 @@ export function repositoryEvidenceCommand(
       notes: [
         "This envelope composes evidence; it does not introduce a repository score or new pass/fail threshold.",
         "Missing report inputs remain explicitly not-supplied rather than being interpreted as passing evidence.",
-        "Public-contract reports are rejected when their recorded Git revision disagrees with the current repository revision.",
+        "Public-contract reports are rejected when their recorded source revision disagrees with the caller-established repository revision.",
       ],
     };
 
