@@ -28,6 +28,7 @@ jobs:
         run: |
           ./node_modules/.bin/oxfmt site/instructions/index.html
           git diff -- site/instructions/index.html
+          exit 1
       - name: Validate through the local Action
         uses: ./
         with:
