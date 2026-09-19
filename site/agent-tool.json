@@ -142,9 +142,7 @@
           "type": "string",
           "required": false,
           "repeatable": true,
-          "aliases": [
-            "file"
-          ]
+          "aliases": ["file"]
         },
         {
           "name": "component",
@@ -214,10 +212,7 @@
         {
           "name": "view",
           "type": "string",
-          "enum": [
-            "full",
-            "agent"
-          ],
+          "enum": ["full", "agent"],
           "required": false,
           "repeatable": false,
           "default": "full"
@@ -244,18 +239,12 @@
           "type": "string",
           "required": false,
           "repeatable": true,
-          "aliases": [
-            "scope"
-          ]
+          "aliases": ["scope"]
         },
         {
           "name": "min-severity",
           "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high"
-          ],
+          "enum": ["low", "medium", "high"],
           "required": false,
           "repeatable": false,
           "default": "low"
@@ -328,10 +317,7 @@
         {
           "name": "view",
           "type": "string",
-          "enum": [
-            "full",
-            "agent"
-          ],
+          "enum": ["full", "agent"],
           "required": false,
           "repeatable": false,
           "default": "agent"
@@ -358,18 +344,12 @@
           "type": "string",
           "required": false,
           "repeatable": true,
-          "aliases": [
-            "scope"
-          ]
+          "aliases": ["scope"]
         },
         {
           "name": "min-severity",
           "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high"
-          ],
+          "enum": ["low", "medium", "high"],
           "required": false,
           "repeatable": false,
           "default": "low"
