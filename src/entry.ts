@@ -18,6 +18,7 @@ import {
   type ExpectationEnvelope,
   type FindingState,
 } from "./expectations.ts";
+import { verifyFinding } from "./finding-verification.ts";
 import { foundationAudit } from "./foundation-audit.ts";
 import { fleetMergeReadiness } from "./merge-readiness.ts";
 import type { ResultStatus } from "./model.ts";
@@ -56,6 +57,7 @@ function expectationUsage(): never {
   coding-tooling remediation plan [--include-baseline] [--json]
   coding-tooling findings [--new|--baseline] [--all] [--json]
   coding-tooling finding <finding-id> [--json]
+  coding-tooling finding verify <finding-id> [--json]
   coding-tooling defer <finding-id> --reason <text> [--json]
   coding-tooling resume <finding-id> [--json]
   coding-tooling baseline [--json]
@@ -73,6 +75,23 @@ function expectationUsage(): never {
 
 export function entryMain(argv = process.argv.slice(2)): number {
   const command = argv[0];
+  if (command === "artifact-reuse") {
+    const knownFlags = new Set(["--json", "--receipt"]);
+    for (let index = 1; index < argv.length; index += 1) {
+      const value = argv[index]!;
+      if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
+      if (value === "--receipt") {
+        if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
+        index += 1;
+      }
+    }
+    const result = artifactReuseEconomics(repositoryRoot(), {
+      receiptPath: option(argv, "receipt"),
+    });
+    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
+    return resultExitCode(result.status);
+  }
+
   if (command === "contract") {
     const action = argv[1] ?? "verify";
     if (action !== "discover" && action !== "verify") return expectationUsage();
@@ -92,23 +111,6 @@ export function entryMain(argv = process.argv.slice(2)): number {
     });
     const report = option(argv, "report");
     if (report) writeReport(result, resolve(root, report));
-    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
-    return resultExitCode(result.status);
-  }
-
-  if (command === "artifact-reuse") {
-    const knownFlags = new Set(["--json", "--receipt"]);
-    for (let index = 1; index < argv.length; index += 1) {
-      const value = argv[index]!;
-      if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
-      if (value === "--receipt") {
-        if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
-        index += 1;
-      }
-    }
-    const result = artifactReuseEconomics(repositoryRoot(), {
-      receiptPath: option(argv, "receipt"),
-    });
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }
@@ -297,9 +299,15 @@ export function entryMain(argv = process.argv.slice(2)): number {
     const state: FindingState | undefined = onlyNew ? "new" : onlyBaseline ? "baseline" : undefined;
     result = findingsCommand(root, { state, includeSuppressed });
   } else if (command === "finding") {
-    const id = argv[1];
-    if (!id || argv.slice(2).some((value) => value !== "--json")) return expectationUsage();
-    result = findingCommand(root, id);
+    if (argv[1] === "verify") {
+      const id = argv[2];
+      if (!id || argv.slice(3).some((value) => value !== "--json")) return expectationUsage();
+      result = verifyFinding(root, id);
+    } else {
+      const id = argv[1];
+      if (!id || argv.slice(2).some((value) => value !== "--json")) return expectationUsage();
+      result = findingCommand(root, id);
+    }
   } else if (command === "defer") {
     const id = argv[1];
     const reason = option(argv, "reason");
