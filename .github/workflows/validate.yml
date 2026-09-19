@@ -24,6 +24,10 @@ jobs:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
+      - name: Print exact instructions formatter patch
+        run: |
+          ./node_modules/.bin/oxfmt site/instructions/index.html
+          git diff -- site/instructions/index.html
       - name: Validate through the local Action
         uses: ./
         with:
