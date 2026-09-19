@@ -30,6 +30,7 @@ export type ResultOperation =
   | "check"
   | "affected"
   | "analyze"
+  | "artifact-reuse"
   | "doctor"
   | "conformance"
   | "environment"
