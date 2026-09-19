@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Stable instructions for coding agents using coding-tooling before working on public GitHub repositories."
+    />
+    <title>coding-tooling · agent instructions</title>
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <header>
+      <a href="../">coding-tooling</a>
+      <span><a href="../agent-tool.json">agent-tool.json</a> · agent instructions / v1</span>
+    </header>
+    <main>
+      <section class="hero">
+        <p class="eyebrow">For coding agents</p>
+        <h1>Inspect first.<br />Then edit.</h1>
+        <p class="lede">
+          Use coding-tooling as a deterministic structural preflight before changing a public GitHub
+          repository. Pin the repository revision when the task names a branch, tag, pull request
+          head, or commit, then continue with the repository's own instructions and authoritative
+          validation.
+        </p>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Required first step</p>
+          <h2>Repository preflight</h2>
+        </div>
+        <article class="card">
+          <ol>
+            <li>
+              Identify the repository as <code>owner/repository</code>. If the task is tied to a
+              branch, tag, pull-request head, or commit, also identify that exact ref.
+            </li>
+            <li>
+              Open
+              <code
+                >https://moritzbrantner.github.io/coding-tooling/?repo=&lt;owner&gt;%2F&lt;repository&gt;</code
+              >.
+              Append <code>&amp;ref=&lt;ref&gt;</code> when an exact revision is known.
+            </li>
+            <li>
+              Use the result as remote structural evidence only. It can inspect public GitHub
+              metadata, repository structure, bounded manifests, declared capabilities, and
+              published evidence; it cannot execute the repository.
+            </li>
+            <li>
+              Read the target repository's <code>AGENTS.md</code> and other governing files before
+              editing. Repository-local guidance and declared commands take precedence over generic
+              assumptions.
+            </li>
+            <li>
+              Keep revision-sensitive work pinned. Do not substitute default-branch analysis for a
+              task that names another ref.
+            </li>
+            <li>
+              Before claiming the work is ready, use the repository's authoritative local or CI
+              validation on the exact resulting head.
+            </li>
+          </ol>
+        </article>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Copyable instruction</p>
+          <h2>Minimal agent rule</h2>
+        </div>
+        <pre>When asked to work on a GitHub repository, inspect it first with:
+https://moritzbrantner.github.io/coding-tooling/?repo=&lt;owner&gt;%2F&lt;repository&gt;
+
+If a branch, tag, or commit is known, append:
+&amp;ref=&lt;ref&gt;
+
+Treat the Pages result as structural preflight only. Then read the repository's AGENTS.md and governing files, use repository-declared commands, and verify the exact resulting head with authoritative local or CI checks before claiming readiness.</pre>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Agent-oriented views</p>
+          <h2>Use the narrowest useful surface</h2>
+        </div>
+        <div class="stack">
+          <article class="card">
+            <h3>Compact analysis</h3>
+            <p class="muted">
+              Use the agent projection when you want a bounded machine-oriented view of existing
+              remote evidence.
+            </p>
+            <pre>https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;view=agent&amp;envelope=1</pre>
+          </article>
+          <article class="card">
+            <h3>Focused analysis</h3>
+            <p class="muted">
+              Narrow existing evidence with supported focus, component, severity, finding, or
+              change-aware parameters rather than inventing a second analysis path.
+            </p>
+            <pre>https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;view=agent&amp;focus=testing&amp;min-severity=medium&amp;envelope=1</pre>
+          </article>
+          <article class="card">
+            <h3>Change-aware planning</h3>
+            <p class="muted">
+              When base and head refs are known, use affected-component analysis to derive a
+              conservative validation plan.
+            </p>
+            <pre>https://moritzbrantner.github.io/coding-tooling/affected.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;base=&lt;base-ref&gt;&amp;head=&lt;head-ref&gt;&amp;tier=fast</pre>
+          </article>
+          <article class="card">
+            <h3>Full machine contract</h3>
+            <p class="muted">
+              Read <a href="../agent-tool.json">agent-tool.json</a> for the published operations,
+              parameter types, authority levels, completeness semantics, and limitations.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="boundary">
+        <h2>Authority boundary</h2>
+        <p>
+          GitHub Pages is a zero-install observation surface. It does not clone the repository, run
+          tests or builds, inspect private repositories, mutate repository state, or establish
+          semantic correctness. Browser JSON views are browser-executed static pages rather than
+          conventional server-side JSON APIs. Missing, stale, bounded, or unavailable evidence must
+          not be treated as passing evidence.
+        </p>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Do not</p>
+          <h2>Common agent mistakes</h2>
+        </div>
+        <article class="card">
+          <ul>
+            <li>Do not treat remote preflight as a replacement for exact-head CI or local checks.</li>
+            <li>Do not infer semantic correctness from structural findings or repository shape.</li>
+            <li>Do not ignore an explicit task ref and analyze only the default branch.</li>
+            <li>Do not interpret unavailable or incomplete evidence as success.</li>
+            <li>Do not use the browser surface to perform repository mutations.</li>
+          </ul>
+        </article>
+      </section>
+    </main>
+    <footer>
+      <span>Deterministic preflight before repository work.</span>
+      <span>Local and CI execution remain authoritative.</span>
+    </footer>
+  </body>
+</html>
