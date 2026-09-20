@@ -42,8 +42,10 @@
               Open
               <code
                 >https://moritzbrantner.github.io/coding-tooling/?repo=&lt;owner&gt;%2F&lt;repository&gt;</code
-              >.
-              Append <code>&amp;ref=&lt;ref&gt;</code> when an exact revision is known.
+              >. Append <code>&amp;ref=&lt;percent-encoded-ref&gt;</code> when an exact revision is
+              known. Percent-encode substituted repository and revision values; Git refs can contain
+              characters such as <code>#</code>, <code>+</code>, and <code>&amp;</code> that
+              otherwise change the URL's meaning.
             </li>
             <li>
               Use the result as remote structural evidence only. It can inspect public GitHub
@@ -72,11 +74,14 @@
           <p class="eyebrow">Copyable instruction</p>
           <h2>Minimal agent rule</h2>
         </div>
-        <pre>When asked to work on a GitHub repository, inspect it first with:
+        <pre>
+When asked to work on a GitHub repository, inspect it first with:
 https://moritzbrantner.github.io/coding-tooling/?repo=&lt;owner&gt;%2F&lt;repository&gt;
 
 If a branch, tag, or commit is known, append:
-&amp;ref=&lt;ref&gt;
+&amp;ref=&lt;percent-encoded-ref&gt;
+
+Percent-encode substituted repository and revision values (for example, with encodeURIComponent) before inserting them into a URL.
 
 Treat the Pages result as structural preflight only. Then read the repository's AGENTS.md and governing files, use repository-declared commands, and verify the exact resulting head with authoritative local or CI checks before claiming readiness.</pre>
       </section>
@@ -93,7 +98,8 @@ Treat the Pages result as structural preflight only. Then read the repository's 
               Use the agent projection when you want a bounded machine-oriented view of existing
               remote evidence.
             </p>
-            <pre>https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;view=agent&amp;envelope=1</pre>
+            <pre>
+https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;view=agent&amp;envelope=1</pre>
           </article>
           <article class="card">
             <h3>Focused analysis</h3>
@@ -101,7 +107,8 @@ Treat the Pages result as structural preflight only. Then read the repository's 
               Narrow existing evidence with supported focus, component, severity, finding, or
               change-aware parameters rather than inventing a second analysis path.
             </p>
-            <pre>https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;view=agent&amp;focus=testing&amp;min-severity=medium&amp;envelope=1</pre>
+            <pre>
+https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;view=agent&amp;focus=testing&amp;min-severity=medium&amp;envelope=1</pre>
           </article>
           <article class="card">
             <h3>Change-aware planning</h3>
@@ -109,7 +116,8 @@ Treat the Pages result as structural preflight only. Then read the repository's 
               When base and head refs are known, use affected-component analysis to derive a
               conservative validation plan.
             </p>
-            <pre>https://moritzbrantner.github.io/coding-tooling/affected.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;base=&lt;base-ref&gt;&amp;head=&lt;head-ref&gt;&amp;tier=fast</pre>
+            <pre>
+https://moritzbrantner.github.io/coding-tooling/affected.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;base=&lt;percent-encoded-base-ref&gt;&amp;head=&lt;percent-encoded-head-ref&gt;&amp;tier=fast</pre>
           </article>
           <article class="card">
             <h3>Full machine contract</h3>
