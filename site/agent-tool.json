@@ -18,6 +18,18 @@
       "parameters": []
     },
     {
+      "id": "agent-instructions",
+      "transport": "html",
+      "href": "https://moritzbrantner.github.io/coding-tooling/instructions/",
+      "description": "Stable human-readable instructions for coding agents: run repository preflight first, pin exact refs when known, respect repository-local guidance, and use authoritative local or CI validation before claiming readiness.",
+      "authority": "published-static-contract",
+      "completeness": "complete-for-published-instructions",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": []
+    },
+    {
       "id": "cli-run-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/run.json/?repo={owner}/{repository}&argv={urlEncodedArgv}",
