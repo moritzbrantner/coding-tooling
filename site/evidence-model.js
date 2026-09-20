@@ -843,18 +843,24 @@ function workflowJobDefaultWorkingDirectory(lines, runIndex) {
   if (jobsIndex < 0 || jobsIndex >= runIndex) return null;
   const jobsIndent = yamlIndent(lines[jobsIndex]);
   const starts = [];
-  for (let index = jobsIndex + 1; index <= runIndex; index += 1) {
+  let jobsEnd = lines.length;
+  for (let index = jobsIndex + 1; index < lines.length; index += 1) {
     const raw = lines[index];
     if (!raw.trim()) continue;
     const indent = yamlIndent(raw);
-    if (indent <= jobsIndent) break;
+    if (indent <= jobsIndent) {
+      jobsEnd = index;
+      break;
+    }
     const match = raw.match(/^(\s*)[A-Za-z0-9_.-]+\s*:\s*(?:#.*)?$/);
     if (!match) continue;
     if (starts.length === 0 || indent === starts[0].indent) starts.push({ index, indent });
   }
-  const job = starts.at(-1);
+  const position = starts.findLastIndex((start) => start.index <= runIndex);
+  const job = starts[position];
   if (!job) return null;
-  return defaultRunWorkingDirectory(lines, job.index + 1, runIndex + 1, job.indent);
+  const jobEnd = starts[position + 1]?.index ?? jobsEnd;
+  return defaultRunWorkingDirectory(lines, job.index + 1, jobEnd, job.indent);
 }
 
 function workflowDefaultWorkingDirectory(lines) {

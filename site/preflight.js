@@ -835,15 +835,103 @@ function validationEvidenceFor(snapshot, paths, components) {
 }
 
 function rustInlineTestEvidencePresent(content) {
-  return String(content)
-    .split(/\r?\n/)
-    .some((line) => {
-      if (/^\s*\/\//.test(line)) return false;
-      return (
-        /^\s*#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/.test(line) ||
-        /^\s*#\s*\[\s*(?:[A-Za-z_][A-Za-z0-9_]*::)*test(?:\s*\([^\]]*\))?\s*\]/.test(line)
-      );
-    });
+  const code = rustCodeWithoutCommentsAndStrings(content);
+  return (
+    /^\s*#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/m.test(code) ||
+    /^\s*#\s*\[\s*(?:[A-Za-z_][A-Za-z0-9_]*::)*test(?:\s*\([^\]]*\))?\s*\]/m.test(code)
+  );
+}
+
+function rustCodeWithoutCommentsAndStrings(content) {
+  const source = String(content);
+  let result = "";
+  let index = 0;
+  let blockCommentDepth = 0;
+  while (index < source.length) {
+    if (blockCommentDepth > 0) {
+      if (source.startsWith("/*", index)) {
+        result += "  ";
+        blockCommentDepth += 1;
+        index += 2;
+      } else if (source.startsWith("*/", index)) {
+        result += "  ";
+        blockCommentDepth -= 1;
+        index += 2;
+      } else {
+        result += source[index] === "\n" ? "\n" : " ";
+        index += 1;
+      }
+      continue;
+    }
+    if (source.startsWith("//", index)) {
+      while (index < source.length && source[index] !== "\n") {
+        result += " ";
+        index += 1;
+      }
+      continue;
+    }
+    if (source.startsWith("/*", index)) {
+      result += "  ";
+      blockCommentDepth = 1;
+      index += 2;
+      continue;
+    }
+
+    const rawString = rustRawStringStart(source, index);
+    if (rawString) {
+      const closing = `"${rawString.hashes}`;
+      result += " ".repeat(rawString.length);
+      index += rawString.length;
+      while (index < source.length && !source.startsWith(closing, index)) {
+        result += source[index] === "\n" ? "\n" : " ";
+        index += 1;
+      }
+      const closingLength = source.startsWith(closing, index) ? closing.length : 0;
+      result += " ".repeat(closingLength);
+      index += closingLength;
+      continue;
+    }
+
+    const stringStart = rustStringStart(source, index);
+    if (stringStart > 0) {
+      result += " ".repeat(stringStart);
+      index += stringStart;
+      while (index < source.length) {
+        if (source[index] === "\\") {
+          const escapedLength = index + 1 < source.length ? 2 : 1;
+          result += " ".repeat(escapedLength);
+          index += escapedLength;
+          continue;
+        }
+        const character = source[index];
+        result += character === "\n" ? "\n" : " ";
+        index += 1;
+        if (character === '"') break;
+      }
+      continue;
+    }
+
+    result += source[index];
+    index += 1;
+  }
+  return result;
+}
+
+function rustRawStringStart(source, index) {
+  if (index > 0 && /[A-Za-z0-9_]/.test(source[index - 1])) return null;
+  const match = source.slice(index).match(/^(?:br|cr|r)(#{0,255})"/);
+  return match ? { length: match[0].length, hashes: match[1] } : null;
+}
+
+function rustStringStart(source, index) {
+  if (source[index] === '"') return 1;
+  if (
+    (source.startsWith('b"', index) || source.startsWith('c"', index)) &&
+    (index === 0 || !/[A-Za-z0-9_]/.test(source[index - 1]))
+  ) {
+    return 2;
+  }
+  return 0;
 }
 
 function isExternalCiPath(path) {

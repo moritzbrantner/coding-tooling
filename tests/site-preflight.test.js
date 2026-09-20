@@ -115,6 +115,31 @@ describe("GitHub Pages repository preflight", () => {
     expect(analysis.findings.map((finding) => finding.id)).not.toContain("REMOTE-TEST-001");
   });
 
+  test("ignores Rust test attributes inside comments and strings", () => {
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [blob("Cargo.toml", "1"), blob("src/lib.rs", "2")],
+        files: {
+          "Cargo.toml": '[package]\nname = "world"\nversion = "0.1.0"\n',
+          "src/lib.rs": `/*
+#[cfg(test)]
+mod commented_out {}
+*/
+const EXAMPLE: &str = r###"
+#[test]
+fn string_example() {}
+"###;
+pub fn tick() {}
+`,
+        },
+      }),
+    );
+
+    expect(analysis.components[0].testEvidence).toEqual(
+      expect.objectContaining({ status: "finding", reason: "no-rust-test-evidence" }),
+    );
+  });
+
   test("returns a ready result for a repository with structural foundation evidence", () => {
     const analysis = analyzeSnapshot(
       repository({

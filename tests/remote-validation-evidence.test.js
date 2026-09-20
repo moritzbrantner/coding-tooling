@@ -274,11 +274,11 @@ jobs:
         default: .
 jobs:
   validate:
+    steps:
+      - run: \${{ inputs.test_command }}
     defaults:
       run:
         working-directory: \${{ inputs.working_directory }}
-    steps:
-      - run: \${{ inputs.test_command }}
 `,
         },
       ],
