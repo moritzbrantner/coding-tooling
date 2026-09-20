@@ -5,6 +5,7 @@ import {
   analyzeSnapshot,
   parseRepositoryReference,
   selectedRemoteFiles,
+  selectedRustSourceFiles,
   selectedWorkflowFiles,
 } from "../site/preflight.js";
 
@@ -49,6 +50,69 @@ describe("GitHub Pages repository preflight", () => {
       ".github/workflows/pages.yml",
       ".github/workflows/validate.yml",
     ]);
+  });
+
+  test("selects production Rust sources for bounded inline-test inspection", () => {
+    const tree = [
+      blob("src/lib.rs", "1"),
+      blob("src/world.rs", "2"),
+      blob("tests/integration.rs", "3"),
+      blob("fixtures/example/src/lib.rs", "4"),
+      blob("target/debug/build.rs", "5"),
+    ];
+
+    expect(selectedRustSourceFiles(tree).map((entry) => entry.path)).toEqual([
+      "src/lib.rs",
+      "src/world.rs",
+    ]);
+  });
+
+  test("fetches Cargo manifests and models root workspace validation commands", () => {
+    const tree = [blob("Cargo.toml", "1"), blob("crates/world/Cargo.toml", "2")];
+    expect(selectedRemoteFiles(tree).map((entry) => entry.path)).toEqual([
+      "Cargo.toml",
+      "crates/world/Cargo.toml",
+    ]);
+
+    const analysis = analyzeSnapshot(
+      repository({
+        tree,
+        files: {
+          "Cargo.toml": '[workspace]\nmembers = ["crates/world"]\n',
+          "crates/world/Cargo.toml": '[package]\nname = "world"\nversion = "0.1.0"\n',
+        },
+      }),
+    );
+    const root = analysis.components.find(
+      (component) => component.kind === "rust" && component.path === ".",
+    );
+    expect(root.capabilities).toEqual(
+      expect.objectContaining({
+        "format:check": ["cargo", "fmt", "--all", "--", "--check"],
+        "test:unit": ["cargo", "test", "--workspace", "--all-features"],
+      }),
+    );
+  });
+
+  test("recognizes inline Rust test modules from fetched source content", () => {
+    const analysis = analyzeSnapshot(
+      repository({
+        tree: [blob("Cargo.toml", "1"), blob("src/lib.rs", "2")],
+        files: {
+          "Cargo.toml": '[package]\nname = "world"\nversion = "0.1.0"\n',
+          "src/lib.rs": `pub fn tick() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn ticks() { tick(); }\n}\n`,
+        },
+      }),
+    );
+
+    expect(analysis.components[0].testEvidence).toEqual(
+      expect.objectContaining({
+        status: "satisfied",
+        reason: "rust-inline-test-evidence-present",
+        inlineTestPaths: ["src/lib.rs"],
+      }),
+    );
+    expect(analysis.findings.map((finding) => finding.id)).not.toContain("REMOTE-TEST-001");
   });
 
   test("returns a ready result for a repository with structural foundation evidence", () => {

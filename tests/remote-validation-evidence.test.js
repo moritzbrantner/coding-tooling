@@ -225,4 +225,212 @@ jobs:
     });
     expect(result.status).toBe("incomplete");
   });
+
+  test("proves validation through an exact-ref reusable workflow command", () => {
+    const ref = "45042e56be120b438096e774027637cac0280075";
+    const callerPath = ".github/workflows/validate.yml";
+    const result = remoteValidationOutcome({
+      workflowPaths: [callerPath],
+      workflows: [
+        {
+          path: callerPath,
+          content: `on:
+  pull_request:
+jobs:
+  validate:
+    uses: owner/reusable/.github/workflows/validate.yml@${ref}
+    with:
+      test_command: cargo test --locked --workspace
+      working_directory: crates/world
+`,
+        },
+      ],
+      reusableWorkflows: [
+        {
+          callerPath,
+          job: "validate",
+          inputs: {
+            test_command: "cargo test --locked --workspace",
+            working_directory: "crates/world",
+          },
+          target: {
+            status: "pinned",
+            reference: `owner/reusable/.github/workflows/validate.yml@${ref}`,
+            repository: "owner/reusable",
+            path: ".github/workflows/validate.yml",
+            ref,
+          },
+          status: "resolved",
+          repository: "owner/reusable",
+          path: ".github/workflows/validate.yml",
+          ref,
+          content: `on:
+  workflow_call:
+    inputs:
+      test_command:
+        type: string
+      working_directory:
+        type: string
+        default: .
+jobs:
+  validate:
+    defaults:
+      run:
+        working-directory: \${{ inputs.working_directory }}
+    steps:
+      - run: \${{ inputs.test_command }}
+`,
+        },
+      ],
+      externalCiPaths: [],
+      workflowFetchTruncated: false,
+      defaultBranch: "main",
+      declaredCommands: [
+        { command: "cargo test --locked --workspace", workingDirectory: "crates/world" },
+      ],
+    });
+
+    expect(result.status).toBe("satisfied");
+    expect(result.workflowEvidence[0].reusableWorkflowEvidence[0]).toEqual(
+      expect.objectContaining({
+        status: "satisfied",
+        matchedCommands: ["cargo test --locked --workspace"],
+      }),
+    );
+  });
+
+  test("keeps mutable reusable workflow references incomplete", () => {
+    const callerPath = ".github/workflows/validate.yml";
+    const result = remoteValidationOutcome({
+      workflowPaths: [callerPath],
+      workflows: [
+        {
+          path: callerPath,
+          content: `on:
+  pull_request:
+jobs:
+  validate:
+    uses: owner/reusable/.github/workflows/validate.yml@main
+`,
+        },
+      ],
+      reusableWorkflows: [
+        {
+          callerPath,
+          job: "validate",
+          inputs: {},
+          target: {
+            status: "unsupported",
+            reference: "owner/reusable/.github/workflows/validate.yml@main",
+            repository: "owner/reusable",
+            path: ".github/workflows/validate.yml",
+            ref: "main",
+          },
+          status: "unsupported",
+          reason: "reusable-workflow-ref-not-immutable",
+        },
+      ],
+      externalCiPaths: [],
+      workflowFetchTruncated: false,
+      defaultBranch: "main",
+      declaredCommands: ["cargo test --locked"],
+    });
+
+    expect(result.status).toBe("incomplete");
+    expect(result.reason).toBe("reusable-workflow-evidence-incomplete");
+  });
+
+  test("keeps call-limit and nested reusable workflow evidence incomplete", () => {
+    const ref = "a".repeat(40);
+    const callerPath = ".github/workflows/validate.yml";
+    const input = {
+      workflowPaths: [callerPath],
+      workflows: [
+        {
+          path: callerPath,
+          content: `on:\n  pull_request:\njobs:\n  validate:\n    uses: owner/reusable/.github/workflows/validate.yml@${ref}\n`,
+        },
+      ],
+      externalCiPaths: [],
+      workflowFetchTruncated: false,
+      defaultBranch: "main",
+      declaredCommands: ["cargo test --locked"],
+    };
+
+    expect(
+      remoteValidationOutcome({ ...input, reusableWorkflowEvidenceIncomplete: true }).status,
+    ).toBe("incomplete");
+
+    const nested = remoteValidationOutcome({
+      ...input,
+      reusableWorkflows: [
+        {
+          callerPath,
+          job: "validate",
+          inputs: {},
+          target: {
+            status: "pinned",
+            reference: `owner/reusable/.github/workflows/validate.yml@${ref}`,
+            repository: "owner/reusable",
+            path: ".github/workflows/validate.yml",
+            ref,
+          },
+          status: "resolved",
+          repository: "owner/reusable",
+          path: ".github/workflows/validate.yml",
+          ref,
+          content: `on:
+  workflow_call:
+jobs:
+  nested:
+    uses: owner/other/.github/workflows/validate.yml@${"b".repeat(40)}
+`,
+        },
+      ],
+    });
+    expect(nested.status).toBe("incomplete");
+    expect(nested.workflowEvidence[0].reusableWorkflowEvidence[0].reason).toBe(
+      "nested-reusable-workflow-unresolved",
+    );
+  });
+
+  test("does not treat an echoed reusable-workflow command as validation", () => {
+    const ref = "a".repeat(40);
+    const callerPath = ".github/workflows/validate.yml";
+    const result = remoteValidationOutcome({
+      workflowPaths: [callerPath],
+      workflows: [
+        {
+          path: callerPath,
+          content: `on:\n  pull_request:\njobs:\n  validate:\n    uses: owner/reusable/.github/workflows/validate.yml@${ref}\n`,
+        },
+      ],
+      reusableWorkflows: [
+        {
+          callerPath,
+          job: "validate",
+          inputs: {},
+          target: {
+            status: "pinned",
+            reference: `owner/reusable/.github/workflows/validate.yml@${ref}`,
+            repository: "owner/reusable",
+            path: ".github/workflows/validate.yml",
+            ref,
+          },
+          status: "resolved",
+          repository: "owner/reusable",
+          path: ".github/workflows/validate.yml",
+          ref,
+          content: `on:\n  workflow_call:\njobs:\n  validate:\n    steps:\n      - run: echo "cargo test --locked"\n`,
+        },
+      ],
+      externalCiPaths: [],
+      workflowFetchTruncated: false,
+      defaultBranch: "main",
+      declaredCommands: ["cargo test --locked"],
+    });
+
+    expect(result.status).toBe("finding");
+    expect(result.workflowEvidence[0].reusableWorkflowEvidence[0].matchedCommands).toEqual([]);
+  });
 });

@@ -1,21 +1,38 @@
-import { selectedRemoteFiles } from "./preflight.js";
+import { selectedRemoteFiles, selectedRustSourceFiles } from "./preflight.js";
 
 export const DEFAULT_REMOTE_MANIFEST_BYTE_BUDGET = 512 * 1024;
+export const DEFAULT_REMOTE_RUST_SOURCE_BYTE_BUDGET = 512 * 1024;
 export const DEFAULT_REMOTE_FETCH_CONCURRENCY = 6;
 
 export function selectRemoteFilesByByteBudget(
   tree,
   byteBudget = DEFAULT_REMOTE_MANIFEST_BYTE_BUDGET,
 ) {
+  return selectByByteBudget(tree, byteBudget, selectedRemoteFiles, "remote manifest byte budget");
+}
+
+export function selectRustSourceFilesByByteBudget(
+  tree,
+  byteBudget = DEFAULT_REMOTE_RUST_SOURCE_BYTE_BUDGET,
+) {
+  return selectByByteBudget(
+    tree,
+    byteBudget,
+    selectedRustSourceFiles,
+    "remote Rust source byte budget",
+  );
+}
+
+function selectByByteBudget(tree, byteBudget, selector, label) {
   if (!Number.isSafeInteger(byteBudget) || byteBudget < 0) {
-    throw new Error("remote manifest byte budget must be a non-negative safe integer");
+    throw new Error(`${label} must be a non-negative safe integer`);
   }
 
-  const eligible = selectedRemoteFiles(tree, tree.length);
+  const eligible = selector(tree, tree.length);
   const unknownSize = eligible.find((entry) => !Number.isSafeInteger(entry.size) || entry.size < 0);
   if (unknownSize) {
     return {
-      selected: selectedRemoteFiles(tree),
+      selected: selector(tree),
       eligible,
       complete: false,
       reason: "blob-size-unavailable",

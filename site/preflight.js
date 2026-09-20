@@ -52,6 +52,18 @@ export function selectedWorkflowFiles(tree, limit = 8) {
     .slice(0, limit);
 }
 
+export function selectedRustSourceFiles(tree, limit = 128) {
+  return tree
+    .filter(
+      (entry) =>
+        entry.type === "blob" &&
+        entry.path.toLowerCase().endsWith(".rs") &&
+        isProductionSource(entry.path),
+    )
+    .toSorted((left, right) => left.path.localeCompare(right.path))
+    .slice(0, limit);
+}
+
 export function selectedRemoteFiles(tree, limit = 24) {
   return tree
     .filter(
@@ -59,6 +71,7 @@ export function selectedRemoteFiles(tree, limit = 24) {
         entry.type === "blob" &&
         !isIgnoredAnalysisPath(entry.path) &&
         (basename(entry.path) === "package.json" ||
+          basename(entry.path) === "Cargo.toml" ||
           basename(entry.path) === ".node-version" ||
           CONTEXT_FILES.has(entry.path)),
     )
@@ -85,6 +98,7 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
     snapshot.revisionUnavailable ||
     snapshot.manifestFetchTruncated ||
     snapshot.unreadablePaths.length > 0 ||
+    components.some((component) => component.testEvidence.status === "incomplete") ||
     validationEvidence.status === "incomplete";
   const highPriorityFindingCount = findings.filter((finding) => finding.severity === "high").length;
 
@@ -102,8 +116,12 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
       revisionUnavailable: Boolean(snapshot.revisionUnavailable),
       manifestFetchTruncated: snapshot.manifestFetchTruncated,
       manifestAcquisition: snapshot.manifestAcquisition ?? null,
+      rustSourceFetchTruncated: Boolean(snapshot.rustSourceFetchTruncated),
+      rustSourceAcquisition: snapshot.rustSourceAcquisition ?? null,
       workflowFetchTruncated: Boolean(snapshot.workflowFetchTruncated),
+      reusableWorkflowAcquisition: snapshot.reusableWorkflowAcquisition ?? null,
       unreadablePaths: snapshot.unreadablePaths,
+      unreadableRustSourcePaths: snapshot.unreadableRustSourcePaths ?? [],
       analyzedFiles: Object.keys(snapshot.files).length,
     },
     repository: snapshot.repository,
@@ -119,7 +137,7 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
     validationEvidence,
     findings,
     limitations: [
-      "Remote preflight reads GitHub metadata, a recursive tree, and bounded text manifests; it does not clone or execute repository code.",
+      "Remote preflight reads GitHub metadata, a recursive tree, bounded text manifests and Rust sources, and exact-ref public reusable workflows; it does not clone or execute repository code.",
       "Findings are structural evidence, not claims about behavioral correctness, security, coverage, or runtime performance.",
       "Run coding-tooling locally for authoritative conformance, findings, environment verification, and validation execution.",
     ],
@@ -196,17 +214,35 @@ function discoverComponents(snapshot, paths) {
       basename(candidate.path) === "Cargo.toml" && !isIgnoredAnalysisPath(candidate.path),
   )) {
     const directory = dirname(entry.path);
+    const workspaceRoot =
+      directory === "" && /^\s*\[workspace\]\s*$/m.test(snapshot.files[entry.path] ?? "");
     components.push({
       name: directory ? basename(directory) : snapshot.repository.name,
       path: directory || ".",
       kind: "rust",
       technologies: ["rust"],
-      capabilities: {
-        "format:check": ["cargo", "fmt", "--check"],
-        lint: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
-        build: ["cargo", "build", "--locked"],
-        "test:unit": ["cargo", "test", "--locked", "--lib"],
-      },
+      capabilities: workspaceRoot
+        ? {
+            "format:check": ["cargo", "fmt", "--all", "--", "--check"],
+            lint: [
+              "cargo",
+              "clippy",
+              "--workspace",
+              "--all-targets",
+              "--all-features",
+              "--",
+              "-D",
+              "warnings",
+            ],
+            build: ["cargo", "build", "--workspace", "--all-features"],
+            "test:unit": ["cargo", "test", "--workspace", "--all-features"],
+          }
+        : {
+            "format:check": ["cargo", "fmt", "--check"],
+            lint: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+            build: ["cargo", "build", "--locked"],
+            "test:unit": ["cargo", "test", "--locked", "--lib"],
+          },
     });
   }
 
@@ -240,16 +276,29 @@ function discoverComponents(snapshot, paths) {
     snapshot.unreadablePaths.length > 0
   );
   for (const component of resolvedComponents) {
+    const productionPaths = componentOwnedPaths(
+      paths,
+      resolvedComponents,
+      component,
+      isProductionSource,
+    );
+    const inspectedSourcePaths =
+      component.kind === "rust"
+        ? productionPaths.filter((path) => typeof snapshot.files[path] === "string")
+        : [];
+    const inlineTestPaths =
+      component.kind === "rust"
+        ? inspectedSourcePaths.filter((path) => rustInlineTestEvidencePresent(snapshot.files[path]))
+        : [];
     component.testEvidence = structuralTestOutcome({
       kind: component.kind,
       complete: evidenceComplete,
-      productionPaths: componentOwnedPaths(
-        paths,
-        resolvedComponents,
-        component,
-        isProductionSource,
-      ),
+      productionPaths,
       testPaths: componentOwnedPaths(paths, resolvedComponents, component, isTestPath),
+      inlineTestPaths,
+      inspectedSourcePaths,
+      sourceContentComplete:
+        component.kind !== "rust" || inspectedSourcePaths.length === productionPaths.length,
     });
   }
 
@@ -598,7 +647,16 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
     const outcome = component.testEvidence;
     const suffix = component.path === "." ? "" : `-${stableId(component.path)}`;
     const nestedPrefix = component.path === "." ? "" : `${component.name}: `;
-    if (outcome.status === "finding")
+    if (outcome.status === "finding" && outcome.reason === "no-rust-test-evidence")
+      add(
+        `REMOTE-TEST-001${suffix}`,
+        "high",
+        `${nestedPrefix}No structural Rust test evidence detected`,
+        `${outcome.inspectedSourcePathCount} component-owned Rust source file(s) were inspected without a separate test path or an inline Rust test marker.`,
+        "Use local deterministic findings before scaffolding tests.",
+        "coding-tooling findings --json",
+      );
+    else if (outcome.status === "finding")
       add(
         `REMOTE-TEST-001${suffix}`,
         "high",
@@ -607,12 +665,12 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
         "Use local deterministic findings before scaffolding tests.",
         "coding-tooling findings --json",
       );
-    else if (outcome.reason === "rust-inline-tests-unobservable")
+    else if (outcome.reason === "rust-source-content-incomplete")
       add(
         `REMOTE-TEST-002${suffix}`,
         "low",
         `${nestedPrefix}Rust structural test evidence is incomplete`,
-        `${outcome.productionPathCount} component-owned Rust production source file(s) were detected with no separate test-like paths. Inline #[cfg(test)] modules are not observable from the tree-only remote boundary.`,
+        `${outcome.inspectedSourcePathCount} of ${outcome.productionPathCount} component-owned Rust source file(s) were inspected, and no separate test path or inline Rust test marker was observed in the available content.`,
         "Use local deterministic findings and test execution before deciding that Rust tests are missing.",
         "coding-tooling findings --json",
       );
@@ -714,6 +772,14 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
       snapshot.unreadablePaths.join(", "),
       "Treat this result as incomplete and use local analysis.",
     );
+  if ((snapshot.unreadableRustSourcePaths ?? []).length)
+    add(
+      "REMOTE-SOURCE-005",
+      "medium",
+      "Selected Rust source evidence could not be read",
+      snapshot.unreadableRustSourcePaths.join(", "),
+      "Treat Rust inline-test evidence as incomplete and use local analysis.",
+    );
 
   const rank = { high: 0, medium: 1, low: 2, info: 3 };
   return findings.toSorted(
@@ -762,8 +828,22 @@ function validationEvidenceFor(snapshot, paths, components) {
     defaultBranch: snapshot.repository.defaultBranch,
     declaredCommands,
     packageScripts,
+    reusableWorkflows: snapshot.reusableWorkflows ?? [],
+    reusableWorkflowEvidenceIncomplete: snapshot.reusableWorkflowAcquisition?.complete === false,
     localActionIsCodingTooling: isCodingToolingAction(snapshot.files["action.yml"]),
   });
+}
+
+function rustInlineTestEvidencePresent(content) {
+  return String(content)
+    .split(/\r?\n/)
+    .some((line) => {
+      if (/^\s*\/\//.test(line)) return false;
+      return (
+        /^\s*#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]/.test(line) ||
+        /^\s*#\s*\[\s*(?:[A-Za-z_][A-Za-z0-9_]*::)*test(?:\s*\([^\]]*\))?\s*\]/.test(line)
+      );
+    });
 }
 
 function isExternalCiPath(path) {
@@ -843,7 +923,7 @@ function componentIdentity(component) {
 function priority(path) {
   if (path === ".coding-tooling.json") return 0;
   if (CONTEXT_FILES.has(path)) return 1;
-  if (path === "package.json") return 2;
+  if (path === "package.json" || path === "Cargo.toml") return 2;
   if (basename(path) === ".node-version") return 20 + path.split("/").length;
   return 10 + path.split("/").length;
 }

@@ -1,3 +1,5 @@
+import { discoverReusableWorkflowCalls, materializeReusableWorkflow } from "./reusable-workflow.js";
+
 export const NORMALIZED_EVIDENCE_SCHEMA_VERSION = 1;
 
 export const PACKAGE_SCRIPT_CANDIDATES = Object.freeze({
@@ -281,19 +283,30 @@ export function canonicalPackageCapabilityOutcomes(
 export function structuralTestOutcome(input) {
   const productionPaths = [...new Set(input.productionPaths ?? [])].toSorted();
   const testPaths = [...new Set(input.testPaths ?? [])].toSorted();
+  const inlineTestPaths = [...new Set(input.inlineTestPaths ?? [])].toSorted();
+  const inspectedSourcePaths = [...new Set(input.inspectedSourcePaths ?? [])].toSorted();
   const base = {
     productionPathCount: productionPaths.length,
     testPathCount: testPaths.length,
+    inlineTestPathCount: inlineTestPaths.length,
+    inspectedSourcePathCount: inspectedSourcePaths.length,
     productionPaths,
     testPaths,
+    inlineTestPaths,
+    inspectedSourcePaths,
   };
   if (!input.complete) return { ...base, status: "incomplete", reason: "evidence-incomplete" };
   if (productionPaths.length === 0)
     return { ...base, status: "unsupported", reason: "no-production-source" };
   if (testPaths.length > 0)
     return { ...base, status: "satisfied", reason: "separate-test-path-present" };
-  if (input.kind === "rust")
-    return { ...base, status: "unsupported", reason: "rust-inline-tests-unobservable" };
+  if (input.kind === "rust") {
+    if (inlineTestPaths.length > 0)
+      return { ...base, status: "satisfied", reason: "rust-inline-test-evidence-present" };
+    if (!input.sourceContentComplete)
+      return { ...base, status: "incomplete", reason: "rust-source-content-incomplete" };
+    return { ...base, status: "finding", reason: "no-rust-test-evidence" };
+  }
   return { ...base, status: "finding", reason: "no-separate-test-path" };
 }
 
@@ -316,6 +329,9 @@ export function remoteValidationOutcome(input) {
         defaultBranch: input.defaultBranch,
         declaredCommands,
         packageScripts,
+        reusableWorkflows: (input.reusableWorkflows ?? []).filter(
+          (workflow) => workflow.callerPath === path,
+        ),
         localActionIsCodingTooling: Boolean(input.localActionIsCodingTooling),
       }),
     );
@@ -345,6 +361,16 @@ export function remoteValidationOutcome(input) {
       status: "incomplete",
       provider: "github-actions",
       reason: "workflow-content-incomplete",
+    };
+  if (
+    input.reusableWorkflowEvidenceIncomplete ||
+    workflowEvidence.some((workflow) => workflow.status === "incomplete")
+  )
+    return {
+      ...base,
+      status: "incomplete",
+      provider: "github-actions",
+      reason: "reusable-workflow-evidence-incomplete",
     };
   if (externalCiPaths.length > 0)
     return {
@@ -404,11 +430,135 @@ function normalizePackageScripts(values) {
 
 function analyzeWorkflowValidation(input) {
   const relevantTrigger = workflowHasRelevantTrigger(input.content, input.defaultBranch);
+  const direct = workflowValidationCommandEvidence(input.content, input);
+  const reusableWorkflowEvidence = (input.reusableWorkflows ?? []).map((workflow) =>
+    analyzeReusableWorkflowValidation(workflow, input),
+  );
+  const matchedPackageScriptEvidence = [
+    ...direct.matchedPackageScriptEvidence,
+    ...reusableWorkflowEvidence.flatMap((workflow) => workflow.matchedPackageScriptEvidence ?? []),
+  ];
+  const wrapperMatchedCommandKeys = new Set(
+    matchedPackageScriptEvidence.flatMap((evidence) =>
+      evidence.matchedCommands.map((command) => `${evidence.workingDirectory}\0${command}`),
+    ),
+  );
+  const matchedCommandEvidence = input.declaredCommands.filter(
+    (command) =>
+      direct.literalMatchedCommandEvidence.some(
+        (literal) =>
+          literal.command === command.command &&
+          literal.workingDirectory === command.workingDirectory,
+      ) ||
+      reusableWorkflowEvidence.some((workflow) =>
+        (workflow.matchedCommandEvidence ?? []).some(
+          (matched) =>
+            matched.command === command.command &&
+            matched.workingDirectory === command.workingDirectory,
+        ),
+      ) ||
+      wrapperMatchedCommandKeys.has(`${command.workingDirectory}\0${command.command}`),
+  );
+  const matchedCommands = [
+    ...new Set(matchedCommandEvidence.map((command) => command.command)),
+  ].toSorted();
+  const codingToolingAction = direct.codingToolingAction;
+  const validationInvocation = matchedCommandEvidence.length > 0 || codingToolingAction;
+  const reusableIncomplete = reusableWorkflowEvidence.some((workflow) =>
+    ["incomplete", "unsupported"].includes(workflow.status),
+  );
+  return {
+    path: input.path,
+    status:
+      relevantTrigger && validationInvocation
+        ? "satisfied"
+        : relevantTrigger && reusableIncomplete
+          ? "incomplete"
+          : "finding",
+    relevantTrigger,
+    validationInvocation,
+    matchedCommands,
+    matchedCommandEvidence,
+    matchedPackageScriptEvidence,
+    codingToolingAction,
+    reusableWorkflowEvidence,
+  };
+}
+
+function analyzeReusableWorkflowValidation(workflow, input) {
+  const base = {
+    callerPath: workflow.callerPath,
+    job: workflow.job,
+    reference: workflow.target.reference,
+    repository: workflow.repository ?? workflow.target.repository,
+    path: workflow.path ?? workflow.target.path,
+    ref: workflow.ref ?? workflow.target.ref,
+  };
+  if (workflow.status !== "resolved") {
+    return {
+      ...base,
+      status: workflow.status === "unsupported" ? "unsupported" : "incomplete",
+      reason: workflow.reason ?? "reusable-workflow-content-unavailable",
+      validationInvocation: false,
+      matchedCommands: [],
+      matchedCommandEvidence: [],
+      matchedPackageScriptEvidence: [],
+    };
+  }
+
+  const materialized = materializeReusableWorkflow(workflow.content, workflow.inputs);
+  if (!materialized.workflowCall) {
+    return {
+      ...base,
+      status: "unsupported",
+      reason: "target-is-not-a-reusable-workflow",
+      validationInvocation: false,
+      matchedCommands: [],
+      matchedCommandEvidence: [],
+      matchedPackageScriptEvidence: [],
+    };
+  }
+  const evidence = workflowValidationCommandEvidence(materialized.content, {
+    ...input,
+    localActionIsCodingTooling:
+      workflow.target.status === "local" && input.localActionIsCodingTooling,
+  });
+  const matchedCommands = [
+    ...new Set(evidence.matchedCommandEvidence.map((command) => command.command)),
+  ].toSorted();
+  const validationInvocation = matchedCommands.length > 0 || evidence.codingToolingAction;
+  const nestedReusableWorkflow =
+    discoverReusableWorkflowCalls([{ path: workflow.path, content: materialized.content }]).length >
+    0;
+  return {
+    ...base,
+    status: validationInvocation
+      ? "satisfied"
+      : materialized.unresolvedInputs.length > 0 || nestedReusableWorkflow
+        ? "incomplete"
+        : "finding",
+    reason: validationInvocation
+      ? "validation-command-evidenced"
+      : materialized.unresolvedInputs.length > 0 || nestedReusableWorkflow
+        ? materialized.unresolvedInputs.length > 0
+          ? "reusable-workflow-inputs-unresolved"
+          : "nested-reusable-workflow-unresolved"
+        : "no-validation-command-evidenced",
+    validationInvocation,
+    matchedCommands,
+    matchedCommandEvidence: evidence.matchedCommandEvidence,
+    matchedPackageScriptEvidence: evidence.matchedPackageScriptEvidence,
+    unresolvedInputs: materialized.unresolvedInputs,
+    nestedReusableWorkflow,
+  };
+}
+
+function workflowValidationCommandEvidence(content, input) {
   const literalMatchedCommandEvidence = input.declaredCommands.filter((command) =>
-    workflowRunsCommand(input.content, command),
+    workflowRunsCommand(content, command),
   );
   const matchedPackageScriptEvidence = input.packageScripts.flatMap((packageEvidence) =>
-    workflowPackageScriptValidationEvidence(input.content, packageEvidence, input.declaredCommands),
+    workflowPackageScriptValidationEvidence(content, packageEvidence, input.declaredCommands),
   );
   const wrapperMatchedCommandKeys = new Set(
     matchedPackageScriptEvidence.flatMap((evidence) =>
@@ -423,23 +573,11 @@ function analyzeWorkflowValidation(input) {
           literal.workingDirectory === command.workingDirectory,
       ) || wrapperMatchedCommandKeys.has(`${command.workingDirectory}\0${command.command}`),
   );
-  const matchedCommands = [
-    ...new Set(matchedCommandEvidence.map((command) => command.command)),
-  ].toSorted();
-  const codingToolingAction = workflowUsesCodingToolingAction(
-    input.content,
-    input.localActionIsCodingTooling,
-  );
-  const validationInvocation = matchedCommandEvidence.length > 0 || codingToolingAction;
   return {
-    path: input.path,
-    status: relevantTrigger && validationInvocation ? "satisfied" : "finding",
-    relevantTrigger,
-    validationInvocation,
-    matchedCommands,
+    literalMatchedCommandEvidence,
     matchedCommandEvidence,
     matchedPackageScriptEvidence,
-    codingToolingAction,
+    codingToolingAction: workflowUsesCodingToolingAction(content, input.localActionIsCodingTooling),
   };
 }
 
@@ -693,7 +831,89 @@ function workflowRunWorkingDirectory(lines, runIndex, runIndent) {
     if (!match) continue;
     return normalizeWorkingDirectory(match[1]);
   }
-  return ".";
+  return (
+    workflowJobDefaultWorkingDirectory(lines, runIndex) ??
+    workflowDefaultWorkingDirectory(lines) ??
+    "."
+  );
+}
+
+function workflowJobDefaultWorkingDirectory(lines, runIndex) {
+  const jobsIndex = lines.findIndex((line) => /^\s*jobs\s*:\s*(?:#.*)?$/.test(line));
+  if (jobsIndex < 0 || jobsIndex >= runIndex) return null;
+  const jobsIndent = yamlIndent(lines[jobsIndex]);
+  const starts = [];
+  for (let index = jobsIndex + 1; index <= runIndex; index += 1) {
+    const raw = lines[index];
+    if (!raw.trim()) continue;
+    const indent = yamlIndent(raw);
+    if (indent <= jobsIndent) break;
+    const match = raw.match(/^(\s*)[A-Za-z0-9_.-]+\s*:\s*(?:#.*)?$/);
+    if (!match) continue;
+    if (starts.length === 0 || indent === starts[0].indent) starts.push({ index, indent });
+  }
+  const job = starts.at(-1);
+  if (!job) return null;
+  return defaultRunWorkingDirectory(lines, job.index + 1, runIndex + 1, job.indent);
+}
+
+function workflowDefaultWorkingDirectory(lines) {
+  const jobsIndex = lines.findIndex((line) => /^\s*jobs\s*:/.test(line));
+  const end = jobsIndex < 0 ? lines.length : jobsIndex;
+  return defaultRunWorkingDirectory(lines, 0, end, -1);
+}
+
+function defaultRunWorkingDirectory(lines, start, end, parentIndent) {
+  const defaultsIndex = findYamlProperty(lines, start, end, parentIndent, "defaults");
+  if (defaultsIndex < 0) return null;
+  const defaultsIndent = yamlIndent(lines[defaultsIndex]);
+  const defaultsEnd = yamlBlockEnd(lines, defaultsIndex, end);
+  const runIndex = findYamlProperty(lines, defaultsIndex + 1, defaultsEnd, defaultsIndent, "run");
+  if (runIndex < 0) return null;
+  const runIndent = yamlIndent(lines[runIndex]);
+  const runEnd = yamlBlockEnd(lines, runIndex, defaultsEnd);
+  const directoryIndex = findYamlProperty(
+    lines,
+    runIndex + 1,
+    runEnd,
+    runIndent,
+    "working-directory",
+  );
+  if (directoryIndex < 0) return null;
+  const match = lines[directoryIndex].match(/^\s*working-directory\s*:\s*(.+)$/);
+  return match ? normalizeWorkingDirectory(match[1]) : null;
+}
+
+function findYamlProperty(lines, start, end, parentIndent, key) {
+  let childIndent = null;
+  for (let index = start; index < end; index += 1) {
+    if (!lines[index].trim()) continue;
+    const indent = yamlIndent(lines[index]);
+    if (indent <= parentIndent) break;
+    childIndent = childIndent === null ? indent : Math.min(childIndent, indent);
+  }
+  if (childIndent === null) return -1;
+  for (let index = start; index < end; index += 1) {
+    const raw = lines[index];
+    if (!raw.trim()) continue;
+    const indent = yamlIndent(raw);
+    if (indent <= parentIndent) break;
+    if (indent === childIndent && new RegExp(`^\\s*${key}\\s*:`).test(raw)) return index;
+  }
+  return -1;
+}
+
+function yamlBlockEnd(lines, start, limit) {
+  const indent = yamlIndent(lines[start]);
+  for (let index = start + 1; index < limit; index += 1) {
+    if (!lines[index].trim()) continue;
+    if (yamlIndent(lines[index]) <= indent) return index;
+  }
+  return limit;
+}
+
+function yamlIndent(line) {
+  return line.match(/^\s*/)?.[0].length ?? 0;
 }
 
 function shellCommandMatchesInDirectory(value, command, workingDirectory, requiredDirectory) {

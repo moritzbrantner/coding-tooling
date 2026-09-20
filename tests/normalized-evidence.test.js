@@ -261,12 +261,39 @@ describe("normalized package evidence", () => {
         complete: true,
         productionPaths: ["src/lib.rs"],
         testPaths: [],
+        inspectedSourcePaths: ["src/lib.rs"],
+        inlineTestPaths: ["src/lib.rs"],
+        sourceContentComplete: true,
       }),
     ).toEqual(
       expect.objectContaining({
-        status: "unsupported",
-        reason: "rust-inline-tests-unobservable",
+        status: "satisfied",
+        reason: "rust-inline-test-evidence-present",
       }),
+    );
+    expect(
+      structuralTestOutcome({
+        kind: "rust",
+        complete: true,
+        productionPaths: ["src/lib.rs"],
+        testPaths: [],
+        inspectedSourcePaths: ["src/lib.rs"],
+        inlineTestPaths: [],
+        sourceContentComplete: true,
+      }),
+    ).toEqual(expect.objectContaining({ status: "finding", reason: "no-rust-test-evidence" }));
+    expect(
+      structuralTestOutcome({
+        kind: "rust",
+        complete: true,
+        productionPaths: ["src/lib.rs", "src/world.rs"],
+        testPaths: [],
+        inspectedSourcePaths: ["src/lib.rs"],
+        inlineTestPaths: [],
+        sourceContentComplete: false,
+      }),
+    ).toEqual(
+      expect.objectContaining({ status: "incomplete", reason: "rust-source-content-incomplete" }),
     );
     expect(
       structuralTestOutcome({
