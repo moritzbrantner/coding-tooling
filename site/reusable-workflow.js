@@ -14,12 +14,13 @@ export function discoverReusableWorkflowCalls(workflows) {
 
 export function materializeReusableWorkflow(content, callerInputs) {
   const defaults = workflowCallInputDefaults(content);
-  const inputs = { ...defaults, ...literalInputs(callerInputs) };
+  // An explicitly supplied but unresolved input overrides its default too.
+  const inputs = literalInputs({ ...defaults, ...callerInputs });
   const unresolved = new Set();
   const materialized = String(content).replace(
     /\$\{\{\s*inputs\.([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}/g,
     (expression, name) => {
-      if (!(name in inputs)) {
+      if (!Object.hasOwn(inputs, name)) {
         unresolved.add(name);
         return expression;
       }
@@ -61,16 +62,22 @@ export function parseReusableWorkflowReference(value) {
 }
 
 function workflowCalls(callerPath, content) {
-  const lines = String(content).split(/\r?\n/);
+  const lines = String(content)
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*#/.test(line));
   const jobsIndex = lines.findIndex((line) => /^\s*jobs:\s*(?:#.*)?$/.test(line));
   if (jobsIndex < 0) return [];
   const jobsIndent = indentation(lines[jobsIndex]);
   const starts = [];
+  let jobsEnd = lines.length;
   for (let index = jobsIndex + 1; index < lines.length; index += 1) {
     const line = lines[index];
     if (!line.trim()) continue;
     const indent = indentation(line);
-    if (indent <= jobsIndent) break;
+    if (indent <= jobsIndent) {
+      jobsEnd = index;
+      break;
+    }
     const match = line.match(/^(\s*)([A-Za-z0-9_.-]+):\s*(?:#.*)?$/);
     if (!match) continue;
     if (starts.length === 0 || match[1].length === starts[0].indent) {
@@ -79,7 +86,7 @@ function workflowCalls(callerPath, content) {
   }
 
   return starts.flatMap((start, position) => {
-    const end = starts[position + 1]?.index ?? lines.length;
+    const end = starts[position + 1]?.index ?? jobsEnd;
     const propertyIndent = firstChildIndent(lines, start.index + 1, end, start.indent);
     if (propertyIndent === null) return [];
     const usesIndex = findProperty(lines, start.index + 1, end, propertyIndent, "uses");
@@ -110,7 +117,7 @@ function workflowCallInputDefaults(content) {
   const inputs = findChildKey(lines, workflowCall, "inputs");
   if (inputs < 0) return {};
 
-  const result = {};
+  const result = Object.create(null);
   const inputEnd = blockEnd(lines, inputs);
   const inputIndent = firstNormalizedChildIndent(lines, inputs, inputEnd);
   if (inputIndent === null) return result;
@@ -149,13 +156,16 @@ function literalInputs(values) {
 function childScalars(lines, start, end, parentIndent) {
   const childIndent = firstChildIndent(lines, start, end, parentIndent);
   if (childIndent === null) return {};
-  const result = {};
+  const result = Object.create(null);
   for (let index = start; index < end; index += 1) {
+    if (!lines[index].trim()) continue;
+    if (indentation(lines[index]) <= parentIndent) break;
     if (indentation(lines[index]) !== childIndent) continue;
     const match = lines[index].trim().match(/^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$/);
     if (!match) continue;
     const value = yamlScalar(match[2]);
-    if (value !== null && !value.includes("${{")) result[match[1]] = value;
+    // Preserve presence even when the value cannot be materialized.
+    result[match[1]] = value;
   }
   return result;
 }
@@ -172,6 +182,7 @@ function firstChildIndent(lines, start, end, parentIndent) {
   for (let index = start; index < end; index += 1) {
     if (!lines[index].trim()) continue;
     const indent = indentation(lines[index]);
+    if (indent <= parentIndent) return null;
     if (indent > parentIndent) return indent;
   }
   return null;
@@ -180,6 +191,7 @@ function firstChildIndent(lines, start, end, parentIndent) {
 function normalizedLines(content) {
   return String(content)
     .split(/\r?\n/)
+    .filter((line) => !/^\s*#/.test(line))
     .map((raw) => ({ indent: indentation(raw), text: raw.replace(/\s+#.*$/, "").trim() }))
     .filter((line) => line.text);
 }

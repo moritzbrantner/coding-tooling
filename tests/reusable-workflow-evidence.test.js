@@ -9,7 +9,7 @@ import {
 const pinnedRef = "45042e56be120b438096e774027637cac0280075";
 
 describe("reusable workflow evidence", () => {
-  test("discovers job-level reusable workflow calls and literal inputs", () => {
+  test("discovers job-level reusable workflow calls and preserves input expressions", () => {
     const calls = discoverReusableWorkflowCalls([
       {
         path: ".github/workflows/validate.yml",
@@ -32,7 +32,10 @@ jobs:
       {
         callerPath: ".github/workflows/validate.yml",
         job: "validate",
-        inputs: { test_command: "cargo test --locked --workspace" },
+        inputs: {
+          test_command: "cargo test --locked --workspace",
+          dynamic_command: "${{ github.event.inputs.command }}",
+        },
         target: {
           status: "pinned",
           reference: `moritzbrantner/reusable-workflows/.github/workflows/validate-repo.yml@${pinnedRef}`,
@@ -59,9 +62,76 @@ jobs:
     );
   });
 
+  test("keeps caller inputs inside the with block and ignores comments", () => {
+    const [call] = discoverReusableWorkflowCalls([
+      {
+        path: ".github/workflows/validate.yml",
+        content: `on: pull_request
+jobs:
+# A comment does not end the jobs mapping.
+  validate:
+    # Nor does it determine the property indentation.
+    uses: owner/repo/.github/workflows/validate.yml@${pinnedRef}
+    with:
+      test_command: echo skipped
+    secrets:
+      test_command: cargo test --locked
+`,
+      },
+    ]);
+
+    expect(call?.inputs).toEqual({ test_command: "echo skipped" });
+  });
+
+  test("does not read sibling mappings as children of an empty with block", () => {
+    const [call] = discoverReusableWorkflowCalls([
+      {
+        path: ".github/workflows/validate.yml",
+        content: `jobs:
+  validate:
+    uses: owner/repo/.github/workflows/validate.yml@${pinnedRef}
+    with: {}
+    secrets:
+      test_command: cargo test --locked
+`,
+      },
+    ]);
+    expect(call?.inputs).toEqual({});
+  });
+
+  test("treats inherited object names as unresolved inputs", () => {
+    const result = materializeReusableWorkflow(
+      "on: workflow_call\njobs:\n  validate:\n    steps:\n      - run: ${{ inputs.toString }}\n",
+      {},
+    );
+    expect(result.unresolvedInputs).toEqual(["toString"]);
+    expect(result.content).toContain("${{ inputs.toString }}");
+  });
+
+  test("materializes explicitly declared inputs with object-prototype names", () => {
+    const [call] = discoverReusableWorkflowCalls([
+      {
+        path: ".github/workflows/validate.yml",
+        content: `jobs:
+  validate:
+    uses: owner/repo/.github/workflows/validate.yml@${pinnedRef}
+    with:
+      __proto__: cargo test --locked
+`,
+      },
+    ]);
+    const result = materializeReusableWorkflow(
+      "on: workflow_call\njobs:\n  validate:\n    steps:\n      - run: ${{ inputs.__proto__ }}\n",
+      call.inputs,
+    );
+    expect(result.unresolvedInputs).toEqual([]);
+    expect(result.content).toContain("run: cargo test --locked");
+  });
+
   test("materializes literal caller inputs over reusable workflow defaults", () => {
     const result = materializeReusableWorkflow(
       `on:
+# Comments do not terminate the trigger or input mappings.
   workflow_call:
     inputs:
       test_command:

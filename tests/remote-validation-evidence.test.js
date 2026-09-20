@@ -1,8 +1,58 @@
 import { describe, expect, test } from "bun:test";
 
 import { remoteValidationOutcome } from "../site/evidence-model.js";
+import { discoverReusableWorkflowCalls } from "../site/reusable-workflow.js";
 
 describe("remote validation evidence", () => {
+  test.each(["${{ github.event.inputs.command }}", "|\n        echo skipped"])(
+    "does not substitute defaults for an unresolved caller input: %s",
+    (callerInput) => {
+      const callerPath = ".github/workflows/validate.yml";
+      const workflows = [
+        {
+          path: callerPath,
+          content: `on: pull_request
+jobs:
+  validate:
+    uses: owner/repo/.github/workflows/validate.yml@${"a".repeat(40)}
+    with:
+      test_command: ${callerInput}
+`,
+        },
+      ];
+      const calls = discoverReusableWorkflowCalls(workflows);
+      const result = remoteValidationOutcome({
+        workflowPaths: [callerPath],
+        workflows,
+        reusableWorkflows: calls.map((call) => ({
+          ...call,
+          status: "resolved",
+          content: `on:
+  workflow_call:
+    inputs:
+      test_command:
+        type: string
+        default: cargo test --locked
+jobs:
+  validate:
+    steps:
+      - run: \${{ inputs.test_command }}
+`,
+        })),
+        externalCiPaths: [],
+        workflowFetchTruncated: false,
+        defaultBranch: "main",
+        declaredCommands: ["cargo test --locked"],
+      });
+
+      expect(result.status).toBe("incomplete");
+      expect(result.workflowEvidence[0].matchedCommands).toEqual([]);
+      expect(result.workflowEvidence[0].reusableWorkflowEvidence[0].unresolvedInputs).toEqual([
+        "test_command",
+      ]);
+    },
+  );
+
   test("proves validation from a relevant trigger plus a declared command", () => {
     const result = remoteValidationOutcome({
       workflowPaths: [".github/workflows/anything.yml"],
