@@ -4,7 +4,7 @@ import { analyzeSnapshot } from "../site/preflight.js";
 import { remoteCommandFromSnapshot } from "../site/remote-command.js";
 
 describe("remote structural test evidence", () => {
-  test("does not claim Rust tests are missing when inline tests are unobservable", () => {
+  test("does not claim Rust tests are missing when source content is unavailable", () => {
     const snapshot = repository({
       tree: [
         blob("Cargo.toml"),

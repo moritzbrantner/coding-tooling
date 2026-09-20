@@ -164,4 +164,88 @@ describe("immutable remote snapshot acquisition", () => {
       expect.objectContaining({ id: "REMOTE-SOURCE-004", severity: "medium" }),
     );
   });
+
+  test("loads bounded Rust sources and resolves public reusable workflows at an exact ref", async () => {
+    const reusableRef = "b".repeat(40);
+    const caller = `on:
+  pull_request:
+jobs:
+  validate:
+    uses: owner/reusable/.github/workflows/validate.yml@${reusableRef}
+    with:
+      test_command: cargo test --locked
+`;
+    const reusable = `on:
+  workflow_call:
+    inputs:
+      test_command:
+        type: string
+jobs:
+  validate:
+    steps:
+      - run: \${{ inputs.test_command }}
+`;
+    const entries = [
+      { path: "Cargo.toml", sha: "cargo", type: "blob", size: 100 },
+      { path: "src/lib.rs", sha: "rust-source", type: "blob", size: 200 },
+      {
+        path: ".github/workflows/validate.yml",
+        sha: "caller-workflow",
+        type: "blob",
+        size: 300,
+      },
+    ];
+    const requests = [];
+
+    const snapshot = await loadSnapshot(
+      { owner: "example", name: "repo" },
+      {
+        fetchImpl: async (url) => {
+          requests.push(url);
+          if (url === "https://api.github.com/repos/example/repo")
+            return jsonResponse(repositoryMetadata());
+          if (url === "https://api.github.com/repos/example/repo/branches/main")
+            return jsonResponse(branchMetadata());
+          if (url === `https://api.github.com/repos/example/repo/git/trees/${revision}?recursive=1`)
+            return jsonResponse({ tree: entries, truncated: false });
+          if (url === "https://api.github.com/repos/example/repo/git/blobs/cargo")
+            return jsonResponse({
+              encoding: "base64",
+              content: btoa('[workspace]\nmembers = ["crates/world"]\n'),
+            });
+          if (url === "https://api.github.com/repos/example/repo/git/blobs/rust-source")
+            return jsonResponse({
+              encoding: "base64",
+              content: btoa("pub fn tick() {}\n#[cfg(test)]\nmod tests {}\n"),
+            });
+          if (url === "https://api.github.com/repos/example/repo/git/blobs/caller-workflow")
+            return jsonResponse({ encoding: "base64", content: btoa(caller) });
+          if (
+            url ===
+            `https://api.github.com/repos/owner/reusable/contents/.github/workflows/validate.yml?ref=${reusableRef}`
+          )
+            return jsonResponse({ type: "file", encoding: "base64", content: btoa(reusable) });
+          throw new Error(`Unexpected request: ${url}`);
+        },
+      },
+    );
+
+    expect(snapshot.files["src/lib.rs"]).toContain("#[cfg(test)]");
+    expect(snapshot.rustSourceAcquisition).toEqual(
+      expect.objectContaining({ selectedCount: 1, selectedBytes: 200 }),
+    );
+    expect(snapshot.rustSourceFetchTruncated).toBe(false);
+    expect(snapshot.reusableWorkflows).toEqual([
+      expect.objectContaining({
+        status: "resolved",
+        repository: "owner/reusable",
+        ref: reusableRef,
+        path: ".github/workflows/validate.yml",
+        content: reusable,
+      }),
+    ]);
+    expect(requests).toContain(
+      `https://api.github.com/repos/owner/reusable/contents/.github/workflows/validate.yml?ref=${reusableRef}`,
+    );
+  });
 });

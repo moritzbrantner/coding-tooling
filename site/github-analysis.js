@@ -10,8 +10,13 @@ import {
   DEFAULT_REMOTE_FETCH_CONCURRENCY,
   mapWithConcurrency,
   selectRemoteFilesByByteBudget,
+  selectRustSourceFilesByByteBudget,
 } from "./remote-acquisition.js";
+import { discoverReusableWorkflowCalls } from "./reusable-workflow.js";
 import { analyzeSnapshot, parseRepositoryReference, selectedWorkflowFiles } from "./preflight.js";
+
+const DEFAULT_REUSABLE_WORKFLOW_LIMIT = 8;
+const DEFAULT_REUSABLE_WORKFLOW_BYTE_BUDGET = 256 * 1024;
 
 export async function analysisJson(value, options = {}) {
   const reference = typeof value === "string" ? parseRepositoryReference(value) : value;
@@ -76,13 +81,19 @@ export async function loadSnapshot(reference, options = {}) {
     (entry) => entry.path && entry.sha && ["blob", "tree"].includes(entry.type),
   );
   const manifestAcquisition = selectRemoteFilesByByteBudget(entries, options.manifestByteBudget);
+  const rustSourceAcquisition = selectRustSourceFilesByByteBudget(
+    entries,
+    options.rustSourceByteBudget,
+  );
   const selectedBase = manifestAcquisition.selected;
+  const selectedRustSources = rustSourceAcquisition.selected;
   const selectedWorkflows = selectedWorkflowFiles(entries);
   const rootAction = entries.find(
     (entry) => entry.type === "blob" && ["action.yml", "action.yaml"].includes(entry.path),
   );
   const selected = [
     ...selectedBase,
+    ...selectedRustSources,
     ...selectedWorkflows,
     ...(rootAction && !selectedBase.some((entry) => entry.path === rootAction.path)
       ? [rootAction]
@@ -92,9 +103,11 @@ export async function loadSnapshot(reference, options = {}) {
   const workflowFetchTruncated = selectedWorkflows.length < eligibleWorkflows.length;
   const files = {};
   const unreadablePaths = [];
+  const unreadableRustSourcePaths = [];
+  const rustSourcePaths = new Set(selectedRustSources.map((entry) => entry.path));
 
   await mapWithConcurrency(
-    selected,
+    deduplicateEntries(selected),
     options.fetchConcurrency ?? DEFAULT_REMOTE_FETCH_CONCURRENCY,
     async (entry) => {
       try {
@@ -107,10 +120,26 @@ export async function loadSnapshot(reference, options = {}) {
         files[entry.path] = decodeBase64(blob.content);
       } catch (error) {
         if (error?.name === "AbortError") throw error;
-        unreadablePaths.push(entry.path);
+        if (rustSourcePaths.has(entry.path)) unreadableRustSourcePaths.push(entry.path);
+        else unreadablePaths.push(entry.path);
       }
     },
   );
+
+  const loadedWorkflows = selectedWorkflows
+    .filter((entry) => typeof files[entry.path] === "string")
+    .map((entry) => ({ path: entry.path, content: files[entry.path] }));
+  const reusableWorkflowCalls = discoverReusableWorkflowCalls(loadedWorkflows);
+  const reusableWorkflowAcquisition = await loadReusableWorkflowEvidence({
+    calls: reusableWorkflowCalls,
+    repository: repository.full_name,
+    revision: resolvedRevision,
+    files,
+    fetchImpl,
+    signal,
+    callLimit: options.reusableWorkflowLimit,
+    byteBudget: options.reusableWorkflowByteBudget,
+  });
 
   return {
     repository: {
@@ -141,9 +170,152 @@ export async function loadSnapshot(reference, options = {}) {
       eligibleCount: manifestAcquisition.eligible.length,
       selectedCount: manifestAcquisition.selected.length,
     },
+    rustSourceFetchTruncated: !rustSourceAcquisition.complete,
+    rustSourceAcquisition: {
+      byteBudget: rustSourceAcquisition.byteBudget,
+      selectedBytes: rustSourceAcquisition.selectedBytes,
+      reason: rustSourceAcquisition.reason,
+      blockedPath: rustSourceAcquisition.blockedPath,
+      eligibleCount: rustSourceAcquisition.eligible.length,
+      selectedCount: rustSourceAcquisition.selected.length,
+    },
     workflowFetchTruncated,
     unreadablePaths: unreadablePaths.toSorted(),
+    unreadableRustSourcePaths: unreadableRustSourcePaths.toSorted(),
+    reusableWorkflows: reusableWorkflowAcquisition.evidence,
+    reusableWorkflowAcquisition: reusableWorkflowAcquisition.summary,
   };
+}
+
+async function loadReusableWorkflowEvidence(input) {
+  const callLimit = boundedOption(
+    input.callLimit,
+    DEFAULT_REUSABLE_WORKFLOW_LIMIT,
+    "reusable workflow call limit",
+  );
+  const byteBudget = boundedOption(
+    input.byteBudget,
+    DEFAULT_REUSABLE_WORKFLOW_BYTE_BUDGET,
+    "reusable workflow byte budget",
+  );
+  const selectedCalls = input.calls.slice(0, callLimit);
+  const cache = new Map();
+  const evidence = [];
+  let selectedBytes = 0;
+  let blockedReference = null;
+
+  for (const call of selectedCalls) {
+    if (call.target.status === "unsupported") {
+      evidence.push({ ...call, status: "unsupported", reason: call.target.reason });
+      continue;
+    }
+    const repository = call.target.repository ?? input.repository;
+    const ref = call.target.ref ?? input.revision;
+    if (!ref) {
+      evidence.push({ ...call, status: "incomplete", reason: "exact-revision-unavailable" });
+      continue;
+    }
+
+    const key = `${repository}@${ref}:${call.target.path}`;
+    let resolved = cache.get(key);
+    if (!resolved) {
+      const localContent =
+        repository === input.repository && ref === input.revision
+          ? input.files[call.target.path]
+          : null;
+      resolved =
+        typeof localContent === "string"
+          ? { status: "resolved", content: localContent }
+          : await githubOptionalTextFile(
+              repository,
+              call.target.path,
+              ref,
+              input.fetchImpl,
+              input.signal,
+            );
+      if (resolved.status === "resolved") {
+        const bytes = new TextEncoder().encode(resolved.content).length;
+        if (selectedBytes + bytes > byteBudget) {
+          blockedReference = key;
+          resolved = { status: "incomplete", reason: "byte-budget-exceeded" };
+        } else {
+          selectedBytes += bytes;
+          resolved = { ...resolved, bytes };
+        }
+      }
+      cache.set(key, resolved);
+    }
+
+    evidence.push({
+      ...call,
+      status: resolved.status,
+      ...(resolved.reason ? { reason: resolved.reason } : {}),
+      repository,
+      ref,
+      path: call.target.path,
+      ...(resolved.status === "resolved" ? { content: resolved.content } : {}),
+    });
+  }
+
+  const limited = selectedCalls.length < input.calls.length;
+  const incomplete = evidence.some((item) => item.status !== "resolved");
+  return {
+    evidence,
+    summary: {
+      callLimit,
+      byteBudget,
+      discoveredCount: input.calls.length,
+      selectedCount: selectedCalls.length,
+      resolvedCount: evidence.filter((item) => item.status === "resolved").length,
+      selectedBytes,
+      complete: !limited && !incomplete,
+      reason: limited
+        ? "call-limit-exceeded"
+        : blockedReference
+          ? "byte-budget-exceeded"
+          : incomplete
+            ? "resolution-incomplete"
+            : "within-bounds",
+      blockedReference,
+    },
+  };
+}
+
+async function githubOptionalTextFile(repository, path, ref, fetchImpl, signal) {
+  try {
+    const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+    const response = await fetchImpl(
+      `https://api.github.com/repos/${repository}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`,
+      {
+        signal,
+        headers: {
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      },
+    );
+    if (!response.ok) return { status: "incomplete", reason: `github-http-${response.status}` };
+    const file = await response.json();
+    if (file.type !== "file" || file.encoding !== "base64" || typeof file.content !== "string") {
+      return { status: "incomplete", reason: "reusable-workflow-content-unavailable" };
+    }
+    return { status: "resolved", content: decodeBase64(file.content) };
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    return { status: "incomplete", reason: "request-failed" };
+  }
+}
+
+function boundedOption(value, fallback, label) {
+  const selected = value ?? fallback;
+  if (!Number.isSafeInteger(selected) || selected < 0) {
+    throw new Error(`${label} must be a non-negative safe integer`);
+  }
+  return selected;
+}
+
+function deduplicateEntries(entries) {
+  return [...new Map(entries.map((entry) => [entry.path, entry])).values()];
 }
 
 export function repositoryGovernanceEvidence(repository, defaultBranch = {}) {
