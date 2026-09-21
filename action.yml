@@ -35,7 +35,7 @@ inputs:
     required: false
     default: "true"
   bun-version:
-    description: Bun version used to execute coding-tooling. Match the consumer pin when Bun is part of the repository environment.
+    description: Fallback Bun version used to execute coding-tooling when a run operation has no environment-v1 Bun declaration. An environment-v1 repository's exact Bun pin is authoritative.
     required: false
     default: 1.4.0
   install-mode:
@@ -55,25 +55,6 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Detect coding-tooling Bun
-      id: tooling-bun
-      shell: bash
-      env:
-        INPUT_BUN_VERSION: ${{ inputs.bun-version }}
-      run: |
-        set -euo pipefail
-        ready=false
-        if command -v bun >/dev/null 2>&1 && [[ "$(bun --version)" == "$INPUT_BUN_VERSION" ]]; then
-          ready=true
-        fi
-        echo "ready=$ready" >> "$GITHUB_OUTPUT"
-
-    - name: Set up Bun
-      if: steps.tooling-bun.outputs.ready != 'true'
-      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-      with:
-        bun-version: ${{ inputs.bun-version }}
-
     - name: Detect consumer environment-v1
       id: consumer-environment
       shell: bash
@@ -83,16 +64,82 @@ runs:
         set -euo pipefail
         detected=false
         node_version_file=false
+        bun_version=""
         if [[ "$INPUT_OPERATION" == "run" && -f .repository-environment.toml && -f scripts/codex-environment.sh ]]; then
           detected=true
           if [[ -f .node-version ]]; then
             node_version_file=true
           fi
+
+          package_bun=""
+          if [[ -f package.json ]]; then
+            package_bun="$(python3 - <<'PY'
+        import json
+        import pathlib
+
+        path = pathlib.Path("package.json")
+        try:
+            value = json.loads(path.read_text(encoding="utf-8")).get("packageManager", "")
+        except (OSError, json.JSONDecodeError):
+            value = ""
+        if isinstance(value, str) and value.startswith("bun@"):
+            print(value.split("@", 1)[1])
+        PY
+        )"
+          fi
+
+          version_file_bun=""
+          if [[ -f .bun-version ]]; then
+            version_file_bun="$(tr -d '[:space:]' < .bun-version)"
+          fi
+
+          if [[ -n "$package_bun" && -n "$version_file_bun" && "$package_bun" != "$version_file_bun" ]]; then
+            echo "::error::Conflicting Bun pins: package.json declares $package_bun while .bun-version declares $version_file_bun"
+            exit 2
+          fi
+
+          bun_version="${package_bun:-$version_file_bun}"
+          if [[ -n "$bun_version" && ! "$bun_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Environment-v1 Bun declarations must use an exact x.y.z version, got $bun_version"
+            exit 2
+          fi
         fi
         {
           echo "detected=$detected"
           echo "node-version-file=$node_version_file"
+          echo "bun-version=$bun_version"
         } >> "$GITHUB_OUTPUT"
+
+    - name: Detect coding-tooling Bun
+      id: tooling-bun
+      shell: bash
+      env:
+        INPUT_BUN_VERSION: ${{ inputs.bun-version }}
+        CONSUMER_BUN_VERSION: ${{ steps.consumer-environment.outputs.bun-version }}
+      run: |
+        set -euo pipefail
+        effective_version="$INPUT_BUN_VERSION"
+        authority="action-fallback"
+        if [[ -n "$CONSUMER_BUN_VERSION" ]]; then
+          effective_version="$CONSUMER_BUN_VERSION"
+          authority="environment-v1"
+        fi
+
+        ready=false
+        if command -v bun >/dev/null 2>&1 && [[ "$(bun --version)" == "$effective_version" ]]; then
+          ready=true
+        fi
+        {
+          echo "ready=$ready"
+          echo "version=$effective_version"
+          echo "authority=$authority"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Set up Bun
+      if: steps.tooling-bun.outputs.ready != 'true'
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: ${{ steps.tooling-bun.outputs.version }}
 
     - name: Resolve consumer environment-v1 cache
       id: consumer-environment-cache
@@ -254,8 +301,10 @@ runs:
             bun "${{ github.action_path }}/src/cli.ts" bootstrap plan --root . --json > "$INPUT_REPORT_PATH"
           else
             score_args=(score --json)
-            if [[ -n "$INPUT_VALIDATION_REPORT" ]]; then
+            if [[ -n "$INPUT_VALIDATION_REPORT" && -f "$INPUT_VALIDATION_REPORT" ]]; then
               score_args+=(--validation-report "$INPUT_VALIDATION_REPORT")
+            elif [[ -n "$INPUT_VALIDATION_REPORT" ]]; then
+              echo "::notice::Validation report $INPUT_VALIDATION_REPORT was not produced; scoring structural evidence without fresh verification evidence."
             fi
             bun "${{ github.action_path }}/src/entry.ts" "${score_args[@]}" > "$INPUT_REPORT_PATH"
           fi
