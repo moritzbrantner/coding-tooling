@@ -31,7 +31,7 @@ coding-tooling score \
 
 `coding-tooling score --json` without a validation report is still useful for inspection. It returns the structural estimate, but marks the result `incomplete` because current execution health was not supplied.
 
-The GitHub Action exposes the same boundary with `operation: score` and the optional `validation-report` input.
+The GitHub Action exposes the same boundary with `operation: score` and the optional `validation-report` input. When an always-run scoring step names a report that an earlier failed validation never produced, the Action omits that absent report and emits an incomplete structural score instead of replacing the primary validation failure with a secondary file-not-found error.
 
 ## Contract
 
