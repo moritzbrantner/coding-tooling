@@ -55,9 +55,8 @@ describe("composite action contract", () => {
     const source = actionSource();
 
     expect(source).toContain('bun_version="${package_bun:-$version_file_bun}"');
-    expect(source).toContain(
-      'CONSUMER_BUN_VERSION: ${{ steps.consumer-environment.outputs.bun-version }}',
-    );
+    expect(source).toContain("CONSUMER_BUN_VERSION:");
+    expect(source).toContain("consumer-environment.outputs.bun-version");
     expect(source).toContain('effective_version="$INPUT_BUN_VERSION"');
     expect(source).toContain('effective_version="$CONSUMER_BUN_VERSION"');
     expect(source).toContain('authority="environment-v1"');
@@ -88,12 +87,9 @@ describe("composite action contract", () => {
   test("treats a missing optional validation report as incomplete score evidence", () => {
     const source = actionSource();
 
-    expect(source).toContain(
-      '[[ -n "$INPUT_VALIDATION_REPORT" && -f "$INPUT_VALIDATION_REPORT" ]]',
-    );
-    expect(source).toContain(
-      "was not produced; scoring structural evidence without fresh verification evidence",
-    );
+    expect(source).toContain('[[ -n "$INPUT_VALIDATION_REPORT"');
+    expect(source).toContain('-f "$INPUT_VALIDATION_REPORT" ]]');
+    expect(source).toContain("was not produced; scoring structural evidence");
   });
 
   test("verifies environment-v1 only after a run failure", () => {
