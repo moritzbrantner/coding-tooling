@@ -60,7 +60,7 @@ describe("composite action contract", () => {
     expect(source).toContain('effective_version="$INPUT_BUN_VERSION"');
     expect(source).toContain('effective_version="$CONSUMER_BUN_VERSION"');
     expect(source).toContain('authority="environment-v1"');
-    expect(source).toContain('bun-version: ${{ steps.tooling-bun.outputs.version }}');
+    expect(source).toContain("bun-version: ${{ steps.tooling-bun.outputs.version }}");
   });
 
   test("skips setup-bun when the effective Bun is already installed", () => {
