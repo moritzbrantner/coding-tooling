@@ -51,11 +51,22 @@ describe("composite action contract", () => {
     expect(source).not.toContain("restore-keys:");
   });
 
-  test("skips setup-bun when the requested Bun is already installed", () => {
+  test("uses the environment-v1 Bun pin before falling back to the action runtime", () => {
+    const source = actionSource();
+
+    expect(source).toContain('bun_version="${package_bun:-$version_file_bun}"');
+    expect(source).toContain('CONSUMER_BUN_VERSION: ${{ steps.consumer-environment.outputs.bun-version }}');
+    expect(source).toContain('effective_version="$INPUT_BUN_VERSION"');
+    expect(source).toContain('effective_version="$CONSUMER_BUN_VERSION"');
+    expect(source).toContain('authority="environment-v1"');
+    expect(source).toContain('bun-version: ${{ steps.tooling-bun.outputs.version }}');
+  });
+
+  test("skips setup-bun when the effective Bun is already installed", () => {
     const source = actionSource();
 
     expect(source).toContain("Detect coding-tooling Bun");
-    expect(source).toContain('[[ "$(bun --version)" == "$INPUT_BUN_VERSION" ]]');
+    expect(source).toContain('[[ "$(bun --version)" == "$effective_version" ]]');
     expect(source).toContain("if: steps.tooling-bun.outputs.ready != 'true'");
   });
 
@@ -70,6 +81,13 @@ describe("composite action contract", () => {
     expect(source).toContain("node-version-file: .node-version");
     expect(source).toContain("bash scripts/codex-environment.sh setup");
     expect(source).not.toContain("Verify environment-v1 preserves tracked state");
+  });
+
+  test("treats a missing optional validation report as incomplete score evidence", () => {
+    const source = actionSource();
+
+    expect(source).toContain('[[ -n "$INPUT_VALIDATION_REPORT" && -f "$INPUT_VALIDATION_REPORT" ]]');
+    expect(source).toContain("was not produced; scoring structural evidence without fresh verification evidence");
   });
 
   test("verifies environment-v1 only after a run failure", () => {
