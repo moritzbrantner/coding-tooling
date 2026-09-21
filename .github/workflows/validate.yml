@@ -24,6 +24,11 @@ jobs:
           bun-version: 1.4.0
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
+      - name: Show formatter diff
+        run: |
+          bun run format:write
+          git diff -- tests/action-contract.test.ts
+          git checkout -- tests/action-contract.test.ts
       - name: Validate through the local Action
         uses: ./
         with:
