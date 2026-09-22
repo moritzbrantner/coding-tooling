@@ -13,13 +13,8 @@
     "validateCommand": "bun run analysis:worker:check",
     "temporaryCommand": "bun run analysis:worker:deploy:temporary",
     "permanentCommand": "bun run analysis:worker:deploy",
-    "requiredRepositorySecrets": [
-      "CLOUDFLARE_ACCOUNT_ID",
-      "CLOUDFLARE_API_TOKEN"
-    ],
-    "optionalRepositorySecrets": [
-      "ANALYSIS_GITHUB_TOKEN"
-    ]
+    "requiredRepositorySecrets": ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"],
+    "optionalRepositorySecrets": ["ANALYSIS_GITHUB_TOKEN"]
   },
   "security": {
     "callerCookiesForwarded": false,

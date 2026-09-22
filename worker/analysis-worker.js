@@ -129,15 +129,7 @@ function errorStatus(message) {
   return 500;
 }
 
-function errorResponse(
-  operation,
-  code,
-  message,
-  status,
-  started,
-  data = {},
-  useEnvelope = true,
-) {
+function errorResponse(operation, code, message, status, started, data = {}, useEnvelope = true) {
   const durationMs = Date.now() - started;
   const result = useEnvelope
     ? apiErrorEnvelope(operation, code, message, data, durationMs)

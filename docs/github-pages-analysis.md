@@ -113,7 +113,6 @@ The compact agent view retains the source repository/revision, selected findings
 
 This is deliberately not described as a conventional HTTP JSON API. GitHub Pages cannot execute server-side code, so a plain `curl` request receives the static HTML shell rather than a dynamically generated `application/json` response. The same limitation applies to `run.json`. A true HTTP endpoint would require a separate serverless/runtime deployment and should be introduced only if that additional operational dependency is justified.
 
-
 ## Conventional HTTP analysis transport
 
 GitHub Pages remains the browser presentation surface, but plain HTTP clients should not depend on
@@ -166,7 +165,6 @@ bun run analysis:worker:deploy:temporary
 
 The printed claim URL is a bearer credential and must not be copied into public CI logs, issues, or
 repository files. Temporary deployments must be claimed before their deadline to become permanent.
-
 
 ## `test-coverage.json` observation
 
