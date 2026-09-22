@@ -113,6 +113,57 @@ The compact agent view retains the source repository/revision, selected findings
 
 This is deliberately not described as a conventional HTTP JSON API. GitHub Pages cannot execute server-side code, so a plain `curl` request receives the static HTML shell rather than a dynamically generated `application/json` response. The same limitation applies to `run.json`. A true HTTP endpoint would require a separate serverless/runtime deployment and should be introduced only if that additional operational dependency is justified.
 
+
+## Conventional HTTP analysis transport
+
+GitHub Pages remains the browser presentation surface, but plain HTTP clients should not depend on
+the client-rendered `analysis.json/` route. The deployable Cloudflare Worker in
+`worker/analysis-worker.js` exposes the same analysis through a conventional
+`application/json` response at `/analysis.json`.
+
+The Worker imports `analysisQueryJson` and therefore reuses the existing `analysis-query.js`,
+`github-analysis.js`, and result-envelope code. It is a transport adapter rather than a second
+analyzer or evidence authority.
+
+Callers discover the production transport through the static contract:
+
+```text
+https://moritzbrantner.github.io/coding-tooling/analysis-endpoint.json
+```
+
+When that document reports `status: "available"`, its `hrefTemplate` is the preferred
+machine-to-machine entry point. Until a permanent Worker URL is configured, browser-capable callers
+may continue to use the Pages view and plain HTTP agents should fall back to direct repository
+inspection rather than treating browser HTML as JSON.
+
+The HTTP adapter deliberately does not reuse caller authentication. Incoming `Cookie` and
+`Authorization` values are never forwarded. Public repositories work with anonymous GitHub API
+access; deployments may optionally configure a server-side Worker secret named `GITHUB_TOKEN` to
+raise GitHub API limits. That secret is attached only to requests whose hostname is
+`api.github.com`.
+
+Deployment is configured by `wrangler.jsonc`:
+
+```text
+bun run analysis:worker:check
+bun run analysis:worker:deploy
+```
+
+The main-branch deployment workflow uses repository secrets `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_API_TOKEN`. `ANALYSIS_GITHUB_TOKEN` is optional and, when present, is stored as the
+Worker's `GITHUB_TOKEN` secret.
+
+For a first private preview, Wrangler 4.102.0 or newer can provision a temporary Worker account
+without existing Cloudflare credentials:
+
+```text
+bun run analysis:worker:deploy:temporary
+```
+
+The printed claim URL is a bearer credential and must not be copied into public CI logs, issues, or
+repository files. Temporary deployments must be claimed before their deadline to become permanent.
+
+
 ## `test-coverage.json` observation
 
 The Pages site also exposes an observation-only coverage view:
