@@ -7,6 +7,11 @@ on:
       - ".github/workflows/pages.yml"
       - "site/**"
   workflow_dispatch:
+    inputs:
+      analysis_api_base_url:
+        description: Optional deployed Analysis API base URL to publish in discovery metadata
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -27,7 +32,7 @@ jobs:
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - name: Configure analysis API discovery
         env:
-          ANALYSIS_API_BASE_URL: ${{ vars.ANALYSIS_API_BASE_URL }}
+          ANALYSIS_API_BASE_URL: ${{ github.event.inputs.analysis_api_base_url || vars.ANALYSIS_API_BASE_URL }}
         run: |
           if [[ -z "$ANALYSIS_API_BASE_URL" ]]; then
             exit 0
