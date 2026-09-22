@@ -1,0 +1,68 @@
+name: Analysis API
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/analysis-api.yml"
+      - "package.json"
+      - "site/**"
+      - "tests/analysis-worker.test.js"
+      - "worker/**"
+      - "wrangler.jsonc"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/analysis-api.yml"
+      - "package.json"
+      - "site/**"
+      - "tests/analysis-worker.test.js"
+      - "worker/**"
+      - "wrangler.jsonc"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: analysis-api-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Test HTTP adapter
+        run: bun test tests/analysis-worker.test.js
+      - name: Bundle Worker
+        run: bun run analysis:worker:check
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ANALYSIS_GITHUB_TOKEN: ${{ secrets.ANALYSIS_GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Configure optional GitHub API token
+        if: env.CLOUDFLARE_ACCOUNT_ID != '' && env.CLOUDFLARE_API_TOKEN != '' && env.ANALYSIS_GITHUB_TOKEN != ''
+        run: printf '%s' "$ANALYSIS_GITHUB_TOKEN" | bunx wrangler@4.136.1 secret put GITHUB_TOKEN
+      - name: Deploy Analysis API
+        if: env.CLOUDFLARE_ACCOUNT_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
+        run: bun run analysis:worker:deploy
+      - name: Report unconfigured deployment
+        if: env.CLOUDFLARE_ACCOUNT_ID == '' || env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "::notice::Analysis API deployment is not configured; add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN repository secrets."
