@@ -1,0 +1,147 @@
+name: Analysis API
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/analysis-api.yml"
+      - "package.json"
+      - "site/**"
+      - "tests/analysis-worker.test.js"
+      - "worker/**"
+      - "wrangler.jsonc"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/analysis-api.yml"
+      - "package.json"
+      - "site/**"
+      - "tests/analysis-worker.test.js"
+      - "worker/**"
+      - "wrangler.jsonc"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: analysis-api-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Test HTTP adapter
+        run: bun test tests/analysis-worker.test.js
+      - name: Bundle Worker
+        run: bun run analysis:worker:check
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: read
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ANALYSIS_GITHUB_TOKEN: ${{ secrets.ANALYSIS_GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - name: Deploy Analysis API
+        if: env.CLOUDFLARE_ACCOUNT_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
+        id: deploy
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: .artifacts/wrangler-output.ndjson
+        run: |
+          mkdir -p .artifacts
+          bun run analysis:worker:deploy
+      - name: Read deployed Worker URL
+        if: env.CLOUDFLARE_ACCOUNT_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
+        id: deployment-url
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync, readFileSync } from "node:fs";
+
+          const values = [];
+          const collect = (value) => {
+            if (typeof value === "string") {
+              values.push(value);
+              return;
+            }
+            if (Array.isArray(value)) {
+              for (const entry of value) collect(entry);
+              return;
+            }
+            if (value && typeof value === "object") {
+              for (const entry of Object.values(value)) collect(entry);
+            }
+          };
+
+          for (const line of readFileSync(".artifacts/wrangler-output.ndjson", "utf8").split(/\r?\n/)) {
+            if (!line.trim()) continue;
+            collect(JSON.parse(line));
+          }
+
+          const url = values.find((value) => {
+            try {
+              return new URL(value).hostname.endsWith(".workers.dev");
+            } catch {
+              return false;
+            }
+          });
+          if (!url) throw new Error("Wrangler output did not expose the deployed workers.dev URL.");
+
+          const baseUrl = new URL(url).origin;
+          appendFileSync(process.env.GITHUB_OUTPUT, `base_url=${baseUrl}\n`);
+          console.log(`Analysis API deployed at ${baseUrl}`);
+          NODE
+      - name: Configure optional GitHub API token
+        if: env.CLOUDFLARE_ACCOUNT_ID != '' && env.CLOUDFLARE_API_TOKEN != '' && env.ANALYSIS_GITHUB_TOKEN != ''
+        run: printf '%s' "$ANALYSIS_GITHUB_TOKEN" | bunx wrangler@4.136.1 secret put GITHUB_TOKEN
+      - name: Smoke-test deployed Analysis API
+        if: env.CLOUDFLARE_ACCOUNT_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          ANALYSIS_API_BASE_URL: ${{ steps.deployment-url.outputs.base_url }}
+        run: |
+          node --input-type=module <<'NODE'
+          const url = new URL("/analysis.json", process.env.ANALYSIS_API_BASE_URL);
+          url.searchParams.set("repo", "moritzbrantner/coding-tooling");
+          url.searchParams.set("view", "agent");
+          url.searchParams.set("limit", "1");
+          url.searchParams.set("envelope", "1");
+
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`Analysis API smoke test failed with HTTP ${response.status}: ${await response.text()}`);
+          }
+          const contentType = response.headers.get("content-type") ?? "";
+          if (!contentType.includes("application/json")) {
+            throw new Error(`Expected application/json, received ${contentType || "no content-type"}.`);
+          }
+          const payload = await response.json();
+          if (payload.schemaVersion !== 1 || typeof payload.status !== "string") {
+            throw new Error("Analysis API returned an invalid result envelope.");
+          }
+          NODE
+      - name: Publish Analysis API URL through Pages
+        if: env.CLOUDFLARE_ACCOUNT_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANALYSIS_API_BASE_URL: ${{ steps.deployment-url.outputs.base_url }}
+        run: gh workflow run pages.yml --ref main --field analysis_api_base_url="$ANALYSIS_API_BASE_URL"
+      - name: Report unconfigured deployment
+        if: env.CLOUDFLARE_ACCOUNT_ID == '' || env.CLOUDFLARE_API_TOKEN == ''
+        run: echo "::notice::Analysis API deployment is not configured; add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN repository secrets."

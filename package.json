@@ -19,7 +19,11 @@
     "analyze": "bun src/entry.ts analyze --json",
     "calibration": "bun src/entry.ts calibration --json",
     "normalize": "bun src/entry.ts normalize --json",
-    "check": "bun run format && bun run lint && bun run typecheck && bun run test"
+    "check": "bun run format && bun run lint && bun run typecheck && bun run test",
+    "analysis:worker:check": "bunx wrangler@4.136.1 deploy --dry-run --outdir .artifacts/analysis-worker",
+    "analysis:worker:dev": "bunx wrangler@4.136.1 dev",
+    "analysis:worker:deploy": "bunx wrangler@4.136.1 deploy",
+    "analysis:worker:deploy:temporary": "bunx wrangler@4.136.1 deploy --temporary"
   },
   "devDependencies": {
     "@types/bun": "1.4.0",
