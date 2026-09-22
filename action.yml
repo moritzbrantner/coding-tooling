@@ -90,7 +90,12 @@ runs:
 
           version_file_bun=""
           if [[ -f .bun-version ]]; then
-            version_file_bun="$(tr -d '[:space:]' < .bun-version)"
+            version_file_bun="$(python3 - <<'PY'
+        import pathlib
+
+        print(pathlib.Path(".bun-version").read_text(encoding="utf-8").strip())
+        PY
+        )"
           fi
 
           if [[ -n "$package_bun" && -n "$version_file_bun" && "$package_bun" != "$version_file_bun" ]]; then
