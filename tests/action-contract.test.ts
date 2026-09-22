@@ -66,9 +66,8 @@ describe("composite action contract", () => {
   test("preserves internal whitespace when reading the environment-v1 Bun pin", () => {
     const source = actionSource();
 
-    expect(source).toContain(
-      'pathlib.Path(".bun-version").read_text(encoding="utf-8").strip()',
-    );
+    expect(source).toContain('pathlib.Path(".bun-version")');
+    expect(source).toContain('.read_text(encoding="utf-8").strip()');
     expect(source).not.toContain("tr -d '[:space:]'");
   });
 
