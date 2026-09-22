@@ -62,13 +62,12 @@ test("keeps ordinary PR pipelines unchanged without local-only source mode", () 
   }
 });
 
-test("activates exact sources, verifies the source fingerprint, and restores distribution state", () => {
+test("activates exact sources and restores distribution state without runner attestation", () => {
   const root = sourceRoot();
   const cargoLock = join(root, "apps", "desktop", "Cargo.lock");
   const cargoConfig = join(root, ".cargo", "config.toml");
   try {
     let pipelineCalls = 0;
-    let environmentCalls = 0;
     const execution = runSourceAwarePipeline(root, "full", {
       sourceDependencies: (_root, action) => {
         expect(action).toBe("activate");
@@ -81,14 +80,6 @@ test("activates exact sources, verifies the source fingerprint, and restores dis
           resolution: "local-only",
         });
       },
-      verifyEnvironment: (_root, profile) => {
-        environmentCalls += 1;
-        expect(profile).toBe("source-development");
-        return envelope("environment", "passed", {
-          expectedFingerprint: "env-v1:fixture",
-          verifiedFingerprint: "env-v1:fixture",
-        });
-      },
       runPipeline: (options) => {
         expect(options.dependencyResolution).toBe("source-development");
         pipelineCalls += 1;
@@ -99,8 +90,6 @@ test("activates exact sources, verifies the source fingerprint, and restores dis
 
     expect(execution.pipeline.status).toBe("passed");
     expect(execution.sourceDevelopment).toBe(true);
-    expect(execution.environment?.data.verifiedFingerprint).toBe("env-v1:fixture");
-    expect(environmentCalls).toBe(1);
     expect(pipelineCalls).toBe(1);
     expect(readFileSync(cargoLock, "utf8")).toBe("distribution-lock\n");
     expect(() => readFileSync(cargoConfig, "utf8")).toThrow();
@@ -113,13 +102,8 @@ test("fails closed before the pipeline when source activation fails", () => {
   const root = sourceRoot();
   try {
     let pipelineCalls = 0;
-    let environmentCalls = 0;
     const execution = runSourceAwarePipeline(root, "full", {
       sourceDependencies: () => envelope("source-deps", "failed"),
-      verifyEnvironment: () => {
-        environmentCalls += 1;
-        return envelope("environment");
-      },
       runPipeline: () => {
         pipelineCalls += 1;
         return envelope("run");
@@ -128,36 +112,10 @@ test("fails closed before the pipeline when source activation fails", () => {
 
     expect(execution.pipeline.status).toBe("failed");
     expect(execution.pipeline.data.phase).toBe("source-activation");
-    expect(environmentCalls).toBe(0);
     expect(pipelineCalls).toBe(0);
     expect(readFileSync(join(root, "apps", "desktop", "Cargo.lock"), "utf8")).toBe(
       "distribution-lock\n",
     );
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test("fails closed before repository checks when the source-development environment is not certified", () => {
-  const root = sourceRoot();
-  try {
-    let pipelineCalls = 0;
-    const execution = runSourceAwarePipeline(root, "full", {
-      sourceDependencies: () => envelope("source-deps"),
-      verifyEnvironment: () =>
-        envelope("environment", "failed", {
-          expectedFingerprint: "env-v1:expected",
-          verifiedFingerprint: null,
-        }),
-      runPipeline: () => {
-        pipelineCalls += 1;
-        return envelope("run");
-      },
-    });
-
-    expect(execution.pipeline.status).toBe("failed");
-    expect(execution.pipeline.data.phase).toBe("environment-verification");
-    expect(pipelineCalls).toBe(0);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
