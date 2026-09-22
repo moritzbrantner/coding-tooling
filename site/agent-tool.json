@@ -30,6 +30,18 @@
       "parameters": []
     },
     {
+      "id": "analysis-http-endpoint",
+      "transport": "static-json",
+      "href": "https://moritzbrantner.github.io/coding-tooling/analysis-endpoint.json",
+      "description": "Discover the conventional application/json analysis transport. When configured, its hrefTemplate points to the Cloudflare Worker that reuses the same remote analysis implementation as the Pages UI; when unconfigured, callers must not treat the browser-only fallback as a plain HTTP JSON API.",
+      "authority": "published-static-contract",
+      "completeness": "complete-for-published-deployment-state",
+      "response": {
+        "schemaVersion": 1
+      },
+      "parameters": []
+    },
+    {
       "id": "cli-run-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/run.json/?repo={owner}/{repository}&argv={urlEncodedArgv}",
@@ -142,7 +154,9 @@
           "type": "string",
           "required": false,
           "repeatable": true,
-          "aliases": ["file"]
+          "aliases": [
+            "file"
+          ]
         },
         {
           "name": "component",
@@ -188,7 +202,7 @@
       "id": "analysis-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}&envelope=1",
-      "description": "Browser-executed schema-v1 remote-preflight JSON for coding agents.",
+      "description": "Browser-executed schema-v1 remote-preflight JSON for coding agents. Browser fallback; registry-driven HTTP clients should check analysis-http-endpoint first.",
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
@@ -212,7 +226,10 @@
         {
           "name": "view",
           "type": "string",
-          "enum": ["full", "agent"],
+          "enum": [
+            "full",
+            "agent"
+          ],
           "required": false,
           "repeatable": false,
           "default": "full"
@@ -239,12 +256,18 @@
           "type": "string",
           "required": false,
           "repeatable": true,
-          "aliases": ["scope"]
+          "aliases": [
+            "scope"
+          ]
         },
         {
           "name": "min-severity",
           "type": "string",
-          "enum": ["low", "medium", "high"],
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
           "required": false,
           "repeatable": false,
           "default": "low"
@@ -293,7 +316,7 @@
       "id": "analysis-agent-json",
       "transport": "browser-json-view",
       "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}&view=agent&envelope=1",
-      "description": "Compact agent-first projection of existing remote-preflight evidence. Optional repeated focus/component plus severity/limit/finding and change-aware base/head/changed-file parameters deterministically narrow the view without adding another evidence oracle. The legacy scope parameter remains an accepted alias for component.",
+      "description": "Compact agent-first projection of existing remote-preflight evidence. Optional repeated focus/component plus severity/limit/finding and change-aware base/head/changed-file parameters deterministically narrow the view without adding another evidence oracle. The legacy scope parameter remains an accepted alias for component. Browser fallback; registry-driven HTTP clients should check analysis-http-endpoint first.",
       "authority": "remote-structural",
       "completeness": "may-be-incomplete",
       "response": {
@@ -317,7 +340,10 @@
         {
           "name": "view",
           "type": "string",
-          "enum": ["full", "agent"],
+          "enum": [
+            "full",
+            "agent"
+          ],
           "required": false,
           "repeatable": false,
           "default": "agent"
@@ -344,12 +370,18 @@
           "type": "string",
           "required": false,
           "repeatable": true,
-          "aliases": ["scope"]
+          "aliases": [
+            "scope"
+          ]
         },
         {
           "name": "min-severity",
           "type": "string",
-          "enum": ["low", "medium", "high"],
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
           "required": false,
           "repeatable": false,
           "default": "low"
@@ -506,7 +538,7 @@
     "A complete repository progress score requires a fresh local or CI coding-tooling run report; structural-only scoring remains explicitly incomplete.",
     "Score history is a per-commit trend for the versioned scoring profile; scoring-profile expansion can change what 100 means.",
     "Parameterized analysis is a projection over existing Pages evidence: focus classification does not create new findings, scope filters exact discovered components without guessing finding ownership, and change context delegates to the existing affected analyzer.",
-    "The run-json, repository-discovery, affected-json, next-work-discovery, analysis-json, testing-scaffold-plan, and test-coverage views are browser-executed rather than server-side application/json HTTP APIs."
+    "The run-json, repository-discovery, affected-json, next-work-discovery, testing-scaffold-plan, test-coverage, and Pages analysis views are browser-executed. A separately deployed analysis Worker provides conventional application/json only when analysis-endpoint.json reports status available."
   ],
   "contractVersion": "coding-tooling/agent-tool/v1",
   "parameterTypes": {
