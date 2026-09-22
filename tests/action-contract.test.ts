@@ -63,6 +63,15 @@ describe("composite action contract", () => {
     expect(source).toContain("bun-version: ${{ steps.tooling-bun.outputs.version }}");
   });
 
+  test("preserves internal whitespace when reading the environment-v1 Bun pin", () => {
+    const source = actionSource();
+
+    expect(source).toContain(
+      'pathlib.Path(".bun-version").read_text(encoding="utf-8").strip()',
+    );
+    expect(source).not.toContain("tr -d '[:space:]'");
+  });
+
   test("skips setup-bun when the effective Bun is already installed", () => {
     const source = actionSource();
 
