@@ -72,16 +72,11 @@ describe("composite action contract", () => {
     expect(source).not.toContain("Verify environment-v1 preserves tracked state");
   });
 
-  test("verifies environment-v1 only after a run failure", () => {
+  test("does not attest the runner environment after run failures", () => {
     const source = actionSource();
 
-    expect(source).toContain("Diagnose environment-v1 after run failure");
-    expect(source).toContain(
-      "failure() && inputs.operation == 'run' && steps.consumer-environment.outputs.detected == 'true'",
-    );
-    expect(source).toContain("environment verify");
-    expect(source).toContain("environment-failure-diagnostic.json");
-    expect(source).toContain("tracked_state=clean");
+    expect(source).not.toContain("Diagnose environment-v1 after run failure");
+    expect(source).not.toContain("environment-failure-diagnostic.json");
   });
 
   test("does not duplicate dependency installation after environment-v1 setup", () => {
