@@ -80,7 +80,7 @@ describe("repository environment conformance", () => {
     }
   });
 
-  test("reports exact observed Bun packageManager pins as passed", () => {
+  test("reports exact Bun packageManager declarations as passed", () => {
     const version = Bun.version;
     const root = repository(`bun@${version}`);
     adoptEnvironment(root);
@@ -96,15 +96,13 @@ describe("repository environment conformance", () => {
             tool: "bun",
             path: "package.json",
             declaredVersion: version,
-            observedVersion: version,
-            status: "passed",
           }),
         ],
       }),
     );
   });
 
-  test("reports exact observed .bun-version pins as passed", () => {
+  test("reports exact .bun-version declarations as passed", () => {
     const version = Bun.version;
     const root = repository();
     writeFileSync(join(root, ".bun-version"), `${version}\n`);
@@ -118,8 +116,6 @@ describe("repository environment conformance", () => {
         tool: "bun",
         path: ".bun-version",
         declaredVersion: version,
-        observedVersion: version,
-        status: "passed",
       }),
     ]);
   });
@@ -202,18 +198,20 @@ describe("repository environment conformance", () => {
     );
   });
 
-  test("distinguishes an installed-version mismatch", () => {
+  test("does not compare an exact declaration with the runner's installed version", () => {
     const root = repository("bun@0.0.1");
     adoptEnvironment(root);
+
     const result = repositoryEnvironmentConformance(root);
 
-    expect(result.findings).toContainEqual(
+    expect(result.findings).toEqual([]);
+    expect(result.data.toolchains).toEqual([
       expect.objectContaining({
-        code: "environment-toolchain-mismatch",
-        status: "failed",
-        severity: "error",
+        tool: "bun",
+        path: "package.json",
+        declaredVersion: "0.0.1",
       }),
-    );
+    ]);
   });
 
   test("reports compatibility holds separately without making the repository fail", () => {
