@@ -151,7 +151,11 @@ bun run analysis:worker:deploy
 
 The main-branch deployment workflow uses repository secrets `CLOUDFLARE_ACCOUNT_ID` and
 `CLOUDFLARE_API_TOKEN`. `ANALYSIS_GITHUB_TOKEN` is optional and, when present, is stored as the
-Worker's `GITHUB_TOKEN` secret.
+Worker's `GITHUB_TOKEN` secret. After deployment, Wrangler's structured output is used to discover
+the public `workers.dev` base URL, the live endpoint is smoke-tested, and the workflow dispatches
+the Pages workflow with that URL. Pages then publishes `analysis-endpoint.json` with
+`status: "available"` and the conventional HTTP `hrefTemplate`. A repository variable named
+`ANALYSIS_API_BASE_URL` remains an optional manual override/fallback for the Pages build.
 
 For a first private preview, Wrangler 4.102.0 or newer can provision a temporary Worker account
 without existing Cloudflare credentials:
