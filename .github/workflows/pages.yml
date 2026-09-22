@@ -25,6 +25,37 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - name: Configure analysis API discovery
+        env:
+          ANALYSIS_API_BASE_URL: ${{ vars.ANALYSIS_API_BASE_URL }}
+        run: |
+          if [[ -z "$ANALYSIS_API_BASE_URL" ]]; then
+            exit 0
+          fi
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const raw = process.env.ANALYSIS_API_BASE_URL?.trim();
+          const base = new URL(raw);
+          if (
+            base.protocol !== "https:" ||
+            base.username ||
+            base.password ||
+            base.search ||
+            base.hash
+          ) {
+            throw new Error("ANALYSIS_API_BASE_URL must be a credential-free HTTPS base URL.");
+          }
+
+          const normalized = base.toString().replace(/\/$/, "");
+          const path = "site/analysis-endpoint.json";
+          const contract = JSON.parse(readFileSync(path, "utf8"));
+          contract.status = "available";
+          contract.hrefTemplate =
+            `${normalized}/analysis.json?repo={owner}/{repository}&view=agent&envelope=1`;
+          contract.deployment.productionBaseUrl = normalized;
+          writeFileSync(path, `${JSON.stringify(contract, null, 2)}\n`);
+          NODE
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
