@@ -280,27 +280,3 @@ runs:
         fi
         bun "${{ github.action_path }}/src/cli.ts" "${args[@]}"
         echo "report-path=$INPUT_REPORT_PATH" >> "$GITHUB_OUTPUT"
-
-    - name: Diagnose environment-v1 after run failure
-      if: ${{ failure() && inputs.operation == 'run' && steps.consumer-environment.outputs.detected == 'true' }}
-      continue-on-error: true
-      shell: bash
-      env:
-        INPUT_ENVIRONMENT_PROFILE: ${{ inputs.environment-profile }}
-        DIAGNOSTIC_REPORT_PATH: .artifacts/coding-tooling/environment-failure-diagnostic.json
-      run: |
-        set +e
-        tracked_state=clean
-        git diff --quiet || tracked_state=changed
-        git diff --cached --quiet || tracked_state=changed
-
-        mkdir -p "$(dirname "$DIAGNOSTIC_REPORT_PATH")"
-        bun "${{ github.action_path }}/src/cli.ts" environment verify \
-          --profile "$INPUT_ENVIRONMENT_PROFILE" --json > "$DIAGNOSTIC_REPORT_PATH"
-        verify_status=$?
-
-        if [[ -f "$DIAGNOSTIC_REPORT_PATH" ]]; then
-          cat "$DIAGNOSTIC_REPORT_PATH"
-        fi
-        echo "::notice::Failure-only environment diagnostics: tracked_state=$tracked_state, environment_verify_exit=$verify_status"
-        exit 0
