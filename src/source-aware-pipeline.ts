@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, readFileSync, rmdirSync, rmSync, writeFileSync }
 import { basename, dirname, join, resolve } from "node:path";
 
 import { runPlan } from "./core.ts";
-import { verifyEnvironmentFingerprint } from "./environment-verification.ts";
 import { type Diagnostic, type ResultEnvelope, type ResultStatus } from "./model.ts";
 import { sourceDependencies } from "./source-deps.ts";
 import { verifySourceDependencyGraph } from "./source-graph.ts";
@@ -11,7 +10,6 @@ import { walkFiles } from "./shared.ts";
 type PipelineRunner = typeof runPlan;
 type SourceDependenciesRunner = typeof sourceDependencies;
 type SourceGraphVerifier = typeof verifySourceDependencyGraph;
-type EnvironmentVerifier = typeof verifyEnvironmentFingerprint;
 
 type SourceDependencyConfig = {
   schemaVersion?: unknown;
@@ -32,7 +30,6 @@ export type SourceAwarePipelineDependencies = {
   runPipeline?: PipelineRunner;
   sourceDependencies?: SourceDependenciesRunner;
   verifySourceGraph?: SourceGraphVerifier;
-  verifyEnvironment?: EnvironmentVerifier;
 };
 
 export type SourceAwarePipelineExecution = {
@@ -40,7 +37,6 @@ export type SourceAwarePipelineExecution = {
   sourceDevelopment: boolean;
   sourceGraph?: ResultEnvelope<Record<string, unknown>>;
   sourceActivation?: ResultEnvelope<Record<string, unknown>>;
-  environment?: ResultEnvelope<Record<string, unknown>>;
 };
 
 function envelope(
@@ -175,7 +171,6 @@ export function runSourceAwarePipeline(
   const pipelineRunner = dependencies.runPipeline ?? runPlan;
   const sourceDependenciesRunner = dependencies.sourceDependencies ?? sourceDependencies;
   const sourceGraphVerifier = dependencies.verifySourceGraph ?? verifySourceDependencyGraph;
-  const environmentVerifier = dependencies.verifyEnvironment ?? verifyEnvironmentFingerprint;
   const source = sourceDevelopmentConfig(root);
 
   if (!source.enabled) {
@@ -231,24 +226,6 @@ export function runSourceAwarePipeline(
     };
   }
 
-  const environment = environmentVerifier(root, "source-development");
-  if (environment.status !== "passed") {
-    const cleanupDiagnostics = restoreSourceState(root, cargoConfig, cargoLocks);
-    return {
-      pipeline: withRestoreDiagnostics(
-        envelope(environment.status, "environment-verification", tier, environment.diagnostics, {
-          expectedFingerprint: environment.data.expectedFingerprint ?? null,
-          verifiedFingerprint: environment.data.verifiedFingerprint ?? null,
-        }),
-        cleanupDiagnostics,
-      ),
-      sourceDevelopment: true,
-      sourceGraph,
-      sourceActivation: activation,
-      environment,
-    };
-  }
-
   const pipeline = pipelineRunner({
     root,
     tier,
@@ -261,6 +238,5 @@ export function runSourceAwarePipeline(
     sourceDevelopment: true,
     sourceGraph,
     sourceActivation: activation,
-    environment,
   };
 }
