@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -14,8 +13,6 @@ export type EnvironmentToolchain = {
   tool: "bun" | "node" | "rust";
   path: string;
   declaredVersion: string | null;
-  observedVersion: string | null;
-  status: "passed" | "failed" | "unavailable";
 };
 
 export type CompatibilityHold = {
@@ -31,21 +28,6 @@ function text(path: string): string {
 
 function exactVersion(value: string): boolean {
   return /^\d+\.\d+\.\d+$/.test(value);
-}
-
-function commandVersion(
-  command: string,
-  args: string[],
-  cwd: string,
-  parse: (stdout: string) => string | null,
-): string | null {
-  const result = spawnSync(command, args, {
-    cwd,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  });
-  if (result.status !== 0 || typeof result.stdout !== "string") return null;
-  return parse(result.stdout.trim());
 }
 
 function bunDeclarations(root: string): {
@@ -74,40 +56,20 @@ function bunToolchain(root: string): EnvironmentToolchain | null {
   const { packageManagerVersion, versionFileVersion } = bunDeclarations(root);
   const declaredVersion = packageManagerVersion ?? versionFileVersion;
   if (declaredVersion === null) return null;
-  const observedVersion = commandVersion("bun", ["--version"], root, (value) => value || null);
   return {
     tool: "bun",
     path: packageManagerVersion !== null ? "package.json" : ".bun-version",
     declaredVersion,
-    observedVersion,
-    status:
-      observedVersion === null
-        ? "unavailable"
-        : exactVersion(declaredVersion) && observedVersion === declaredVersion
-          ? "passed"
-          : "failed",
   };
 }
 
 function nodeToolchain(root: string): EnvironmentToolchain | null {
   const path = join(root, ".node-version");
   if (!existsSync(path)) return null;
-  const declaredVersion = text(path).trim();
-  const observedVersion = commandVersion("node", ["--version"], root, (value) => {
-    const version = value.match(/^v?(\d+\.\d+\.\d+)$/)?.[1];
-    return version ?? null;
-  });
   return {
     tool: "node",
     path: ".node-version",
-    declaredVersion,
-    observedVersion,
-    status:
-      observedVersion === null
-        ? "unavailable"
-        : exactVersion(declaredVersion) && observedVersion === declaredVersion
-          ? "passed"
-          : "failed",
+    declaredVersion: text(path).trim(),
   };
 }
 
@@ -116,57 +78,10 @@ function rustToolchain(root: string): EnvironmentToolchain | null {
   if (!existsSync(path)) return null;
   const source = text(path);
   const match = source.match(/channel\s*=\s*"([^"]+)"/);
-  const declaredVersion = match?.[1] ?? null;
-  if (!declaredVersion || !exactVersion(declaredVersion)) {
-    return {
-      tool: "rust",
-      path: "rust-toolchain.toml",
-      declaredVersion,
-      observedVersion: null,
-      status: "failed",
-    };
-  }
-
-  const installedToolchains = commandVersion(
-    "rustup",
-    ["toolchain", "list"],
-    root,
-    (value) => value,
-  );
-  let observedVersion: string | null = null;
-  if (installedToolchains !== null) {
-    const installed = installedToolchains
-      .split("\n")
-      .some((line) => line.trim().startsWith(declaredVersion));
-    if (installed) {
-      observedVersion = commandVersion(
-        "rustc",
-        [`+${declaredVersion}`, "--version"],
-        root,
-        (value) => {
-          const version = value.match(/^rustc\s+(\d+\.\d+\.\d+)/)?.[1];
-          return version ?? null;
-        },
-      );
-    }
-  } else {
-    observedVersion = commandVersion("rustc", ["--version"], root, (value) => {
-      const version = value.match(/^rustc\s+(\d+\.\d+\.\d+)/)?.[1];
-      return version ?? null;
-    });
-  }
-
   return {
     tool: "rust",
     path: "rust-toolchain.toml",
-    declaredVersion,
-    observedVersion,
-    status:
-      observedVersion === null
-        ? "unavailable"
-        : observedVersion === declaredVersion
-          ? "passed"
-          : "failed",
+    declaredVersion: match?.[1] ?? null,
   };
 }
 
@@ -349,24 +264,6 @@ export function repositoryEnvironmentConformance(root: string): {
         status: "failed",
         severity: "error",
         message: `${toolchain.tool} must use an exact x.y.z repository pin`,
-        path: toolchain.path,
-      });
-      continue;
-    }
-    if (toolchain.status === "unavailable") {
-      findings.push({
-        code: "environment-toolchain-unavailable",
-        status: "unavailable",
-        severity: "error",
-        message: `${toolchain.tool} ${toolchain.declaredVersion} is declared but not available locally`,
-        path: toolchain.path,
-      });
-    } else if (toolchain.status === "failed") {
-      findings.push({
-        code: "environment-toolchain-mismatch",
-        status: "failed",
-        severity: "error",
-        message: `${toolchain.tool} declares ${toolchain.declaredVersion} but observed ${toolchain.observedVersion ?? "unknown"}`,
         path: toolchain.path,
       });
     }
