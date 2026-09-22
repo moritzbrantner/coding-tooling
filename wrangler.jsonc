@@ -1,0 +1,10 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "coding-tooling-analysis",
+  "main": "worker/analysis-worker.js",
+  "compatibility_date": "2026-09-22",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  }
+}
