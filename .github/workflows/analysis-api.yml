@@ -145,4 +145,3 @@ jobs:
       - name: Report unconfigured deployment
         if: env.CLOUDFLARE_ACCOUNT_ID == '' || env.CLOUDFLARE_API_TOKEN == ''
         run: echo "::notice::Analysis API deployment is not configured; add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN repository secrets."
-
