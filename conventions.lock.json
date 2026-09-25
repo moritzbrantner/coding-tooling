@@ -1,6 +1,5 @@
 {
-  "schemaVersion": 1,
-  "sourceRevision": "77c18b74035989da5a2f8c79ec138d2fcc012e32",
+  "schemaVersion": 2,
   "requestedModules": ["rust"],
   "resolvedModules": ["base", "rust"],
   "files": {

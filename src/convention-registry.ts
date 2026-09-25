@@ -45,11 +45,11 @@ type ConsumerManifest = {
 };
 
 type ConventionLock = {
-  schemaVersion: 1;
-  sourceRevision: string;
+  schemaVersion: 1 | 2;
   requestedModules: string[];
   resolvedModules: string[];
   files: Record<string, string>;
+  legacySourceRevision?: string;
 };
 
 type RegistryOptions = {
@@ -255,11 +255,15 @@ function loadConsumer(root: string): ConsumerManifest | undefined {
 
 function loadLock(root: string): ConventionLock | undefined {
   const value = readJson<unknown>(join(root, lockName));
+  if (!isRecord(value)) return undefined;
+  const legacyV1 =
+    value.schemaVersion === 1 &&
+    typeof value.sourceRevision === "string" &&
+    value.sourceRevision.length > 0;
+  const currentV2 =
+    value.schemaVersion === 2 && !Object.prototype.hasOwnProperty.call(value, "sourceRevision");
   if (
-    !isRecord(value) ||
-    value.schemaVersion !== 1 ||
-    typeof value.sourceRevision !== "string" ||
-    !value.sourceRevision ||
+    (!legacyV1 && !currentV2) ||
     !isModuleList(value.requestedModules) ||
     !isModuleList(value.resolvedModules) ||
     !isFileHashRecord(value.files) ||
@@ -267,11 +271,11 @@ function loadLock(root: string): ConventionLock | undefined {
   )
     return undefined;
   return {
-    schemaVersion: 1,
-    sourceRevision: value.sourceRevision,
+    schemaVersion: value.schemaVersion as 1 | 2,
     requestedModules: value.requestedModules,
     resolvedModules: value.resolvedModules,
     files: value.files,
+    legacySourceRevision: legacyV1 ? (value.sourceRevision as string) : undefined,
   };
 }
 
@@ -528,8 +532,7 @@ function materialize(root: string, snapshot: Snapshot): MaterializationResult {
   }
 
   const lock: ConventionLock = {
-    schemaVersion: 1,
-    sourceRevision: snapshot.sourceRevision,
+    schemaVersion: 2,
     requestedModules: snapshot.requestedModules,
     resolvedModules: snapshot.resolvedModules,
     files: hashes,
@@ -652,7 +655,7 @@ export function conventionRegistryCommand(
           root,
           requestedModules: consumer.modules,
           resolvedModules: lock.resolvedModules,
-          sourceRevision: lock.sourceRevision,
+          sourceRevision: lock.legacySourceRevision ?? null,
           drift,
         },
         diagnostics,
@@ -717,7 +720,7 @@ export function conventionRegistryCommand(
         root,
         requestedModules: requested,
         resolvedModules: materialized.lock.resolvedModules,
-        sourceRevision: materialized.lock.sourceRevision,
+        sourceRevision: snapshot.sourceRevision,
         ...materialization,
         changed,
         reconciliation: changed ? "changed" : "unchanged",
@@ -727,15 +730,33 @@ export function conventionRegistryCommand(
 
     const snapshot = buildSnapshot(source.root, source.registry, existing.modules);
     if (action === "diff") {
-      const changed = hashDiff(snapshotHashes(snapshot), currentFileHashes(root));
+      const desiredHashes = snapshotHashes(snapshot);
+      const changed = hashDiff(desiredHashes, currentFileHashes(root));
       const lock = loadLock(root);
+      const cacheMetadataDrift = lock
+        ? hashDiff(desiredHashes, lock.files)
+        : Object.keys(desiredHashes).sort();
+      const lockMetadataDrift: string[] = [];
+      if (!lock) lockMetadataDrift.push("lock");
+      else {
+        if (lock.schemaVersion !== 2) lockMetadataDrift.push("schemaVersion");
+        if (JSON.stringify(lock.requestedModules) !== JSON.stringify(snapshot.requestedModules)) {
+          lockMetadataDrift.push("requestedModules");
+        }
+        if (JSON.stringify(lock.resolvedModules) !== JSON.stringify(snapshot.resolvedModules)) {
+          lockMetadataDrift.push("resolvedModules");
+        }
+        if (cacheMetadataDrift.length > 0) lockMetadataDrift.push("files");
+      }
       return envelope("conventions-diff", "passed", started, {
         root,
-        installedRevision: lock?.sourceRevision,
+        cacheSchemaVersion: lock?.schemaVersion,
+        installedRevision: lock?.legacySourceRevision ?? null,
         availableRevision: snapshot.sourceRevision,
         changed,
-        updateAvailable:
-          Boolean(lock && lock.sourceRevision !== snapshot.sourceRevision) || changed.length > 0,
+        cacheMetadataDrift,
+        lockMetadataDrift,
+        updateAvailable: changed.length > 0 || lockMetadataDrift.length > 0,
       });
     }
 
@@ -744,7 +765,7 @@ export function conventionRegistryCommand(
       root,
       requestedModules: existing.modules,
       resolvedModules: materialized.lock.resolvedModules,
-      sourceRevision: materialized.lock.sourceRevision,
+      sourceRevision: snapshot.sourceRevision,
       ...materializationData(materialized),
     });
   } catch (error) {

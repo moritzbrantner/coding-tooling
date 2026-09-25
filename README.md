@@ -41,7 +41,7 @@ coding-tooling conventions diff [--json]
 coding-tooling conventions update [--json]
 ```
 
-`coding-tooling conventions resolve` remains temporarily available for repositories still using the previous live-resolution contract.
+`coding-tooling conventions resolve` remains available when callers need direct current-source resolution.
 
 Run directly during development with Bun:
 
@@ -51,7 +51,7 @@ bun src/cli.ts inspect --json
 
 ## Installed conventions
 
-Shared engineering policy is authored in `coding-agent-conventions`, but consumer repositories explicitly install only the modules they use.
+Shared engineering policy is authored in `coding-agent-conventions`. Consumer repositories explicitly select only the modules they use; that selection does not pin a convention revision.
 
 ```bash
 coding-tooling conventions init react testing-library vitest
@@ -74,7 +74,7 @@ conventions.lock.json
   modules/
 ```
 
-`conventions.json` is the human-owned selection. `conventions.lock.json` records the resolved dependency set, source revision, and content hashes. `.conventions/` contains managed snapshots that agents and deterministic tooling can consume without network access or a shared conventions checkout.
+`conventions.json` is the human-owned module selection. `conventions.lock.json` records the resolved dependency set and content hashes for the local managed cache; it deliberately records no convention source revision. `.conventions/` is a non-authoritative cache that deterministic tooling can consume without network access. The current `coding-agent-conventions` source remains the policy authority.
 
 Do not hand-edit `.conventions/`. Repository-specific policy and exceptions belong in `AGENTS.md`.
 
@@ -100,16 +100,16 @@ Some installed rules include small JSON enforcement sidecars authored next to th
 
 Validation is fail-fast: convention checks and tier capabilities run in deterministic order and stop after the first failure or unavailable required enforcement. This makes the cheap-before-expensive validation policy executable rather than advisory.
 
-### Updating policy
+### Refreshing the local convention cache
 
-Convention policy does not silently change underneath a repository. Inspect and deliberately accept updates:
+The selected modules always refer to the current shared convention authority. The local managed files are only a cache:
 
 ```bash
 coding-tooling conventions diff
 coding-tooling conventions update
 ```
 
-`diff` compares the installed snapshots with the current registry source without mutating the repository. `update` rematerializes the selected modules and refreshes the lock.
+`diff` compares the cache with the current registry source without mutating the repository. `update` rematerializes the selected modules from that source and refreshes cache-integrity metadata. A newly exposed incompatibility is repaired in the consumer or documented as a narrow repository-local exception; it is not handled by freezing an older convention revision.
 
 ### Checking policy installation
 
@@ -117,7 +117,7 @@ coding-tooling conventions update
 coding-tooling conventions check
 ```
 
-The check is intentionally narrow. It verifies the manifest/lock relationship and detects drift in managed convention files, including companion assets and their installed configuration metadata. It does **not** run formatters, linters, analyzers, tests, architecture checks, convention enforcement, or the repository's normal CI commands. Those checks remain the normal semantic capabilities; when they are executed, applicable convention configuration is composed automatically, and `coding-tooling run` performs executable enforcement as part of validation.
+The check is intentionally narrow. It verifies the manifest/cache-integrity relationship and detects local drift in managed convention files, including companion assets and their installed configuration metadata. It does not claim that the cache is the current policy source. It does **not** run formatters, linters, analyzers, tests, architecture checks, convention enforcement, or the repository's normal CI commands. Those checks remain the normal semantic capabilities; when they are executed, applicable convention configuration is composed automatically, and `coding-tooling run` performs executable enforcement as part of validation.
 
 Commands that need registry content (`init`, `add`, `diff`, `update`) discover `coding-agent-conventions` from an explicit `--conventions-root`, `CODING_AGENT_CONVENTIONS_ROOT`, the shared Moenarch environment registry, or a sibling checkout. `check` needs only the committed consumer files and therefore works offline.
 
@@ -205,7 +205,7 @@ coding-agent-skills          coding-agent-conventions
   reusable procedures          shared engineering policy
           │                      + tool-native fragments
           │                              │
-          │                       installed snapshots
+          │                        managed cache
           │                              │
           └──────────────┬───────────────┘
                          ▼
@@ -220,7 +220,7 @@ coding-agent-skills          coding-agent-conventions
 - `coding-agent-skills` owns reusable reasoning procedures and flows.
 - `coding-agent-conventions` owns shared engineering policy, tool-native policy fragments, and its installable registry.
 - consumer `AGENTS.md` files own repository-specific guidance and exceptions.
-- `coding-tooling` owns deterministic discovery, validation, convention installation/integrity checking, supported config composition, and source-dependency mechanics.
+- `coding-tooling` owns deterministic discovery, validation, convention module selection/cache integrity, supported config composition, and source-dependency mechanics.
 - `runtime-profiler` owns runtime capture.
 - Moonlight owns candidate evaluation.
 - `agent-loop-orchestrator` owns optional durable coordination.
