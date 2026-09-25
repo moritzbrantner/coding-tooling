@@ -126,7 +126,7 @@ For response compatibility, `data.sourceRevision` remains present: it reports th
 
 ### `conventions diff`
 
-Requires access to the current conventions source. It resolves the selected modules against the current registry and reports changed managed files, cache-metadata drift, including companion assets and executable metadata, plus the current source revision for observability. The deprecated `data.installedRevision` field remains present for response compatibility: it contains the legacy v1 lock revision or `null` for v2. It does not mutate the consumer repository.
+Requires access to the current conventions source. It resolves the selected modules against the current registry and reports changed managed files and lock-metadata drift across the schema, requested modules, resolved modules, and cached file hashes, including companion assets and executable metadata, plus the current source revision for observability. The deprecated `data.installedRevision` field remains present for response compatibility: it contains the legacy v1 lock revision or `null` for v2. It does not mutate the consumer repository.
 
 ### `conventions update`
 
