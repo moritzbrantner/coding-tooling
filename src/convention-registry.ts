@@ -259,7 +259,8 @@ function loadLock(root: string): ConventionLock | undefined {
     value.schemaVersion === 1 &&
     typeof value.sourceRevision === "string" &&
     value.sourceRevision.length > 0;
-  const currentV2 = value.schemaVersion === 2;
+  const currentV2 =
+    value.schemaVersion === 2 && !Object.prototype.hasOwnProperty.call(value, "sourceRevision");
   if (
     (!legacyV1 && !currentV2) ||
     !isModuleList(value.requestedModules) ||
