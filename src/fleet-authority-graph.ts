@@ -3,12 +3,8 @@ import { basename, join, resolve } from "node:path";
 
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { readRepositoryMetadata } from "./repository-metadata.ts";
-import { readSourceDependencyConfig } from "./source-deps.ts";
-import { type CommandResult, runCommand } from "./shared.ts";
 
-export const FLEET_AUTHORITY_GRAPH_VERSION = "coding-tooling/fleet-authority-graph/v1" as const;
-
-type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
+export const FLEET_AUTHORITY_GRAPH_VERSION = "coding-tooling/fleet-authority-graph/v2" as const;
 
 export type AuthorityBoundaries = {
   owns: string[];
@@ -72,131 +68,9 @@ function repositoryDirectories(root: string): string[] {
   }
 }
 
-function githubRepository(value: string): string | null {
-  const match = value.match(/github\.com[/:]([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/i);
-  return match ? `${match[1]}/${match[2]}` : null;
-}
-
-function sourceDependencyEvidence(
-  root: string,
-  runner: Runner,
-): { entries: Array<Record<string, unknown>>; diagnostics: Diagnostic[] } {
-  const path = join(root, ".coding-tooling.source-deps.json");
-  if (!existsSync(path)) return { entries: [], diagnostics: [] };
-
-  let loaded;
-  try {
-    loaded = readSourceDependencyConfig(root);
-  } catch (error) {
-    return {
-      entries: [],
-      diagnostics: [
-        {
-          code: "authority-graph-source-deps-invalid",
-          message: error instanceof Error ? error.message : String(error),
-          path: ".coding-tooling.source-deps.json",
-        },
-      ],
-    };
-  }
-
-  const entries: Array<Record<string, unknown>> = [];
-  const diagnostics: Diagnostic[] = [];
-  const sources =
-    loaded.schemaVersion <= 2
-      ? loaded.patches.map((patch) => ({
-          ecosystem: "cargo" as const,
-          git: patch.git,
-          rev: patch.rev,
-          localPath: patch.localPath ?? null,
-          localOnly: loaded.localOnly,
-          packages: [{ package: patch.package }],
-        }))
-      : loaded.sourceRepositories.map((repository) => ({
-          ecosystem: repository.ecosystem,
-          git: repository.git,
-          rev: repository.rev,
-          localPath: repository.localPath ?? null,
-          localOnly: repository.localOnly,
-          packages: repository.packages,
-        }));
-
-  for (const source of sources) {
-    const git = source.git;
-    const rev = source.rev.toLowerCase();
-    const localPath = source.localPath;
-    const packageNames = source.packages.map((entry) => entry.package).filter(Boolean);
-    const label = packageNames.join(", ") || git;
-    if (!git || packageNames.length === 0 || !/^[0-9a-f]{40}$/i.test(rev)) {
-      diagnostics.push({
-        code: "authority-graph-source-patch-invalid",
-        message: `Source ${label} lacks package, Git URL, or exact revision`,
-        path: ".coding-tooling.source-deps.json",
-      });
-      continue;
-    }
-    if (source.localOnly && !localPath) {
-      diagnostics.push({
-        code: "authority-graph-local-source-required",
-        message: `${label} is local-only but does not declare localPath`,
-        path: ".coding-tooling.source-deps.json",
-      });
-    }
-    let actualRevision: string | null = null;
-    if (localPath) {
-      const resolvedLocal = resolve(root, localPath);
-      if (existsSync(resolvedLocal)) {
-        const command = runner("git", ["-C", resolvedLocal, "rev-parse", "HEAD"], root);
-        if (command.status === 0 && /^[0-9a-f]{40}$/i.test(command.stdout.trim())) {
-          actualRevision = command.stdout.trim().toLowerCase();
-          if (actualRevision !== rev) {
-            diagnostics.push({
-              code: "authority-graph-source-revision-drift",
-              message: `${label} local source is ${actualRevision}, expected ${rev}`,
-              path: ".coding-tooling.source-deps.json",
-            });
-          }
-        } else {
-          diagnostics.push({
-            code: "authority-graph-source-revision-unavailable",
-            message: `Could not resolve local source revision for ${label}`,
-            path: ".coding-tooling.source-deps.json",
-          });
-        }
-      } else if (source.localOnly) {
-        diagnostics.push({
-          code: "authority-graph-local-source-missing",
-          message: `${label} local-only checkout does not exist at ${localPath}`,
-          path: ".coding-tooling.source-deps.json",
-        });
-      }
-    }
-    for (const packageEntry of source.packages) {
-      entries.push({
-        package: packageEntry.package,
-        ecosystem: source.ecosystem,
-        repository: githubRepository(git),
-        git,
-        declaredRevision: rev,
-        localOnly: source.localOnly,
-        localPath,
-        actualRevision,
-        exactRevisionSatisfied:
-          actualRevision === null ? (source.localOnly ? false : null) : actualRevision === rev,
-      });
-    }
-  }
-  entries.sort((left, right) => String(left.package).localeCompare(String(right.package)));
-  return { entries, diagnostics };
-}
-
-export function fleetAuthorityGraph(
-  fleetRoot: string,
-  dependencies: { run?: Runner } = {},
-): ResultEnvelope<Record<string, unknown>> {
+export function fleetAuthorityGraph(fleetRoot: string): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const root = resolve(fleetRoot);
-  const runner = dependencies.run ?? runCommand;
   const diagnostics: Diagnostic[] = [];
   const owners = new Map<string, string[]>();
   const repositories = repositoryDirectories(root).map((repositoryRoot) => {
@@ -216,20 +90,12 @@ export function fleetAuthorityGraph(
       current.push(id);
       owners.set(capability, current);
     }
-    const sourceDependencies = sourceDependencyEvidence(repositoryRoot, runner);
-    diagnostics.push(
-      ...sourceDependencies.diagnostics.map((diagnostic) => ({
-        ...diagnostic,
-        message: `${id}: ${diagnostic.message}`,
-      })),
-    );
     return {
       id,
       root: repositoryRoot,
       metadata: metadataRead.metadata ?? null,
       metadataDiagnostics: metadataRead.diagnostics,
       authority: authority ?? null,
-      sourceDependencies: sourceDependencies.entries,
     };
   });
 
@@ -240,12 +106,6 @@ export function fleetAuthorityGraph(
       repositories: [...repositories].sort(),
     }))
     .sort((left, right) => left.capability.localeCompare(right.capability));
-  for (const duplicate of duplicateOwners) {
-    diagnostics.push({
-      code: "authority-graph-duplicate-owner",
-      message: `${duplicate.capability} is declared authoritative by ${duplicate.repositories.join(", ")}`,
-    });
-  }
 
   const authorityOwners = Object.fromEntries(
     [...owners.entries()]
@@ -280,22 +140,7 @@ export function fleetAuthorityGraph(
     .filter((repository) => repository.authority === null)
     .map((repository) => repository.id)
     .sort();
-  const sourceGraphInvalid = diagnostics.some((diagnostic) =>
-    [
-      "authority-graph-source-deps-invalid",
-      "authority-graph-source-revision-drift",
-      "authority-graph-source-patch-invalid",
-      "authority-graph-source-revision-unavailable",
-      "authority-graph-local-source-required",
-      "authority-graph-local-source-missing",
-    ].includes(diagnostic.code ?? ""),
-  );
-  const status: ResultStatus =
-    repositories.length === 0
-      ? "unavailable"
-      : duplicateOwners.length > 0 || sourceGraphInvalid
-        ? "failed"
-        : "passed";
+  const status: ResultStatus = repositories.length === 0 ? "unavailable" : "passed";
   if (repositories.length === 0) {
     diagnostics.push({
       code: "authority-graph-repositories-unavailable",
@@ -316,15 +161,21 @@ export function fleetAuthorityGraph(
       dependencyEdges,
       adapterEdges,
       duplicateOwners,
+      conflicts: duplicateOwners.map((duplicate) => ({
+        kind: "duplicate-authority-owner",
+        capability: duplicate.capability,
+        repositories: duplicate.repositories,
+      })),
       coverage: {
         repositoryCount: repositories.length,
         authorityDeclared: repositories.length - missingAuthoritySections.length,
         missingAuthoritySections,
       },
       notes: [
-        "Missing authority sections are adoption gaps, not automatic failures.",
-        "Duplicate authoritative owners and invalid exact source revisions fail the graph.",
-        "Local-only source graphs require every declared local checkout to exist at the pinned revision.",
+        "This graph is descriptive metadata, not a validation or merge gate.",
+        "Duplicate authoritative owners are exposed as conflicts without changing graph status.",
+        "Source-development checkout state and revision verification belong to explicit source-dependency diagnostics, not this graph.",
+        "Missing authority sections are adoption gaps; repositories should not invent ownership declarations merely to improve coverage.",
       ],
     },
     diagnostics,

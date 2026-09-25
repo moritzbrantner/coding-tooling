@@ -5,6 +5,14 @@ import { join } from "node:path";
 
 import { fleetAuthorityGraph, parseAuthorityBoundaries } from "../src/fleet-authority-graph.ts";
 
+function repository(root: string, name: string, metadata: string, agents?: string): string {
+  const path = join(root, name);
+  mkdirSync(join(path, ".git"), { recursive: true });
+  writeFileSync(join(path, ".repository.toml"), metadata);
+  if (agents) writeFileSync(join(path, "AGENTS.md"), agents);
+  return path;
+}
+
 test("parses the standard AGENTS authority boundary section", () => {
   expect(
     parseAuthorityBoundaries(`# Agent guidance
@@ -36,12 +44,26 @@ test("parses an authority section at end of file", () => {
   ).toEqual(["streaming/checkpoints"]);
 });
 
-test("fails a local-only source graph when the configured checkout is absent", () => {
+test("describes repository dependencies and ignores source-checkout validation state", () => {
   const fleet = mkdtempSync(join(tmpdir(), "coding-tooling-authority-"));
-  const repository = join(fleet, "consumer");
-  mkdirSync(join(repository, ".git"), { recursive: true });
+  const consumer = repository(
+    fleet,
+    "consumer",
+    `schema_version = 1
+id = "example/consumer"
+kind = "app"
+status = "active"
+depends_on = ["example/foundation"]
+consumed_by = []
+supersedes = []
+replaced_by = []
+`,
+    `## Authority boundaries
+- Adapts: \`foundation/runtime\`
+`,
+  );
   writeFileSync(
-    join(repository, ".coding-tooling.source-deps.json"),
+    join(consumer, ".coding-tooling.source-deps.json"),
     JSON.stringify({
       schemaVersion: 2,
       cargo: {
@@ -51,7 +73,7 @@ test("fails a local-only source graph when the configured checkout is absent", (
             package: "foundation",
             git: "https://github.com/example/foundation.git",
             rev: "0123456789abcdef0123456789abcdef01234567",
-            localPath: "../foundation",
+            localPath: "../missing-foundation",
           },
         ],
       },
@@ -59,49 +81,54 @@ test("fails a local-only source graph when the configured checkout is absent", (
   );
 
   const result = fleetAuthorityGraph(fleet);
-  expect(result.status).toBe("failed");
-  expect(result.diagnostics.map((entry) => entry.code)).toContain(
-    "authority-graph-local-source-missing",
+
+  expect(result.status).toBe("passed");
+  expect(result.diagnostics).toEqual([]);
+  expect(result.data.dependencyEdges).toEqual([
+    { from: "example/consumer", to: "example/foundation", kind: "depends-on" },
+  ]);
+  expect((result.data.repositories as Array<Record<string, unknown>>)[0]).not.toHaveProperty(
+    "sourceDependencies",
   );
 });
 
-test("fails a JavaScript-only local source graph when the configured checkout is absent", () => {
-  const fleet = mkdtempSync(join(tmpdir(), "coding-tooling-authority-js-"));
-  const repository = join(fleet, "consumer");
-  mkdirSync(join(repository, ".git"), { recursive: true });
-  writeFileSync(
-    join(repository, ".coding-tooling.source-deps.json"),
-    JSON.stringify({
-      schemaVersion: 4,
-      cargo: { repositories: [] },
-      javascript: {
-        localOnly: true,
-        repositories: [
-          {
-            git: "https://github.com/example/editor-core.git",
-            rev: "0123456789abcdef0123456789abcdef01234567",
-            localPath: "../editor-core",
-            packages: [{ package: "@example/editor-core" }],
-          },
-        ],
-      },
-    }),
+test("reports duplicate authority as a conflict without turning the graph into a gate", () => {
+  const fleet = mkdtempSync(join(tmpdir(), "coding-tooling-authority-conflict-"));
+  const metadata = (id: string) => `schema_version = 1
+id = "${id}"
+kind = "library"
+status = "active"
+depends_on = []
+consumed_by = []
+supersedes = []
+replaced_by = []
+`;
+  repository(
+    fleet,
+    "left",
+    metadata("example/left"),
+    `## Authority boundaries
+- Owns: \`physics/collision\`
+`,
+  );
+  repository(
+    fleet,
+    "right",
+    metadata("example/right"),
+    `## Authority boundaries
+- Owns: \`physics/collision\`
+`,
   );
 
   const result = fleetAuthorityGraph(fleet);
-  expect(result.status).toBe("failed");
-  expect(result.diagnostics.map((entry) => entry.code)).toContain(
-    "authority-graph-local-source-missing",
-  );
-  expect(
-    (result.data.repositories as Array<{ sourceDependencies: Array<{ package: string }> }>)[0]
-      ?.sourceDependencies,
-  ).toEqual([
-    expect.objectContaining({
-      package: "@example/editor-core",
-      ecosystem: "javascript",
-      declaredRevision: "0123456789abcdef0123456789abcdef01234567",
-      exactRevisionSatisfied: false,
-    }),
+
+  expect(result.status).toBe("passed");
+  expect(result.diagnostics).toEqual([]);
+  expect(result.data.conflicts).toEqual([
+    {
+      kind: "duplicate-authority-owner",
+      capability: "physics/collision",
+      repositories: ["example/left", "example/right"],
+    },
   ]);
 });
