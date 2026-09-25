@@ -125,6 +125,27 @@ describe("installed convention registry", () => {
     }
   });
 
+  test("rejects source revision pins in v2 locks", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      conventionRegistryCommand("init", ["react"], { root: target, conventionsRoot: source });
+      const lockPath = join(target, "conventions.lock.json");
+      const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+      writeFileSync(
+        lockPath,
+        `${JSON.stringify({ ...lock, sourceRevision: "should-not-be-authoritative" }, null, 2)}\n`,
+      );
+
+      const check = conventionRegistryCommand("check", [], { root: target });
+      expect(check.status).toBe("failed");
+      expect(check.diagnostics[0]?.code).toBe("conventions-lock-missing");
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
   test("initializes an empty selection into a checkable managed snapshot", () => {
     const source = registry();
     const target = workspace("convention-consumer-");
