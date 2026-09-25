@@ -23,7 +23,10 @@ type CollectionWarning = {
   message: string;
 };
 
-const owner = process.env.LANDSCAPE_OWNER?.trim() || process.env.GITHUB_REPOSITORY_OWNER || "moritzbrantner";
+const owner =
+  process.env.LANDSCAPE_OWNER?.trim() ||
+  process.env.GITHUB_REPOSITORY_OWNER ||
+  "moritzbrantner";
 const token = process.env.GITHUB_TOKEN?.trim();
 const warnings: CollectionWarning[] = [];
 
@@ -36,10 +39,7 @@ function headers(): HeadersInit {
   };
 }
 
-async function github(
-  url: string,
-  warning: CollectionWarning,
-): Promise<Response | undefined> {
+async function github(url: string, warning: CollectionWarning): Promise<Response | undefined> {
   try {
     return await fetch(url, { headers: headers() });
   } catch (error) {
@@ -55,7 +55,9 @@ async function listRepositories(): Promise<GitHubRepository[]> {
   const repositories: GitHubRepository[] = [];
   for (let page = 1; ; page += 1) {
     const response = await github(
-      `https://api.github.com/users/${encodeURIComponent(owner)}/repos?type=owner&sort=full_name&direction=asc&per_page=100&page=${page}`,
+      `https://api.github.com/users/${encodeURIComponent(
+        owner,
+      )}/repos?type=owner&sort=full_name&direction=asc&per_page=100&page=${page}`,
       { message: `Repository listing request failed on page ${page}` },
     );
     if (!response) break;
@@ -79,7 +81,9 @@ async function readRepositoryFile(
   path: string,
 ): Promise<string | undefined> {
   const response = await github(
-    `https://api.github.com/repos/${repository.full_name}/contents/${path}?ref=${encodeURIComponent(repository.default_branch)}`,
+    `https://api.github.com/repos/${repository.full_name}/contents/${path}?ref=${encodeURIComponent(
+      repository.default_branch,
+    )}`,
     {
       repository: repository.full_name,
       path,
@@ -123,7 +127,9 @@ try {
 
     const repositoryMetadata = await readRepositoryFile(repository, ".repository.toml");
     const agents = await readRepositoryFile(repository, "AGENTS.md");
-    if (repositoryMetadata) writeFileSync(join(repositoryRoot, ".repository.toml"), repositoryMetadata);
+    if (repositoryMetadata) {
+      writeFileSync(join(repositoryRoot, ".repository.toml"), repositoryMetadata);
+    }
     if (agents) writeFileSync(join(repositoryRoot, "AGENTS.md"), agents);
     if (repositoryMetadata || agents) collectedRepositoryCount += 1;
   }

@@ -57,8 +57,7 @@ function render() {
     ? new Date(snapshot.generatedAt).toLocaleString()
     : "unknown time";
   status.dataset.state = "";
-  status.textContent =
-    `${repositoryRows.length} repositories · ${capabilityEntries.length} capabilities · snapshot ${generated}`;
+  status.textContent = `${repositoryRows.length} repositories · ${capabilityEntries.length} capabilities · snapshot ${generated}`;
 }
 
 function matches(value, query) {
@@ -79,7 +78,8 @@ function renderWarnings(entries) {
       article.className = "finding finding-medium";
       const label = document.createElement("div");
       label.className = "finding-label";
-      label.textContent = [entry.repository, entry.path].filter(Boolean).join(" · ") || "Collection";
+      label.textContent =
+        [entry.repository, entry.path].filter(Boolean).join(" · ") || "Collection";
       const message = document.createElement("p");
       message.textContent = entry.message;
       article.append(label, message);
