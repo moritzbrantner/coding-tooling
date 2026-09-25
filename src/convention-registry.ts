@@ -736,6 +736,20 @@ export function conventionRegistryCommand(
       const cacheMetadataDrift = lock
         ? hashDiff(desiredHashes, lock.files)
         : Object.keys(desiredHashes).sort();
+      const lockMetadataDrift: string[] = [];
+      if (!lock) lockMetadataDrift.push("lock");
+      else {
+        if (lock.schemaVersion !== 2) lockMetadataDrift.push("schemaVersion");
+        if (
+          JSON.stringify(lock.requestedModules) !== JSON.stringify(snapshot.requestedModules)
+        ) {
+          lockMetadataDrift.push("requestedModules");
+        }
+        if (JSON.stringify(lock.resolvedModules) !== JSON.stringify(snapshot.resolvedModules)) {
+          lockMetadataDrift.push("resolvedModules");
+        }
+        if (cacheMetadataDrift.length > 0) lockMetadataDrift.push("files");
+      }
       return envelope("conventions-diff", "passed", started, {
         root,
         cacheSchemaVersion: lock?.schemaVersion,
@@ -743,8 +757,8 @@ export function conventionRegistryCommand(
         availableRevision: snapshot.sourceRevision,
         changed,
         cacheMetadataDrift,
-        updateAvailable:
-          lock?.schemaVersion !== 2 || changed.length > 0 || cacheMetadataDrift.length > 0,
+        lockMetadataDrift,
+        updateAvailable: changed.length > 0 || lockMetadataDrift.length > 0,
       });
     }
 
