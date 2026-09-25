@@ -198,6 +198,30 @@ describe("installed convention registry", () => {
     }
   });
 
+  test("reports stale v2 lock metadata as updateable even when managed files match", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      conventionRegistryCommand("init", ["react"], { root: target, conventionsRoot: source });
+      const lockPath = join(target, "conventions.lock.json");
+      const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+      lock.files["index.md"] = "0".repeat(64);
+      writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+
+      const diff = conventionRegistryCommand("diff", [], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(diff.status).toBe("passed");
+      expect(diff.data.changed).toEqual([]);
+      expect(diff.data.cacheMetadataDrift).toEqual(["index.md"]);
+      expect(diff.data.updateAvailable).toBe(true);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
   test("reports current convention changes without treating the previous source revision as authority", () => {
     const source = registry();
     const target = workspace("convention-consumer-");
