@@ -54,3 +54,11 @@
 - Recompute when a consumer genuinely needs different evidence, when independent verification is itself part of the contract, or when reuse would blur ownership or freshness semantics.
 - Prefer ownership-preserving handles, references, immutable snapshots, or other cheap sharing mechanisms over repeated conversion and cloning where the language/runtime supports them.
 - Do not extract a fleet-wide shared type merely to implement this principle. Keep the validated representation with its semantic owner and extract a reusable contract only after multiple real consumers demonstrate the same meaning and lifecycle.
+
+## PRINCIPLE-009 — Spend interface space on the user's work
+
+- In an interactive product, prominent screen space must support a current user decision, action, or state; product self-description is not a default UI function.
+- Assume returning users already know which product they opened. Do not repeatedly explain the product's purpose, architecture, implementation model, capability claims, privacy posture, or source provenance on ordinary workflow screens unless that information changes an immediate choice or consent decision.
+- Prefer direct access to the actual choices, content, and controls over an introductory block, section preamble, badge row, or call to action that only restates or points at content already visible on the same screen.
+- Remove redundant visible hierarchy when the content names itself. Preserve required accessibility semantics without forcing explanatory chrome into the visual layout.
+- Keep explanatory material in onboarding, help, documentation, about surfaces, or a deliberate details affordance when users may need it.
