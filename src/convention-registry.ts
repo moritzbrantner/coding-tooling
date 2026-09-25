@@ -45,7 +45,7 @@ type ConsumerManifest = {
 };
 
 type ConventionLock = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   requestedModules: string[];
   resolvedModules: string[];
   files: Record<string, string>;
@@ -254,9 +254,14 @@ function loadConsumer(root: string): ConsumerManifest | undefined {
 
 function loadLock(root: string): ConventionLock | undefined {
   const value = readJson<unknown>(join(root, lockName));
+  if (!isRecord(value)) return undefined;
+  const legacyV1 =
+    value.schemaVersion === 1 &&
+    typeof value.sourceRevision === "string" &&
+    value.sourceRevision.length > 0;
+  const currentV2 = value.schemaVersion === 2;
   if (
-    !isRecord(value) ||
-    value.schemaVersion !== 1 ||
+    (!legacyV1 && !currentV2) ||
     !isModuleList(value.requestedModules) ||
     !isModuleList(value.resolvedModules) ||
     !isFileHashRecord(value.files) ||
@@ -264,7 +269,7 @@ function loadLock(root: string): ConventionLock | undefined {
   )
     return undefined;
   return {
-    schemaVersion: 1,
+    schemaVersion: value.schemaVersion as 1 | 2,
     requestedModules: value.requestedModules,
     resolvedModules: value.resolvedModules,
     files: value.files,
@@ -524,7 +529,7 @@ function materialize(root: string, snapshot: Snapshot): MaterializationResult {
   }
 
   const lock: ConventionLock = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     requestedModules: snapshot.requestedModules,
     resolvedModules: snapshot.resolvedModules,
     files: hashes,
