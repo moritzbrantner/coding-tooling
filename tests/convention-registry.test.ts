@@ -215,6 +215,33 @@ describe("installed convention registry", () => {
       expect(diff.status).toBe("passed");
       expect(diff.data.changed).toEqual([]);
       expect(diff.data.cacheMetadataDrift).toEqual(["index.md"]);
+      expect(diff.data.lockMetadataDrift).toEqual(["files"]);
+      expect(diff.data.updateAvailable).toBe(true);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("reports stale v2 module metadata as updateable", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      conventionRegistryCommand("init", ["react"], { root: target, conventionsRoot: source });
+      const lockPath = join(target, "conventions.lock.json");
+      const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+      lock.requestedModules = [];
+      lock.resolvedModules = ["base", "typescript"];
+      writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+
+      const diff = conventionRegistryCommand("diff", [], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(diff.status).toBe("passed");
+      expect(diff.data.changed).toEqual([]);
+      expect(diff.data.cacheMetadataDrift).toEqual([]);
+      expect(diff.data.lockMetadataDrift).toEqual(["requestedModules", "resolvedModules"]);
       expect(diff.data.updateAvailable).toBe(true);
     } finally {
       rmSync(source, { recursive: true, force: true });
