@@ -740,9 +740,7 @@ export function conventionRegistryCommand(
       if (!lock) lockMetadataDrift.push("lock");
       else {
         if (lock.schemaVersion !== 2) lockMetadataDrift.push("schemaVersion");
-        if (
-          JSON.stringify(lock.requestedModules) !== JSON.stringify(snapshot.requestedModules)
-        ) {
+        if (JSON.stringify(lock.requestedModules) !== JSON.stringify(snapshot.requestedModules)) {
           lockMetadataDrift.push("requestedModules");
         }
         if (JSON.stringify(lock.resolvedModules) !== JSON.stringify(snapshot.resolvedModules)) {
