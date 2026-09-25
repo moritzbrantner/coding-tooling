@@ -71,12 +71,45 @@ describe("installed convention registry", () => {
       expect(manifest.modules).toEqual(["react"]);
 
       const lock = JSON.parse(readFileSync(join(target, "conventions.lock.json"), "utf8"));
+      expect(lock.schemaVersion).toBe(2);
       expect(lock.resolvedModules).toEqual(["base", "typescript", "react"]);
       expect(lock).not.toHaveProperty("sourceRevision");
       expect(readFileSync(join(target, ".conventions/index.md"), "utf8")).toContain("## react");
 
       const check = conventionRegistryCommand("check", [], { root: target });
       expect(check.status).toBe("passed");
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts legacy revision-pinned v1 locks and rewrites them as unpinned v2 locks", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      conventionRegistryCommand("init", ["react"], { root: target, conventionsRoot: source });
+      const lockPath = join(target, "conventions.lock.json");
+      const current = JSON.parse(readFileSync(lockPath, "utf8"));
+      writeFileSync(
+        lockPath,
+        `${JSON.stringify(
+          { ...current, schemaVersion: 1, sourceRevision: "legacy-revision" },
+          null,
+          2,
+        )}\n`,
+      );
+
+      expect(conventionRegistryCommand("check", [], { root: target }).status).toBe("passed");
+
+      const update = conventionRegistryCommand("update", [], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(update.status).toBe("passed");
+      const rewritten = JSON.parse(readFileSync(lockPath, "utf8"));
+      expect(rewritten.schemaVersion).toBe(2);
+      expect(rewritten).not.toHaveProperty("sourceRevision");
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
