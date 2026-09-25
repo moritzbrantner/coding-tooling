@@ -46,7 +46,9 @@ function render() {
     .filter(([capability, owners]) =>
       matches({ capability, owners, adapters: adaptersFor(capability) }, query),
     );
-  const conflictRows = (graph.conflicts ?? []).filter((conflict) => matches(conflict, query));
+  const conflictRows = (graph.conflicts ?? []).filter((conflict) =>
+    matches(conflict, query),
+  );
 
   renderWarnings(snapshot.source?.warnings ?? []);
   renderConflicts(conflictRows);
@@ -57,7 +59,8 @@ function render() {
     ? new Date(snapshot.generatedAt).toLocaleString()
     : "unknown time";
   status.dataset.state = "";
-  status.textContent = `${repositoryRows.length} repositories · ${capabilityEntries.length} capabilities · snapshot ${generated}`;
+  status.textContent =
+    `${repositoryRows.length} repositories · ${capabilityEntries.length} capabilities · snapshot ${generated}`;
 }
 
 function matches(value, query) {
