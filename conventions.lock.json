@@ -3,11 +3,11 @@
   "requestedModules": ["rust"],
   "resolvedModules": ["base", "rust"],
   "files": {
-    "modules/base/principles/README.md": "76eabf9bd1006ec6948a1721af11a8e579d3503a62b2442e5b3a31132ae639f1",
+    "modules/base/principles/README.md": "a1694972dc07e9f8eb16a64de9f61a8247025c43ad7937f6b777ac58cc5d6760",
     "modules/base/docs/adr/0001-capability-internalization.md": "43e98e05265dd48f1f559cc428ba037e3da5530af687237764900a27471ab30e",
     "modules/base/conventions/agents/README.md": "bec31197ea2e31ca5a7acaad2ab1870495e89c90d62a645990cddfcf0bd49bfb",
     "modules/base/conventions/codebase-design/README.md": "18c5548fdbbd948cdcfe8e867114f47e15a4ba1f152cc2af6f99c028bfc944aa",
-    "modules/base/conventions/repository/README.md": "37c0a7d6b1119c07ba00c5a71a47a6b8e5e0362c44c7154497a01df7f32f3022",
+    "modules/base/conventions/repository/README.md": "41019dde13cf15da2fca632c2ee64d0eb7c9bf97031bfd414b5436870cd48749",
     "modules/base/conventions/repository/REPO-010.json": "9f5cb19d1dcb35b8b7d7866d87200db6b1717806a0a894bd951bf1d54e771333",
     "modules/base/conventions/repository/REPO-012.json": "8d8139e3e99bda60ed85db1aefd3149b383818bd74888fc255d3d6c57acb226e",
     "modules/base/conventions/repository/REPO-013.json": "579de2f1800e75119e85f73dcbc85d78735444eb6dd79562e511488b6e7c62fd",
@@ -20,6 +20,6 @@
     "modules/rust/technologies/rust/README.md": "cf6eaeb058e999e8df328f9d2c9d17dc7330c6323074720efbf297d72deea583",
     "modules/rust/technologies/rust/RUST-002.json": "727685a156625cab8db0e6eb2bbe8f72fece6a7d4199024e1213647e52292074",
     "configurations.json": "569bf6db9f0a2c85726ccb231698002bb12727682fbfd96e93472591427b14f2",
-    "index.md": "d0cb3f4e3111c3d604a64847be6294cf664dbbadaaa33d839d05a9443e5a7946"
+    "index.md": "17ec3e680df2e0e782d2d65787b3c172982fdedb6a1e606fe36250a5e3eb6ada"
   }
 }
