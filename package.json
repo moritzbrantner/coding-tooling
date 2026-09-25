@@ -19,7 +19,8 @@
     "analyze": "bun src/entry.ts analyze --json",
     "calibration": "bun src/entry.ts calibration --json",
     "normalize": "bun src/entry.ts normalize --json",
-    "check": "bun run format && bun run lint && bun run typecheck && bun run test"
+    "check": "bun run format && bun run lint && bun run typecheck && bun run test",
+    "landscape:build": "bun scripts/build-landscape-snapshot.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.0",
