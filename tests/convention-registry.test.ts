@@ -78,6 +78,7 @@ describe("installed convention registry", () => {
 
       const check = conventionRegistryCommand("check", [], { root: target });
       expect(check.status).toBe("passed");
+      expect(check.data.sourceRevision).toBeNull();
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
@@ -100,7 +101,9 @@ describe("installed convention registry", () => {
         )}\n`,
       );
 
-      expect(conventionRegistryCommand("check", [], { root: target }).status).toBe("passed");
+      const legacyCheck = conventionRegistryCommand("check", [], { root: target });
+      expect(legacyCheck.status).toBe("passed");
+      expect(legacyCheck.data.sourceRevision).toBe("legacy-revision");
 
       const diff = conventionRegistryCommand("diff", [], {
         root: target,
@@ -109,6 +112,7 @@ describe("installed convention registry", () => {
       expect(diff.status).toBe("passed");
       expect(diff.data.changed).toEqual([]);
       expect(diff.data.cacheSchemaVersion).toBe(1);
+      expect(diff.data.installedRevision).toBe("legacy-revision");
       expect(diff.data.updateAvailable).toBe(true);
 
       const update = conventionRegistryCommand("update", [], {
@@ -119,6 +123,9 @@ describe("installed convention registry", () => {
       const rewritten = JSON.parse(readFileSync(lockPath, "utf8"));
       expect(rewritten.schemaVersion).toBe(2);
       expect(rewritten).not.toHaveProperty("sourceRevision");
+      const rewrittenCheck = conventionRegistryCommand("check", [], { root: target });
+      expect(rewrittenCheck.status).toBe("passed");
+      expect(rewrittenCheck.data.sourceRevision).toBeNull();
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
