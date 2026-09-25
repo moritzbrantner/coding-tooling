@@ -74,7 +74,20 @@ export function fleetAuthorityGraph(fleetRoot: string): ResultEnvelope<Record<st
   const diagnostics: Diagnostic[] = [];
   const owners = new Map<string, string[]>();
   const repositories = repositoryDirectories(root).map((repositoryRoot) => {
-    const metadataRead = readRepositoryMetadata(repositoryRoot);
+    let metadataRead: ReturnType<typeof readRepositoryMetadata>;
+    try {
+      metadataRead = readRepositoryMetadata(repositoryRoot);
+    } catch (error) {
+      metadataRead = {
+        diagnostics: [
+          {
+            code: "repository-metadata-unreadable",
+            message: error instanceof Error ? error.message : String(error),
+            path: ".repository.toml",
+          },
+        ],
+      };
+    }
     const id = metadataRead.metadata?.id ?? basename(repositoryRoot);
     let authority: AuthorityBoundaries | undefined;
     const agentsPath = join(repositoryRoot, "AGENTS.md");

@@ -36,8 +36,19 @@ function headers(): HeadersInit {
   };
 }
 
-async function github(url: string): Promise<Response> {
-  return fetch(url, { headers: headers() });
+async function github(
+  url: string,
+  warning: CollectionWarning,
+): Promise<Response | undefined> {
+  try {
+    return await fetch(url, { headers: headers() });
+  } catch (error) {
+    warnings.push({
+      ...warning,
+      message: `${warning.message}: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return undefined;
+  }
 }
 
 async function listRepositories(): Promise<GitHubRepository[]> {
@@ -45,7 +56,9 @@ async function listRepositories(): Promise<GitHubRepository[]> {
   for (let page = 1; ; page += 1) {
     const response = await github(
       `https://api.github.com/users/${encodeURIComponent(owner)}/repos?type=owner&sort=full_name&direction=asc&per_page=100&page=${page}`,
+      { message: `Repository listing request failed on page ${page}` },
     );
+    if (!response) break;
     if (!response.ok) {
       warnings.push({
         message: `Repository listing stopped at page ${page}: GitHub returned ${response.status}.`,
@@ -67,7 +80,13 @@ async function readRepositoryFile(
 ): Promise<string | undefined> {
   const response = await github(
     `https://api.github.com/repos/${repository.full_name}/contents/${path}?ref=${encodeURIComponent(repository.default_branch)}`,
+    {
+      repository: repository.full_name,
+      path,
+      message: "GitHub content request failed",
+    },
   );
+  if (!response) return undefined;
   if (response.status === 404) return undefined;
   if (!response.ok) {
     warnings.push({
@@ -100,6 +119,7 @@ try {
     const repositoryRoot = join(root, repository.name);
     mkdirSync(join(repositoryRoot, ".git"), { recursive: true });
     metadata.set(repository.full_name, repository);
+    metadata.set(repository.name, repository);
 
     const repositoryMetadata = await readRepositoryFile(repository, ".repository.toml");
     const agents = await readRepositoryFile(repository, "AGENTS.md");

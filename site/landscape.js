@@ -36,9 +36,16 @@ function render() {
   const repositoryRows = (graph.repositories ?? []).filter((repository) =>
     matches(repository, query),
   );
-  const capabilityEntries = Object.entries(graph.authorityOwners ?? {}).filter(([capability, owners]) =>
-    matches({ capability, owners, adapters: adaptersFor(capability) }, query),
-  );
+  const capabilityNames = new Set([
+    ...Object.keys(graph.authorityOwners ?? {}),
+    ...(graph.adapterEdges ?? []).map((edge) => edge.capability),
+  ]);
+  const capabilityEntries = [...capabilityNames]
+    .sort()
+    .map((capability) => [capability, graph.authorityOwners?.[capability] ?? []])
+    .filter(([capability, owners]) =>
+      matches({ capability, owners, adapters: adaptersFor(capability) }, query),
+    );
   const conflictRows = (graph.conflicts ?? []).filter((conflict) => matches(conflict, query));
 
   renderWarnings(snapshot.source?.warnings ?? []);

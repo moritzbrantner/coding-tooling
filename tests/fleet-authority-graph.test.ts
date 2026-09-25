@@ -132,3 +132,33 @@ replaced_by = []
     },
   ]);
 });
+
+test("contains malformed repository metadata as a descriptive adoption gap", () => {
+  const fleet = mkdtempSync(join(tmpdir(), "coding-tooling-authority-malformed-"));
+  repository(
+    fleet,
+    "broken",
+    `schema_version = 1
+id = "example/broken"
+kind = "library"
+status = "active"
+summary = "\\x"
+depends_on = []
+consumed_by = []
+supersedes = []
+replaced_by = []
+`,
+  );
+
+  const result = fleetAuthorityGraph(fleet);
+  const repositories = result.data.repositories as Array<{
+    metadata: unknown;
+    metadataDiagnostics: Array<{ code?: string }>;
+  }>;
+
+  expect(result.status).toBe("passed");
+  expect(repositories[0]?.metadata).toBeNull();
+  expect(repositories[0]?.metadataDiagnostics).toEqual([
+    expect.objectContaining({ code: "repository-metadata-unreadable" }),
+  ]);
+});
