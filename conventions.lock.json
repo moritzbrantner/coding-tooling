@@ -1,12 +1,7 @@
 {
   "schemaVersion": 1,
-  "requestedModules": [
-    "rust"
-  ],
-  "resolvedModules": [
-    "base",
-    "rust"
-  ],
+  "requestedModules": ["rust"],
+  "resolvedModules": ["base", "rust"],
   "files": {
     "modules/base/principles/README.md": "76eabf9bd1006ec6948a1721af11a8e579d3503a62b2442e5b3a31132ae639f1",
     "modules/base/docs/adr/0001-capability-internalization.md": "43e98e05265dd48f1f559cc428ba037e3da5530af687237764900a27471ab30e",
