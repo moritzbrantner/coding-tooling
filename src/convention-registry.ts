@@ -46,7 +46,6 @@ type ConsumerManifest = {
 
 type ConventionLock = {
   schemaVersion: 1;
-  sourceRevision: string;
   requestedModules: string[];
   resolvedModules: string[];
   files: Record<string, string>;
@@ -258,8 +257,6 @@ function loadLock(root: string): ConventionLock | undefined {
   if (
     !isRecord(value) ||
     value.schemaVersion !== 1 ||
-    typeof value.sourceRevision !== "string" ||
-    !value.sourceRevision ||
     !isModuleList(value.requestedModules) ||
     !isModuleList(value.resolvedModules) ||
     !isFileHashRecord(value.files) ||
@@ -268,7 +265,6 @@ function loadLock(root: string): ConventionLock | undefined {
     return undefined;
   return {
     schemaVersion: 1,
-    sourceRevision: value.sourceRevision,
     requestedModules: value.requestedModules,
     resolvedModules: value.resolvedModules,
     files: value.files,
@@ -529,7 +525,6 @@ function materialize(root: string, snapshot: Snapshot): MaterializationResult {
 
   const lock: ConventionLock = {
     schemaVersion: 1,
-    sourceRevision: snapshot.sourceRevision,
     requestedModules: snapshot.requestedModules,
     resolvedModules: snapshot.resolvedModules,
     files: hashes,
@@ -652,7 +647,6 @@ export function conventionRegistryCommand(
           root,
           requestedModules: consumer.modules,
           resolvedModules: lock.resolvedModules,
-          sourceRevision: lock.sourceRevision,
           drift,
         },
         diagnostics,
@@ -717,7 +711,7 @@ export function conventionRegistryCommand(
         root,
         requestedModules: requested,
         resolvedModules: materialized.lock.resolvedModules,
-        sourceRevision: materialized.lock.sourceRevision,
+        sourceRevision: snapshot.sourceRevision,
         ...materialization,
         changed,
         reconciliation: changed ? "changed" : "unchanged",
@@ -728,14 +722,11 @@ export function conventionRegistryCommand(
     const snapshot = buildSnapshot(source.root, source.registry, existing.modules);
     if (action === "diff") {
       const changed = hashDiff(snapshotHashes(snapshot), currentFileHashes(root));
-      const lock = loadLock(root);
       return envelope("conventions-diff", "passed", started, {
         root,
-        installedRevision: lock?.sourceRevision,
         availableRevision: snapshot.sourceRevision,
         changed,
-        updateAvailable:
-          Boolean(lock && lock.sourceRevision !== snapshot.sourceRevision) || changed.length > 0,
+        updateAvailable: changed.length > 0,
       });
     }
 
@@ -744,7 +735,7 @@ export function conventionRegistryCommand(
       root,
       requestedModules: existing.modules,
       resolvedModules: materialized.lock.resolvedModules,
-      sourceRevision: materialized.lock.sourceRevision,
+      sourceRevision: snapshot.sourceRevision,
       ...materializationData(materialized),
     });
   } catch (error) {
