@@ -81,3 +81,9 @@ These are repository-layout defaults, not requirements that every repository cre
 - Do not turn skipped, unavailable, incomparable, partial, or non-authoritative evidence into a success claim.
 - Qualify claims to the boundary actually proved: target, workload, platform, precision, protocol behavior, authority level, or other material limitation.
 - Prefer a narrower accurate claim over a broader claim that relies on inference beyond the evidence.
+
+## REPO-018 — Track the current shared convention authority
+
+- Consumer repositories select applicable `coding-agent-conventions` modules but do not pin the shared convention repository to a commit, tag, or historical snapshot.
+- Resolve selected modules from the current shared convention authority before implementation and validation. Local managed files may be used as a cache, but they must not make an older policy revision authoritative.
+- If a current convention exposes an incompatibility or validation failure, repair the consumer or record a narrow repository-local exception with the reason; do not freeze the consumer on an older convention revision.
