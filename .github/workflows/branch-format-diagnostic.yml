@@ -1,0 +1,35 @@
+name: Branch Format Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/descriptive-agent-landscape-20260925
+    paths:
+      - ".github/workflows/branch-format-diagnostic.yml"
+      - "scripts/build-landscape-snapshot.ts"
+      - "site/landscape.js"
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - name: Render canonical formatting
+        run: |
+          bun run format:write
+          echo "FORMAT_SCRIPT_BEGIN"
+          base64 -w0 scripts/build-landscape-snapshot.ts
+          echo
+          echo "FORMAT_SCRIPT_END"
+          echo "FORMAT_SITE_BEGIN"
+          base64 -w0 site/landscape.js
+          echo
+          echo "FORMAT_SITE_END"
