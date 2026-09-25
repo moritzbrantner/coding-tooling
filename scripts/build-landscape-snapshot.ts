@@ -39,7 +39,10 @@ function headers(): HeadersInit {
   };
 }
 
-async function github(url: string, warning: CollectionWarning): Promise<Response | undefined> {
+async function github(
+  url: string,
+  warning: CollectionWarning,
+): Promise<Response | undefined> {
   try {
     return await fetch(url, { headers: headers() });
   } catch (error) {
@@ -125,7 +128,10 @@ try {
     metadata.set(repository.full_name, repository);
     metadata.set(repository.name, repository);
 
-    const repositoryMetadata = await readRepositoryFile(repository, ".repository.toml");
+    const repositoryMetadata = await readRepositoryFile(
+      repository,
+      ".repository.toml",
+    );
     const agents = await readRepositoryFile(repository, "AGENTS.md");
     if (repositoryMetadata) {
       writeFileSync(join(repositoryRoot, ".repository.toml"), repositoryMetadata);
