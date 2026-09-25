@@ -122,11 +122,11 @@ Works without access to the source registry. It verifies local cache integrity:
 - every managed `.conventions/` source, companion asset, and metadata file matches its recorded SHA-256 hash;
 - no unexpected managed files have appeared.
 
-The command does not prove convention freshness and does not run formatters, linters, analyzers, tests, or architecture checks. Current policy is resolved from `coding-agent-conventions`; the local cache is not a version authority. Those checks remain normal repository capabilities. Installed executable convention fragments are consumed when those normal capabilities are planned or executed; there is no separate convention-verification capability that callers must remember to add.
+For response compatibility, `data.sourceRevision` remains present: it reports the historical revision for a legacy v1 lock and `null` for an unpinned v2 lock. The command does not prove convention freshness and does not run formatters, linters, analyzers, tests, or architecture checks. Current policy is resolved from `coding-agent-conventions`; the local cache is not a version authority. Those checks remain normal repository capabilities. Installed executable convention fragments are consumed when those normal capabilities are planned or executed; there is no separate convention-verification capability that callers must remember to add.
 
 ### `conventions diff`
 
-Requires access to the current conventions source. It resolves the selected modules against the current registry and reports changed managed files, including companion assets and executable metadata, plus the current source revision for observability. It does not mutate the consumer repository.
+Requires access to the current conventions source. It resolves the selected modules against the current registry and reports changed managed files, including companion assets and executable metadata, plus the current source revision for observability. The deprecated `data.installedRevision` field remains present for response compatibility: it contains the legacy v1 lock revision or `null` for v2. It does not mutate the consumer repository.
 
 ### `conventions update`
 
