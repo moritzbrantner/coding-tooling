@@ -102,6 +102,15 @@ describe("installed convention registry", () => {
 
       expect(conventionRegistryCommand("check", [], { root: target }).status).toBe("passed");
 
+      const diff = conventionRegistryCommand("diff", [], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(diff.status).toBe("passed");
+      expect(diff.data.changed).toEqual([]);
+      expect(diff.data.cacheSchemaVersion).toBe(1);
+      expect(diff.data.updateAvailable).toBe(true);
+
       const update = conventionRegistryCommand("update", [], {
         root: target,
         conventionsRoot: source,
