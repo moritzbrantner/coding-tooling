@@ -19,7 +19,7 @@ coding-tooling conventions update [--root <path>] [--conventions-root <path>] [-
 coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventions-root <path>] [--registry <path>] [--json]
 ```
 
-`conventions resolve` is a compatibility command for repositories still using live policy resolution. New consumers should use installed modules.
+`conventions resolve` provides direct resolution from the current shared convention source. Module-managed consumers use `conventions.json` for explicit module selection and `.conventions/` only as a local cache.
 
 ## Stable capability names
 
@@ -98,13 +98,13 @@ The optional `.coding-tooling.json` defines repository validation tiers and expl
 
 ### `conventions init`
 
-Creates `conventions.json` with the selected modules or profile and materializes `.conventions/` plus `conventions.lock.json`, including an empty managed snapshot when the selection is empty.
+Creates `conventions.json` with the selected modules or profile and materializes `.conventions/` plus `conventions.lock.json`, including an empty managed cache when the selection is empty. The lock contains cache-integrity metadata and deliberately does not pin a convention source revision.
 
 The command is idempotent: if the repository is already initialized, it returns the existing selection without overwriting it.
 
 ### `conventions add`
 
-Adds modules, resolves their dependencies from `coding-agent-conventions/registry/registry.json`, rematerializes the managed snapshots, and refreshes the lock.
+Adds modules, resolves their dependencies from the current `coding-agent-conventions/registry/registry.json`, rematerializes the managed cache, and refreshes the lock.
 
 A module selection is explicit. Technology inference is not used to silently change the installed policy set.
 
@@ -114,7 +114,7 @@ The installed snapshot contains `.conventions/configurations.json`, which record
 
 ### `conventions check`
 
-Works without access to the source registry. It verifies:
+Works without access to the source registry. It verifies local cache integrity:
 
 - `conventions.json` exists and is valid;
 - `conventions.lock.json` exists and is valid;
@@ -122,17 +122,17 @@ Works without access to the source registry. It verifies:
 - every managed `.conventions/` source, companion asset, and metadata file matches its recorded SHA-256 hash;
 - no unexpected managed files have appeared.
 
-The command does not run formatters, linters, analyzers, tests, or architecture checks. Those remain normal repository capabilities. Installed executable convention fragments are consumed when those normal capabilities are planned or executed; there is no separate convention-verification capability that callers must remember to add.
+The command does not prove convention freshness and does not run formatters, linters, analyzers, tests, or architecture checks. Current policy is resolved from `coding-agent-conventions`; the local cache is not a version authority. Those checks remain normal repository capabilities. Installed executable convention fragments are consumed when those normal capabilities are planned or executed; there is no separate convention-verification capability that callers must remember to add.
 
 ### `conventions diff`
 
-Requires access to the current conventions source. It resolves the installed module selection against the current registry and reports changed managed files, including companion assets and executable metadata, plus the installed and available registry revisions. It does not mutate the consumer repository.
+Requires access to the current conventions source. It resolves the selected modules against the current registry and reports changed managed files, including companion assets and executable metadata, plus the current source revision for observability. It does not mutate the consumer repository.
 
 ### `conventions update`
 
 Requires access to the current conventions source. It rematerializes the currently selected modules, companion assets, and executable metadata from the current registry and refreshes `conventions.lock.json`.
 
-Policy updates are therefore deliberate repository changes that can be reviewed like dependency updates.
+This refresh updates the local cache; it does not opt the repository into a new convention version because convention revisions are not pinned. If current policy exposes an incompatibility, fix the consumer or record a narrow repository-local exception.
 
 ### Registry source discovery
 
@@ -167,21 +167,19 @@ Effective configs are transient execution artifacts. They do not modify reposito
 
 ## Managed and local policy
 
-`.conventions/` contains managed snapshots and must not be hand-edited.
+`.conventions/` contains a managed local cache and must not be hand-edited. Its hashes protect cache integrity; they do not pin the shared policy revision.
 
 `.conventions/index.md` is the cheap entry point for humans and agents. It contains a deterministic rule briefing built from each installed `## ID — Title` heading and that rule's first authored bullet, followed by links to the full managed module files and a separate companion-asset section. Stable IDs are de-duplicated in the briefing, so detailed documents may expand a rule without repeating it in the hot-path summary.
 
-The briefing is navigation, not a second policy source: its wording is extracted directly from installed convention files, and the full managed source remains authoritative when a rule is relevant or ambiguous.
+The briefing is navigation, not a second policy source: its wording is extracted directly from cached convention files. The current shared `coding-agent-conventions` source remains authoritative when policy freshness or ambiguity matters.
 
 Repository-specific semantics, commands, architecture boundaries, and deliberate exceptions belong in repository-local guidance such as `AGENTS.md`. Repository tool configuration may add non-conflicting settings, but it may not accidentally override an installed convention requirement through config precedence.
 
 `coding-agent-skills` owns reusable reasoning procedures. Skills may read installed conventions but should not copy policy text.
 
-## Compatibility: `conventions resolve`
+## Direct current-source resolution: `conventions resolve`
 
-The previous live-resolution command remains available during migration. It discovers the current shared checkout, infers technologies, and returns applicable convention files without copying them.
-
-Do not build new repository contracts around live resolution. Migrate consumers to explicit installed modules and remove live-resolution dependencies once the migration is complete.
+This command discovers the current shared checkout, infers technologies, and returns applicable convention files without copying them. Module-managed repositories should continue to declare their intended module set in `conventions.json`; direct resolution does not replace that explicit selection.
 
 ## Boundary with orchestration
 
