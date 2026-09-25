@@ -98,7 +98,7 @@ The optional `.coding-tooling.json` defines repository validation tiers and expl
 
 ### `conventions init`
 
-Creates `conventions.json` with the selected modules or profile and materializes `.conventions/` plus `conventions.lock.json`, including an empty managed cache when the selection is empty. The lock contains cache-integrity metadata and deliberately does not pin a convention source revision.
+Creates `conventions.json` with the selected modules or profile and materializes `.conventions/` plus `conventions.lock.json`, including an empty managed cache when the selection is empty. The current unpinned lock format is schema v2: it contains cache-integrity metadata and deliberately does not pin a convention source revision. Legacy revision-pinned v1 locks remain readable and are rewritten as v2 on refresh.
 
 The command is idempotent: if the repository is already initialized, it returns the existing selection without overwriting it.
 
