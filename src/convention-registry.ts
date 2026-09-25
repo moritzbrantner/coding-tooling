@@ -727,11 +727,13 @@ export function conventionRegistryCommand(
     const snapshot = buildSnapshot(source.root, source.registry, existing.modules);
     if (action === "diff") {
       const changed = hashDiff(snapshotHashes(snapshot), currentFileHashes(root));
+      const lock = loadLock(root);
       return envelope("conventions-diff", "passed", started, {
         root,
+        cacheSchemaVersion: lock?.schemaVersion,
         availableRevision: snapshot.sourceRevision,
         changed,
-        updateAvailable: changed.length > 0,
+        updateAvailable: lock?.schemaVersion !== 2 || changed.length > 0,
       });
     }
 
