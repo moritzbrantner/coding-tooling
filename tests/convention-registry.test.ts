@@ -72,6 +72,7 @@ describe("installed convention registry", () => {
 
       const lock = JSON.parse(readFileSync(join(target, "conventions.lock.json"), "utf8"));
       expect(lock.resolvedModules).toEqual(["base", "typescript", "react"]);
+      expect(lock).not.toHaveProperty("sourceRevision");
       expect(readFileSync(join(target, ".conventions/index.md"), "utf8")).toContain("## react");
 
       const check = conventionRegistryCommand("check", [], { root: target });
@@ -127,7 +128,7 @@ describe("installed convention registry", () => {
     }
   });
 
-  test("reports available convention changes without mutating the consumer", () => {
+  test("reports current convention changes without treating the previous source revision as authority", () => {
     const source = registry();
     const target = workspace("convention-consumer-");
     try {
