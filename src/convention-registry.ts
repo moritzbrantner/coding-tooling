@@ -49,6 +49,7 @@ type ConventionLock = {
   requestedModules: string[];
   resolvedModules: string[];
   files: Record<string, string>;
+  legacySourceRevision?: string;
 };
 
 type RegistryOptions = {
@@ -274,6 +275,7 @@ function loadLock(root: string): ConventionLock | undefined {
     requestedModules: value.requestedModules,
     resolvedModules: value.resolvedModules,
     files: value.files,
+    legacySourceRevision: legacyV1 ? (value.sourceRevision as string) : undefined,
   };
 }
 
@@ -653,6 +655,7 @@ export function conventionRegistryCommand(
           root,
           requestedModules: consumer.modules,
           resolvedModules: lock.resolvedModules,
+          sourceRevision: lock.legacySourceRevision ?? null,
           drift,
         },
         diagnostics,
@@ -732,6 +735,7 @@ export function conventionRegistryCommand(
       return envelope("conventions-diff", "passed", started, {
         root,
         cacheSchemaVersion: lock?.schemaVersion,
+        installedRevision: lock?.legacySourceRevision ?? null,
         availableRevision: snapshot.sourceRevision,
         changed,
         updateAvailable: lock?.schemaVersion !== 2 || changed.length > 0,
