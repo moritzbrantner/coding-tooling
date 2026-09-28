@@ -84,6 +84,8 @@ Exit codes are `0` for passed, `1` for failed, `2` for unavailable or invalid CL
 
 `inspect` performs mechanical discovery only.
 
+A `Cargo.toml` with a `[workspace]` table is one Rust component that covers its members. Crates matched by its `members` paths or globs, minus `exclude`, are not emitted as separate Rust components. Workspace-root capabilities validate every member explicitly (`cargo fmt --all --check`; `clippy`, `build`, and `test` with `--workspace`) so `default-members` cannot narrow the gate. Nested crates outside the workspace's `members` remain their own components. Implicit membership through path dependencies is not inferred, and package scripts that invoke Cargo are not deduplicated against the Rust component; override either through `capabilityCommands`.
+
 `check` executes one declared deterministic validation capability and must not silently mutate source code. Before executing a supported formatter/linter capability, it also resolves any applicable installed convention configuration fragments and injects their deterministic effective config into the same normal capability command.
 
 `affected` reports facts derived from a Git baseline and repository structure. It does not decide agent policy.
