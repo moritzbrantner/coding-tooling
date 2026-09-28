@@ -3,7 +3,7 @@
   "reusableWorkflow": {
     "repository": "moritzbrantner/reusable-workflows",
     "path": ".github/workflows/coding-tooling-score-history.yml",
-    "revision": "27bcfd648f5fdf3f08b3e4b1adc96ccce28508bc"
+    "revision": "main"
   },
   "repositories": [
     {
