@@ -10,7 +10,7 @@ import {
 const reusableWorkflow = {
   repository: "moritzbrantner/reusable-workflows",
   path: ".github/workflows/coding-tooling-score-history.yml",
-  revision: "27bcfd648f5fdf3f08b3e4b1adc96ccce28508bc",
+  revision: "main",
 };
 
 function entry(repository: string) {
@@ -62,14 +62,14 @@ describe("score adoption registry", () => {
     ).toThrow("unique");
   });
 
-  test("requires immutable workflow and current score-profile identity", () => {
+  test("accepts the current workflow branch and requires a current score-profile identity", () => {
     expect(() =>
       parseScoreAdoptionRegistry({
         schemaVersion: SCORE_ADOPTION_REGISTRY_SCHEMA_V1,
-        reusableWorkflow: { ...reusableWorkflow, revision: "main" },
+        reusableWorkflow: { ...reusableWorkflow, revision: "not a ref" },
         repositories: [entry("moritzbrantner/rust-kernels")],
       }),
-    ).toThrow("immutable lowercase commit SHA");
+    ).toThrow("main or a lowercase commit SHA");
 
     expect(() =>
       parseScoreAdoptionRegistry({

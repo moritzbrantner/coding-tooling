@@ -40,7 +40,6 @@ type BuiltinEnforcement = {
   check:
     | "bun-default"
     | "case-portability"
-    | "ci-action-pins"
     | "csharp-explicit-control-flow"
     | "csharp-member-order"
     | "env-example"
@@ -153,7 +152,6 @@ const knownTextNames = new Set([
 const builtinChecks = new Set([
   "bun-default",
   "case-portability",
-  "ci-action-pins",
   "csharp-explicit-control-flow",
   "csharp-member-order",
   "env-example",
@@ -165,7 +163,6 @@ const builtinChecks = new Set([
   "vitest-kinds",
 ]);
 const exactBunPackageManager = /^bun@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-const exactActionRevision = /^[0-9a-f]{40}$/i;
 const ambientEnvironmentKeys = new Set([
   "CI",
   "HOME",
@@ -211,6 +208,8 @@ function loadEnforcements(root: string): ConventionEnforcement[] {
     if (!isRecord(value) || value.schemaVersion !== 1 || typeof value.ruleId !== "string") continue;
     const enforcement = value.enforcement;
     if (!isRecord(enforcement) || typeof enforcement.kind !== "string") continue;
+    // Older managed convention snapshots still contain this retired check.
+    if (value.ruleId === "GIT-004" && enforcement.check === "ci-action-pins") continue;
 
     if (enforcement.kind === "capability") {
       if (
@@ -632,41 +631,6 @@ function textHygiene(root: string, ruleId: string): ConventionCheckResult {
   return builtinResult(ruleId, "text-hygiene", failures);
 }
 
-function ciActionPins(root: string, ruleId: string): ConventionCheckResult {
-  const failures: string[] = [];
-  for (const file of repositoryFiles(root)) {
-    const workflowLike =
-      (file.relativePath.startsWith(".github/") && /\.ya?ml$/i.test(file.relativePath)) ||
-      file.relativePath === "action.yml" ||
-      file.relativePath === "action.yaml";
-    if (!workflowLike) continue;
-    if (file.gitMode === "160000" || file.gitMode === "120000") {
-      failures.push(`${file.relativePath}: tracked workflow must be a regular file`);
-      continue;
-    }
-
-    let content: string;
-    try {
-      content = readFileSync(file.absolutePath, "utf8");
-    } catch {
-      failures.push(`${file.relativePath}: tracked workflow could not be read`);
-      continue;
-    }
-    for (const [index, line] of content.split(/\r?\n/).entries()) {
-      const value = line.match(/^\s*(?:-\s*)?uses:\s*([^\s#]+)/)?.[1];
-      if (!value || value.startsWith("./") || value.startsWith("docker://")) continue;
-      const separator = value.lastIndexOf("@");
-      const revision = separator >= 0 ? value.slice(separator + 1) : "";
-      if (!exactActionRevision.test(revision)) {
-        failures.push(
-          `${file.relativePath}:${index + 1}: external action must use a full commit SHA`,
-        );
-      }
-    }
-  }
-  return builtinResult(ruleId, "ci-action-pins", failures);
-}
-
 function withinRoot(root: string, candidate: string): boolean {
   return candidate === root || candidate.startsWith(`${root}${sep}`);
 }
@@ -766,8 +730,6 @@ function runBuiltin(
       return bunDefault(root, components, ruleId);
     case "case-portability":
       return casePortability(root, ruleId);
-    case "ci-action-pins":
-      return ciActionPins(root, ruleId);
     case "csharp-explicit-control-flow":
       return builtinResult(
         ruleId,
