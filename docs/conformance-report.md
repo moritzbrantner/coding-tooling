@@ -18,7 +18,7 @@ The report has `operation: "conformance"` and `data.reportVersion: 1`. It includ
 - whether `.coding-tooling.json` exists and is valid;
 - configured/default tier plans, including required and optional missing capabilities;
 - availability of executables referenced by planned checks;
-- whether `conventions.json`, `conventions.lock.json`, and the installed `.conventions/` snapshot are intact;
+- whether `conventions.json`, `conventions.lock.json`, and the local `.conventions/` cache are intact;
 - the explicitly selected convention modules;
 - results from installed deterministic convention enforcement when the snapshot is valid;
 - normalized findings with stable codes, status, severity, and convention ID where known.
@@ -43,7 +43,7 @@ The report does not install or update conventions, dependencies, toolchains, rep
 
 Environment conformance reads only repository-local declarations and locally installed executables. Environment fingerprint verification derives expected identity from repository-owned semantic inputs, then observes the current machine; a machine receives `verifiedFingerprint` only when it satisfies that expected identity. Neither path queries upstream release services or decides whether a newer stable toolchain exists. Latest-version discovery and exact-pin mutation belong to the explicit `platform-upgrader refresh latest-stable` path.
 
-Installed convention integrity checking works from the committed manifest, lock, and managed snapshot without a live `coding-agent-conventions` checkout. Deterministic enforcement is executed only from the validated installed snapshot using the existing convention-enforcement path.
+Convention cache-integrity checking works from the committed manifest, lock, and managed cache without a live `coding-agent-conventions` checkout. That proves only that the cache has not drifted from its recorded hashes; it does not make the cache a policy-version authority or prove freshness. Current shared policy is resolved from `coding-agent-conventions`, while deterministic enforcement can execute from the validated local cache using the existing convention-enforcement path.
 
 Missing configuration is represented as a normal machine-readable finding rather than an exception. This makes the command suitable for landscape aggregation across repositories at different adoption stages.
 

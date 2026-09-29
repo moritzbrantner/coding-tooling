@@ -5,7 +5,13 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/pages.yml"
+      - "package.json"
+      - "scripts/build-landscape-snapshot.ts"
+      - "src/fleet-authority-graph.ts"
+      - "src/repository-metadata.ts"
       - "site/**"
+  schedule:
+    - cron: "17 5 * * *"
   workflow_dispatch:
 
 permissions:
@@ -22,11 +28,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - name: Build descriptive agent landscape
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bun run landscape:build
       - name: Configure Pages
-        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+        uses: actions/configure-pages@v6
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
@@ -40,4 +54,4 @@ jobs:
     steps:
       - name: Deploy Pages
         id: deployment
-        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+        uses: actions/deploy-pages@v5

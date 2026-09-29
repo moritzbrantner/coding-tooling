@@ -8,7 +8,7 @@ It deliberately does not contain changing observations such as the latest score,
 
 The registry records rollout intent only:
 
-- the immutable `reusable-workflows` revision used for the current rollout;
+- the `reusable-workflows` revision used for the current rollout, normally `main`;
 - the reusable score-history workflow path;
 - repositories included in a rollout wave;
 - the expected coarse score-profile identity;
@@ -37,7 +37,7 @@ The v1 registry schema is `coding-tooling/score-adoption-registry/v1`.
 
 `src/score-adoption.ts` validates the checked-in registry and future consumers can use the same parser. The contract requires:
 
-- an exact lowercase 40-character reusable-workflow commit SHA;
+- `main` for the current reusable workflow or a lowercase 40-character commit SHA for an intentional compatibility pin;
 - a `.github/workflows/*.yml` or `.yaml` reusable workflow path;
 - unique repository names in deterministic lexical order;
 - positive rollout-wave numbers;
@@ -46,3 +46,5 @@ The v1 registry schema is `coding-tooling/score-adoption-registry/v1`.
 - one of the supported stable dashboard groups.
 
 Runtime discovery and portfolio aggregation should consume this inventory and then read live/persisted evidence from the repositories. They should not write observations back into `score-adoption.json`.
+
+Older v1 parsers accepted only commit SHAs. Consumers that read a registry using `main` must update their parser to this v1 behavior first; the old parser fails explicitly until updated. Existing v1 registries with commit SHAs continue to parse.

@@ -1,5 +1,7 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, posix } from "node:path";
+
+import { Glob, TOML } from "bun";
 
 import { applyConventionConfigurations } from "./convention-config.ts";
 import { validateConvergenceRuleConfig } from "./convergence-rule-policy.ts";
@@ -143,22 +145,28 @@ export function discoverComponents(root = repositoryRoot()): Component[] {
     });
   }
 
-  for (const file of files.filter((path) => basename(path) === "Cargo.toml")) {
-    const directory = dirname(file);
-    const path = relativePosix(root, directory);
+  const cargoManifests = files
+    .filter((path) => basename(path) === "Cargo.toml")
+    .map((file) => ({ path: relativePosix(root, dirname(file)), workspace: cargoWorkspace(file) }));
+  const cargoPaths = cargoManifests.map((manifest) => manifest.path);
+  const workspaceMembers = new Set(
+    cargoManifests.flatMap((manifest) =>
+      manifest.workspace
+        ? cargoWorkspaceMembers(manifest.path, manifest.workspace, cargoPaths)
+        : [],
+    ),
+  );
+  for (const manifest of cargoManifests) {
+    if (!manifest.workspace && workspaceMembers.has(manifest.path)) continue;
+    const { path } = manifest;
     components.push({
-      name: path === "." ? basename(root) : basename(directory),
+      name: path === "." ? basename(root) : basename(path),
       path,
       kind: "rust",
       technologies: ["rust"],
-      capabilities: {
-        "format:check": ["cargo", "fmt", "--check"],
-        lint: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
-        build: ["cargo", "build", "--locked"],
-        test: ["cargo", "test", "--locked"],
-        "test:unit": ["cargo", "test", "--locked", "--lib"],
-        "test:integration": ["cargo", "test", "--locked", "--tests"],
-      },
+      capabilities: structuredClone(
+        manifest.workspace ? cargoWorkspaceCapabilities : cargoPackageCapabilities,
+      ),
     });
   }
 
@@ -184,6 +192,73 @@ export function discoverComponents(root = repositoryRoot()): Component[] {
 
   return components.sort(
     (left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name),
+  );
+}
+
+const cargoPackageCapabilities: Partial<Record<Capability, string[]>> = {
+  "format:check": ["cargo", "fmt", "--check"],
+  lint: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+  build: ["cargo", "build", "--locked"],
+  test: ["cargo", "test", "--locked"],
+  "test:unit": ["cargo", "test", "--locked", "--lib"],
+  "test:integration": ["cargo", "test", "--locked", "--tests"],
+};
+
+// A workspace root validates every member explicitly: without `--workspace`,
+// Cargo only covers `default-members` (or the root package) from the root.
+const cargoWorkspaceCapabilities: Partial<Record<Capability, string[]>> = {
+  "format:check": ["cargo", "fmt", "--all", "--check"],
+  lint: [
+    "cargo",
+    "clippy",
+    "--workspace",
+    "--all-targets",
+    "--all-features",
+    "--",
+    "-D",
+    "warnings",
+  ],
+  build: ["cargo", "build", "--workspace", "--locked"],
+  test: ["cargo", "test", "--workspace", "--locked"],
+  "test:unit": ["cargo", "test", "--workspace", "--locked", "--lib"],
+  "test:integration": ["cargo", "test", "--workspace", "--locked", "--tests"],
+};
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+type CargoWorkspace = { members: string[]; exclude: string[] };
+
+function cargoWorkspace(file: string): CargoWorkspace | undefined {
+  let manifest: { workspace?: { members?: unknown; exclude?: unknown } };
+  try {
+    manifest = TOML.parse(readFileSync(file, "utf8")) as typeof manifest;
+  } catch {
+    // An unparsable manifest stays a plain crate component; Cargo reports the error itself.
+    return undefined;
+  }
+  if (!manifest.workspace || typeof manifest.workspace !== "object") return undefined;
+  return {
+    members: stringArray(manifest.workspace.members),
+    exclude: stringArray(manifest.workspace.exclude),
+  };
+}
+
+function cargoWorkspaceMembers(
+  workspacePath: string,
+  workspace: CargoWorkspace,
+  cargoPaths: readonly string[],
+): string[] {
+  const resolve = (pattern: string) =>
+    posix.normalize(posix.join(workspacePath, pattern.replaceAll("\\", "/"))).replace(/\/$/, "");
+  const members = workspace.members.map((pattern) => new Glob(resolve(pattern)));
+  const excluded = new Set(workspace.exclude.map(resolve));
+  return cargoPaths.filter(
+    (path) =>
+      path !== workspacePath && !excluded.has(path) && members.some((member) => member.match(path)),
   );
 }
 
