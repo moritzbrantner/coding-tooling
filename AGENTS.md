@@ -4,7 +4,7 @@ This file contains repository-specific guidance for coding agents working in `co
 
 ## Tooling
 
-- Use Bun 1.4.0, as pinned by `package.json`.
+- Use Bun 1.4.2, as pinned by `package.json`.
 - Prefer repository-declared scripts and capabilities over invented commands.
 - Run cheap deterministic checks before broader validation: `bun run format:check`, `bun run lint`, `bun run typecheck`, then `bun run test`.
 - Before finalizing a change, run `bun run check` and `bun run findings`.
