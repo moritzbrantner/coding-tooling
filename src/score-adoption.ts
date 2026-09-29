@@ -28,7 +28,6 @@ export type ScoreAdoptionRegistry = {
 };
 
 const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-const shaPattern = /^[0-9a-f]{40}$/;
 const workflowPathPattern = /^\.github\/workflows\/[A-Za-z0-9_.-]+\.ya?ml$/;
 const historyBranchPattern = /^[A-Za-z0-9._/-]+$/;
 const dashboardGroups = new Set<ScoreAdoptionDashboardGroup>([
@@ -139,9 +138,9 @@ export function parseScoreAdoptionRegistry(value: unknown): ScoreAdoptionRegistr
   }
   if (
     typeof value.reusableWorkflow.revision !== "string" ||
-    !shaPattern.test(value.reusableWorkflow.revision)
+    !/^(?:main|[0-9a-f]{40})$/.test(value.reusableWorkflow.revision)
   ) {
-    throw new Error("reusableWorkflow.revision must be an immutable lowercase commit SHA");
+    throw new Error("reusableWorkflow.revision must be main or a lowercase commit SHA");
   }
 
   if (!Array.isArray(value.repositories) || value.repositories.length === 0) {
