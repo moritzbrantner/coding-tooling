@@ -10,6 +10,7 @@ import {
   DEFAULT_REMOTE_FETCH_CONCURRENCY,
   mapWithConcurrency,
   selectRemoteFilesByByteBudget,
+  selectReactSourceFilesByByteBudget,
   selectRustSourceFilesByByteBudget,
 } from "./remote-acquisition.js";
 import { discoverReusableWorkflowCalls } from "./reusable-workflow.js";
@@ -90,6 +91,11 @@ export async function loadSnapshot(reference, options = {}) {
     entries,
     options.rustSourceByteBudget,
   );
+  const reactSourceAcquisition = selectReactSourceFilesByByteBudget(
+    entries,
+    options.reactSourceByteBudget,
+  );
+  const selectedReactSources = reactSourceAcquisition.selected;
   const selectedBase = manifestAcquisition.selected;
   const selectedRustSources = rustSourceAcquisition.selected;
   const selectedWorkflows = selectedWorkflowFiles(entries);
@@ -99,6 +105,7 @@ export async function loadSnapshot(reference, options = {}) {
   const selected = [
     ...selectedBase,
     ...selectedRustSources,
+    ...selectedReactSources,
     ...selectedWorkflows,
     ...(rootAction && !selectedBase.some((entry) => entry.path === rootAction.path)
       ? [rootAction]
@@ -109,6 +116,8 @@ export async function loadSnapshot(reference, options = {}) {
   const files = {};
   const unreadablePaths = [];
   const unreadableRustSourcePaths = [];
+  const unreadableReactSourcePaths = [];
+  const reactSourcePaths = new Set(selectedReactSources.map((entry) => entry.path));
   const rustSourcePaths = new Set(selectedRustSources.map((entry) => entry.path));
 
   await mapWithConcurrency(
@@ -125,7 +134,8 @@ export async function loadSnapshot(reference, options = {}) {
         files[entry.path] = decodeBase64(blob.content);
       } catch (error) {
         if (error?.name === "AbortError") throw error;
-        if (rustSourcePaths.has(entry.path)) unreadableRustSourcePaths.push(entry.path);
+        if (reactSourcePaths.has(entry.path)) unreadableReactSourcePaths.push(entry.path);
+        else if (rustSourcePaths.has(entry.path)) unreadableRustSourcePaths.push(entry.path);
         else unreadablePaths.push(entry.path);
       }
     },
@@ -175,6 +185,16 @@ export async function loadSnapshot(reference, options = {}) {
       eligibleCount: manifestAcquisition.eligible.length,
       selectedCount: manifestAcquisition.selected.length,
     },
+    reactSourceFetchTruncated: !reactSourceAcquisition.complete,
+    reactSourceAcquisition: {
+      byteBudget: reactSourceAcquisition.byteBudget,
+      selectedBytes: reactSourceAcquisition.selectedBytes,
+      reason: reactSourceAcquisition.reason,
+      blockedPath: reactSourceAcquisition.blockedPath,
+      eligibleCount: reactSourceAcquisition.eligible.length,
+      selectedCount: reactSourceAcquisition.selected.length,
+    },
+    unreadableReactSourcePaths: unreadableReactSourcePaths.toSorted(),
     rustSourceFetchTruncated: !rustSourceAcquisition.complete,
     rustSourceAcquisition: {
       byteBudget: rustSourceAcquisition.byteBudget,

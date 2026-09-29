@@ -24,7 +24,8 @@
     "analysis:worker:dev": "wrangler dev",
     "analysis:worker:deploy": "wrangler deploy",
     "analysis:worker:deploy:temporary": "wrangler deploy --temporary",
-    "landscape:build": "bun scripts/build-landscape-snapshot.ts"
+    "landscape:build": "bun scripts/build-landscape-snapshot.ts",
+    "pages:build": "bun scripts/build-pages.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.0",

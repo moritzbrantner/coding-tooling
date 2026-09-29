@@ -7,6 +7,9 @@ on:
       - ".github/workflows/pages.yml"
       - "package.json"
       - "scripts/build-landscape-snapshot.ts"
+      - "scripts/build-pages.ts"
+      - "src/react-update-boundaries.ts"
+      - "bun.lock"
       - "src/fleet-authority-graph.ts"
       - "src/repository-metadata.ts"
       - "site/**"
@@ -38,6 +41,8 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
+      - name: Install browser build dependencies
+        run: bun install --frozen-lockfile
       - name: Build descriptive agent landscape
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -75,10 +80,12 @@ jobs:
           contract.deployment.productionBaseUrl = normalized;
           writeFileSync(path, `${JSON.stringify(contract, null, 2)}\n`);
           NODE
+      - name: Bundle Pages analyzer
+        run: bun run pages:build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: site
+          path: .artifacts/pages
 
   deploy:
     environment:

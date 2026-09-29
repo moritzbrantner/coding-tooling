@@ -192,4 +192,14 @@ Deployment/release-only workflows therefore remain automation without proven val
 
 This check is structural and non-executing. Hosted check conclusions, branch protection, and whether CI actually passed remain separate evidence.
 
+### HTTP acquisition boundary
+
 The HTTP adapter rejects private repository metadata before requesting repository trees or blobs, even when its server token can read them. GitHub acquisition inherits caller cancellation and has a 30-second operational deadline. Wrangler is an exact locked development dependency; validation installs the committed lockfile before testing and bundling.
+
+### React source evidence
+
+Pages runs the same React update-boundary AST analyzer as local findings on bounded production JavaScript/TypeScript source candidates, excluding fixtures, tests, stories, declarations, generated outputs, and dependencies. GitHub acquisition uses a separate default 512 KiB source budget and reports `reactSourceAcquisition`, `reactSourceFetchTruncated`, and `unreadableReactSourcePaths`. Unreadable or budget-truncated source evidence makes the overall preflight incomplete. Unrecognized patterns never imply that React update boundaries or runtime performance are correct.
+
+`REMOTE-REACT-*` findings include exact source locations and convention references. Concrete frame/setter and pure effect-copy findings have medium priority; context naming heuristics have low priority. They appear under both `focus=architecture` and `focus=performance`. Local findings remain authoritative for complete scans and suppression policy. Pages does not apply repository suppression metadata.
+
+Run `bun run pages:build` to bundle the static site and pinned TypeScript AST dependency into `.artifacts/pages`; Pages publishes that disposable build directory. The browser build does not execute inspected repository source and introduces no time-based validation gate.

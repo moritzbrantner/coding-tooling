@@ -5,6 +5,8 @@ on:
     paths:
       - ".github/workflows/analysis-api.yml"
       - "package.json"
+      - "bun.lock"
+      - "src/react-update-boundaries.ts"
       - "site/**"
       - "tests/analysis-worker.test.js"
       - "worker/**"
@@ -14,6 +16,8 @@ on:
     paths:
       - ".github/workflows/analysis-api.yml"
       - "package.json"
+      - "bun.lock"
+      - "src/react-update-boundaries.ts"
       - "site/**"
       - "tests/analysis-worker.test.js"
       - "worker/**"
