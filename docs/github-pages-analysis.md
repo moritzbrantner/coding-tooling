@@ -138,3 +138,11 @@ Schema-v1 `workflowEvidence.matchedCommandEvidence` contains the declared valida
 Deployment/release-only workflows therefore remain automation without proven validation. Supported external CI configuration is reported as `unsupported`/external rather than as missing CI because Pages does not execute or interpret those providers. If the bounded GitHub workflow evidence cannot be inspected completely, validation evidence is `incomplete`, never satisfied or absent.
 
 This check is structural and non-executing. Hosted check conclusions, branch protection, and whether CI actually passed remain separate evidence.
+
+### React source evidence
+
+Pages runs the same React update-boundary AST analyzer as local findings on bounded production JavaScript/TypeScript source candidates, excluding fixtures, tests, stories, declarations, generated outputs, and dependencies. GitHub acquisition uses a separate default 512 KiB source budget and reports `reactSourceAcquisition`, `reactSourceFetchTruncated`, and `unreadableReactSourcePaths`. Unreadable or budget-truncated source evidence makes the overall preflight incomplete. Unrecognized patterns never imply that React update boundaries or runtime performance are correct.
+
+`REMOTE-REACT-*` findings include exact source locations and convention references. Concrete frame/setter and pure effect-copy findings have medium priority; context naming heuristics have low priority. They appear under both `focus=architecture` and `focus=performance`. Local findings remain authoritative for complete scans and suppression policy. Pages does not apply repository suppression metadata.
+
+Run `bun run pages:build` to bundle the static site and pinned TypeScript AST dependency into `.artifacts/pages`; Pages publishes that disposable build directory. The browser build does not execute inspected repository source and introduces no time-based validation gate.
