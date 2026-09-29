@@ -69,7 +69,8 @@ export async function handleAnalysisRequest(request, env = {}, options = {}) {
   try {
     const analyze = options.analysisQueryJson ?? analysisQueryJson;
     const fetchImpl = createGithubFetch(env.GITHUB_TOKEN, options.fetchImpl ?? fetch);
-    const analysis = await analyze(repository, analysisParameters, { fetchImpl });
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(30_000)]);
+    const analysis = await analyze(repository, analysisParameters, { fetchImpl, signal });
     const durationMs = Date.now() - started;
     const result = useEnvelope ? analysisApiEnvelope(analysis, durationMs) : analysis;
 

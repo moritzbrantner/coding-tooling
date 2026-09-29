@@ -191,3 +191,5 @@ Schema-v1 `workflowEvidence.matchedCommandEvidence` contains the declared valida
 Deployment/release-only workflows therefore remain automation without proven validation. Supported external CI configuration is reported as `unsupported`/external rather than as missing CI because Pages does not execute or interpret those providers. If the bounded GitHub workflow evidence cannot be inspected completely, validation evidence is `incomplete`, never satisfied or absent.
 
 This check is structural and non-executing. Hosted check conclusions, branch protection, and whether CI actually passed remain separate evidence.
+
+The HTTP adapter rejects private repository metadata before requesting repository trees or blobs, even when its server token can read them. GitHub acquisition inherits caller cancellation and has a 30-second operational deadline. Wrangler is an exact locked development dependency; validation installs the committed lockfile before testing and bundling.

@@ -160,6 +160,55 @@ describe("analysis HTTP worker", () => {
     expect(calls[1].headers.get("cookie")).toBeNull();
   });
 
+  test("refuses private repository analysis even when the server token can read metadata", async () => {
+    const requests = [];
+    const response = await handleAnalysisRequest(
+      new Request("https://analysis.example/analysis.json?repo=example/private&envelope=1"),
+      { GITHUB_TOKEN: "server-token" },
+      {
+        fetchImpl: async (url) => {
+          requests.push(url);
+          if (url !== "https://api.github.com/repos/example/private")
+            throw new Error("Private content was requested");
+          return new Response(
+            JSON.stringify({
+              private: true,
+              owner: { login: "example" },
+              name: "private",
+              full_name: "example/private",
+              default_branch: "main",
+            }),
+          );
+        },
+      },
+    );
+    expect(response.status).toBe(404);
+    expect(requests).toEqual(["https://api.github.com/repos/example/private"]);
+    expect(await response.text()).not.toContain("server-token");
+  });
+
+  test("propagates request cancellation to GitHub acquisition", async () => {
+    const controller = new AbortController();
+    const request = new Request(
+      "https://analysis.example/analysis.json?repo=example/project&envelope=1",
+      { signal: controller.signal },
+    );
+    controller.abort();
+    let observedSignal;
+    await handleAnalysisRequest(
+      request,
+      {},
+      {
+        fetchImpl: async (_url, init) => {
+          observedSignal = init.signal;
+          throw new Error("Aborted request");
+        },
+      },
+    );
+    expect(observedSignal).toBeInstanceOf(AbortSignal);
+    expect(observedSignal.aborted).toBeTrue();
+  });
+
   test("answers CORS preflight without running analysis", async () => {
     const response = await handleAnalysisRequest(
       new Request("https://analysis.example/analysis.json", { method: "OPTIONS" }),
