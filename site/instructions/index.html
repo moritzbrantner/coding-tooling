@@ -75,15 +75,15 @@
           <h2>Minimal agent rule</h2>
         </div>
         <pre>
-When asked to work on a GitHub repository, inspect it first with:
+When asked to work on a public GitHub repository, discover the machine analysis transport first:
+https://moritzbrantner.github.io/coding-tooling/analysis-endpoint.json
+
+If it reports status "available", use its http-json hrefTemplate with the percent-encoded owner/repository and, when known, the exact ref.
+
+If the HTTP transport is not configured, browser-capable agents may use the Pages preflight:
 https://moritzbrantner.github.io/coding-tooling/?repo=&lt;owner&gt;%2F&lt;repository&gt;
 
-If a branch, tag, or commit is known, append:
-&amp;ref=&lt;percent-encoded-ref&gt;
-
-Percent-encode substituted repository and revision values (for example, with encodeURIComponent) before inserting them into a URL.
-
-Treat the Pages result as structural preflight only. Then read the repository's AGENTS.md and governing files, use repository-declared commands, and verify the exact resulting head with authoritative local or CI checks before claiming readiness.</pre>
+Do not send caller cookies or caller GitHub authorization through the analysis service. Treat all remote results as structural evidence only, then read AGENTS.md and verify the exact resulting head with authoritative local or CI checks.</pre>
       </section>
 
       <section>
@@ -93,10 +93,19 @@ Treat the Pages result as structural preflight only. Then read the repository's 
         </div>
         <div class="stack">
           <article class="card">
-            <h3>Compact analysis</h3>
+            <h3>HTTP analysis discovery</h3>
             <p class="muted">
-              Use the agent projection when you want a bounded machine-oriented view of existing
-              remote evidence.
+              Start with this static JSON contract. When <code>status</code> is
+              <code>available</code>, its <code>hrefTemplate</code> is a conventional
+              <code>application/json</code> endpoint suitable for plain HTTP clients.
+            </p>
+            <pre>https://moritzbrantner.github.io/coding-tooling/analysis-endpoint.json</pre>
+          </article>
+          <article class="card">
+            <h3>Browser fallback</h3>
+            <p class="muted">
+              Browser-capable agents can still use the existing client-rendered projection. Plain
+              HTTP readers must not mistake this Pages route for a server-side JSON endpoint.
             </p>
             <pre>
 https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo=&lt;owner&gt;%2F&lt;repository&gt;&amp;view=agent&amp;envelope=1</pre>
@@ -132,11 +141,12 @@ https://moritzbrantner.github.io/coding-tooling/affected.json/?repo=&lt;owner&gt
       <section class="boundary">
         <h2>Authority boundary</h2>
         <p>
-          GitHub Pages is a zero-install observation surface. It does not clone the repository, run
-          tests or builds, inspect private repositories, mutate repository state, or establish
-          semantic correctness. Browser JSON views are browser-executed static pages rather than
-          conventional server-side JSON APIs. Missing, stale, bounded, or unavailable evidence must
-          not be treated as passing evidence.
+          GitHub Pages remains a zero-install observation surface. It does not clone the repository,
+          run tests or builds, inspect private repositories, mutate repository state, or establish
+          semantic correctness. Browser JSON views are browser-executed static pages. The separately
+          deployed analysis Worker is only a transport adapter around the same remote analyzer; it
+          does not gain local execution authority. Missing, stale, bounded, or unavailable evidence
+          must not be treated as passing evidence.
         </p>
       </section>
 

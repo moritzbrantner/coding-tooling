@@ -16,6 +16,11 @@ on:
   schedule:
     - cron: "17 5 * * *"
   workflow_dispatch:
+    inputs:
+      analysis_api_base_url:
+        description: Optional deployed Analysis API base URL to publish in discovery metadata
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -42,10 +47,41 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: bun run landscape:build
-      - name: Bundle Pages analyzer
-        run: bun run pages:build
       - name: Configure Pages
         uses: actions/configure-pages@v6
+      - name: Configure analysis API discovery
+        env:
+          ANALYSIS_API_BASE_URL: ${{ github.event.inputs.analysis_api_base_url || vars.ANALYSIS_API_BASE_URL }}
+        run: |
+          if [[ -z "$ANALYSIS_API_BASE_URL" ]]; then
+            exit 0
+          fi
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const raw = process.env.ANALYSIS_API_BASE_URL?.trim();
+          const base = new URL(raw);
+          if (
+            base.protocol !== "https:" ||
+            base.username ||
+            base.password ||
+            base.search ||
+            base.hash
+          ) {
+            throw new Error("ANALYSIS_API_BASE_URL must be a credential-free HTTPS base URL.");
+          }
+
+          const normalized = base.toString().replace(/\/$/, "");
+          const path = "site/analysis-endpoint.json";
+          const contract = JSON.parse(readFileSync(path, "utf8"));
+          contract.status = "available";
+          contract.hrefTemplate =
+            `${normalized}/analysis.json?repo={owner}/{repository}&view=agent&envelope=1`;
+          contract.deployment.productionBaseUrl = normalized;
+          writeFileSync(path, `${JSON.stringify(contract, null, 2)}\n`);
+          NODE
+      - name: Bundle Pages analyzer
+        run: bun run pages:build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:

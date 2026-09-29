@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "coding-tooling-analysis-http",
+  "status": "unconfigured",
+  "transport": "http-json",
+  "provider": "cloudflare-workers",
+  "workerName": "coding-tooling-analysis",
+  "path": "/analysis.json",
+  "hrefTemplate": null,
+  "description": "Conventional application/json transport for the existing coding-tooling remote analysis. The worker reuses the same analysis-query and github-analysis modules as GitHub Pages.",
+  "deployment": {
+    "config": "wrangler.jsonc",
+    "validateCommand": "bun run analysis:worker:check",
+    "temporaryCommand": "bun run analysis:worker:deploy:temporary",
+    "permanentCommand": "bun run analysis:worker:deploy",
+    "requiredRepositorySecrets": ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"],
+    "optionalRepositorySecrets": ["ANALYSIS_GITHUB_TOKEN"]
+  },
+  "security": {
+    "callerCookiesForwarded": false,
+    "callerAuthorizationForwarded": false,
+    "githubTokenSource": "optional server-side Worker secret only"
+  },
+  "fallback": {
+    "transport": "browser-json-view",
+    "hrefTemplate": "https://moritzbrantner.github.io/coding-tooling/analysis.json/?repo={owner}/{repository}&view=agent&envelope=1"
+  }
+}

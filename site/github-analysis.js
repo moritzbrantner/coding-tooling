@@ -54,6 +54,11 @@ export async function loadSnapshot(reference, options = {}) {
     fetchImpl,
     signal,
   );
+  if (repository.private === true) {
+    throw new Error(
+      "Repository not found. This zero-token Pages preflight supports public GitHub repositories only.",
+    );
+  }
   const inspectDefaultBranch = shouldInspectDefaultBranch(repository);
   const defaultBranch = inspectDefaultBranch
     ? await githubOptionalJson(

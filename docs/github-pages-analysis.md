@@ -113,6 +113,59 @@ The compact agent view retains the source repository/revision, selected findings
 
 This is deliberately not described as a conventional HTTP JSON API. GitHub Pages cannot execute server-side code, so a plain `curl` request receives the static HTML shell rather than a dynamically generated `application/json` response. The same limitation applies to `run.json`. A true HTTP endpoint would require a separate serverless/runtime deployment and should be introduced only if that additional operational dependency is justified.
 
+## Conventional HTTP analysis transport
+
+GitHub Pages remains the browser presentation surface, but plain HTTP clients should not depend on
+the client-rendered `analysis.json/` route. The deployable Cloudflare Worker in
+`worker/analysis-worker.js` exposes the same analysis through a conventional
+`application/json` response at `/analysis.json`.
+
+The Worker imports `analysisQueryJson` and therefore reuses the existing `analysis-query.js`,
+`github-analysis.js`, and result-envelope code. It is a transport adapter rather than a second
+analyzer or evidence authority.
+
+Callers discover the production transport through the static contract:
+
+```text
+https://moritzbrantner.github.io/coding-tooling/analysis-endpoint.json
+```
+
+When that document reports `status: "available"`, its `hrefTemplate` is the preferred
+machine-to-machine entry point. Until a permanent Worker URL is configured, browser-capable callers
+may continue to use the Pages view and plain HTTP agents should fall back to direct repository
+inspection rather than treating browser HTML as JSON.
+
+The HTTP adapter deliberately does not reuse caller authentication. Incoming `Cookie` and
+`Authorization` values are never forwarded. Public repositories work with anonymous GitHub API
+access; deployments may optionally configure a server-side Worker secret named `GITHUB_TOKEN` to
+raise GitHub API limits. That secret is attached only to requests whose hostname is
+`api.github.com`.
+
+Deployment is configured by `wrangler.jsonc`:
+
+```text
+bun run analysis:worker:check
+bun run analysis:worker:deploy
+```
+
+The main-branch deployment workflow uses repository secrets `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_API_TOKEN`. `ANALYSIS_GITHUB_TOKEN` is optional and, when present, is stored as the
+Worker's `GITHUB_TOKEN` secret. After deployment, Wrangler's structured output is used to discover
+the public `workers.dev` base URL, the live endpoint is smoke-tested, and the workflow dispatches
+the Pages workflow with that URL. Pages then publishes `analysis-endpoint.json` with
+`status: "available"` and the conventional HTTP `hrefTemplate`. A repository variable named
+`ANALYSIS_API_BASE_URL` remains an optional manual override/fallback for the Pages build.
+
+For a first private preview, Wrangler 4.102.0 or newer can provision a temporary Worker account
+without existing Cloudflare credentials:
+
+```text
+bun run analysis:worker:deploy:temporary
+```
+
+The printed claim URL is a bearer credential and must not be copied into public CI logs, issues, or
+repository files. Temporary deployments must be claimed before their deadline to become permanent.
+
 ## `test-coverage.json` observation
 
 The Pages site also exposes an observation-only coverage view:
@@ -139,6 +192,10 @@ Deployment/release-only workflows therefore remain automation without proven val
 
 This check is structural and non-executing. Hosted check conclusions, branch protection, and whether CI actually passed remain separate evidence.
 
+### HTTP acquisition boundary
+
+The HTTP adapter rejects private repository metadata before requesting repository trees or blobs, even when its server token can read them. GitHub acquisition inherits caller cancellation and has a 30-second operational deadline. Wrangler is an exact locked development dependency; validation installs the committed lockfile before testing and bundling.
+
 ### React source evidence
 
 Pages runs the same React update-boundary AST analyzer as local findings on bounded production JavaScript/TypeScript source candidates, excluding fixtures, tests, stories, declarations, generated outputs, and dependencies. GitHub acquisition uses a separate default 512 KiB source budget and reports `reactSourceAcquisition`, `reactSourceFetchTruncated`, and `unreadableReactSourcePaths`. Unreadable or budget-truncated source evidence makes the overall preflight incomplete. Unrecognized patterns never imply that React update boundaries or runtime performance are correct.
@@ -146,3 +203,5 @@ Pages runs the same React update-boundary AST analyzer as local findings on boun
 `REMOTE-REACT-*` findings include exact source locations and convention references. Concrete frame/setter and pure effect-copy findings have medium priority; context naming heuristics have low priority. They appear under both `focus=architecture` and `focus=performance`. Local findings remain authoritative for complete scans and suppression policy. Pages does not apply repository suppression metadata.
 
 Run `bun run pages:build` to bundle the static site and pinned TypeScript AST dependency into `.artifacts/pages`; Pages publishes that disposable build directory. The browser build does not execute inspected repository source and introduces no time-based validation gate.
+
+The Worker build explicitly selects TypeScript's browser host to avoid Node filesystem initialization in workerd. `analysis:worker:check` bundles through locked Wrangler and exercises the exact artifact in a local Workers runtime with fixture-only GitHub responses; it verifies React findings and private-repository rejection.
