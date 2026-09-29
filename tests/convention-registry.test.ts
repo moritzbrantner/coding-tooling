@@ -71,11 +71,82 @@ describe("installed convention registry", () => {
       expect(manifest.modules).toEqual(["react"]);
 
       const lock = JSON.parse(readFileSync(join(target, "conventions.lock.json"), "utf8"));
+      expect(lock.schemaVersion).toBe(2);
       expect(lock.resolvedModules).toEqual(["base", "typescript", "react"]);
+      expect(lock).not.toHaveProperty("sourceRevision");
       expect(readFileSync(join(target, ".conventions/index.md"), "utf8")).toContain("## react");
 
       const check = conventionRegistryCommand("check", [], { root: target });
       expect(check.status).toBe("passed");
+      expect(check.data.sourceRevision).toBeNull();
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("accepts legacy revision-pinned v1 locks and rewrites them as unpinned v2 locks", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      conventionRegistryCommand("init", ["react"], { root: target, conventionsRoot: source });
+      const lockPath = join(target, "conventions.lock.json");
+      const current = JSON.parse(readFileSync(lockPath, "utf8"));
+      writeFileSync(
+        lockPath,
+        `${JSON.stringify(
+          { ...current, schemaVersion: 1, sourceRevision: "legacy-revision" },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const legacyCheck = conventionRegistryCommand("check", [], { root: target });
+      expect(legacyCheck.status).toBe("passed");
+      expect(legacyCheck.data.sourceRevision).toBe("legacy-revision");
+
+      const diff = conventionRegistryCommand("diff", [], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(diff.status).toBe("passed");
+      expect(diff.data.changed).toEqual([]);
+      expect(diff.data.cacheSchemaVersion).toBe(1);
+      expect(diff.data.installedRevision).toBe("legacy-revision");
+      expect(diff.data.updateAvailable).toBe(true);
+
+      const update = conventionRegistryCommand("update", [], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(update.status).toBe("passed");
+      const rewritten = JSON.parse(readFileSync(lockPath, "utf8"));
+      expect(rewritten.schemaVersion).toBe(2);
+      expect(rewritten).not.toHaveProperty("sourceRevision");
+      const rewrittenCheck = conventionRegistryCommand("check", [], { root: target });
+      expect(rewrittenCheck.status).toBe("passed");
+      expect(rewrittenCheck.data.sourceRevision).toBeNull();
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects source revision pins in v2 locks", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      conventionRegistryCommand("init", ["react"], { root: target, conventionsRoot: source });
+      const lockPath = join(target, "conventions.lock.json");
+      const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+      writeFileSync(
+        lockPath,
+        `${JSON.stringify({ ...lock, sourceRevision: "should-not-be-authoritative" }, null, 2)}\n`,
+      );
+
+      const check = conventionRegistryCommand("check", [], { root: target });
+      expect(check.status).toBe("failed");
+      expect(check.diagnostics[0]?.code).toBe("conventions-lock-missing");
     } finally {
       rmSync(source, { recursive: true, force: true });
       rmSync(target, { recursive: true, force: true });
@@ -127,7 +198,58 @@ describe("installed convention registry", () => {
     }
   });
 
-  test("reports available convention changes without mutating the consumer", () => {
+  test("reports stale v2 lock metadata as updateable even when managed files match", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      conventionRegistryCommand("init", ["react"], { root: target, conventionsRoot: source });
+      const lockPath = join(target, "conventions.lock.json");
+      const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+      lock.files["index.md"] = "0".repeat(64);
+      writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+
+      const diff = conventionRegistryCommand("diff", [], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(diff.status).toBe("passed");
+      expect(diff.data.changed).toEqual([]);
+      expect(diff.data.cacheMetadataDrift).toEqual(["index.md"]);
+      expect(diff.data.lockMetadataDrift).toEqual(["files"]);
+      expect(diff.data.updateAvailable).toBe(true);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("reports stale v2 module metadata as updateable", () => {
+    const source = registry();
+    const target = workspace("convention-consumer-");
+    try {
+      conventionRegistryCommand("init", ["react"], { root: target, conventionsRoot: source });
+      const lockPath = join(target, "conventions.lock.json");
+      const lock = JSON.parse(readFileSync(lockPath, "utf8"));
+      lock.requestedModules = [];
+      lock.resolvedModules = ["base", "typescript"];
+      writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+
+      const diff = conventionRegistryCommand("diff", [], {
+        root: target,
+        conventionsRoot: source,
+      });
+      expect(diff.status).toBe("passed");
+      expect(diff.data.changed).toEqual([]);
+      expect(diff.data.cacheMetadataDrift).toEqual([]);
+      expect(diff.data.lockMetadataDrift).toEqual(["requestedModules", "resolvedModules"]);
+      expect(diff.data.updateAvailable).toBe(true);
+    } finally {
+      rmSync(source, { recursive: true, force: true });
+      rmSync(target, { recursive: true, force: true });
+    }
+  });
+
+  test("reports current convention changes without treating the previous source revision as authority", () => {
     const source = registry();
     const target = workspace("convention-consumer-");
     try {

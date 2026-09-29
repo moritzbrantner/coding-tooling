@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Search the repository dependency and semantic authority landscape published by coding-tooling."
+    />
+    <title>coding-tooling · agent landscape</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header>
+      <a href="https://github.com/moritzbrantner/coding-tooling">coding-tooling</a>
+      <span><a href="./">repository analysis</a> · agent landscape</span>
+    </header>
+    <main>
+      <section class="section-heading row" style="margin-top: 48px">
+        <div>
+          <p class="eyebrow">Repository metadata</p>
+          <h1 style="font-size: clamp(2.4rem, 6vw, 4.8rem)">Agent landscape</h1>
+        </div>
+        <a href="./landscape.json" target="_blank" rel="noreferrer">Open landscape.json</a>
+      </section>
+
+      <form id="filter-form">
+        <label for="filter">Filter repositories and capabilities</label>
+        <div class="input-row">
+          <input
+            id="filter"
+            type="search"
+            autocomplete="off"
+            placeholder="maps, physics, rendering…"
+          />
+          <button id="clear-filter" class="secondary" type="button">Clear</button>
+        </div>
+        <p id="status" class="status" role="status">Loading landscape…</p>
+      </form>
+
+      <section id="warnings-section" hidden>
+        <div class="section-heading">
+          <p class="eyebrow">Collection</p>
+          <h2>Warnings</h2>
+        </div>
+        <div id="warnings" class="stack"></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Architecture</p>
+          <h2>Authority conflicts</h2>
+        </div>
+        <div id="conflicts" class="stack"></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Capabilities</p>
+          <h2>Declared owners and adapters</h2>
+        </div>
+        <div class="table-scroll">
+          <table class="evidence-table">
+            <thead>
+              <tr>
+                <th scope="col">Capability</th>
+                <th scope="col">Owner</th>
+                <th scope="col">Adapters</th>
+              </tr>
+            </thead>
+            <tbody id="capabilities"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <p class="eyebrow">Repositories</p>
+          <h2>Dependencies and authority</h2>
+        </div>
+        <div class="table-scroll">
+          <table class="evidence-table">
+            <thead>
+              <tr>
+                <th scope="col">Repository</th>
+                <th scope="col">Kind / status</th>
+                <th scope="col">Depends on</th>
+                <th scope="col">Owns</th>
+                <th scope="col">Adapts</th>
+              </tr>
+            </thead>
+            <tbody id="repositories"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="boundary">
+        <h2>Boundary</h2>
+        <p>
+          This is a read-only projection of repository-local <code>.repository.toml</code> and
+          <code>AGENTS.md</code> declarations. Conflicts, gaps, and collection failures are shown as
+          information. They do not become validation or merge decisions here.
+        </p>
+      </section>
+    </main>
+    <footer>
+      <span>Repository-local declarations remain authoritative.</span>
+      <span>Public repositories only.</span>
+    </footer>
+    <script type="module" src="./landscape.js"></script>
+  </body>
+</html>

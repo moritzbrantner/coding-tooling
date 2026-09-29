@@ -23,12 +23,13 @@
     "analysis:worker:check": "bunx wrangler@4.136.1 deploy --dry-run --outdir .artifacts/analysis-worker",
     "analysis:worker:dev": "bunx wrangler@4.136.1 dev",
     "analysis:worker:deploy": "bunx wrangler@4.136.1 deploy",
-    "analysis:worker:deploy:temporary": "bunx wrangler@4.136.1 deploy --temporary"
+    "analysis:worker:deploy:temporary": "bunx wrangler@4.136.1 deploy --temporary",
+    "landscape:build": "bun scripts/build-landscape-snapshot.ts"
   },
   "devDependencies": {
     "@types/bun": "1.4.0",
     "@typescript/typescript6": "6.0.2",
-    "oxfmt": "0.65.0",
+    "oxfmt": "0.70.0",
     "oxlint": "1.80.0",
     "typescript": "7.0.2"
   },
