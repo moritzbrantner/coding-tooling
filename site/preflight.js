@@ -1,3 +1,4 @@
+import { analyzeReactUpdateBoundaries } from "../src/react-update-boundaries.ts";
 import {
   canonicalPackageCapabilityOutcomes,
   createPackageEvidence,
@@ -52,6 +53,21 @@ export function selectedWorkflowFiles(tree, limit = 8) {
     .slice(0, limit);
 }
 
+export function selectedReactSourceFiles(tree, limit = 128) {
+  return tree
+    .filter(
+      (entry) =>
+        entry.type === "blob" &&
+        /\.(?:[cm]?[jt]sx?)$/.test(entry.path) &&
+        isProductionSource(entry.path) &&
+        !entry.path.endsWith(".d.ts") &&
+        !/\.(?:test|spec|stories|story|fixture|fixtures)\.[^.]+$/.test(entry.path) &&
+        !/\/src\/(?:test|tests|testing|__tests__)\//.test(`/${entry.path}`),
+    )
+    .toSorted((left, right) => left.path.localeCompare(right.path))
+    .slice(0, limit);
+}
+
 export function selectedRustSourceFiles(tree, limit = 128) {
   return tree
     .filter(
@@ -98,6 +114,8 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
     snapshot.revisionUnavailable ||
     snapshot.manifestFetchTruncated ||
     snapshot.unreadablePaths.length > 0 ||
+    Boolean(snapshot.reactSourceFetchTruncated) ||
+    (snapshot.unreadableReactSourcePaths?.length ?? 0) > 0 ||
     components.some((component) => component.testEvidence.status === "incomplete") ||
     validationEvidence.status === "incomplete";
   const highPriorityFindingCount = findings.filter((finding) => finding.severity === "high").length;
@@ -118,6 +136,9 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
       manifestAcquisition: snapshot.manifestAcquisition ?? null,
       rustSourceFetchTruncated: Boolean(snapshot.rustSourceFetchTruncated),
       rustSourceAcquisition: snapshot.rustSourceAcquisition ?? null,
+      reactSourceFetchTruncated: Boolean(snapshot.reactSourceFetchTruncated),
+      reactSourceAcquisition: snapshot.reactSourceAcquisition ?? null,
+      unreadableReactSourcePaths: snapshot.unreadableReactSourcePaths ?? [],
       workflowFetchTruncated: Boolean(snapshot.workflowFetchTruncated),
       reusableWorkflowAcquisition: snapshot.reusableWorkflowAcquisition ?? null,
       unreadablePaths: snapshot.unreadablePaths,
@@ -137,7 +158,7 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
     validationEvidence,
     findings,
     limitations: [
-      "Remote preflight reads GitHub metadata, a recursive tree, bounded text manifests and Rust sources, and exact-ref public reusable workflows; it does not clone or execute repository code.",
+      "Remote preflight reads GitHub metadata, a recursive tree, bounded text manifests, React source candidates and Rust sources, and exact-ref public reusable workflows; it does not clone or execute repository code.",
       "Findings are structural evidence, not claims about behavioral correctness, security, coverage, or runtime performance.",
       "Run coding-tooling locally for authoritative conformance, findings, environment verification, and validation execution.",
     ],
@@ -477,6 +498,29 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
       recommendation,
       ...(command ? { command } : {}),
     });
+  for (const entry of selectedReactSourceFiles(snapshot.tree, snapshot.tree.length)) {
+    const content = snapshot.files[entry.path];
+    if (typeof content !== "string") continue;
+    for (const finding of analyzeReactUpdateBoundaries(entry.path, content)) {
+      const concrete = finding.kind !== "broad-context-update-risk";
+      findings.push({
+        id: `REMOTE-REACT-${stableId(`${entry.path}:${finding.startLine}:${finding.startColumn}:${finding.kind}`)}`,
+        severity: concrete ? "medium" : "low",
+        title: finding.message,
+        evidence: `${entry.path}:${finding.startLine}:${finding.startColumn}: ${finding.message}`,
+        recommendation: finding.recommendation,
+        command: "coding-tooling findings --json",
+        conventionId: finding.conventionId,
+        location: {
+          path: entry.path,
+          startLine: finding.startLine,
+          startColumn: finding.startColumn,
+          endLine: finding.endLine,
+          endColumn: finding.endColumn,
+        },
+      });
+    }
+  }
   const config = parseJson(snapshot.files[".coding-tooling.json"]);
   if (!paths.has(".coding-tooling.json"))
     add(

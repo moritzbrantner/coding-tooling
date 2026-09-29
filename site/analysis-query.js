@@ -213,6 +213,7 @@ function matchesFocus(finding, focus) {
 }
 
 function findingFocus(id) {
+  if (id.startsWith("REMOTE-REACT-")) return ["architecture", "performance"];
   if (id.startsWith("REMOTE-TEST-") || id.startsWith("REMOTE-COVERAGE-")) return ["testing"];
   if (id.startsWith("REMOTE-PERFORMANCE-") || id.startsWith("REMOTE-BENCH-"))
     return ["performance"];
