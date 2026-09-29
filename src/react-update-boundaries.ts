@@ -268,6 +268,12 @@ export function analyzeReactUpdateBoundaries(
     while (owner && !ts.isFunctionLike(owner)) owner = owner.parent;
     if (!owner || !ts.isFunctionLike(owner)) return false;
     return owner.parameters.some((parameter) => {
+      if (ts.isObjectBindingPattern(parameter.name)) {
+        // A field on a destructured prop can belong to a DOM node, media element, or store.
+        if (root !== value) return false;
+      } else if (!ts.isIdentifier(parameter.name) || parameter.name.text !== "props") {
+        return false;
+      }
       let matches = false;
       walk(parameter.name, (node) => {
         if (ts.isIdentifier(node) && symbol(node) === symbol(root)) matches = true;

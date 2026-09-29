@@ -86,6 +86,21 @@ function Scene() {
     ).toEqual([]);
   });
 
+  test("keeps media and store parameters outside pure React props mirroring", () => {
+    expect(
+      scan(`${react}
+      function useMedia(video) {
+        const [time, setTime] = useState(0);
+        useEffect(() => setTime(video.currentTime), [video.currentTime]);
+      }
+      function Scene({video, store}) {
+        const [time, setTime] = useState(0);
+        useEffect(() => setTime(video.currentTime), [video.currentTime]);
+        useEffect(() => setTime(store.value), [store.value]);
+      }`),
+    ).toEqual([]);
+  });
+
   test("recognizes aliases, namespace hooks, named frame callbacks, and local callback chains", () => {
     const source = `import * as R from "react"; import {useState as state} from "react";
       function Scene() {
