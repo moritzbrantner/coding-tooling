@@ -1,8 +1,25 @@
-import { selectedRemoteFiles, selectedRustSourceFiles } from "./preflight.js";
+import {
+  selectedReactSourceFiles,
+  selectedRemoteFiles,
+  selectedRustSourceFiles,
+} from "./preflight.js";
 
 export const DEFAULT_REMOTE_MANIFEST_BYTE_BUDGET = 512 * 1024;
 export const DEFAULT_REMOTE_RUST_SOURCE_BYTE_BUDGET = 512 * 1024;
+export const DEFAULT_REMOTE_REACT_SOURCE_BYTE_BUDGET = 512 * 1024;
 export const DEFAULT_REMOTE_FETCH_CONCURRENCY = 6;
+
+export function selectReactSourceFilesByByteBudget(
+  tree,
+  byteBudget = DEFAULT_REMOTE_REACT_SOURCE_BYTE_BUDGET,
+) {
+  return selectByByteBudget(
+    tree,
+    byteBudget,
+    selectedReactSourceFiles,
+    "remote React source byte budget",
+  );
+}
 
 export function selectRemoteFilesByByteBudget(
   tree,

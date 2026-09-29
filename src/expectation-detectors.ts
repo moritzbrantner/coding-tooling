@@ -19,6 +19,7 @@ import {
   missingTypeScriptConfigFindings,
 } from "./expectation-package-detectors.ts";
 import { createDetectorContext } from "./expectation-package-context.ts";
+import { reactUpdateBoundaryFindings } from "./expectation-react-detector.ts";
 import { missingCargoTargetPathFindings } from "./expectation-rust-detector.ts";
 import { missingRustTestFindings } from "./expectation-rust-test-detector.ts";
 import {
@@ -41,6 +42,70 @@ export type {
 } from "./expectation-detector-types.ts";
 
 export const expectationDescriptors: ExpectationDescriptor[] = [
+  {
+    id: "react-animation-frame-state",
+    version: 1,
+    description: "Animation-frame callbacks do not directly publish React state",
+    defaultSeverity: "warning",
+    policyKind: "convention",
+    conventionId: "REACT-008",
+    evidenceContract: {
+      basis: "syntax",
+      oracle: "react-update-boundary-ast",
+      independenceKey: "react-update-boundary-ast",
+      proves:
+        "A recognized animation-frame callback directly calls an imported React useState setter, possibly through bounded same-file direct callbacks.",
+      limitations: [
+        "Does not prove runtime frequency, rendering cost, or performance; profiling and benchmarks remain authoritative.",
+        "Only imported React hooks, local bindings, and bounded direct same-file callbacks are recognized; custom hooks, dynamic calls, and cross-file data flow remain unsupported.",
+        "Context frequency and service names are advisory heuristics, not measured behavior.",
+      ],
+    },
+    detect: (context) => reactUpdateBoundaryFindings(context, "animation-frame-state"),
+  },
+  {
+    id: "react-effect-mirrored-state",
+    version: 1,
+    description: "Effects do not redundantly mirror React values into local state",
+    defaultSeverity: "warning",
+    policyKind: "convention",
+    conventionId: "REACT-009",
+    evidenceContract: {
+      basis: "syntax",
+      oracle: "react-update-boundary-ast",
+      independenceKey: "react-update-boundary-ast",
+      proves:
+        "A recognized React effect consists solely of a state setter copying one local state or parameter value with the same single dependency.",
+      limitations: [
+        "Does not prove runtime frequency, rendering cost, or performance; profiling and benchmarks remain authoritative.",
+        "Only imported React hooks, local bindings, and bounded direct same-file callbacks are recognized; custom hooks, dynamic calls, and cross-file data flow remain unsupported.",
+        "Context frequency and service names are advisory heuristics, not measured behavior.",
+      ],
+    },
+    detect: (context) => reactUpdateBoundaryFindings(context, "effect-mirrored-state"),
+  },
+  {
+    id: "react-broad-context-update-risk",
+    version: 1,
+    description: "Context values separate potentially frequent state from unrelated capabilities",
+    defaultSeverity: "info",
+    policyKind: "advisory",
+    conventionId: "REACT-010",
+    evidenceContract: {
+      basis: "syntax",
+      oracle: "react-update-boundary-ast",
+      independenceKey: "react-update-boundary-ast",
+      proves:
+        "A locally declared React context provider object combines frequency-named local state and its setter with a service or capability property.",
+      limitations: [
+        "Does not prove runtime frequency, rendering cost, or performance; profiling and benchmarks remain authoritative.",
+        "Only imported React hooks, local bindings, and bounded direct same-file callbacks are recognized; custom hooks, dynamic calls, and cross-file data flow remain unsupported.",
+        "Context frequency and service names are advisory heuristics, not measured behavior.",
+      ],
+    },
+    detect: (context) => reactUpdateBoundaryFindings(context, "broad-context-update-risk"),
+  },
+
   {
     id: "benchmark-evidence",
     version: 1,

@@ -103,6 +103,9 @@ describe("expectation detector registry contract", () => {
       "package-aggregate-check",
       "package-cli-wiring",
       "package-test-capability",
+      "react-animation-frame-state",
+      "react-broad-context-update-risk",
+      "react-effect-mirrored-state",
       "required-capability-available",
       "rust-cargo-target-path",
       "rust-source-test",
@@ -125,6 +128,9 @@ describe("expectation detector registry contract", () => {
       ["package-aggregate-check", 1],
       ["package-cli-wiring", 1],
       ["package-test-capability", 1],
+      ["react-animation-frame-state", 1],
+      ["react-broad-context-update-risk", 1],
+      ["react-effect-mirrored-state", 1],
       ["required-capability-available", 1],
       ["rust-cargo-target-path", 1],
       ["rust-source-test", 1],
@@ -137,7 +143,9 @@ describe("expectation detector registry contract", () => {
       ["typescript-source-test", 2],
       ["typescript-type-assignability", 1],
     ]);
-    expect(registry.every((entry) => entry.policyKind === "advisory")).toBeTrue();
+    expect(
+      registry.filter((entry) => entry.policyKind === "convention").map((entry) => entry.id),
+    ).toEqual(["react-animation-frame-state", "react-effect-mirrored-state"]);
     expect(expectationDescriptors.map((entry) => entry.id)).toEqual(
       registry.map((entry) => entry.id),
     );

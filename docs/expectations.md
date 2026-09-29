@@ -143,3 +143,13 @@ The shared generator path rejects symbolic-link components in existing output pa
 ## Analysis cost
 
 Expectations should use the cheapest deterministic source that can prove the fact: filesystem/manifests first, repository configuration next, then static/AST or compiler metadata only for rules that need it. Probabilistic local-agent analysis should remain a separate enrichment layer until there is evidence that it belongs in the trusted finding stream.
+
+## React update boundaries
+
+`react-animation-frame-state` and `react-effect-mirrored-state` are warning-level syntax findings; `react-broad-context-update-risk` starts as an informational advisory. All include exact source ranges in `analysisEvidence.location`, stable finding IDs, and architectural recommendations. Renderer refs/frame callbacks or a bounded UI publish cadence are alternatives to frame-driven React updates. Context advice concerns update frequency; none of these checks requires `memo`, `useMemo`, or `useCallback`.
+
+The shared AST analyzer recognizes React imports (including aliases and namespaces), `useState` bindings, global/window animation-frame calls, and directly invoked same-file callbacks up to eight call edges. It skips deferred, unused, async, shadowed, or explicitly reassigned callbacks. Mirroring requires one setter statement copying a local state value or direct parameter/property and a matching single dependency; external synchronization and effects containing other meaningful actions remain outside that pattern. Context advice requires a locally created context, an object value containing hover/pointer/frame/tick-named state and its setter, and an unrelated service/capability property. Imported contexts, custom hooks, object spreads, cross-file calls, and other ambiguous data flow remain unsupported.
+
+When React-rendered UI must update every frame, record an exact-ID suppression with a reason in `.coding-tooling.expectations.json`; it stays inspectable through `findings --all`. Broader suppression policies retain the existing baseline requirements. These checks do not execute React, measure frequency or cost, or establish runtime performance. Profiling and representative benchmarks remain authoritative.
+
+The convention IDs REACT-008 through REACT-010 follow issue #225's update-boundary intent. The convention catalog resolved during implementation (`sourceRevision: e6acb5310afaf15c0cba24f87108f5f4ad1bedc3`) contained REACT-001 through REACT-007; this change does not alter or snapshot that shared policy.
