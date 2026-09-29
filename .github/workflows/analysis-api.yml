@@ -9,6 +9,7 @@ on:
       - "src/react-update-boundaries.ts"
       - "site/**"
       - "tests/analysis-worker.test.js"
+      - "tests/analysis-worker-runtime.test.js"
       - "worker/**"
       - "wrangler.jsonc"
   push:
@@ -20,6 +21,7 @@ on:
       - "src/react-update-boundaries.ts"
       - "site/**"
       - "tests/analysis-worker.test.js"
+      - "tests/analysis-worker-runtime.test.js"
       - "worker/**"
       - "wrangler.jsonc"
   workflow_dispatch:

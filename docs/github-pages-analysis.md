@@ -203,3 +203,5 @@ Pages runs the same React update-boundary AST analyzer as local findings on boun
 `REMOTE-REACT-*` findings include exact source locations and convention references. Concrete frame/setter and pure effect-copy findings have medium priority; context naming heuristics have low priority. They appear under both `focus=architecture` and `focus=performance`. Local findings remain authoritative for complete scans and suppression policy. Pages does not apply repository suppression metadata.
 
 Run `bun run pages:build` to bundle the static site and pinned TypeScript AST dependency into `.artifacts/pages`; Pages publishes that disposable build directory. The browser build does not execute inspected repository source and introduces no time-based validation gate.
+
+The Worker build explicitly selects TypeScript's browser host to avoid Node filesystem initialization in workerd. `analysis:worker:check` bundles through locked Wrangler and exercises the exact artifact in a local Workers runtime with fixture-only GitHub responses; it verifies React findings and private-repository rejection.

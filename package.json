@@ -20,16 +20,18 @@
     "calibration": "bun src/entry.ts calibration --json",
     "normalize": "bun src/entry.ts normalize --json",
     "check": "bun run format && bun run lint && bun run typecheck && bun run test",
-    "analysis:worker:check": "wrangler deploy --dry-run --outdir .artifacts/analysis-worker",
+    "analysis:worker:check": "bun test tests/analysis-worker-runtime.test.js",
     "analysis:worker:dev": "wrangler dev",
     "analysis:worker:deploy": "wrangler deploy",
     "analysis:worker:deploy:temporary": "wrangler deploy --temporary",
     "landscape:build": "bun scripts/build-landscape-snapshot.ts",
-    "pages:build": "bun scripts/build-pages.ts"
+    "pages:build": "bun scripts/build-pages.ts",
+    "analysis:worker:bundle": "wrangler deploy --dry-run --outdir .artifacts/analysis-worker"
   },
   "devDependencies": {
     "@types/bun": "1.4.2",
     "@typescript/typescript6": "6.0.2",
+    "miniflare": "5.20260921.0-alpha",
     "oxfmt": "0.70.0",
     "oxlint": "1.80.0",
     "typescript": "7.0.2",

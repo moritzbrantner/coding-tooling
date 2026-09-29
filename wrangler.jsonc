@@ -3,6 +3,10 @@
   "main": "worker/analysis-worker.js",
   "compatibility_date": "2026-09-22",
   "workers_dev": true,
+  // The AST analyzer supplies its own host; Workers cannot initialize TypeScript's Node filesystem host.
+  "define": {
+    "process.browser": "true",
+  },
   "observability": {
     "enabled": true,
   },
