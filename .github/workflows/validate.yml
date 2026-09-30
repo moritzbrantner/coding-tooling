@@ -13,6 +13,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  consumer-node-setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Write an isolated consumer version file
+        shell: bash
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.artifacts/consumer-node-setup"
+          printf '22.23.2\n' > "$GITHUB_WORKSPACE/.artifacts/consumer-node-setup/.node-version"
+      - name: Set up the consumer's exact Node version
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .artifacts/consumer-node-setup/.node-version
+      - name: Verify the installed version
+        shell: bash
+        run: test "$(node --version)" = 'v22.23.2'
+
   dogfood-private-action:
     runs-on: ubuntu-latest
     timeout-minutes: 15
