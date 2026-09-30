@@ -610,6 +610,23 @@ function sourceFor(options: RegistryOptions): { root: string; registry: Registry
   return { root: source.root, registry: loadRegistry(source.root) };
 }
 
+export function conventionModuleReferences(sourceRoot: string, sourcePaths: string[]) {
+  const registry = loadRegistry(sourceRoot);
+  const requested = Object.entries(registry.modules)
+    .filter(([, module]) =>
+      module.sources.some((source) =>
+        sourcePaths.some((path) => path === source || path.startsWith(`${source}/`)),
+      ),
+    )
+    .map(([id]) => id);
+  return resolveDependencies(registry, requested).map((id) => ({
+    id,
+    source: "registry/registry.json",
+    sources: registry.modules[id]!.sources,
+    dependencies: registry.modules[id]!.dependencies ?? [],
+  }));
+}
+
 export function conventionRegistryCommand(
   action: "init" | "add" | "check" | "diff" | "update",
   modules: string[],

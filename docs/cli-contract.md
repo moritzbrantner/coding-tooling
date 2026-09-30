@@ -5,7 +5,7 @@ The CLI is a deterministic interface for humans, CI, coding agents, and higher-l
 ## Commands
 
 ```bash
-coding-tooling inspect [--json]
+coding-tooling inspect [--target <path>...] [--component <name>...] [--task-kind <kind>] [--task-context] [--policy-context <path>] [--config <path>] [--root <path>] [--json]
 coding-tooling check <capability> [--component <name>] [--json]
 coding-tooling affected [--base <git-ref>] [--json]
 coding-tooling doctor [--json]
@@ -91,6 +91,8 @@ Exit codes are `0` for passed, `1` for failed, `2` for unavailable or invalid CL
 ## Validation commands
 
 `inspect` performs mechanical discovery only.
+
+Explicit scope flags add a compact `taskContext` with source pointers, selected policy references, configured focused commands and a distinct completion gate. Lookup does not execute commands or generate configuration artifacts. Missing or unsupported relationships remain partial. See [task-scoped inspection](./task-scoped-inspection.md).
 
 A `Cargo.toml` with a `[workspace]` table is one Rust component that covers its members. Crates matched by its `members` paths or globs, minus `exclude`, are not emitted as separate Rust components. Workspace-root capabilities validate every member explicitly (`cargo fmt --all --check`; `clippy`, `build`, and `test` with `--workspace`) so `default-members` cannot narrow the gate. Nested crates outside the workspace's `members` remain their own components. Implicit membership through path dependencies is not inferred, and package scripts that invoke Cargo are not deduplicated against the Rust component; override either through `capabilityCommands`.
 

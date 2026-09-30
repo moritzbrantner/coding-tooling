@@ -78,13 +78,19 @@ const ignoredDirectories = new Set([
 export function walkFiles(
   root: string,
   maxDepth = 3,
-  options: { includeIgnoredDirectories?: readonly string[] } = {},
+  options: {
+    includeIgnoredDirectories?: readonly string[];
+    onTruncatedDirectory?: (path: string) => void;
+  } = {},
 ): string[] {
   const files: string[] = [];
   const includedIgnoredDirectories = new Set(options.includeIgnoredDirectories ?? []);
 
   function walk(current: string, depth: number): void {
-    if (depth > maxDepth) return;
+    if (depth > maxDepth) {
+      options.onTruncatedDirectory?.(current);
+      return;
+    }
 
     let entries;
     try {
