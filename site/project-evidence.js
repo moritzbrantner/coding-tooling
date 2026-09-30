@@ -33,6 +33,11 @@ export function createProjectManifestEvidence(input) {
 }
 
 export function collectGithubProjectManifestEvidence(snapshot, components) {
+  const symbolicPaths = new Set(
+    (snapshot?.tree ?? [])
+      .filter((entry) => entry?.type === "blob" && entry.mode === "120000")
+      .map((entry) => entry.path),
+  );
   const manifestPaths = (snapshot?.tree ?? [])
     .filter((entry) => entry?.type === "blob")
     .map((entry) => entry?.path)
@@ -53,7 +58,13 @@ export function collectGithubProjectManifestEvidence(snapshot, components) {
         manifestPaths: manifestPaths.filter((manifestPath) =>
           manifestBelongsToComponent(manifestPath, component.path, component.kind),
         ),
-        complete: snapshot?.treeTruncated !== true,
+        complete:
+          snapshot?.treeTruncated !== true &&
+          !manifestPaths.some(
+            (manifestPath) =>
+              symbolicPaths.has(manifestPath) &&
+              manifestBelongsToComponent(manifestPath, component.path, component.kind),
+          ),
       }),
     );
 }

@@ -131,7 +131,9 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
     components.some(
       (component) =>
         component.testEvidence.status === "incomplete" ||
-        (component.kind !== "package" && component.toolchain?.status === "incomplete"),
+        (component.kind !== "package" && component.toolchain?.status === "incomplete") ||
+        component.evidence?.facts.manifest.status === "incomplete" ||
+        component.projectEvidence?.facts.manifests.status === "incomplete",
     ) ||
     validationEvidence.status === "incomplete";
   const highPriorityFindingCount = findings.filter((finding) => finding.severity === "high").length;
@@ -198,10 +200,14 @@ function discoverComponents(snapshot, paths) {
   const components = [];
   for (const entry of snapshot.tree.filter(
     (candidate) =>
-      basename(candidate.path) === "package.json" && !isIgnoredAnalysisPath(candidate.path),
+      candidate.type === "blob" &&
+      basename(candidate.path) === "package.json" &&
+      !isIgnoredAnalysisPath(candidate.path),
   )) {
-    const manifest = parseJson(snapshot.files[entry.path]);
-    if (!manifest) continue;
+    const parsed = entry.mode === "120000" ? null : parseJson(snapshot.files[entry.path]);
+    const manifestComplete =
+      parsed !== null && typeof parsed === "object" && !Array.isArray(parsed);
+    const manifest = manifestComplete ? parsed : {};
     const directory = dirname(entry.path);
     const path = directory || ".";
     const name = manifest.name ?? (path === "." ? snapshot.repository.name : basename(directory));
@@ -211,6 +217,7 @@ function discoverComponents(snapshot, paths) {
       name,
       path,
       manifestPath: entry.path,
+      manifestComplete,
       packageManager: manifest.packageManager,
       nodeVersion: snapshot.files[nodeVersionPath],
       nodeVersionPath,
@@ -248,7 +255,9 @@ function discoverComponents(snapshot, paths) {
 
   for (const entry of snapshot.tree.filter(
     (candidate) =>
-      basename(candidate.path) === "Cargo.toml" && !isIgnoredAnalysisPath(candidate.path),
+      candidate.type === "blob" &&
+      basename(candidate.path) === "Cargo.toml" &&
+      !isIgnoredAnalysisPath(candidate.path),
   )) {
     const directory = dirname(entry.path);
     const workspaceRoot =
@@ -284,7 +293,10 @@ function discoverComponents(snapshot, paths) {
   }
 
   for (const entry of snapshot.tree.filter(
-    (candidate) => /\.(sln|csproj)$/.test(candidate.path) && !isIgnoredAnalysisPath(candidate.path),
+    (candidate) =>
+      candidate.type === "blob" &&
+      /\.(sln|csproj)$/.test(candidate.path) &&
+      !isIgnoredAnalysisPath(candidate.path),
   )) {
     const directory = dirname(entry.path);
     const path = directory || ".";

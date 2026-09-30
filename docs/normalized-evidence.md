@@ -15,6 +15,16 @@ The normalized evidence seam keeps those responsibilities separate:
 
 The local collector reuses `discoverComponents` for component identity and adds manifest/context facts. The remote collector uses the GitHub tree/blob snapshot. Both feed the same pure package semantics.
 
+An unacquired, malformed or linked package manifest remains visible as incomplete
+normalized evidence. When runnable local discovery cannot establish a package,
+the evidence collector retains its known manifest path and fallback directory
+identity without inventing executable capabilities. `manifestComplete: false`
+marks manifest-owned facts unavailable; it cannot become a known empty script
+table or inherit a satisfied workspace toolchain. A valid `{}` manifest remains
+available and can produce real missing-script findings. GitHub directory entries
+are not components, and linked native manifest inventories retain incomplete
+provenance. Local runnable discovery does not follow linked manifests.
+
 Canonical capability outcomes are explicit:
 
 - `satisfied` — the declared scripts mechanically provide the capability;

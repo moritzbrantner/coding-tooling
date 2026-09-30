@@ -61,13 +61,19 @@ export function createPackageEvidence(input) {
     throw new Error("Package evidence requires a manifest path");
   }
   const path = input.path || ".";
-  const scripts = strings(input.scripts);
-  const dependencies = strings(input.dependencies);
-  const devDependencies = strings(input.devDependencies);
+  const manifestStatus = input.manifestComplete === false ? "incomplete" : "available";
+  const scripts = strings(manifestStatus === "available" ? input.scripts : undefined);
+  const dependencies = strings(manifestStatus === "available" ? input.dependencies : undefined);
+  const devDependencies = strings(
+    manifestStatus === "available" ? input.devDependencies : undefined,
+  );
   const lockfiles = [
     ...new Set((input.lockfiles ?? []).filter((item) => typeof item === "string")),
   ].toSorted();
-  const packageManager = typeof input.packageManager === "string" ? input.packageManager : null;
+  const packageManager =
+    manifestStatus === "available" && typeof input.packageManager === "string"
+      ? input.packageManager
+      : null;
   const nodeVersion = typeof input.nodeVersion === "string" ? input.nodeVersion.trim() : null;
   const nodeVersionPath = input.nodeVersionPath ?? `${path === "." ? "" : `${path}/`}.node-version`;
 
@@ -80,22 +86,22 @@ export function createPackageEvidence(input) {
     },
     facts: {
       manifest: {
-        status: "available",
+        status: manifestStatus,
         path: manifestPath,
         provenance: provenance(collector, manifestPath),
       },
       scripts: {
-        status: "available",
+        status: manifestStatus,
         value: scripts,
         provenance: provenance(collector, manifestPath),
       },
       dependencies: {
-        status: "available",
+        status: manifestStatus,
         value: dependencies,
         provenance: provenance(collector, manifestPath),
       },
       devDependencies: {
-        status: "available",
+        status: manifestStatus,
         value: devDependencies,
         provenance: provenance(collector, manifestPath),
       },
@@ -188,6 +194,14 @@ export function packageToolchainOutcome(evidence) {
   if (evidence?.schemaVersion !== NORMALIZED_EVIDENCE_SCHEMA_VERSION) {
     throw new Error("Unsupported normalized package evidence schema");
   }
+  if (evidence.facts.manifest.status !== "available")
+    return {
+      status: "incomplete",
+      manager: null,
+      runtime: null,
+      reason: "package-manifest-unavailable",
+      provenance: [evidence.facts.manifest.provenance],
+    };
   const packageManager = evidence.facts.packageManager.value;
   if (typeof packageManager === "string") {
     const match = packageManager.match(/^([^@]+)@(.+)$/);
