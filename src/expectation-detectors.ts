@@ -11,6 +11,7 @@ import {
   sourceWorkMarkerFindings,
 } from "./expectation-gap-detectors.ts";
 import { mobileAnalysisOrchestrationFindings } from "./expectation-mobile-analysis-detector.ts";
+import { missingHttpContractEvidenceFindings } from "./expectation-http-detector.ts";
 import {
   consumerVerificationDependencyFindings,
   missingAggregateCheckFindings,
@@ -42,6 +43,26 @@ export type {
 } from "./expectation-detector-types.ts";
 
 export const expectationDescriptors: ExpectationDescriptor[] = [
+  {
+    id: "http-route-contract-evidence",
+    version: 1,
+    description: "Public HTTP operations declare exact behavioral case evidence",
+    defaultSeverity: "warning",
+    policyKind: "advisory",
+    evidenceContract: {
+      basis: "configuration",
+      oracle: "public-http-contract-case-declarations",
+      independenceKey: "public-http-contract-case-declarations",
+      proves:
+        "A supported declared public HTTP operation lacks a strong test-capability mapping with an explicit case ID and behavior dimension.",
+      limitations: [
+        "A declared mapping is not execution evidence; contract verify separately checks exact-run case outcomes.",
+        "Does not infer behavioral intent or coverage from test names, imports or source reachability.",
+        "Only supported public-contract inventory adapters participate; this does not claim complete runtime route discovery or assertion quality.",
+      ],
+    },
+    detect: missingHttpContractEvidenceFindings,
+  },
   {
     id: "react-animation-frame-state",
     version: 1,

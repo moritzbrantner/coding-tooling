@@ -51,6 +51,7 @@ export type PublicContractSurface = {
   kind: PublicContractSurfaceKind;
   component: string;
   subject: string;
+  declaration?: string;
   discovery: {
     status: PublicContractDiscoveryStatus;
     reason?: string;
@@ -325,6 +326,7 @@ function openApiSurfaces(root: string): PublicContractSurface[] {
           kind: "http-operation",
           component,
           subject: `${upper} ${path}`,
+          declaration: relativePosix(root, file),
           discovery: { status: "complete" },
         });
       }
@@ -438,6 +440,17 @@ function validateVerifications(
   }
 }
 
+export function publicContractDeclarations(
+  root: string,
+  manifestPath = ".coding-tooling.contracts.json",
+) {
+  const surfaces = discoverPublicContract(root);
+  const manifest = loadManifest(root, manifestPath);
+  const verifications = manifest.verifications ?? [];
+  validateVerifications(verifications, surfaces);
+  return { surfaces, verifications, manifestPath };
+}
+
 function revision(root: string): string | undefined {
   return sourceRevision(root);
 }
@@ -473,10 +486,7 @@ export function publicContractCommand(
     if (!["observe", "protect-new", "strict"].includes(enforcement))
       throw new Error(`Unknown public contract enforcement mode: ${String(enforcement)}`);
     const manifestPath = config.contracts?.manifest ?? ".coding-tooling.contracts.json";
-    const surfaces = discoverPublicContract(root);
-    const manifest = loadManifest(root, manifestPath);
-    const verifications = manifest.verifications ?? [];
-    validateVerifications(verifications, surfaces);
+    const { surfaces, verifications } = publicContractDeclarations(root, manifestPath);
     const currentRevision = revision(root);
     const bySurface = new Map<string, PublicContractEvidence[]>();
     const executions = new Map<string, PublicContractCaseExecution>();
