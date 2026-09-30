@@ -33,7 +33,7 @@
     "@typescript/typescript6": "6.0.2",
     "miniflare": "5.20260921.0-alpha",
     "oxfmt": "0.71.0",
-    "oxlint": "1.80.0",
+    "oxlint": "1.85.0",
     "typescript": "7.0.2",
     "wrangler": "4.136.1"
   },
