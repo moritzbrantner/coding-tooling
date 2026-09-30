@@ -27,6 +27,7 @@ import {
 } from "./shared.ts";
 import { collectTestDiscoveryEvidence, reconcileTestScope } from "./test-discovery-evidence.ts";
 import { collectTestExecutionEvidence } from "./test-execution-evidence.ts";
+import { validateTaskKnowledge } from "./task-knowledge-declarations.ts";
 
 type PackageManifest = {
   name?: string;
@@ -69,6 +70,7 @@ export function loadConfig(root: string, configuredPath = ".coding-tooling.json"
   if (!value || value.schemaVersion !== 1)
     throw new Error(`${configuredPath} must use schemaVersion 1`);
   validateConvergenceRuleConfig(value, configuredPath);
+  validateTaskKnowledge(value.taskKnowledge);
   for (const values of Object.values(value.tiers ?? {})) validateCapabilities(values);
   validateCapabilities(value.requiredCapabilities ?? []);
   validateCapabilities(value.optionalCapabilities ?? []);
@@ -298,11 +300,12 @@ function packageCapabilities(
   return result;
 }
 
+export function declaredComponents(root: string, config = loadConfig(root)): Component[] {
+  return applyCapabilityCommands(discoverComponents(root, config), config);
+}
+
 function configuredComponents(root: string, config: ToolingConfig): Component[] {
-  return applyConventionConfigurations(
-    root,
-    applyCapabilityCommands(discoverComponents(root, config), config),
-  );
+  return applyConventionConfigurations(root, declaredComponents(root, config));
 }
 
 function applyDependencyResolution(

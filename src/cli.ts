@@ -28,6 +28,7 @@ import { normalizeRepository } from "./normalization.ts";
 import { integratePullRequest, type MergeMethod, type RemoteChecksPolicy } from "./pr.ts";
 import { repositoryRoot } from "./shared.ts";
 import { sourceDependencies } from "./source-deps.ts";
+import { inspectTaskContext } from "./task-inspection.ts";
 
 type OptionValue = string | boolean | string[];
 type Options = Record<string, OptionValue>;
@@ -143,7 +144,7 @@ function reportPullRequestIntegrationResult(
 
 function usage(): never {
   console.error(`Usage:
-  coding-tooling inspect [--json]
+  coding-tooling inspect [--target <path>...] [--component <name>...] [--task-kind <kind>] [--task-context] [--policy-context <path>] [--config <path>] [--root <path>] [--json]
   coding-tooling check <capability> [--component <name>] [--json]
   coding-tooling affected [--base <git-ref>] [--json]
   coding-tooling doctor [--json]
@@ -182,8 +183,43 @@ export function main(argv = process.argv.slice(2)): number {
   const { command, positional, options } = parse(argv);
   const root = repositoryRoot();
   let result: ResultEnvelope<Record<string, unknown>>;
-  if (command === "inspect") result = inspect(root);
-  else if (command === "doctor") result = doctor(root);
+  if (command === "inspect") {
+    const valueFlags = new Set([
+      "target",
+      "component",
+      "task-kind",
+      "policy-context",
+      "config",
+      "root",
+    ]);
+    if (
+      positional.length ||
+      Object.entries(options).some(
+        ([key, value]) =>
+          (!valueFlags.has(key) && key !== "json" && key !== "task-context") ||
+          (valueFlags.has(key) && typeof value !== "string" && !Array.isArray(value)),
+      )
+    )
+      return usage();
+    for (const name of ["task-kind", "policy-context", "config", "root"])
+      if (Array.isArray(options[name])) return usage();
+    if (
+      (options.json !== undefined && options.json !== true) ||
+      (options["task-context"] !== undefined && options["task-context"] !== true)
+    )
+      return usage();
+    const targetRoot = resolve(stringOption(options, "root") ?? root);
+    const scoped = Object.keys(options).some((key) => key !== "root" && key !== "json");
+    result = scoped
+      ? inspectTaskContext(targetRoot, {
+          targets: stringOptions(options, "target"),
+          components: stringOptions(options, "component"),
+          taskKind: stringOption(options, "task-kind"),
+          configPath: stringOption(options, "config"),
+          policyContextPath: stringOption(options, "policy-context"),
+        })
+      : inspect(targetRoot);
+  } else if (command === "doctor") result = doctor(root);
   else if (command === "conformance")
     result = conformanceReport({ root, configPath: stringOption(options, "config") });
   else if (command === "bootstrap") {

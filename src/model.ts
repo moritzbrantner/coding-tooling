@@ -1,3 +1,5 @@
+import type { TaskKnowledge } from "./task-knowledge-declarations.ts";
+
 export const capabilities = [
   "format:check",
   "lint",
@@ -100,6 +102,7 @@ export type ToolingConfig = {
   optionalCapabilities?: Capability[];
   capabilityCommands?: Record<string, Partial<Record<Capability, string[]>>>;
   conventionRefs?: string[];
+  taskKnowledge?: TaskKnowledge;
   convergence?: {
     rules?: Record<string, "disabled" | "suggest" | "apply">;
   };

@@ -358,6 +358,10 @@ export function resolveConventions(
         technologies,
         files: [...files.values()],
         conventionIds: selectedConventionIds,
+        ruleSources: Object.fromEntries(
+          // oxlint-disable-next-line unicorn/no-array-sort -- Sort fresh provenance entries under ES2022.
+          [...ids.entries()].sort(([left], [right]) => left.localeCompare(right)),
+        ),
         explicitRefs: resolvedRefs,
         localInstructions,
         precedence: ["repository-local", "technology", "general", "principle"],
