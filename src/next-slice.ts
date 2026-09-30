@@ -52,11 +52,14 @@ export function rankNextSliceCandidates(candidates: NextSliceCandidate[]): NextS
   );
 }
 
-function pullRequestCandidates(root: string): {
+function pullRequestCandidates(
+  root: string,
+  runner: Runner,
+): {
   candidates: NextSliceCandidate[];
   source: ResultEnvelope<Record<string, unknown>>;
 } {
-  const source = openPullRequestReconciliation(root);
+  const source = openPullRequestReconciliation(root, { run: runner });
   const entries = Array.isArray(source.data.pullRequests)
     ? (source.data.pullRequests as Array<Record<string, unknown>>)
     : [];
@@ -321,7 +324,7 @@ export function nextSliceCommand(
   const started = Date.now();
   const root = resolve(repositoryRoot);
   const runner = dependencies.run ?? runCommand;
-  const pr = pullRequestCandidates(root);
+  const pr = pullRequestCandidates(root, runner);
   const roadmap = roadmapCandidates(root);
   const issues = issueCandidates(root, runner);
   const todos = todoCandidates(root);
