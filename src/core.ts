@@ -101,7 +101,7 @@ function validateCapabilities(values: readonly string[]): void {
   }
 }
 
-export function discoverComponents(root = repositoryRoot()): Component[] {
+export function discoverComponents(root = repositoryRoot(), config?: ToolingConfig): Component[] {
   const files = walkFiles(root, 4);
   const components: Component[] = [];
 
@@ -188,6 +188,19 @@ export function discoverComponents(root = repositoryRoot()): Component[] {
         "test:unit": ["dotnet", "test", target, "--no-build"],
       },
     });
+  }
+
+  if (!components.some((component) => component.path === ".")) {
+    const commands = (config ?? loadConfig(root)).capabilityCommands?.["."];
+    if (commands && Object.keys(commands).length > 0) {
+      components.push({
+        name: basename(root),
+        path: ".",
+        kind: "repository",
+        technologies: [],
+        capabilities: structuredClone(commands),
+      });
+    }
   }
 
   return components.sort(
@@ -286,7 +299,7 @@ function packageCapabilities(
 function configuredComponents(root: string, config: ToolingConfig): Component[] {
   return applyConventionConfigurations(
     root,
-    applyCapabilityCommands(discoverComponents(root), config),
+    applyCapabilityCommands(discoverComponents(root, config), config),
   );
 }
 
@@ -500,7 +513,7 @@ export function runPlan(options: {
     const plan = planChecks({ ...options, root });
     const config = loadConfig(root, options.configPath);
     const componentPaths = configuredComponents(root, config).map((component) => component.path);
-    const selectedComponents = discoverComponents(root).filter(
+    const selectedComponents = discoverComponents(root, config).filter(
       (component) =>
         !options.component ||
         component.name === options.component ||

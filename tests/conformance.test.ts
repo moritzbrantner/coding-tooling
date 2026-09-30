@@ -85,6 +85,37 @@ function findings(result: ReturnType<typeof conformanceReport>) {
 }
 
 describe("repository conformance report", () => {
+  test("recognizes explicit root capabilities without a language component", () => {
+    const root = mkdtempSync(join(tmpdir(), "coding-tooling-componentless-conformance-"));
+    configureTooling(root);
+    installConventions(root);
+    const before = snapshot(root);
+
+    const result = conformanceReport({ root });
+
+    expect(result.status).toBe("passed");
+    expect(result.data.components).toEqual([
+      expect.objectContaining({ kind: "repository", path: ".", technologies: [] }),
+    ]);
+    expect(findings(result).map(({ code }) => code)).not.toContain(
+      "repository-components-unavailable",
+    );
+    expect(snapshot(root)).toEqual(before);
+  });
+
+  test("reports invalid componentless configuration instead of inventing a scope", () => {
+    const root = mkdtempSync(join(tmpdir(), "coding-tooling-invalid-repository-conformance-"));
+    writeJson(join(root, ".coding-tooling.json"), {
+      schemaVersion: 1,
+      capabilityCommands: { ".": { "package:check": [] } },
+    });
+    installConventions(root);
+    const result = conformanceReport({ root });
+    expect(result.status).toBe("failed");
+    expect(result.data.components).toEqual([]);
+    expect(findings(result).map(({ code }) => code)).toContain("tooling-config-invalid");
+  });
+
   test("reports missing configuration without throwing", () => {
     const root = repository();
 

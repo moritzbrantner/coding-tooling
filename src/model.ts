@@ -85,7 +85,7 @@ export type ResultEnvelope<T extends Record<string, unknown>> = {
 export type Component = {
   name: string;
   path: string;
-  kind: "package" | "python" | "rust" | "dotnet";
+  kind: "package" | "python" | "rust" | "dotnet" | "repository";
   technologies: string[];
   capabilities: Partial<Record<Capability, string[]>>;
 };
