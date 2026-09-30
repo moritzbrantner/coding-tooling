@@ -18,6 +18,7 @@ import {
 import {
   fleetRepositoryContracts,
   repositoryContractCommand,
+  repositoryCommandEnvironment,
 } from "../src/repository-contract-verification.ts";
 import { readRepositoryMetadata } from "../src/repository-metadata.ts";
 import { runCommand } from "../src/shared.ts";
@@ -25,6 +26,19 @@ import type { Diagnostic } from "../src/model.ts";
 import { taskPacketCommand, TASK_PACKET_VERSION } from "../src/agent-work.ts";
 
 const roots: string[] = [];
+
+test("preserves Windows executable lookup with one case-insensitive PATH entry", () => {
+  const environment = { Path: "C:\\Tools;C:\\Program Files\\Git\\bin", OTHER: "preserved" };
+  const result = repositoryCommandEnvironment(environment, true);
+  expect(result.PATH).toBe(environment.Path);
+  expect(Object.keys(result).filter((key) => key.toLowerCase() === "path")).toEqual(["PATH"]);
+  expect(result.OTHER).toBe("preserved");
+  expect(environment).toEqual({ Path: environment.Path, OTHER: "preserved" });
+  expect(repositoryCommandEnvironment({ Path: "alias", PATH: "preferred" }, true)).toEqual({
+    PATH: "preferred",
+  });
+  expect(repositoryCommandEnvironment(environment, false)).toEqual(environment);
+});
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });

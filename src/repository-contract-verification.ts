@@ -85,9 +85,24 @@ function sourceRequirements(report: ResultEnvelope<Record<string, unknown>> | nu
   });
 }
 
+export function repositoryCommandEnvironment(
+  environment: NodeJS.ProcessEnv,
+  windows = process.platform === "win32",
+): NodeJS.ProcessEnv {
+  const result = { ...environment };
+  if (!windows) return result;
+  const keys = Object.keys(result).filter((key) => key.toLowerCase() === "path");
+  let pathKey = keys[0] ?? "PATH";
+  for (const key of keys) if (key < pathKey) pathKey = key;
+  const path = result[pathKey];
+  for (const key of keys) delete result[key];
+  result.PATH = path;
+  return result;
+}
+
 function nativeRunner(sourceRoot: string): ContractRunner {
   const fleetRoot = dirname(resolve(sourceRoot));
-  const env = { ...process.env };
+  const env = repositoryCommandEnvironment(process.env);
   env.PATH = (env.PATH ?? "")
     .split(delimiter)
     .filter((entry) => {
