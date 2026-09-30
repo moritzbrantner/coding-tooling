@@ -9,8 +9,19 @@ import {
   structuralTestOutcome,
 } from "./evidence-model.js";
 import { resolveWorkspacePackages, workspaceToolchainConflict } from "./workspace-toolchain.js";
+import { collectGithubProjectManifestEvidence } from "./project-evidence.js";
+import {
+  collectGithubProjectToolchainEvidence,
+  projectToolchainOutcome,
+} from "./project-toolchain.js";
 
-const CONTEXT_FILES = new Set([".coding-tooling.json", ".node-version", "rust-toolchain.toml"]);
+const CONTEXT_FILES = new Set([
+  ".coding-tooling.json",
+  ".node-version",
+  "rust-toolchain.toml",
+  "rust-toolchain",
+  "global.json",
+]);
 const IGNORED_ANALYSIS_SEGMENTS = new Set([
   ".git",
   ".next",
@@ -89,6 +100,7 @@ export function selectedRemoteFiles(tree, limit = 24) {
         (basename(entry.path) === "package.json" ||
           basename(entry.path) === "Cargo.toml" ||
           basename(entry.path) === ".node-version" ||
+          ["rust-toolchain.toml", "rust-toolchain", "global.json"].includes(basename(entry.path)) ||
           CONTEXT_FILES.has(entry.path)),
     )
     .toSorted(
@@ -116,7 +128,11 @@ export function analyzeSnapshot(snapshot, now = new Date()) {
     snapshot.unreadablePaths.length > 0 ||
     Boolean(snapshot.reactSourceFetchTruncated) ||
     (snapshot.unreadableReactSourcePaths?.length ?? 0) > 0 ||
-    components.some((component) => component.testEvidence.status === "incomplete") ||
+    components.some(
+      (component) =>
+        component.testEvidence.status === "incomplete" ||
+        (component.kind !== "package" && component.toolchain?.status === "incomplete"),
+    ) ||
     validationEvidence.status === "incomplete";
   const highPriorityFindingCount = findings.filter((finding) => finding.severity === "high").length;
 
@@ -296,7 +312,20 @@ function discoverComponents(snapshot, paths) {
     snapshot.manifestFetchTruncated ||
     snapshot.unreadablePaths.length > 0
   );
+  const projectEvidence = collectGithubProjectManifestEvidence(snapshot, resolvedComponents);
+  const toolchainEvidence = collectGithubProjectToolchainEvidence(snapshot, resolvedComponents);
   for (const component of resolvedComponents) {
+    if (component.kind === "rust" || component.kind === "dotnet") {
+      component.projectEvidence = projectEvidence.find(
+        (evidence) =>
+          evidence.component.path === component.path && evidence.component.kind === component.kind,
+      );
+      component.toolchainEvidence = toolchainEvidence.find(
+        (evidence) =>
+          evidence.component.path === component.path && evidence.component.kind === component.kind,
+      );
+      component.toolchain = projectToolchainOutcome(component.toolchainEvidence);
+    }
     const productionPaths = componentOwnedPaths(
       paths,
       resolvedComponents,
@@ -664,28 +693,33 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
     );
   }
 
-  if (components.some((component) => component.kind === "rust")) {
-    if (!paths.has("rust-toolchain.toml"))
-      add(
-        "REMOTE-ENV-002",
-        "medium",
-        "Rust toolchain declaration is missing",
-        "A Rust component exists without rust-toolchain.toml.",
-        "Declare an exact Rust toolchain and required components.",
-      );
-    else {
-      const channel = snapshot.files["rust-toolchain.toml"]?.match(
-        /^\s*channel\s*=\s*"([^"]+)"/m,
-      )?.[1];
-      if (!/^\d+\.\d+\.\d+$/.test(channel ?? ""))
-        add(
-          "REMOTE-ENV-004",
-          "high",
-          "Rust toolchain pin is not exact",
-          "rust-toolchain.toml does not contain an exact x.y.z channel.",
-          "Use an exact Rust channel for deterministic environment identity.",
-        );
-    }
+  for (const component of components.filter(
+    (item) => item.kind === "rust" || item.kind === "dotnet",
+  )) {
+    const outcome = component.toolchain;
+    if (outcome.status === "satisfied") continue;
+    const suffix = component.path === "." ? "" : `-${stableId(component.path)}`;
+    const prefix = component.path === "." ? "" : `${component.name}: `;
+    const runtime = component.kind === "rust" ? "Rust" : ".NET SDK";
+    const missing = outcome.reason === "project-toolchain-missing";
+    const exact = outcome.reason === "project-toolchain-not-exact";
+    const id =
+      component.kind === "rust" && (missing || exact)
+        ? missing
+          ? "REMOTE-ENV-002"
+          : "REMOTE-ENV-004"
+        : "REMOTE-ENV-009";
+    add(
+      `${id}${suffix}`,
+      component.kind === "rust" && exact
+        ? "high"
+        : outcome.status === "incomplete" || outcome.status === "unsupported"
+          ? "low"
+          : "medium",
+      `${prefix}${runtime} toolchain ${missing ? "declaration is missing" : exact ? "pin is not exact" : `evidence is ${outcome.status}`}`,
+      `${outcome.declaration ?? component.path}: ${outcome.reason}.`,
+      "Inspect the component-scoped declaration and run local environment verification; remote evidence does not establish the active installed toolchain.",
+    );
   }
   for (const component of components) {
     const outcome = component.testEvidence;
