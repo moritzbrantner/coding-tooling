@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { createGithubFetch, handleAnalysisRequest } from "../worker/analysis-worker.js";
 
+const analyzeProjectedResponse = async () => projectedAnalysis();
+
 function projectedAnalysis() {
   return {
     schemaVersion: 1,
@@ -112,18 +114,17 @@ describe("analysis HTTP worker", () => {
   });
 
   test("uses immutable caching only for caller-pinned commit SHAs", async () => {
-    const analyze = async () => projectedAnalysis();
     const pinned = await handleAnalysisRequest(
       new Request(
         "https://analysis.example/analysis.json?repo=example/project&ref=0123456789abcdef0123456789abcdef01234567",
       ),
       {},
-      { analysisQueryJson: analyze },
+      { analysisQueryJson: analyzeProjectedResponse },
     );
     const branch = await handleAnalysisRequest(
       new Request("https://analysis.example/analysis.json?repo=example/project&ref=main"),
       {},
-      { analysisQueryJson: analyze },
+      { analysisQueryJson: analyzeProjectedResponse },
     );
 
     expect(pinned.headers.get("cache-control")).toContain("immutable");

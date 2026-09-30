@@ -20,6 +20,8 @@ import { planGenerator } from "../src/generators.ts";
 import type { Capability, ResultEnvelope } from "../src/model.ts";
 
 const roots: string[] = [];
+const failedCapabilityChecker: CapabilityChecker = (_root, capability) =>
+  capabilityResult(capability, "failed");
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
@@ -286,11 +288,8 @@ describe("repository-local generator dogfood", () => {
     const root = fixture();
     toolingFixture(root);
     localFeatureGenerator(root);
-    const checker: CapabilityChecker = (_root, capability) =>
-      capabilityResult(capability, "failed");
-
     const result = executeGeneratorCommand(root, "feature", { name: "Orders" }, undefined, {
-      checkCapability: checker,
+      checkCapability: failedCapabilityChecker,
     });
     expect(result.status).toBe("failed");
     expect(result.data.result).toBe("generated-but-unverified");
