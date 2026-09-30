@@ -50,6 +50,8 @@ template:smoke
 
 A capability name describes semantics, not an ecosystem command. The implementation maps it to a repository-declared or mechanically safe command.
 
+An explicit nonempty `capabilityCommands["."]` declaration creates a root component with `kind: "repository"` and no language technologies when no language component already owns the root. This additive component kind lets Markdown/Shell or other componentless repositories expose deterministic validation without a fake package manifest. Existing language components retain their identities and command override behavior. Nested language components remain separate; empty or non-root declarations do not create a repository scope. Planning, strict execution, capability checks and conformance use the declared root commands, including an alternate `--config` path where supported.
+
 - `test:integration:workflow` verifies multi-operation or business-workflow integration without requiring the browser/full-system boundary of E2E.
 - `test:e2e:smoke` is a deliberately small end-to-end critical-path suite, distinct from `test:e2e`.
 - `test:accessibility` is deterministic automated accessibility validation; manual review remains separate.

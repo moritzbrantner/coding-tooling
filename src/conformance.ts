@@ -87,20 +87,6 @@ export function conformanceReport(
   const root = resolve(options.root ?? repositoryRoot());
   const configPath = options.configPath ?? ".coding-tooling.json";
   const findings: ConformanceFinding[] = [];
-  const components = discoverComponents(root);
-  const technologies = [
-    ...new Set(components.flatMap((component) => component.technologies)),
-  ].sort();
-
-  if (components.length === 0) {
-    findings.push({
-      code: "repository-components-unavailable",
-      status: "unavailable",
-      severity: "error",
-      message: "No supported repository components were discovered",
-    });
-  }
-
   const environment = repositoryEnvironmentConformance(root);
   findings.push(...environment.findings);
   const environmentFingerprint = verifyEnvironmentFingerprint(root);
@@ -141,6 +127,22 @@ export function conformanceReport(
         path: configPath,
       });
     }
+  }
+
+  const components = discoverComponents(
+    root,
+    toolingConfigValid ? toolingConfig : { schemaVersion: 1 },
+  );
+  const technologies = [
+    ...new Set(components.flatMap((component) => component.technologies)),
+  ].sort();
+  if (components.length === 0) {
+    findings.push({
+      code: "repository-components-unavailable",
+      status: "unavailable",
+      severity: "error",
+      message: "No supported repository components were discovered",
+    });
   }
 
   const tierReports: Array<Record<string, unknown>> = [];
