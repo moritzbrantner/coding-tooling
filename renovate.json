@@ -1,4 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>moritzbrantner/coding-agent-conventions"]
+  "extends": ["github>moritzbrantner/coding-agent-conventions"],
+  "ignorePaths": [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "fixtures/**",
+    "calibration/fixtures/**"
+  ]
 }
