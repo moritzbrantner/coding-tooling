@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
@@ -8,6 +8,11 @@ import {
   createProjectManifestEvidence,
   type ProjectManifestEvidenceV1,
 } from "../site/project-evidence.js";
+import {
+  createProjectToolchainEvidence,
+  projectToolchainPaths,
+  type ProjectToolchainEvidenceV1,
+} from "../site/project-toolchain.js";
 
 type PackageManifest = {
   name?: string;
@@ -83,4 +88,21 @@ function manifestBelongsToComponent(
   if (manifestDirectory !== componentPath) return false;
   if (kind === "rust") return basename(manifestPath) === "Cargo.toml";
   return manifestPath.endsWith(".sln") || manifestPath.endsWith(".csproj");
+}
+
+export function collectLocalProjectToolchainEvidence(root: string): ProjectToolchainEvidenceV1[] {
+  return collectLocalProjectManifestEvidence(root).map(({ component }) => {
+    const files: Record<string, string | null> = {};
+    for (const path of projectToolchainPaths(component.path, component.kind)) {
+      const absolutePath = join(root, path);
+      try {
+        const metadata = lstatSync(absolutePath, { throwIfNoEntry: false });
+        if (!metadata) continue;
+        files[path] = metadata.isFile() ? readFileSync(absolutePath, "utf8") : null;
+      } catch {
+        files[path] = null;
+      }
+    }
+    return createProjectToolchainEvidence({ collector: "filesystem", ...component, files });
+  });
 }
