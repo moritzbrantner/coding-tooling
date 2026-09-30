@@ -13,6 +13,7 @@ import { convergenceRuleModes, type ConvergenceRuleMode } from "./convergence-ru
 import { convergenceRulesCommand } from "./convergence-rules.ts";
 import { affected, check, doctor, inspect, planEnvelope, runPlan, writeReport } from "./core.ts";
 import { auditDependencies } from "./dependency-audit.ts";
+import { inspectDependencies } from "./dependency-inspection.ts";
 import { resolveDependencies } from "./dependency-resolution.ts";
 import {
   expectedEnvironmentFingerprint,
@@ -155,6 +156,7 @@ function usage(): never {
   coding-tooling pr integrate <number> [--tier <name>] [--merge-method <squash|merge|rebase>] [--remote <name>] [--remote-checks <required|advisory>] [--dry-run] [--json]
   coding-tooling source-deps <activate|status|deactivate> [--config <path>] [--json]
   coding-tooling dependencies audit [--config <path>] [--strict] [--json]
+  coding-tooling dependencies inspect [--component <name>] [--config <path>] [--json]
   coding-tooling dependencies resolve [--static] [--strict] [--json]
   coding-tooling agent-capabilities <validate|catalog|profile> [profile-name] [--root <path>] [--contracts-root <path>] [--json]
   coding-tooling conventions init [module...] [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
@@ -267,7 +269,12 @@ export function main(argv = process.argv.slice(2)): number {
     result = sourceDependencies(root, action, stringOption(options, "config"));
   } else if (command === "dependencies") {
     const action = positional[0];
-    if (action === "audit") {
+    if (action === "inspect") {
+      result = inspectDependencies(root, {
+        component: stringOption(options, "component"),
+        configPath: stringOption(options, "config"),
+      });
+    } else if (action === "audit") {
       result = auditDependencies(root, stringOption(options, "config"), Boolean(options.strict));
     } else if (action === "resolve") {
       result = resolveDependencies(root, {

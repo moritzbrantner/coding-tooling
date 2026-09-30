@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coding-tooling.local/schemas/dependency-inspection.schema.json",
+  "title": "coding-tooling dependency inspection data v1",
+  "type": "object",
+  "required": ["root", "reportVersion", "components", "boundaries", "coverage"],
+  "properties": {
+    "root": { "type": "string" },
+    "reportVersion": { "const": 1 },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "path", "ecosystem", "status", "dependencies"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "ecosystem": { "enum": ["javascript", "rust", "dotnet", "unknown"] },
+          "status": { "$ref": "#/$defs/status" },
+          "reason": { "type": "string" },
+          "dependencies": { "type": "array", "items": { "$ref": "#/$defs/dependency" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "boundaries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name", "evidence"],
+        "properties": {
+          "kind": { "enum": ["docker-service", "subprocess", "http", "ffi", "wasm"] },
+          "name": { "type": "string" },
+          "evidence": { "$ref": "#/$defs/strings" },
+          "component": { "type": "string" },
+          "command": { "oneOf": [{ "type": "string" }, { "$ref": "#/$defs/strings" }] },
+          "image": { "type": "string" },
+          "dependsOn": { "$ref": "#/$defs/strings" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["feature", "status"],
+        "properties": {
+          "feature": { "type": "string" },
+          "status": { "$ref": "#/$defs/status" },
+          "reason": { "type": "string" },
+          "evidence": { "$ref": "#/$defs/strings" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "status": { "enum": ["complete", "partial", "unsupported", "unavailable"] },
+    "strings": { "type": "array", "items": { "type": "string" } },
+    "dependency": {
+      "type": "object",
+      "required": ["name", "kind", "source", "declaration", "features"],
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "enum": ["direct", "dev", "build", "optional", "peer"] },
+        "source": { "enum": ["registry", "workspace", "path", "git", "unknown"] },
+        "declaration": { "type": "string" },
+        "features": { "$ref": "#/$defs/strings" },
+        "version": { "type": "string" },
+        "package": { "type": "string" },
+        "reference": { "type": "string" },
+        "revision": { "type": "string" },
+        "defaultFeatures": { "type": "boolean" },
+        "target": { "type": "string" },
+        "inheritedFrom": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
