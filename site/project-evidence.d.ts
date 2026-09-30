@@ -40,7 +40,7 @@ export type ProjectComponentReference = {
 };
 
 export type GithubProjectSnapshot = {
-  tree?: Array<{ path?: string | null; type?: string | null }>;
+  tree?: Array<{ path?: string | null; type?: string | null; mode?: string | null }>;
   treeTruncated?: boolean;
 };
 

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, posix } from "node:path";
 
 import { Glob, TOML } from "bun";
@@ -102,7 +102,9 @@ function validateCapabilities(values: readonly string[]): void {
 }
 
 export function discoverComponents(root = repositoryRoot(), config?: ToolingConfig): Component[] {
-  const files = walkFiles(root, 4);
+  const files = walkFiles(root, 4).filter((path) =>
+    lstatSync(path, { throwIfNoEntry: false })?.isFile(),
+  );
   const components: Component[] = [];
 
   for (const file of files.filter((path) => basename(path) === "package.json")) {

@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 import { discoverComponents } from "./core.ts";
-import { readJson, relativePosix, walkFiles } from "./shared.ts";
+import { relativePosix, walkFiles } from "./shared.ts";
 import { createPackageEvidence, type PackageEvidenceV1 } from "../site/evidence-model.js";
 import {
   createProjectManifestEvidence,
@@ -25,32 +25,61 @@ type PackageManifest = {
 const packageLockfiles = ["bun.lock", "bun.lockb", "package-lock.json"] as const;
 
 export function collectLocalPackageEvidence(root: string): PackageEvidenceV1[] {
-  return discoverComponents(root)
-    .filter((component) => component.kind === "package")
-    .map((component) => {
-      const directory = component.path === "." ? root : join(root, component.path);
-      const manifestPath = join(directory, "package.json");
-      const manifest = readJson<PackageManifest>(manifestPath) ?? {};
-      const nodeVersionPath = join(directory, ".node-version");
-      return createPackageEvidence({
-        collector: "filesystem",
-        name: component.name,
-        path: component.path,
-        manifestPath: component.path === "." ? "package.json" : `${component.path}/package.json`,
-        packageManager: manifest.packageManager,
-        nodeVersion: existsSync(nodeVersionPath)
-          ? readFileSync(nodeVersionPath, "utf8").trim()
-          : undefined,
-        nodeVersionPath:
-          component.path === "." ? ".node-version" : `${component.path}/.node-version`,
-        scripts: manifest.scripts,
-        dependencies: manifest.dependencies,
-        devDependencies: manifest.devDependencies,
-        hasTsconfig: existsSync(join(directory, "tsconfig.json")),
-        tsconfigPath: component.path === "." ? "tsconfig.json" : `${component.path}/tsconfig.json`,
-        lockfiles: packageLockfiles.filter((name) => existsSync(join(directory, name))),
-      });
-    });
+  const components = new Map(
+    discoverComponents(root)
+      .filter((component) => component.kind === "package")
+      .map((component) => [component.path, component]),
+  );
+  return (
+    walkFiles(root, 4)
+      .filter((path) => basename(path) === "package.json")
+      .map((manifestPath) => {
+        const directory = dirname(manifestPath);
+        const path = relativePosix(root, directory);
+        const component = components.get(path) ?? { path, name: basename(directory) };
+        const content = readRegularText(manifestPath);
+        let parsed: unknown;
+        try {
+          parsed = content === undefined ? undefined : JSON.parse(content);
+        } catch {
+          parsed = undefined;
+        }
+        const manifestComplete =
+          parsed !== null && typeof parsed === "object" && !Array.isArray(parsed);
+        const manifest = manifestComplete ? (parsed as PackageManifest) : {};
+        const nodeVersionPath = join(directory, ".node-version");
+        return createPackageEvidence({
+          collector: "filesystem",
+          name: component.name,
+          path: component.path,
+          manifestPath: component.path === "." ? "package.json" : `${component.path}/package.json`,
+          manifestComplete,
+          packageManager: manifest.packageManager,
+          nodeVersion: readRegularText(nodeVersionPath)?.trim(),
+          nodeVersionPath:
+            component.path === "." ? ".node-version" : `${component.path}/.node-version`,
+          scripts: manifest.scripts,
+          dependencies: manifest.dependencies,
+          devDependencies: manifest.devDependencies,
+          hasTsconfig: existsSync(join(directory, "tsconfig.json")),
+          tsconfigPath:
+            component.path === "." ? "tsconfig.json" : `${component.path}/tsconfig.json`,
+          lockfiles: packageLockfiles.filter((name) => existsSync(join(directory, name))),
+        });
+      })
+      // oxlint-disable-next-line unicorn/no-array-sort -- Sort a fresh evidence array; the repository targets ES2022.
+      .sort((left, right) => left.component.path.localeCompare(right.component.path))
+  );
+}
+
+function readRegularText(path: string): string | undefined {
+  try {
+    return lstatSync(path, { throwIfNoEntry: false })?.isFile()
+      ? readFileSync(path, "utf8")
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export function collectLocalProjectManifestEvidence(root: string): ProjectManifestEvidenceV1[] {
@@ -65,14 +94,18 @@ export function collectLocalProjectManifestEvidence(root: string): ProjectManife
   return discoverComponents(root).flatMap((component) => {
     if (component.kind !== "rust" && component.kind !== "dotnet") return [];
     const kind = component.kind;
+    const ownedPaths = relativeManifestPaths.filter((manifestPath) =>
+      manifestBelongsToComponent(manifestPath, component.path, kind),
+    );
     return [
       createProjectManifestEvidence({
         collector: "filesystem",
         name: component.name,
         path: component.path,
         kind,
-        manifestPaths: relativeManifestPaths.filter((manifestPath) =>
-          manifestBelongsToComponent(manifestPath, component.path, kind),
+        manifestPaths: ownedPaths,
+        complete: ownedPaths.every((path) =>
+          lstatSync(join(root, path), { throwIfNoEntry: false })?.isFile(),
         ),
       }),
     ];

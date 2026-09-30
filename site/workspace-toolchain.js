@@ -17,6 +17,7 @@ export function resolveWorkspacePackages(components, rootManifest) {
       ...component,
       workspace: membership,
     };
+    if (component.evidence?.facts.manifest.status !== "available") return resolved;
     if (root.toolchain?.status !== "satisfied") return resolved;
 
     const local = component.toolchain;
