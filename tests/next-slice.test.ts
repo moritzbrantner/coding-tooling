@@ -125,8 +125,10 @@ test("keeps fully deferred capability gaps visible without selecting them again"
     )}\n`,
   );
 
+  const commands: string[] = [];
   const result = nextSliceCommand(root, {
     run: (_command, args = []) => {
+      commands.push(args[0] ?? "");
       if (args[0] === "repo") {
         return {
           command: ["gh", ...args],
@@ -151,6 +153,7 @@ test("keeps fully deferred capability gaps visible without selecting them again"
   });
 
   const candidates = result.data.candidates as NextSliceCandidate[];
+  expect(commands).toEqual(["repo", "pr", "issue"]);
   expect(candidates).toContainEqual(
     expect.objectContaining({
       kind: "capability-gap",
@@ -159,6 +162,7 @@ test("keeps fully deferred capability gaps visible without selecting them again"
   );
   expect(result.data.selected).toBeNull();
   expect(result.data.sources).toMatchObject({
+    pullRequests: { status: "passed", count: 0 },
     capabilityGaps: { deferred: 1 },
   });
 });
