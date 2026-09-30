@@ -41,8 +41,12 @@ jobs:
           bun-version: 1.4.2
       - name: Bootstrap action dependencies
         run: bun install --frozen-lockfile
+      - name: Verify bootstrap and Pages in an exact clean checkout
+        run: bun src/router.ts repository contract --execute --json
       - name: Build Pages browser analyzer
         run: bun run pages:build
+      - name: Check the exact static artifact
+        run: bun run pages:check
       - name: Validate through the local Action
         uses: ./
         with:

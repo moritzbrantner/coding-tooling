@@ -12,6 +12,10 @@ import { reconcileFleetSourceDependencies } from "./fleet-source-deps.ts";
 import type { ResultEnvelope } from "./model.ts";
 import { nextSliceCommand } from "./next-slice.ts";
 import { pullRequestIntegrationReceipt } from "./pr-integration-receipt.ts";
+import {
+  fleetRepositoryContracts,
+  repositoryContractCommand,
+} from "./repository-contract-verification.ts";
 import { repositoryRoot } from "./shared.ts";
 import { sourceDependencies } from "./source-deps.ts";
 import { verifySourceDependencyGraph } from "./source-graph.ts";
@@ -52,6 +56,8 @@ function usage(): number {
   coding-tooling source-deps <prepare|activate|status|smoke|restore|deactivate> [--config <path>] [--root <path>] [--json]
   coding-tooling source-deps verify-graph [--config <path>] [--root <path>] [--json]
   coding-tooling fleet authority-graph [--root <path>] [--json]
+  coding-tooling repository contract [--root <path>] [--execute] [--json]
+  coding-tooling fleet contracts [--root <path>] [--execute] [--json]
   coding-tooling fleet source-deps reconcile [--apply] [--root <path>] [--json]`);
   return 2;
 }
@@ -61,11 +67,15 @@ function validFlags(
   start: number,
   valueFlags: Set<string>,
   booleanFlags: Set<string> = new Set(),
+  strictPositionals = false,
 ): boolean {
   const allowed = new Set(["--json", ...valueFlags, ...booleanFlags]);
   for (let index = start; index < argv.length; index += 1) {
     const value = argv[index]!;
-    if (!value.startsWith("--")) continue;
+    if (!value.startsWith("--")) {
+      if (strictPositionals) return false;
+      continue;
+    }
     if (!allowed.has(value)) return false;
     if (valueFlags.has(value)) {
       const next = argv[index + 1];
@@ -156,6 +166,16 @@ export function routerMain(argv = process.argv.slice(2)): number {
   if (argv[0] === "fleet" && argv[1] === "authority-graph") {
     if (!validFlags(argv, 2, new Set(["--root"]))) return usage();
     return print(fleetAuthorityGraph(root), compact);
+  }
+
+  if (argv[0] === "repository" && argv[1] === "contract") {
+    if (!validFlags(argv, 2, new Set(["--root"]), new Set(["--execute"]), true)) return usage();
+    return print(repositoryContractCommand(root, { execute: argv.includes("--execute") }), compact);
+  }
+
+  if (argv[0] === "fleet" && argv[1] === "contracts") {
+    if (!validFlags(argv, 2, new Set(["--root"]), new Set(["--execute"]), true)) return usage();
+    return print(fleetRepositoryContracts(root, { execute: argv.includes("--execute") }), compact);
   }
 
   if (argv[0] === "fleet" && argv[1] === "source-deps" && argv[2] === "reconcile") {

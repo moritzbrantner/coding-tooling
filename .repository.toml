@@ -7,3 +7,24 @@ depends_on = ["moritzbrantner/coding-agent-conventions", "moritzbrantner/agent-c
 consumed_by = []
 supersedes = []
 replaced_by = []
+
+[architecture]
+owns = [
+  "coding-tooling/deterministic-evidence",
+  "coding-tooling/validation-selection",
+  "coding-tooling/pr-integration-mechanics",
+  "coding-tooling/fleet-metadata",
+]
+consumes = ["coding-agent-conventions/policy", "coding-agent-skills/procedures"]
+must_not_own = ["product-domain-semantics", "human-architecture-decisions"]
+
+[bootstrap]
+command = ["bun", "install", "--frozen-lockfile"]
+check = ["bun", "src/cli.ts", "inspect", "--json"]
+timeout_seconds = 300
+
+[pages]
+status = "enabled"
+command = ["bun", "run", "pages:build"]
+check = ["bun", "run", "pages:check"]
+timeout_seconds = 300

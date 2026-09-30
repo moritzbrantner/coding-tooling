@@ -8,6 +8,8 @@ coding-tooling fleet authority-graph --root .. --json
 
 It is intentionally descriptive. It helps humans and agents discover where responsibilities are declared; it does not prove that an architecture is correct and it is not a validation or merge gate.
 
+For executable checks of machine-readable ownership, exclusions, bootstrap and Pages declarations, use [repository contracts](./repository-contracts.md). `fleet contracts` reuses this graph's repositories, dependency edges and Markdown owners, and fails on conflicting declarations. The existing descriptive graph and published snapshot retain their contracts.
+
 ## Dependency source
 
 Repository relationships come from the existing `.repository.toml` contract. `depends_on` remains the repository-local declaration for dependency direction.

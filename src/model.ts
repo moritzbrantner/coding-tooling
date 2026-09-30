@@ -35,6 +35,8 @@ export type ResultOperation =
   | "conformance"
   | "environment"
   | "repository-metadata"
+  | "repository-contract"
+  | "fleet-repository-contracts"
   | "repository-evidence"
   | "fleet"
   | "fleet-authority-graph"
