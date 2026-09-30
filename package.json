@@ -26,6 +26,7 @@
     "analysis:worker:deploy:temporary": "wrangler deploy --temporary",
     "landscape:build": "bun scripts/build-landscape-snapshot.ts",
     "pages:build": "bun scripts/build-pages.ts",
+    "pages:check": "bun scripts/check-pages.ts",
     "analysis:worker:bundle": "wrangler deploy --dry-run --outdir .artifacts/analysis-worker"
   },
   "devDependencies": {

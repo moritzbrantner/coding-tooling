@@ -1,13 +1,19 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { check } from "./core.ts";
 import { expectedEnvironmentFingerprint } from "./environment-fingerprint.ts";
 import { findingsCommand } from "./expectations.ts";
+import { parseAuthorityBoundaries } from "./fleet-authority-graph.ts";
 import type { Capability, Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { capabilities } from "./model.ts";
 import { remediationPlanCommand } from "./remediation-plan.ts";
+import {
+  forbiddenAuthorityClaims,
+  type RepositoryArchitecture,
+} from "./repository-contract-declarations.ts";
+import { readRepositoryMetadata } from "./repository-metadata.ts";
 import { type CommandResult, runCommand } from "./shared.ts";
 import { sourceRevision } from "./source-context.ts";
 
@@ -57,6 +63,7 @@ type PacketRead = {
   packet?: TaskPacket;
   digest?: string;
   diagnostics: Diagnostic[];
+  repositoryBoundaries?: { purpose: string | null; architecture: RepositoryArchitecture | null };
 };
 
 type VerificationReport = ResultEnvelope<Record<string, unknown>> & {
@@ -279,7 +286,43 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
 
 function readTaskPacket(root: string, packetPath: string): PacketRead {
   try {
-    return normalizeTaskPacket(JSON.parse(readFileSync(resolve(root, packetPath), "utf8")));
+    const result = normalizeTaskPacket(JSON.parse(readFileSync(resolve(root, packetPath), "utf8")));
+    if (!result.packet) return result;
+    const metadata = existsSync(resolve(root, ".repository.toml"))
+      ? readRepositoryMetadata(root)
+      : undefined;
+    if (metadata && !metadata.metadata) return { diagnostics: metadata.diagnostics };
+    const agentsPath = resolve(root, "AGENTS.md");
+    const authority = existsSync(agentsPath)
+      ? parseAuthorityBoundaries(readFileSync(agentsPath, "utf8"))
+      : undefined;
+    const declared = metadata?.metadata?.architecture;
+    const architecture =
+      declared || authority
+        ? {
+            owns: declared?.owns ?? authority?.owns ?? [],
+            consumes: declared?.consumes ?? authority?.adapts ?? [],
+            mustNotOwn: uniqueSorted([
+              ...(declared?.mustNotOwn ?? []),
+              ...(authority?.nonAuthoritative ?? []),
+            ]),
+          }
+        : null;
+    const violations = architecture
+      ? forbiddenAuthorityClaims(architecture, [result.packet.ownedCapability])
+      : [];
+    if (violations.length)
+      return {
+        diagnostics: violations.map((violation) => ({
+          code: "task-packet-forbidden-repository-authority",
+          message: `ownedCapability ${violation.capability} violates repository exclusion ${violation.exclusion}`,
+          path: ".repository.toml",
+        })),
+      };
+    return {
+      ...result,
+      repositoryBoundaries: { purpose: metadata?.metadata?.summary ?? null, architecture },
+    };
   } catch (error) {
     return {
       diagnostics: [
@@ -343,6 +386,7 @@ export function taskPacketCommand(
     packetDigest: read.digest,
     packet: read.packet,
     evidencePlan,
+    repositoryBoundaries: read.repositoryBoundaries ?? null,
   });
 }
 

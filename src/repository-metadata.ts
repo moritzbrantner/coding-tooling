@@ -3,6 +3,10 @@ import { basename, join, resolve } from "node:path";
 
 import { foundationAudit } from "./foundation-audit.ts";
 import type { Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
+import {
+  parseRepositoryContractDeclarations,
+  type RepositoryContractDeclarations,
+} from "./repository-contract-declarations.ts";
 
 export const repositoryKinds = [
   "library",
@@ -26,7 +30,7 @@ export const repositoryStatuses = [
 export type RepositoryKind = (typeof repositoryKinds)[number];
 export type RepositoryStatus = (typeof repositoryStatuses)[number];
 
-export type RepositoryMetadata = {
+export type RepositoryMetadata = RepositoryContractDeclarations & {
   schemaVersion: 1;
   id: string;
   kind: RepositoryKind;
@@ -57,21 +61,40 @@ const agentPolicyPaths = [
   "docs/agents/triage-labels.md",
 ] as const;
 
-function stringField(source: string, name: string): string | undefined {
-  const match = source.match(new RegExp(`^\\s*${name}\\s*=\\s*"((?:\\\\.|[^"])*)"\\s*$`, "m"));
-  return match ? (JSON.parse(`"${match[1]}"`) as string) : undefined;
+function stringField(
+  source: Record<string, unknown>,
+  name: string,
+  diagnostics: Diagnostic[],
+): string | undefined {
+  const value = source[name];
+  if (value === undefined || typeof value === "string") return value;
+  diagnostics.push({
+    code: "repository-metadata-field-type-invalid",
+    message: `${name} must be a string`,
+    path: ".repository.toml",
+  });
+  return undefined;
 }
 
-function numberField(source: string, name: string): number | undefined {
-  const match = source.match(new RegExp(`^\\s*${name}\\s*=\\s*(\\d+)\\s*$`, "m"));
-  return match ? Number(match[1]) : undefined;
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function stringArrayField(source: string, name: string): string[] {
-  const match = source.match(new RegExp(`^\\s*${name}\\s*=\\s*\\[([\\s\\S]*?)\\]`, "m"));
-  if (!match) return [];
-  const values = match[1].match(/"(?:\\.|[^"])*"/g) ?? [];
-  return values.map((value) => JSON.parse(value) as string);
+function stringArrayField(
+  source: Record<string, unknown>,
+  name: string,
+  diagnostics: Diagnostic[],
+): string[] {
+  const value = source[name];
+  if (value === undefined) return [];
+  if (Array.isArray(value) && value.every((entry): entry is string => typeof entry === "string"))
+    return value;
+  diagnostics.push({
+    code: "repository-metadata-field-type-invalid",
+    message: `${name} must be an array of strings`,
+    path: ".repository.toml",
+  });
+  return [];
 }
 
 function validRepositoryId(value: string): boolean {
@@ -105,15 +128,24 @@ export function readRepositoryMetadata(root: string): MetadataRead {
 
   const source = readFileSync(path, "utf8");
   const diagnostics: Diagnostic[] = [];
-  const schemaVersion = numberField(source, "schema_version");
-  const id = stringField(source, "id");
-  const kind = stringField(source, "kind");
-  const status = stringField(source, "status");
-  const summary = stringField(source, "summary");
-  const dependsOn = stringArrayField(source, "depends_on");
-  const consumedBy = stringArrayField(source, "consumed_by");
-  const supersedes = stringArrayField(source, "supersedes");
-  const replacedBy = stringArrayField(source, "replaced_by");
+  const contracts = parseRepositoryContractDeclarations(source, diagnostics);
+  let document: Record<string, unknown>;
+  try {
+    const parsed: unknown = Bun.TOML.parse(source);
+    if (!record(parsed)) return { diagnostics };
+    document = parsed;
+  } catch {
+    return { diagnostics };
+  }
+  const schemaVersion = document.schema_version;
+  const id = stringField(document, "id", diagnostics);
+  const kind = stringField(document, "kind", diagnostics);
+  const status = stringField(document, "status", diagnostics);
+  const summary = stringField(document, "summary", diagnostics);
+  const dependsOn = stringArrayField(document, "depends_on", diagnostics);
+  const consumedBy = stringArrayField(document, "consumed_by", diagnostics);
+  const supersedes = stringArrayField(document, "supersedes", diagnostics);
+  const replacedBy = stringArrayField(document, "replaced_by", diagnostics);
 
   if (schemaVersion !== 1) {
     diagnostics.push({
@@ -151,6 +183,7 @@ export function readRepositoryMetadata(root: string): MetadataRead {
   if (diagnostics.length > 0 || !id || !kind || !status) return { diagnostics };
   return {
     metadata: {
+      ...contracts,
       schemaVersion: 1,
       id,
       kind: kind as RepositoryKind,
