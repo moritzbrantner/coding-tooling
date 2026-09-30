@@ -2,6 +2,8 @@
 
 A passing integration or end-to-end capability does not prove that every HTTP operation mapped to that capability was tested.
 
+The advisory `http-route-contract-evidence` finding identifies supported declared HTTP operations without an explicit strong test-capability mapping, case ID and behavior dimension. Its identity derives from the stable public operation ID and its provenance includes the inventory and evidence manifest. Source/test imports cannot satisfy it. A valid declaration only removes declaration debt: `contract verify` still requires a passed exact case from the current invocation. Public HTTP surfaces additionally expose their inventory source through `declaration`.
+
 For HTTP public-contract surfaces, coding-tooling therefore separates the broad capability outcome from exact behavioral case evidence.
 
 ## Manifest declaration

@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { discoverComponents } from "./core.ts";
+import { discoverComponents, loadConfig } from "./core.ts";
+import { publicContractDeclarations } from "./public-contract.ts";
 import { deploymentRuntimeParitySubjects } from "./expectation-deployment-detector.ts";
 import { productionSourceFiles, workMarkerSourceFiles } from "./expectation-gap-detectors.ts";
 import { mobileAnalysisOrchestrationSubjects } from "./expectation-mobile-analysis-detector.ts";
@@ -28,6 +29,7 @@ export type FindingsCoverage = {
 
 type CoverageTarget =
   | "repository-config"
+  | "http-operations"
   | "packages"
   | "consumer-verification-packages"
   | "deployment-workflows"
@@ -44,6 +46,7 @@ type CoverageTarget =
   | "work-marker-source";
 
 const coverageTargets: Record<string, CoverageTarget> = {
+  "http-route-contract-evidence": "http-operations",
   "benchmark-evidence": "packages",
   "consumer-dependency-resolution-stability": "consumer-verification-packages",
   "deployment-runtime-parity": "deployment-workflows",
@@ -80,6 +83,10 @@ function hasConsumerVerificationScript(packageInfo: DetectorContext["packages"][
 
 function detectorSubjects(root: string, context: DetectorContext, target: CoverageTarget): number {
   switch (target) {
+    case "http-operations":
+      return publicContractDeclarations(root, loadConfig(root).contracts?.manifest).surfaces.filter(
+        (surface) => surface.kind === "http-operation",
+      ).length;
     case "repository-config":
       return existsSync(join(root, ".coding-tooling.json")) ? 1 : 0;
     case "packages":
