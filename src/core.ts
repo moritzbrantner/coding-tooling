@@ -58,6 +58,7 @@ const scriptCandidates: Record<Capability, string[]> = {
   "profile:runtime": ["profile:runtime"],
   "profile:hotspots": ["profile:hotspots"],
   "profile:memory": ["profile:memory"],
+  "load:smoke": ["load:smoke"],
   "size:budget": ["size:budget"],
   "storybook:check": ["storybook:check"],
   "web:audit": ["web:audit"],
@@ -452,11 +453,17 @@ function executePlannedCheck(
   const started = Date.now();
   const cwd = planned.path === "." ? root : join(root, planned.path);
   const result = runCommand(planned.command[0], planned.command.slice(1), cwd);
-  const processStatus: ResultStatus = result.error
+  let processStatus: ResultStatus = result.error
     ? "error"
     : result.status === 0
       ? "passed"
       : "failed";
+  if (
+    planned.capability === "load:smoke" &&
+    (result.errorCode === "ENOENT" || (!result.error && result.status === 2))
+  ) {
+    processStatus = "unavailable";
+  }
   const testExecution = collectTestExecutionEvidence({
     cwd,
     capability: planned.capability,
@@ -487,6 +494,7 @@ function executePlannedCheck(
     stdout: result.stdout,
     stderr: result.stderr,
     error: result.error,
+    errorCode: result.errorCode,
     testExecution,
     testDiscovery,
     testScope,
@@ -519,6 +527,22 @@ function testEvidenceDiagnostics(completed: ReturnType<typeof executePlannedChec
     });
   }
   return diagnostics;
+}
+
+function executionStatus(
+  results: readonly { status: ResultStatus }[],
+  missingUnavailable = false,
+): ResultStatus {
+  if (results.some((result) => result.status === "error")) {
+    return "error";
+  }
+  if (results.some((result) => result.status === "failed")) {
+    return "failed";
+  }
+  if (missingUnavailable || results.some((result) => result.status === "unavailable")) {
+    return "unavailable";
+  }
+  return "passed";
 }
 
 export function runPlan(options: {
@@ -559,20 +583,18 @@ export function runPlan(options: {
       );
     }
 
-    const results: Array<Record<string, unknown>> = [];
+    const results: ReturnType<typeof executePlannedCheck>[] = [];
     for (const planned of plan.checks) {
       const completed = executePlannedCheck(root, planned, componentPaths);
       results.push(completed);
       diagnostics.push(...testEvidenceDiagnostics(completed));
       if (completed.status !== "passed") break;
     }
-    const status: ResultStatus = results.some((result) => result.status === "error")
-      ? "error"
-      : results.some((result) => result.status === "failed")
-        ? "failed"
-        : options.strict && plan.missing.some((item) => !item.optional)
-          ? "unavailable"
-          : "passed";
+    const status = executionStatus(
+      results,
+      plan.missing.some((item) => item.capability === "load:smoke") ||
+        Boolean(options.strict && plan.missing.some((item) => !item.optional)),
+    );
     return envelope(
       "run",
       status,
@@ -639,11 +661,7 @@ export function check(
       ]);
     const results = checks.map((item) => executePlannedCheck(root, item, componentPaths));
     const diagnostics = results.flatMap(testEvidenceDiagnostics);
-    const status = results.some((item) => item.status === "error")
-      ? "error"
-      : results.some((item) => item.status === "failed")
-        ? "failed"
-        : "passed";
+    const status = executionStatus(results);
     return envelope("check", status, started, { capability, results }, diagnostics);
   } catch (error) {
     return envelope("check", "error", started, { capability, results: [] }, [

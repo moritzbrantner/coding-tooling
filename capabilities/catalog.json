@@ -173,6 +173,15 @@
       "baselineRequired": false
     },
     {
+      "name": "load:smoke",
+      "kind": "profile",
+      "tier": "performance",
+      "scriptCandidates": ["load:smoke"],
+      "defaultArtifacts": [".artifacts/runtime-profiler"],
+      "optIn": true,
+      "baselineRequired": false
+    },
+    {
       "name": "size:budget",
       "kind": "package",
       "tier": "performance",

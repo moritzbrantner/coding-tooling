@@ -7,6 +7,7 @@ Stable names:
 - `profile:runtime` — bounded runtime evidence for a named workload.
 - `profile:hotspots` — source-level sampled CPU/hotspot evidence for a named workload.
 - `profile:memory` — memory/resource evidence for a named workload. RSS, retained heap, allocations, and GC metrics remain distinct evidence.
+- `load:smoke` — bounded local HTTP/service throughput, latency, and error evidence. Repository-owned fixtures and runtime-profiler scenarios define the workload; exit code 2 reports unavailable prerequisites. See [service load smoke](../../docs/load-smoke.md).
 
 A profiler capability exists only when the repository exposes the corresponding package script or an explicit `capabilityCommands` mapping. Language/framework detection and profiler installation alone are not sufficient.
 

@@ -155,6 +155,7 @@ benchmark:smoke
 profile:runtime
 profile:hotspots
 profile:memory
+load:smoke
 storybook:check
 web:audit
 template:smoke
@@ -168,6 +169,7 @@ template:smoke
 - `profile:runtime` invokes a repository-declared representative runtime scenario.
 - `profile:hotspots` invokes a repository-declared source-level CPU/hotspot scenario.
 - `profile:memory` invokes repository-declared memory/resource evidence; it does not collapse RSS, retained heap, allocations, or GC into one metric.
+- `load:smoke` invokes a bounded repository-owned HTTP/service workload through a declared profiler. It is distinct from correctness E2E, benchmarks, and stress tests. See [service load smoke](./docs/load-smoke.md).
 
 For JavaScript/TypeScript components, declared package scripts are preferred over invented commands. When an installed convention has an applicable supported tool fragment, `coding-tooling` preserves that normal semantic capability but injects the deterministic effective config into the selected formatter/linter invocation. Rust and .NET use conservative built-in commands where semantics are mechanically clear.
 
