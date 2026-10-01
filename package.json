@@ -6,6 +6,9 @@
     "coding-tooling": "./src/router.ts"
   },
   "type": "module",
+  "exports": {
+    "./size-evidence": "./src/size-evidence.ts"
+  },
   "scripts": {
     "format": "oxfmt --check .",
     "format:check": "oxfmt --check .",

@@ -156,6 +156,7 @@ function recommendedConfig(
     "profile:runtime",
     "profile:hotspots",
     "profile:memory",
+    "size:budget",
     "storybook:check",
     "web:audit",
     "template:smoke",
@@ -184,6 +185,7 @@ function recommendedConfig(
       "profile:runtime",
       "profile:hotspots",
       "profile:memory",
+      "size:budget",
     ].filter((capability) => optional.has(capability as Capability)) as Capability[],
   );
   if (performance.length > 0) tiers.performance = performance;

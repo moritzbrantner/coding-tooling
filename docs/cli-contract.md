@@ -11,6 +11,7 @@ coding-tooling affected [--base <git-ref>] [--json]
 coding-tooling doctor [--json]
 coding-tooling repository contract [--root <path>] [--execute] [--json]
 coding-tooling fleet contracts [--root <path>] [--execute] [--json]
+coding-tooling performance size [--root <path>] [--baseline <path>] [--report <path>] [--json]
 coding-tooling performance applicability [--root <path>] [--json]
 coding-tooling fleet performance [--root <path>] [--json]
 coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
@@ -51,6 +52,7 @@ benchmark:smoke
 profile:runtime
 profile:hotspots
 profile:memory
+size:budget
 storybook:check
 web:audit
 template:smoke
@@ -69,6 +71,7 @@ An explicit nonempty `capabilityCommands["."]` declaration creates a root compon
 - `package:check` validates package or release shape without publishing.
 - `profile:runtime` captures a repository-declared representative runtime scenario.
 - `profile:hotspots` captures source-level CPU/hotspot evidence for a repository-declared scenario.
+- `size:budget` measures explicitly selected built artifact bytes with repository-owned budgets. See [size evidence](./size-evidence.md) for versioned baseline and comparability semantics.
 - `profile:memory` captures repository-declared memory/allocation/GC evidence. The capability name does not imply that RSS, retained heap, allocations, or GC pauses are interchangeable.
 
 Profiler capabilities are never inferred merely from a language, framework, or installed profiler executable. They become available only through an explicit repository package script or `capabilityCommands` mapping. `coding-tooling` executes that declaration; the profiler owns measurement semantics and the repository/evaluator owns thresholds. Unsupported collector environments must be surfaced by the declared command as unavailable/failure evidence rather than silently replaced by a weaker measurement.

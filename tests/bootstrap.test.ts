@@ -148,3 +148,14 @@ describe("repository foundation bootstrap", () => {
     );
   });
 });
+
+test("size budgets join the performance tier only when explicitly declared", () => {
+  const root = makeRepository("size-pilot");
+  writeFileSync(
+    join(root, "package.json"),
+    JSON.stringify({ name: "size-pilot", scripts: { "size:budget": "bun scripts/size.ts" } }),
+  );
+  const recommendation = repositoryFoundationRecommendation(root);
+  expect(recommendation.config.optionalCapabilities).toContain("size:budget");
+  expect(recommendation.config.tiers?.performance).toEqual(["size:budget"]);
+});
