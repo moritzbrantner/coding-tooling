@@ -39,6 +39,7 @@ coding-tooling conventions add <module...> [--profile <name>] [--json]
 coding-tooling conventions check [--json]
 coding-tooling conventions diff [--json]
 coding-tooling conventions update [--json]
+coding-tooling workflow-profile audit [--root <path>] [--json]
 ```
 
 `coding-tooling conventions resolve` remains available when callers need direct current-source resolution.
@@ -120,6 +121,16 @@ coding-tooling conventions check
 The check is intentionally narrow. It verifies the manifest/cache-integrity relationship and detects local drift in managed convention files, including companion assets and their installed configuration metadata. It does not claim that the cache is the current policy source. It does **not** run formatters, linters, analyzers, tests, architecture checks, convention enforcement, or the repository's normal CI commands. Those checks remain the normal semantic capabilities; when they are executed, applicable convention configuration is composed automatically, and `coding-tooling run` performs executable enforcement as part of validation.
 
 Commands that need registry content (`init`, `add`, `diff`, `update`) discover `coding-agent-conventions` from an explicit `--conventions-root`, `CODING_AGENT_CONVENTIONS_ROOT`, the shared Moenarch environment registry, or a sibling checkout. `check` needs only the committed consumer files and therefore works offline.
+
+## Workflow profile drift
+
+Maintained repositories may commit `.github/workflow-profile.json`, resolved from the canonical `reusable-workflows` profile catalog by `platform-upgrader`.
+
+```bash
+coding-tooling workflow-profile audit --json
+```
+
+The audit is offline and non-mutating. It compares the declaration's canonical workflow paths and explicit reasoned exceptions with the actual `.github/workflows/*.yml|*.yaml` files. Missing canonical callers, undeclared extra workflows, malformed declarations, and ambiguous exceptions fail deterministically. It does not infer which profile a repository should use and does not interpret validation semantics.
 
 ## Source development mode
 
