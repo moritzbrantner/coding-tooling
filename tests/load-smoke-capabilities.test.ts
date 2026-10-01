@@ -69,6 +69,19 @@ describe("bounded load smoke invocation", () => {
     expect(runPlan({ root, tier: "performance", strict: true }).status).toBe("unavailable");
   });
 
+  test("selecting an undeclared load workload without optional or required annotations is unavailable", () => {
+    const root = repository();
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { performance: ["load:smoke"] },
+      }),
+    );
+    expect(runPlan({ root, tier: "performance", strict: true }).status).toBe("unavailable");
+    expect(runPlan({ root, tier: "performance" }).status).toBe("unavailable");
+  });
+
   test("load's reserved unavailable exit code does not reinterpret ordinary validation commands", () => {
     const root = repository();
     writeFileSync(

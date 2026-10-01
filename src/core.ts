@@ -393,8 +393,13 @@ export function planChecks(options: {
     if (availableCapabilities.has(capability)) continue;
     if (requiredCapabilities.has(capability))
       missing.push({ capability, component: scope, optional: false });
-    else if (optionalCapabilities.has(capability))
-      missing.push({ capability, component: scope, optional: true });
+    else if (optionalCapabilities.has(capability) || capability === "load:smoke") {
+      missing.push({
+        capability,
+        component: scope,
+        optional: optionalCapabilities.has(capability),
+      });
+    }
   }
 
   return {
