@@ -2,6 +2,8 @@
 
 `coding-tooling performance size --root <repository> --json` reads explicitly selected built files. It does not build, install, run a profiler, refresh a baseline or change a budget. The metric is raw on-disk artifact bytes, separate from compressed transfer size, linker symbols, runtime latency and memory. Optional ecosystem analyzers remain separate enrichment.
 
+Bun consumer scripts may import `sizeEvidence` from the narrow package export `coding-tooling/size-evidence` instead of loading the complete CLI. Source-development consumers use an exact Git revision through their normal package manager; no publication is required.
+
 Repositories expose `size:budget` through a package script or explicit `capabilityCommands` mapping. Discovery never substitutes a build command or guesses a size threshold. Performance-tier bootstrap includes a declared size capability.
 
 Commit `.performance/size.json` with this versioned contract:

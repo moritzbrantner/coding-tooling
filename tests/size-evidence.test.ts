@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sizeEvidence } from "../src/size-evidence.ts";
+import { sizeEvidence } from "coding-tooling/size-evidence";
 
 const roots: string[] = [];
 function fixture() {
