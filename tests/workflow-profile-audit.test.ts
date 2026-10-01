@@ -53,6 +53,7 @@ describe("workflow profile audit", () => {
       exceptions: 0,
       actual: 2,
       missing: 0,
+      missingExceptions: 0,
       unexpected: 0,
     });
   });
@@ -101,6 +102,52 @@ describe("workflow profile audit", () => {
     workflow(root, "security.yml");
 
     expect(workflowProfileAudit(root).status).toBe("passed");
+  });
+
+  test("reports stale exceptions whose workflow is absent", () => {
+    const root = repository();
+    declaration(root, {
+      exceptions: [
+        {
+          path: ".github/workflows/security.yml",
+          reason: "Separate security publication permission boundary",
+        },
+      ],
+    });
+    workflow(root, "validate.yml");
+    workflow(root, "pages.yml");
+
+    const result = workflowProfileAudit(root);
+
+    expect(result.status).toBe("failed");
+    expect(result.data.missingExceptionWorkflows).toEqual([
+      ".github/workflows/security.yml",
+    ]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "workflow-profile-exception-workflow-missing",
+      }),
+    );
+  });
+
+  test("returns a structured failure when the workflows path is not a directory", () => {
+    const root = mkdtempSync(join(tmpdir(), "coding-tooling-workflow-profile-invalid-"));
+    mkdirSync(join(root, ".github"), { recursive: true });
+    declaration(root, {
+      enabledRoles: ["validate"],
+      workflows: { validate: ".github/workflows/validate.yml" },
+    });
+    writeFileSync(join(root, ".github", "workflows"), "not a directory\n");
+
+    const result = workflowProfileAudit(root);
+
+    expect(result.status).toBe("failed");
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "workflow-profile-workflows-path-invalid",
+        path: ".github/workflows",
+      }),
+    );
   });
 
   test("fails closed on malformed declarations", () => {
