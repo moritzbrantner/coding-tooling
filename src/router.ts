@@ -21,6 +21,7 @@ import {
   repositoryContractCommand,
 } from "./repository-contract-verification.ts";
 import { repositoryRoot } from "./shared.ts";
+import { sizeEvidence } from "./size-evidence.ts";
 import { sourceDependencies } from "./source-deps.ts";
 import { verifySourceDependencyGraph } from "./source-graph.ts";
 
@@ -61,6 +62,7 @@ function usage(): number {
   coding-tooling source-deps verify-graph [--config <path>] [--root <path>] [--json]
   coding-tooling fleet authority-graph [--root <path>] [--json]
   coding-tooling repository contract [--root <path>] [--execute] [--json]
+  coding-tooling performance size [--root <path>] [--baseline <path>] [--report <path>] [--json]
   coding-tooling performance applicability [--root <path>] [--json]
   coding-tooling fleet performance [--root <path>] [--json]
   coding-tooling fleet contracts [--root <path>] [--execute] [--json]
@@ -179,6 +181,15 @@ export function routerMain(argv = process.argv.slice(2)): number {
     return print(repositoryContractCommand(root, { execute: argv.includes("--execute") }), compact);
   }
 
+  if (argv[0] === "performance" && argv[1] === "size") {
+    if (!validFlags(argv, 2, new Set(["--root", "--baseline", "--report"]), new Set(), true)) {
+      return usage();
+    }
+    const baseline = option(argv, "baseline");
+    const result = sizeEvidence(root, baseline === undefined ? {} : { baseline });
+    writeOptionalReport(root, argv, result);
+    return print(result, compact);
+  }
   if (argv[0] === "performance" && argv[1] === "applicability") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
     return print(performanceApplicability(root), compact);

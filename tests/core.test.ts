@@ -73,6 +73,7 @@ describe("coding-tooling plans", () => {
     manifest.scripts["test:e2e:smoke"] = "bun test smoke";
     manifest.scripts["test:accessibility"] = "bun test accessibility";
     manifest.scripts["test:visual"] = "bun test visual";
+    manifest.scripts["size:budget"] = "bun run verify-size";
     manifest.scripts["package:check"] = "bun run package-check";
     writeFileSync(join(root, "package.json"), JSON.stringify(manifest));
 
@@ -84,6 +85,7 @@ describe("coding-tooling plans", () => {
       "test:accessibility",
     ]);
     expect(component.capabilities["test:visual"]).toEqual(["npm", "run", "test:visual"]);
+    expect(component.capabilities["size:budget"]).toEqual(["npm", "run", "size:budget"]);
     expect(component.capabilities["package:check"]).toEqual(["npm", "run", "package:check"]);
   });
 

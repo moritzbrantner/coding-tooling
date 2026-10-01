@@ -58,6 +58,7 @@ const scriptCandidates: Record<Capability, string[]> = {
   "profile:runtime": ["profile:runtime"],
   "profile:hotspots": ["profile:hotspots"],
   "profile:memory": ["profile:memory"],
+  "size:budget": ["size:budget"],
   "storybook:check": ["storybook:check"],
   "web:audit": ["web:audit"],
   "template:smoke": ["template:smoke"],
