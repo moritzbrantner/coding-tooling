@@ -237,14 +237,10 @@ function actualWorkflowPaths(root: string): {
   }
 }
 
-export function workflowProfileAudit(
-  root: string,
-): ResultEnvelope<Record<string, unknown>> {
+export function workflowProfileAudit(root: string): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   const resolvedRoot = resolve(root);
-  const { declaration, diagnostics } = readDeclaration(
-    join(resolvedRoot, declarationRelativePath),
-  );
+  const { declaration, diagnostics } = readDeclaration(join(resolvedRoot, declarationRelativePath));
   const inventory = actualWorkflowPaths(resolvedRoot);
   const actual = inventory.paths;
   diagnostics.push(...inventory.diagnostics);
@@ -283,9 +279,7 @@ export function workflowProfileAudit(
 
   const missing = expected.filter((path) => !actual.includes(path));
   const missingExceptions = exceptions.filter((path) => !actual.includes(path));
-  const unexpected = actual.filter(
-    (path) => !expectedSet.has(path) && !exceptionSet.has(path),
-  );
+  const unexpected = actual.filter((path) => !expectedSet.has(path) && !exceptionSet.has(path));
 
   for (const path of missing) {
     diagnostics.push({

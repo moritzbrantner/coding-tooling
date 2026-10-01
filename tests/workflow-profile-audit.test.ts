@@ -82,9 +82,7 @@ describe("workflow profile audit", () => {
     const result = workflowProfileAudit(root);
 
     expect(result.status).toBe("failed");
-    expect(result.data.unexpectedWorkflows).toEqual([
-      ".github/workflows/temporary-repair.yml",
-    ]);
+    expect(result.data.unexpectedWorkflows).toEqual([".github/workflows/temporary-repair.yml"]);
   });
 
   test("allows an explicit reasoned exception", () => {
@@ -120,9 +118,7 @@ describe("workflow profile audit", () => {
     const result = workflowProfileAudit(root);
 
     expect(result.status).toBe("failed");
-    expect(result.data.missingExceptionWorkflows).toEqual([
-      ".github/workflows/security.yml",
-    ]);
+    expect(result.data.missingExceptionWorkflows).toEqual([".github/workflows/security.yml"]);
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
         code: "workflow-profile-exception-workflow-missing",
