@@ -3,9 +3,9 @@
   "kind": "coding-tooling-public-contract-snapshot",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "9afbbcaaa0f00e2d6dad2c798520fb62eb439976"
+    "revision": "122ad55cbc5fd82233f2aa4af17278554db5cc78"
   },
-  "generatedAt": "2026-10-01T05:54:14.000Z",
+  "generatedAt": "2026-10-01T06:34:25.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1,
@@ -14,13 +14,13 @@
   },
   "report": {
     "schemaVersion": 1,
-    "revision": "9afbbcaaa0f00e2d6dad2c798520fb62eb439976",
+    "revision": "122ad55cbc5fd82233f2aa4af17278554db5cc78",
     "enforcement": "observe",
     "manifestPath": ".coding-tooling.contracts.json",
     "summary": {
-      "discovered": 2,
+      "discovered": 3,
       "verified": 0,
-      "unverified": 2,
+      "unverified": 3,
       "incompleteDiscovery": 2,
       "failedEvidence": 0,
       "unavailableEvidence": 0,
@@ -49,6 +49,17 @@
         "discovery": {
           "status": "partial",
           "reason": "The action boundary is known, but action inputs and outputs are not enumerated yet."
+        },
+        "status": "unverified",
+        "evidence": []
+      },
+      {
+        "id": "package-export:coding-tooling:.%2Fsize-evidence",
+        "kind": "package-export",
+        "component": ".",
+        "subject": "coding-tooling/size-evidence",
+        "discovery": {
+          "status": "complete"
         },
         "status": "unverified",
         "evidence": []
