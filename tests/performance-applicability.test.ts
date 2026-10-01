@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { analyzeExpectations } from "../src/expectations.ts";
 import {
   performanceApplicability,
   fleetPerformanceApplicability,
@@ -39,6 +40,37 @@ function row(report: ReturnType<typeof performanceApplicability>, family: string
   return report.data.components[0]?.families.find((value) => value.family === family);
 }
 describe("performance applicability", () => {
+  test("publishable exports with omitted private retain size applicability", () => {
+    const root = fixture({ private: undefined, exports: { ".": "./index.ts" } });
+    expect(row(performanceApplicability(root), "size-budget")?.state).toBe("applicable-missing");
+    const internal = fixture({ private: true, exports: { ".": "./index.ts" } });
+    expect(row(performanceApplicability(internal), "size-budget")?.state).toBe("not-applicable");
+  });
+  test("derived output debt is excluded while genuine production source debt remains visible", () => {
+    const root = fixture();
+    mkdirSync(join(root, "src"));
+    writeFileSync(
+      join(root, "src/operation.ts"),
+      '// TODO: implement the declared operation\nexport function operation() { throw new Error("Not implemented"); }\n',
+    );
+    for (const derived of [".cache", ".artifacts", ".asset-tooling"]) {
+      mkdirSync(join(root, derived));
+      writeFileSync(
+        join(root, derived, "bundled.js"),
+        '// TODO: bundled third-party marker\nthrow new Error("Not implemented");\n',
+      );
+    }
+    const findings = analyzeExpectations(root).findings;
+    expect(findings.some((value) => value.subject.path === "src/operation.ts")).toBe(true);
+    expect(
+      findings.some(
+        (value) =>
+          value.subject.path?.startsWith(".artifacts/") ||
+          value.subject.path?.startsWith(".cache/") ||
+          value.subject.path?.startsWith(".asset-tooling/"),
+      ),
+    ).toBe(false);
+  });
   test("availability rejects executable-directory symlinks and accepts local executable files without running them", () => {
     if (process.platform === "win32") return;
     const root = fixture();

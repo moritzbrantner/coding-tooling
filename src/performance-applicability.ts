@@ -230,7 +230,7 @@ function inferredRoles(root: string, component: Component): Role[] {
         result.delete("react-interaction");
         result.add("mobile");
       }
-      if (parsed.private === false && (parsed.exports !== undefined || parsed.bin !== undefined))
+      if (parsed.private !== true && (parsed.exports !== undefined || parsed.bin !== undefined))
         result.add("distributable");
     }
   }
