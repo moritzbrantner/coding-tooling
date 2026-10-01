@@ -20,6 +20,7 @@ export const capabilities = [
   "profile:runtime",
   "profile:hotspots",
   "profile:memory",
+  "load:smoke",
   "size:budget",
   "storybook:check",
   "web:audit",

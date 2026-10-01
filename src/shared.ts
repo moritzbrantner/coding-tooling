@@ -8,6 +8,7 @@ export type CommandResult = {
   stdout: string;
   stderr: string;
   error?: string;
+  errorCode?: string;
   signal?: string;
 };
 
@@ -26,6 +27,10 @@ export function runCommand(
   const signal = result.signal ?? undefined;
   const error =
     result.error?.message ?? (signal ? `Process terminated by signal ${signal}` : undefined);
+  let errorCode: string | undefined;
+  if (result.error && "code" in result.error && typeof result.error.code === "string") {
+    errorCode = result.error.code;
+  }
 
   return {
     command: [command, ...args],
@@ -36,6 +41,7 @@ export function runCommand(
     stdout: typeof result.stdout === "string" ? result.stdout : "",
     stderr: typeof result.stderr === "string" ? result.stderr : "",
     error,
+    errorCode,
     signal,
   };
 }

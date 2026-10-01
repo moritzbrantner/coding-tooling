@@ -29,6 +29,7 @@ type CatalogSchema = {
           tier?: {
             enum?: string[];
           };
+          kind?: { enum?: string[] };
         };
       };
     };
@@ -75,12 +76,16 @@ describe("capability catalog", () => {
     const schemaTiers = new Set(
       catalogSchema.properties?.capabilities?.items?.properties?.tier?.enum ?? [],
     );
+    const schemaKinds = new Set(
+      catalogSchema.properties?.capabilities?.items?.properties?.kind?.enum ?? [],
+    );
     expect(schemaTiers.size).toBeGreaterThan(0);
 
     for (const capability of catalog.capabilities) {
       expect(capability.scriptCandidates.length).toBeGreaterThan(0);
       expect(new Set(capability.scriptCandidates).size).toBe(capability.scriptCandidates.length);
       expect(schemaTiers.has(capability.tier)).toBe(true);
+      expect(schemaKinds.has(capability.kind)).toBe(true);
     }
   });
 

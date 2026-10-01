@@ -156,6 +156,7 @@ function recommendedConfig(
     "profile:runtime",
     "profile:hotspots",
     "profile:memory",
+    "load:smoke",
     "size:budget",
     "storybook:check",
     "web:audit",
@@ -185,6 +186,7 @@ function recommendedConfig(
       "profile:runtime",
       "profile:hotspots",
       "profile:memory",
+      "load:smoke",
       "size:budget",
     ].filter((capability) => optional.has(capability as Capability)) as Capability[],
   );
