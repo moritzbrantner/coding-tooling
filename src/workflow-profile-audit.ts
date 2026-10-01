@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
 import type { Diagnostic, ResultEnvelope } from "./model.ts";
@@ -193,13 +193,48 @@ function readDeclaration(path: string): {
   };
 }
 
-function actualWorkflowPaths(root: string): string[] {
+function actualWorkflowPaths(root: string): {
+  paths: string[];
+  diagnostics: Diagnostic[];
+} {
   const directory = join(root, ".github", "workflows");
-  if (!existsSync(directory)) return [];
-  return readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /\.ya?ml$/.test(entry.name))
-    .map((entry) => `.github/workflows/${entry.name}`)
-    .sort();
+  if (!existsSync(directory)) {
+    return { paths: [], diagnostics: [] };
+  }
+
+  try {
+    if (!statSync(directory).isDirectory()) {
+      return {
+        paths: [],
+        diagnostics: [
+          {
+            code: "workflow-profile-workflows-path-invalid",
+            message: ".github/workflows exists but is not a directory",
+            path: ".github/workflows",
+          },
+        ],
+      };
+    }
+
+    return {
+      paths: readdirSync(directory, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && /\.ya?ml$/.test(entry.name))
+        .map((entry) => `.github/workflows/${entry.name}`)
+        .sort(),
+      diagnostics: [],
+    };
+  } catch (error) {
+    return {
+      paths: [],
+      diagnostics: [
+        {
+          code: "workflow-profile-workflows-unreadable",
+          message: error instanceof Error ? error.message : String(error),
+          path: ".github/workflows",
+        },
+      ],
+    };
+  }
 }
 
 export function workflowProfileAudit(
@@ -210,7 +245,9 @@ export function workflowProfileAudit(
   const { declaration, diagnostics } = readDeclaration(
     join(resolvedRoot, declarationRelativePath),
   );
-  const actual = actualWorkflowPaths(resolvedRoot);
+  const inventory = actualWorkflowPaths(resolvedRoot);
+  const actual = inventory.paths;
+  diagnostics.push(...inventory.diagnostics);
 
   if (!declaration) {
     return {
@@ -245,6 +282,7 @@ export function workflowProfileAudit(
   }
 
   const missing = expected.filter((path) => !actual.includes(path));
+  const missingExceptions = exceptions.filter((path) => !actual.includes(path));
   const unexpected = actual.filter(
     (path) => !expectedSet.has(path) && !exceptionSet.has(path),
   );
@@ -253,6 +291,13 @@ export function workflowProfileAudit(
     diagnostics.push({
       code: "workflow-profile-workflow-missing",
       message: `Expected canonical workflow ${path} is missing`,
+      path,
+    });
+  }
+  for (const path of missingExceptions) {
+    diagnostics.push({
+      code: "workflow-profile-exception-workflow-missing",
+      message: `Excepted workflow ${path} is missing`,
       path,
     });
   }
@@ -282,12 +327,14 @@ export function workflowProfileAudit(
       exceptionWorkflows: exceptions,
       actualWorkflows: actual,
       missingWorkflows: missing,
+      missingExceptionWorkflows: missingExceptions,
       unexpectedWorkflows: unexpected,
       summary: {
         expected: expected.length,
         exceptions: exceptions.length,
         actual: actual.length,
         missing: missing.length,
+        missingExceptions: missingExceptions.length,
         unexpected: unexpected.length,
       },
     },
