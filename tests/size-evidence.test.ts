@@ -194,3 +194,27 @@ test("package CLI exposes structured results and nonzero unavailable exit codes"
   expect(missing.status).toBe(2);
   expect(JSON.parse(missing.stdout).status).toBe("unavailable");
 });
+
+test("equivalent selector order retains baseline comparability", () => {
+  const root = fixture();
+  const selectors = [{ path: "dist/index.js" }, { path: "dist/chunk.js" }];
+  declaration(root, { artifacts: selectors });
+  const path = baseline(root);
+  declaration(root, { artifacts: [...selectors].reverse() });
+  expect(sizeEvidence(root, { baseline: path }).data.targets[0]?.comparison.state).toBe(
+    "comparable",
+  );
+});
+test("rejects baseline files outside selectors or missing its entrypoint", () => {
+  const root = fixture();
+  declaration(root);
+  const path = baseline(root);
+  for (const change of ["outside", "entrypoint"] as const) {
+    const value = sizeEvidence(root);
+    const target = value.data.targets[0]!;
+    const artifact = target.artifacts.find((item) => item.path === "dist/index.js")!;
+    artifact.path = change === "outside" ? "unrelated/file.js" : "dist/other.js";
+    writeFileSync(path, JSON.stringify(value));
+    expect(sizeEvidence(root, { baseline: path }).status).toBe("error");
+  }
+});

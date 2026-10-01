@@ -85,6 +85,77 @@ function canonicalPath(value: unknown): string {
   }
   return value;
 }
+function parseTarget(item: unknown): Target {
+  if (
+    !record(item) ||
+    !text(item.id) ||
+    (item.kind !== "web" && item.kind !== "native") ||
+    !text(item.target) ||
+    !text(item.profile) ||
+    !text(item.minification) ||
+    !strings(item.features) ||
+    !bytes(item.maxBytes) ||
+    (item.maxIncreaseBytes !== undefined && !bytes(item.maxIncreaseBytes)) ||
+    !Array.isArray(item.artifacts) ||
+    item.artifacts.length === 0 ||
+    !strings(item.buildInputs) ||
+    item.buildInputs.length === 0 ||
+    !Array.isArray(item.toolchains) ||
+    item.toolchains.length === 0
+  ) {
+    throw new Error("Invalid size target identity, selectors, toolchains or budgets.");
+  }
+  keys(item, [
+    "id",
+    "kind",
+    "entrypoint",
+    "artifacts",
+    "target",
+    "profile",
+    "features",
+    "minification",
+    "toolchains",
+    "buildInputs",
+    "maxBytes",
+    "maxIncreaseBytes",
+  ]);
+  const artifacts = item.artifacts.map((selector: unknown): Selection => {
+    if (!record(selector) || (selector.extensions !== undefined && !strings(selector.extensions))) {
+      throw new Error("Invalid artifact selection.");
+    }
+    keys(selector, ["path", "extensions"]);
+    const extensions = selector.extensions ?? [];
+    if (
+      !Array.isArray(extensions) ||
+      !extensions.every((extension: string) => /^\.[a-zA-Z0-9]+$/.test(extension))
+    ) {
+      throw new Error("Artifact extensions must be explicit suffixes such as .js.");
+    }
+    return { path: canonicalPath(selector.path), extensions: sorted(extensions) };
+  });
+  const toolchains = item.toolchains.map((command: unknown): string[] => {
+    if (!Array.isArray(command) || command.length === 0 || !command.every(text)) {
+      throw new Error("Toolchain probes must be non-empty argument vectors.");
+    }
+    return command;
+  });
+  return {
+    id: item.id,
+    kind: item.kind,
+    entrypoint: canonicalPath(item.entrypoint),
+    artifacts: sorted(artifacts, (left, right) =>
+      comparePaths(JSON.stringify(left), JSON.stringify(right)),
+    ),
+    target: item.target,
+    profile: item.profile,
+    features: sorted(item.features),
+    minification: item.minification,
+    toolchains,
+    buildInputs: sorted(item.buildInputs.map(canonicalPath)),
+    maxBytes: item.maxBytes,
+    maxIncreaseBytes: item.maxIncreaseBytes ?? null,
+  };
+}
 function declaration(root: string): Target[] {
   const path = join(root, ".performance/size.json");
   if (!existsSync(path)) {
@@ -100,78 +171,7 @@ function declaration(root: string): Target[] {
     throw new Error("Size declaration requires schemaVersion 1 and non-empty targets.");
   }
   keys(value, ["schemaVersion", "targets"]);
-  const targets = value.targets.map((item: unknown): Target => {
-    if (
-      !record(item) ||
-      !text(item.id) ||
-      (item.kind !== "web" && item.kind !== "native") ||
-      !text(item.target) ||
-      !text(item.profile) ||
-      !text(item.minification) ||
-      !strings(item.features) ||
-      !bytes(item.maxBytes) ||
-      (item.maxIncreaseBytes !== undefined && !bytes(item.maxIncreaseBytes)) ||
-      !Array.isArray(item.artifacts) ||
-      item.artifacts.length === 0 ||
-      !strings(item.buildInputs) ||
-      item.buildInputs.length === 0 ||
-      !Array.isArray(item.toolchains) ||
-      item.toolchains.length === 0
-    ) {
-      throw new Error("Invalid size target identity, selectors, toolchains or budgets.");
-    }
-    keys(item, [
-      "id",
-      "kind",
-      "entrypoint",
-      "artifacts",
-      "target",
-      "profile",
-      "features",
-      "minification",
-      "toolchains",
-      "buildInputs",
-      "maxBytes",
-      "maxIncreaseBytes",
-    ]);
-    const artifacts = item.artifacts.map((selector: unknown): Selection => {
-      if (
-        !record(selector) ||
-        (selector.extensions !== undefined && !strings(selector.extensions))
-      ) {
-        throw new Error("Invalid artifact selection.");
-      }
-      keys(selector, ["path", "extensions"]);
-      const extensions = selector.extensions ?? [];
-      if (
-        !Array.isArray(extensions) ||
-        !extensions.every((extension: string) => /^\.[a-zA-Z0-9]+$/.test(extension))
-      ) {
-        throw new Error("Artifact extensions must be explicit suffixes such as .js.");
-      }
-      return { path: canonicalPath(selector.path), extensions: sorted(extensions) };
-    });
-    const toolchains = item.toolchains.map((command: unknown): string[] => {
-      if (!Array.isArray(command) || command.length === 0 || !command.every(text)) {
-        throw new Error("Toolchain probes must be non-empty argument vectors.");
-      }
-      return command;
-    });
-    return {
-      id: item.id,
-      kind: item.kind,
-      entrypoint: canonicalPath(item.entrypoint),
-      artifacts,
-      target: item.target,
-      profile: item.profile,
-      features: sorted(item.features),
-      minification: item.minification,
-      toolchains,
-      buildInputs: sorted(item.buildInputs.map(canonicalPath)),
-      maxBytes: item.maxBytes,
-      maxIncreaseBytes: item.maxIncreaseBytes ?? null,
-    };
-  });
+  const targets = value.targets.map(parseTarget);
   if (new Set(targets.map((target) => target.id)).size !== targets.length) {
     throw new Error("Size target IDs must be unique.");
   }
@@ -271,6 +271,29 @@ function readBaseline(root: string, path: string): Baseline[] {
     ) {
       throw new Error("Invalid baseline measurement.");
     }
+    const { toolVersions, buildInputHashes, ...declaredInputs } = item.inputs;
+    const target = parseTarget({ ...declaredInputs, maxBytes: 0 });
+    if (
+      target.id !== item.id ||
+      target.kind !== item.kind ||
+      !Array.isArray(toolVersions) ||
+      toolVersions.length !== target.toolchains.length ||
+      !toolVersions.every(text) ||
+      !Array.isArray(buildInputHashes) ||
+      buildInputHashes.length !== target.buildInputs.length
+    ) {
+      throw new Error("Invalid baseline build identity.");
+    }
+    for (const [index, input] of buildInputHashes.entries()) {
+      if (
+        !record(input) ||
+        input.path !== target.buildInputs[index] ||
+        !text(input.sha256) ||
+        !/^[a-f0-9]{64}$/.test(input.sha256)
+      ) {
+        throw new Error("Invalid baseline build input hash.");
+      }
+    }
     let total = 0;
     const paths = new Set<string>();
     for (const artifact of item.artifacts) {
@@ -283,12 +306,26 @@ function readBaseline(root: string, path: string): Baseline[] {
       ) {
         throw new Error("Invalid baseline artifact.");
       }
-      canonicalPath(artifact.path);
+      const artifactPath = canonicalPath(artifact.path);
+      if (
+        !target.artifacts.some(
+          (selector) =>
+            (artifactPath === selector.path ||
+              (selector.extensions.length > 0 && artifactPath.startsWith(`${selector.path}/`))) &&
+            (selector.extensions.length === 0 ||
+              selector.extensions.some((extension) => artifactPath.endsWith(extension))),
+        )
+      ) {
+        throw new Error("Baseline artifact is outside its declared selection.");
+      }
       if (paths.has(artifact.path)) {
         throw new Error("Duplicate baseline artifact path.");
       }
       paths.add(artifact.path);
       total += artifact.bytes;
+    }
+    if (!paths.has(target.entrypoint)) {
+      throw new Error("Baseline artifact selection is missing its declared entrypoint.");
     }
     if (total !== item.bytes) {
       throw new Error("Baseline artifact byte total does not match its measurement.");

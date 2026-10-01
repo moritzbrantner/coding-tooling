@@ -156,6 +156,7 @@ function recommendedConfig(
     "profile:runtime",
     "profile:hotspots",
     "profile:memory",
+    "size:budget",
     "storybook:check",
     "web:audit",
     "template:smoke",
