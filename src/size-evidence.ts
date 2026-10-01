@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
-import { type ResultEnvelope } from "./model.ts";
 
 type Selection = { path: string; extensions: string[] };
 type Target = {
@@ -41,6 +40,14 @@ type SizeData = {
   schemaVersion: "coding-tooling/size-evidence/v1";
   metric: "raw-artifact-bytes";
   targets: Measurement[];
+};
+export type SizeEvidenceResult = {
+  schemaVersion: 1;
+  operation: "size-evidence";
+  status: "passed" | "failed" | "unavailable" | "error";
+  durationMs: number;
+  data: SizeData;
+  diagnostics: { message: string }[];
 };
 class Unavailable extends Error {}
 function record(value: unknown): value is Record<string, unknown> {
@@ -344,7 +351,7 @@ function readBaseline(root: string, path: string): Baseline[] {
 export function sizeEvidence(
   root: string,
   options: { baseline?: string } = {},
-): ResultEnvelope<SizeData> {
+): SizeEvidenceResult {
   const started = Date.now();
   const data: SizeData = {
     schemaVersion: "coding-tooling/size-evidence/v1",
