@@ -8,9 +8,9 @@ import {
   realpathSync,
   statSync,
 } from "node:fs";
-import { delimiter, isAbsolute, join, relative, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:path";
 
-import { declaredComponents, loadConfig } from "./core.ts";
+import { cargoComponentManifestPaths, declaredComponents, loadConfig } from "./core.ts";
 import { fleetAuthorityGraph } from "./fleet-authority-graph.ts";
 import type { Component, Diagnostic, ResultEnvelope } from "./model.ts";
 import { readRepositoryMetadata } from "./repository-metadata.ts";
@@ -180,22 +180,22 @@ function inferredRoles(root: string, component: Component): Role[] {
   const result = new Set<Role>();
   if (component.kind === "rust") {
     result.add("distributable");
-    const cargo: unknown = Bun.TOML.parse(
-      readFileSync(join(root, component.path, "Cargo.toml"), "utf8"),
-    );
-    if (record(cargo)) {
-      const workspace = record(cargo.workspace) ? cargo.workspace : {};
-      const dependencies = {
-        ...(record(cargo.dependencies) ? cargo.dependencies : {}),
-        ...(record(workspace.dependencies) ? workspace.dependencies : {}),
-      };
-      if (["axum", "actix-web", "warp", "rocket"].some((name) => name in dependencies))
-        result.add("service");
-      if (
-        (Array.isArray(cargo.bench) && cargo.bench.length) ||
-        walkFiles(join(root, component.path, "benches"), 1).some((file) => file.endsWith(".rs"))
-      )
-        result.add("rust-kernel");
+    for (const manifest of cargoComponentManifestPaths(root, component.path)) {
+      const cargo: unknown = Bun.TOML.parse(readFileSync(manifest, "utf8"));
+      if (record(cargo)) {
+        const workspace = record(cargo.workspace) ? cargo.workspace : {};
+        const dependencies = {
+          ...(record(cargo.dependencies) ? cargo.dependencies : {}),
+          ...(record(workspace.dependencies) ? workspace.dependencies : {}),
+        };
+        if (["axum", "actix-web", "warp", "rocket"].some((name) => name in dependencies))
+          result.add("service");
+        if (
+          (Array.isArray(cargo.bench) && cargo.bench.length) ||
+          walkFiles(join(dirname(manifest), "benches"), 1).some((file) => file.endsWith(".rs"))
+        )
+          result.add("rust-kernel");
+      }
     }
   }
   if (
@@ -245,7 +245,7 @@ const roleFamilies: Record<Role, readonly Family[]> = {
   "react-interaction": ["react-render-budget"],
   "dotnet-service": ["benchmark-smoke", "runtime", "memory", "load-smoke"],
   service: ["runtime", "load-smoke"],
-  mobile: ["startup", "frame-stall", "memory"],
+  mobile: ["startup", "frame-stall", "memory", "size-budget"],
   distributable: ["size-budget"],
 };
 /** PATH existence only: lookup never launches a collector or repository script. */

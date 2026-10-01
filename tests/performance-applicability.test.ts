@@ -40,6 +40,34 @@ function row(report: ReturnType<typeof performanceApplicability>, family: string
   return report.data.components[0]?.families.find((value) => value.family === family);
 }
 describe("performance applicability", () => {
+  test("workspace workload roles include selected members and respect exclusions", () => {
+    const root = fixture();
+    for (const name of ["kernel", "api"])
+      mkdirSync(join(root, "crates", name), { recursive: true });
+    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = ["crates/*"]\n');
+    writeFileSync(
+      join(root, "crates/kernel/Cargo.toml"),
+      '[package]\nname = "kernel"\nversion = "0.1.0"\n[[bench]]\nname = "solver"\n',
+    );
+    writeFileSync(
+      join(root, "crates/api/Cargo.toml"),
+      '[package]\nname = "api"\nversion = "0.1.0"\n[dependencies]\naxum = "0.8.8"\n',
+    );
+    const workspace = performanceApplicability(root).data.components.find((value) =>
+      value.roles.includes("distributable"),
+    );
+    expect(workspace?.roles).toContain("rust-kernel");
+    expect(workspace?.roles).toContain("service");
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      '[workspace]\nmembers = ["crates/*"]\nexclude = ["crates/kernel"]\n',
+    );
+    const selected = performanceApplicability(root).data.components.find(
+      (value) => value.path === "." && value.roles.includes("distributable"),
+    );
+    expect(selected?.roles).not.toContain("rust-kernel");
+    expect(selected?.roles).toContain("service");
+  });
   test("publishable exports with omitted private retain size applicability", () => {
     const root = fixture({ private: undefined, exports: { ".": "./index.ts" } });
     expect(row(performanceApplicability(root), "size-budget")?.state).toBe("applicable-missing");
@@ -361,7 +389,7 @@ describe("performance applicability", () => {
   test("Expo startup/frame/memory and explicit kernel role use distinct applicability families", () => {
     const mobile = fixture({ dependencies: { expo: "55.0.0", react: "19.2.6" } });
     const report = performanceApplicability(mobile);
-    for (const family of ["startup", "frame-stall", "memory"])
+    for (const family of ["startup", "frame-stall", "memory", "size-budget"])
       expect(row(report, family)?.state).toBe("applicable-missing");
     expect(row(report, "browser-audit")?.state).toBe("not-applicable");
     const native = fixture();

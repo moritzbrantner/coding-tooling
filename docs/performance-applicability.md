@@ -15,14 +15,14 @@ The envelope reports successful _analysis_, not passing performance. Missing sce
 
 ## Initial matrix
 
-| Repository/workload shape                                                                    | Applicable families                                                                   |
-| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Rust kernels with an explicit role or authored native benches                                | deterministic benchmark smoke, hotspots, memory, distributable size                   |
-| React/web                                                                                    | browser audit/trace, runtime, web size; React interactions additionally render budget |
-| ASP.NET Web/declared .NET service                                                            | benchmark smoke (e.g. BenchmarkDotNet), runtime (e.g. EventPipe), memory, load smoke  |
-| Declared service or recognized Axum/Actix/Warp/Rocket/Express/Fastify/Hono/Koa/Nest boundary | runtime and HTTP load smoke                                                           |
-| Expo/React Native                                                                            | startup, frame stalls, runtime memory; collector availability remains explicit        |
-| Distributable package/native component                                                       | size budget                                                                           |
+| Repository/workload shape                                                                    | Applicable families                                                                                   |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Rust kernels with an explicit role or authored native benches                                | deterministic benchmark smoke, hotspots, memory, distributable size                                   |
+| React/web                                                                                    | browser audit/trace, runtime, web size; React interactions additionally render budget                 |
+| ASP.NET Web/declared .NET service                                                            | benchmark smoke (e.g. BenchmarkDotNet), runtime (e.g. EventPipe), memory, load smoke                  |
+| Declared service or recognized Axum/Actix/Warp/Rocket/Express/Fastify/Hono/Koa/Nest boundary | runtime and HTTP load smoke                                                                           |
+| Expo/React Native                                                                            | startup, frame stalls, runtime memory and native bundle size; collector availability remains explicit |
+| Distributable package/native component                                                       | size budget                                                                                           |
 
 Shape-based results are conservative applicability candidates, not product/domain decisions. Framework dependencies and authored benchmarks are structural signals; installation does not imply collector support. Repository owners declare exceptions where a family does not materially apply. Memory metrics remain collector-specific; RSS, allocations and retained heap are not interchangeable. The audit neither measures them nor compares thresholds.
 
