@@ -179,8 +179,10 @@ function declaration(root: string): Target[] {
 }
 function select(root: string, target: Target): Artifact[] {
   const selected = new Map<string, Artifact>();
+  let visited = 0;
   function visit(path: string, extensions: string[], depth: number): void {
-    if (depth > 32 || selected.size > 10000) {
+    visited += 1;
+    if (depth > 32 || visited > 10000) {
       throw new Error("Size artifact selection exceeds its traversal bound.");
     }
     const absolute = join(root, path);

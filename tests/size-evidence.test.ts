@@ -200,7 +200,7 @@ test("equivalent selector order retains baseline comparability", () => {
   const selectors = [{ path: "dist/index.js" }, { path: "dist/chunk.js" }];
   declaration(root, { artifacts: selectors });
   const path = baseline(root);
-  declaration(root, { artifacts: [...selectors].reverse() });
+  declaration(root, { artifacts: [selectors[1]!, selectors[0]!] });
   expect(sizeEvidence(root, { baseline: path }).data.targets[0]?.comparison.state).toBe(
     "comparable",
   );
