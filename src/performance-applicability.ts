@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { accessSync, constants, existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  existsSync,
+  lstatSync,
+  readFileSync,
+  realpathSync,
+  statSync,
+} from "node:fs";
 import { delimiter, isAbsolute, join, relative, resolve } from "node:path";
 
 import { declaredComponents, loadConfig } from "./core.ts";
@@ -241,11 +249,12 @@ const roleFamilies: Record<Role, readonly Family[]> = {
   distributable: ["size-budget"],
 };
 /** PATH existence only: lookup never launches a collector or repository script. */
-function executableAvailable(tool: string): boolean {
+function executableAvailable(tool: string, cwd: string): boolean {
   const extensions =
     process.platform === "win32" ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";") : [""];
-  const candidates = isAbsolute(tool)
-    ? [tool]
+  const local = isAbsolute(tool) || tool.includes("/") || tool.includes("\\");
+  const candidates = local
+    ? [resolve(cwd, tool)]
     : (process.env.PATH ?? "")
         .split(delimiter)
         .filter(Boolean)
@@ -256,7 +265,7 @@ function executableAvailable(tool: string): boolean {
   return candidates.some((file) => {
     try {
       accessSync(file, constants.X_OK);
-      return lstatSync(file).isFile() || lstatSync(file).isSymbolicLink();
+      return statSync(file).isFile();
     } catch {
       return false;
     }
@@ -268,7 +277,7 @@ function observeFamily(
   applicable: Set<Family>,
   declared: Declaration | undefined,
   selected: Family,
-  available: (tool: string) => boolean,
+  available: (tool: string, cwd: string) => boolean,
   diagnostics: Diagnostic[],
 ): FamilyResult {
   const exception = declared?.notApplicable.find((value) => value.family === selected);
@@ -328,7 +337,7 @@ function observeFamily(
       reason: `Declared collector does not support ${process.platform}.`,
     };
   const missingTools = [...new Set([command[0]!, ...scenario.tools])].filter(
-    (tool) => !available(tool),
+    (tool) => !available(tool, join(root, component.path)),
   );
   if (missingTools.length)
     return {
@@ -348,7 +357,7 @@ function observeFamily(
 }
 export function performanceApplicability(
   root: string,
-  options: { available?: (tool: string) => boolean } = {},
+  options: { available?: (tool: string, cwd: string) => boolean } = {},
 ): ResultEnvelope<AuditData> {
   const started = Date.now();
   const diagnostics: Diagnostic[] = [];
