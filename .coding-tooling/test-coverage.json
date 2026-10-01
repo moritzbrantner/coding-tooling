@@ -3,9 +3,9 @@
   "kind": "coding-tooling-test-coverage-snapshot",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "122ad55cbc5fd82233f2aa4af17278554db5cc78"
+    "revision": "1ca87e2982c30cf29b813b0e6309219642f65b3f"
   },
-  "generatedAt": "2026-10-01T06:34:23.000Z",
+  "generatedAt": "2026-10-01T09:16:57.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1
@@ -16,15 +16,15 @@
   },
   "coverage": {
     "lines": {
-      "covered": 30088,
-      "total": 35734,
-      "percent": 84.2
+      "covered": 30119,
+      "total": 35763,
+      "percent": 84.22
     },
     "statements": null,
     "functions": {
-      "covered": 2886,
-      "total": 3103,
-      "percent": 93.01
+      "covered": 2888,
+      "total": 3104,
+      "percent": 93.04
     },
     "branches": null
   }
