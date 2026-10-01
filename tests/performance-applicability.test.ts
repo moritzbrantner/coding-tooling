@@ -99,45 +99,47 @@ describe("performance applicability", () => {
       ),
     ).toBe(false);
   });
-  test("availability rejects executable-directory symlinks and accepts local executable files without running them", () => {
-    if (process.platform === "win32") return;
-    const root = fixture();
-    writeFileSync(join(root, "bench.ts"), "export {};\n");
-    mkdirSync(join(root, "directory"));
-    symlinkSync(join(root, "directory"), join(root, "collector"));
-    writeFileSync(
-      join(root, ".coding-tooling.json"),
-      JSON.stringify({
-        schemaVersion: 1,
-        capabilityCommands: { ".": { benchmark: [join(root, "collector"), "bench.ts"] } },
-      }),
-    );
-    declare(root, {
-      scenarios: [
-        {
-          family: "react-render-budget",
-          capability: "benchmark",
-          path: "bench.ts",
-          tools: [],
-          platforms: [],
-        },
-      ],
-    });
-    expect(row(performanceApplicability(root), "react-render-budget")?.state).toBe(
-      "unsupported-environment",
-    );
-    rmSync(join(root, "collector"));
-    writeFileSync(join(root, "collector"), "#!/bin/sh\nexit 99\n");
-    chmodSync(join(root, "collector"), 0o755);
-    writeFileSync(
-      join(root, ".coding-tooling.json"),
-      JSON.stringify({
-        schemaVersion: 1,
-        capabilityCommands: { ".": { benchmark: ["./collector", "bench.ts"] } },
-      }),
-    );
-    expect(row(performanceApplicability(root), "react-render-budget")?.state).toBe("supported");
-  });
+  test.skipIf(process.platform === "win32")(
+    "availability rejects executable-directory symlinks and accepts local executable files without running them",
+    () => {
+      const root = fixture();
+      writeFileSync(join(root, "bench.ts"), "export {};\n");
+      mkdirSync(join(root, "directory"));
+      symlinkSync(join(root, "directory"), join(root, "collector"));
+      writeFileSync(
+        join(root, ".coding-tooling.json"),
+        JSON.stringify({
+          schemaVersion: 1,
+          capabilityCommands: { ".": { benchmark: [join(root, "collector"), "bench.ts"] } },
+        }),
+      );
+      declare(root, {
+        scenarios: [
+          {
+            family: "react-render-budget",
+            capability: "benchmark",
+            path: "bench.ts",
+            tools: [],
+            platforms: [],
+          },
+        ],
+      });
+      expect(row(performanceApplicability(root), "react-render-budget")?.state).toBe(
+        "unsupported-environment",
+      );
+      rmSync(join(root, "collector"));
+      writeFileSync(join(root, "collector"), "#!/bin/sh\nexit 99\n");
+      chmodSync(join(root, "collector"), 0o755);
+      writeFileSync(
+        join(root, ".coding-tooling.json"),
+        JSON.stringify({
+          schemaVersion: 1,
+          capabilityCommands: { ".": { benchmark: ["./collector", "bench.ts"] } },
+        }),
+      );
+      expect(row(performanceApplicability(root), "react-render-budget")?.state).toBe("supported");
+    },
+  );
   test("maintained Axum and ASP.NET Web shapes expose service runtime/load applicability", () => {
     const rust = fixture();
     writeFileSync(
