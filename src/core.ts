@@ -279,6 +279,22 @@ function cargoWorkspaceMembers(
   );
 }
 
+/** The same bounded workspace/member selection used by component discovery. */
+export function cargoComponentManifestPaths(root: string, componentPath: string): string[] {
+  const manifest = join(root, componentPath, "Cargo.toml");
+  const workspace = cargoWorkspace(manifest);
+  if (!workspace) return [manifest];
+  const paths = walkFiles(root, 4)
+    .filter(
+      (path) =>
+        basename(path) === "Cargo.toml" && lstatSync(path, { throwIfNoEntry: false })?.isFile(),
+    )
+    .map((path) => relativePosix(root, dirname(path)));
+  return [componentPath, ...cargoWorkspaceMembers(componentPath, workspace, paths)].map((path) =>
+    join(root, path, "Cargo.toml"),
+  );
+}
+
 function packageCapabilities(
   root: string,
   directory: string,

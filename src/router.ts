@@ -10,6 +10,10 @@ import { entryMain } from "./entry.ts";
 import { fleetAuthorityGraph } from "./fleet-authority-graph.ts";
 import { reconcileFleetSourceDependencies } from "./fleet-source-deps.ts";
 import type { ResultEnvelope } from "./model.ts";
+import {
+  performanceApplicability,
+  fleetPerformanceApplicability,
+} from "./performance-applicability.ts";
 import { nextSliceCommand } from "./next-slice.ts";
 import { pullRequestIntegrationReceipt } from "./pr-integration-receipt.ts";
 import {
@@ -57,6 +61,8 @@ function usage(): number {
   coding-tooling source-deps verify-graph [--config <path>] [--root <path>] [--json]
   coding-tooling fleet authority-graph [--root <path>] [--json]
   coding-tooling repository contract [--root <path>] [--execute] [--json]
+  coding-tooling performance applicability [--root <path>] [--json]
+  coding-tooling fleet performance [--root <path>] [--json]
   coding-tooling fleet contracts [--root <path>] [--execute] [--json]
   coding-tooling fleet source-deps reconcile [--apply] [--root <path>] [--json]`);
   return 2;
@@ -173,6 +179,14 @@ export function routerMain(argv = process.argv.slice(2)): number {
     return print(repositoryContractCommand(root, { execute: argv.includes("--execute") }), compact);
   }
 
+  if (argv[0] === "performance" && argv[1] === "applicability") {
+    if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
+    return print(performanceApplicability(root), compact);
+  }
+  if (argv[0] === "fleet" && argv[1] === "performance") {
+    if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
+    return print(fleetPerformanceApplicability(root), compact);
+  }
   if (argv[0] === "fleet" && argv[1] === "contracts") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(["--execute"]), true)) return usage();
     return print(fleetRepositoryContracts(root, { execute: argv.includes("--execute") }), compact);

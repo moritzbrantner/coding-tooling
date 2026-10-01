@@ -63,6 +63,9 @@ export function readJson<T>(path: string): T | undefined {
 }
 
 const ignoredDirectories = new Set([
+  ".cache",
+  ".artifacts",
+  ".asset-tooling",
   ".git",
   ".next",
   ".tooling",
