@@ -11,6 +11,8 @@ coding-tooling affected [--base <git-ref>] [--json]
 coding-tooling doctor [--json]
 coding-tooling repository contract [--root <path>] [--execute] [--json]
 coding-tooling fleet contracts [--root <path>] [--execute] [--json]
+coding-tooling performance applicability [--root <path>] [--json]
+coding-tooling fleet performance [--root <path>] [--json]
 coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
 coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
 coding-tooling conventions init [module...] [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
@@ -24,6 +26,8 @@ coding-tooling conventions resolve [--root <path>] [--config <path>] [--conventi
 `conventions resolve` provides direct resolution from the current shared convention source. Module-managed consumers use `conventions.json` for explicit module selection and `.conventions/` only as a local cache.
 
 Repository and fleet contracts validate declared purpose, ownership, exclusions, bootstrap and Pages applicability. Execution requires an explicit `--execute` and verifies an exact clean checkout. See [repository contracts](./repository-contracts.md) for declarations, statuses and provenance.
+
+The read-only [performance applicability audit](./performance-applicability.md) reports supported, applicable-missing, unsupported-environment and not-applicable scenario wiring separately from execution and measured performance.
 
 ## Stable capability names
 

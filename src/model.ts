@@ -41,6 +41,8 @@ export type ResultOperation =
   | "fleet-repository-contracts"
   | "repository-evidence"
   | "fleet"
+  | "performance-applicability"
+  | "fleet-performance-applicability"
   | "fleet-authority-graph"
   | "foundation"
   | "bootstrap"
