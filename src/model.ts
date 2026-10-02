@@ -48,6 +48,7 @@ export type ResultOperation =
   | "fleet-performance-applicability"
   | "fleet-authority-graph"
   | "foundation"
+  | "workflow-profile"
   | "bootstrap"
   | "plan"
   | "remediation-plan"

@@ -31,6 +31,7 @@ import { fleetAudit, repositoryMetadataCommand } from "./repository-metadata.ts"
 import { repositoryProgressScoreCommand } from "./repository-progress-score.ts";
 import { repositoryEvidenceCommand } from "./repository-evidence.ts";
 import { repositoryRoot } from "./shared.ts";
+import { workflowProfileAudit } from "./workflow-profile-audit.ts";
 
 function resultExitCode(status: ResultStatus): number {
   return status === "passed" ? 0 : status === "failed" ? 1 : status === "unavailable" ? 2 : 3;
@@ -64,6 +65,7 @@ function expectationUsage(): never {
   coding-tooling scaffold <finding-id> [--json]
   coding-tooling calibration [--json]
   coding-tooling foundation audit [--root <path>] [--json]
+  coding-tooling workflow-profile audit [--root <path>] [--json]
   coding-tooling repository metadata [--root <path>] [--json]
   coding-tooling repository evidence [--root <path>] [--validation-report <path>] [--contract-report <path>] [--json]
   coding-tooling fleet <audit|readiness> [--root <path>] [--json]
@@ -165,6 +167,23 @@ export function entryMain(argv = process.argv.slice(2)): number {
     }
     const targetRoot = resolve(option(argv, "root") ?? repositoryRoot());
     const result = foundationAudit(targetRoot);
+    console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
+    return resultExitCode(result.status);
+  }
+
+  if (command === "workflow-profile") {
+    if (argv[1] !== "audit") return expectationUsage();
+    const knownFlags = new Set(["--json", "--root"]);
+    for (let index = 2; index < argv.length; index += 1) {
+      const value = argv[index]!;
+      if (!value.startsWith("--") || !knownFlags.has(value)) return expectationUsage();
+      if (value === "--root") {
+        if (!argv[index + 1] || argv[index + 1]!.startsWith("--")) return expectationUsage();
+        index += 1;
+      }
+    }
+    const targetRoot = resolve(option(argv, "root") ?? repositoryRoot());
+    const result = workflowProfileAudit(targetRoot);
     console.log(JSON.stringify(result, null, argv.includes("--json") ? 0 : 2));
     return resultExitCode(result.status);
   }
