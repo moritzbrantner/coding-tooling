@@ -225,7 +225,6 @@ coding-agent-skills          coding-agent-conventions
 - `coding-tooling` owns deterministic discovery, validation, convention module selection/cache integrity, supported config composition, and source-dependency mechanics.
 - `runtime-profiler` owns runtime capture.
 - Moonlight owns candidate evaluation.
-- `agent-loop-orchestrator` owns optional durable coordination.
-- `agent-loop-setup` owns machine bootstrap and the per-user component registry.
+- the global work loop (`moritzbrantner/dotfiles` `skills/work-loop`) selects work from GitHub issues; there is no other coordination layer.
 
 The collaboration arrows are not hard package dependencies. `coding-tooling` remains useful without the other repositories; operations report unavailable inputs rather than making unrelated commands depend on the whole landscape.
