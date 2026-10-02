@@ -146,12 +146,41 @@ describe("fleet audit", () => {
     expect(activeResult?.agentPolicy.stale).toEqual([
       expect.objectContaining({ code: "legacy-agent-loop-config", path: ".agent-loop.toml" }),
       expect.objectContaining({
-        code: "legacy-agent-loop-policy",
+        code: "legacy-agent-loop-config",
         path: "docs/agents/triage-labels.md",
       }),
     ]);
     expect(activeResult?.agentPolicy.observedStale).toEqual(activeResult?.agentPolicy.stale);
     expect(activeResult?.remediation).toContain("remove stale Agent Loop policy from active");
+  });
+
+  test("reports repository-local loop skills and plan-execution policy as stale", () => {
+    const fleet = tempRoot("coding-tooling-fleet-local-loop-");
+    const active = repository(fleet, "active");
+    metadata(active);
+    mkdirSync(join(active, ".claude", "skills", "agent-loop"), { recursive: true });
+    writeFileSync(join(active, ".claude", "skills", "agent-loop", "SKILL.md"), "# Agent loop\n");
+    writeFileSync(
+      join(active, "AGENTS.md"),
+      "If the user says follow the plan step by step, loop.\n",
+    );
+    const clean = repository(fleet, "clean");
+    metadata(clean);
+    writeFileSync(join(clean, "AGENTS.md"), "Run `bun test` before pushing.\n");
+
+    const repositories = fleetAudit(fleet).data.repositories as Array<{
+      name: string;
+      agentPolicy: { stale: Array<{ code: string; path: string }> };
+    }>;
+
+    expect(repositories.find((entry) => entry.name === "active")?.agentPolicy.stale).toEqual([
+      expect.objectContaining({
+        code: "legacy-agent-loop-config",
+        path: ".claude/skills/agent-loop",
+      }),
+      expect.objectContaining({ code: "legacy-agent-loop-policy", path: "AGENTS.md" }),
+    ]);
+    expect(repositories.find((entry) => entry.name === "clean")?.agentPolicy.stale).toEqual([]);
   });
 
   test("does not revive repositories that are intentionally retiring or archived", () => {

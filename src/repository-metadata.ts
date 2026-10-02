@@ -53,13 +53,25 @@ type StaleAgentPolicyFinding = {
   message: string;
 };
 
-const agentPolicyPaths = [
-  "AGENTS.md",
-  "CONTRIBUTING.md",
+const agentPolicyPaths = ["AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md"] as const;
+
+// Repository-local agent loop machinery retired in favour of one global work loop over GitHub issues.
+const legacyAgentLoopPaths = [
+  ".agent-loop",
+  ".agent-loop.toml",
+  ".agents/skills/implementer-loop",
+  ".claude/skills/agent-loop",
+  ".claude/skills/orchestrate",
+  "AGENT_TASKS.md",
+  "AGENT_WORKFLOW.md",
+  "docs/AGENT_TASKS.md",
   "docs/agents/issue-tracker.md",
   "docs/agents/planning-workflow.md",
   "docs/agents/triage-labels.md",
 ] as const;
+
+const legacyAgentLoopPolicy =
+  /mattpocock\/skills|ready-for-agent|agent-loop control plane|follow the plan step by step/i;
 
 function stringField(
   source: Record<string, unknown>,
@@ -253,12 +265,13 @@ function repositoryDirectories(fleetRoot: string): string[] {
 
 function staleAgentPolicyFindings(root: string): StaleAgentPolicyFinding[] {
   const findings: StaleAgentPolicyFinding[] = [];
-  if (existsSync(join(root, ".agent-loop.toml"))) {
+  for (const path of legacyAgentLoopPaths) {
+    if (!existsSync(join(root, path))) continue;
     findings.push({
       code: "legacy-agent-loop-config",
-      path: ".agent-loop.toml",
+      path,
       message:
-        "root .agent-loop.toml belongs to the retired repository-local loop model; use direct skills or optional .agent-loop/config.toml orchestration instead",
+        "repository-local agent loop machinery is retired; work runs through the global work loop over GitHub issues, so remove it",
     });
   }
   for (const path of agentPolicyPaths) {
@@ -270,14 +283,12 @@ function staleAgentPolicyFindings(root: string): StaleAgentPolicyFinding[] {
     } catch {
       continue;
     }
-    const copiedSkillMapping = /mattpocock\/skills/.test(source);
-    const legacyLoopLabels = /ready-for-agent/.test(source) && /agent-loop:/.test(source);
-    if (!copiedSkillMapping && !legacyLoopLabels) continue;
+    if (!legacyAgentLoopPolicy.test(source)) continue;
     findings.push({
       code: "legacy-agent-loop-policy",
       path,
       message:
-        "copied Agent Loop label/routing policy is stale shared policy; remove it or keep only repository-specific issue guidance",
+        "agent loop routing, triage-label or plan-execution policy is retired; keep only repository-specific guidance",
     });
   }
   return findings.sort((left, right) => left.path.localeCompare(right.path));
