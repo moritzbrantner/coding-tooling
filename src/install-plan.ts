@@ -1,11 +1,14 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { discoverComponents, planChecks } from "./core.ts";
+import { discoverComponents, loadConfig, planChecks } from "./core.ts";
 import type { Diagnostic, ResultEnvelope, ResultOperation, ResultStatus } from "./model.ts";
 import { relativePosix, repositoryRoot, runCommand } from "./shared.ts";
 
-type InstallManager = "bun" | "npm";
+// Version 2 added the `cargo` manager (`cargo fetch --locked` for locked Rust components).
+const INSTALL_PLAN_VERSION = 2;
+
+type InstallManager = "bun" | "npm" | "cargo";
 
 type InstallOwner = {
   path: string;
@@ -59,6 +62,33 @@ function installOwnerAt(root: string, directory: string): InstallOwner | undefin
     };
   }
   return undefined;
+}
+
+function cargoSourceDevelopment(root: string): boolean {
+  const configPath = join(root, ".coding-tooling.source-deps.json");
+  if (!existsSync(configPath)) return false;
+  try {
+    const parsed = JSON.parse(readFileSync(configPath, "utf8")) as {
+      cargo?: { localOnly?: unknown };
+    };
+    return parsed.cargo?.localOnly === true;
+  } catch {
+    return false;
+  }
+}
+
+// Cargo components with a committed Cargo.lock acquire their locked dependencies before
+// frozen convention enforcement and `--locked` repository commands run. Source-development
+// repositories (`cargo.localOnly`) resolve through the source-aware pipeline instead, and
+// crates without a lockfile have nothing to acquire hermetically.
+function cargoOwnerAt(root: string, directory: string): InstallOwner | undefined {
+  if (!existsSync(join(directory, "Cargo.lock"))) return undefined;
+  return {
+    path: relativePosix(root, directory),
+    manager: "cargo",
+    lockfile: "Cargo.lock",
+    command: ["cargo", "fetch", "--locked"],
+  };
 }
 
 function envelope(
@@ -124,17 +154,47 @@ export function dependencyInstallPlan(
         });
         continue;
       }
-      const existing = steps.get(owner.path);
+      const existing = steps.get(`${owner.manager}:${owner.path}`);
       if (existing) {
         existing.components.push(component.name);
         continue;
       }
-      steps.set(owner.path, { ...owner, components: [component.name] });
+      steps.set(`${owner.manager}:${owner.path}`, { ...owner, components: [component.name] });
+    }
+
+    if (!cargoSourceDevelopment(root)) {
+      // Convention enforcement (e.g. RUST-002 `cargo clippy --frozen`) inspects every
+      // selector-matched component, not only those with checks in the selected tier.
+      const conventionComponents = discoverComponents(
+        root,
+        loadConfig(root, options.configPath),
+      ).filter(
+        (component) =>
+          component.kind === "rust" &&
+          (!options.component ||
+            component.name === options.component ||
+            component.path === options.component),
+      );
+      for (const component of conventionComponents) {
+        const directory = component.path === "." ? root : join(root, component.path);
+        const owner = cargoOwnerAt(root, directory);
+        if (!owner) continue;
+        const key = `cargo:${owner.path}`;
+        const existing = steps.get(key);
+        if (existing) {
+          existing.components.push(component.name);
+          continue;
+        }
+        steps.set(key, { ...owner, components: [component.name] });
+      }
     }
 
     const ordered = [...steps.values()]
       .map((step) => ({ ...step, components: [...step.components].sort() }))
-      .sort((left, right) => left.path.localeCompare(right.path));
+      .sort(
+        (left, right) =>
+          left.path.localeCompare(right.path) || left.manager.localeCompare(right.manager),
+      );
     const status: ResultStatus = conflict
       ? "failed"
       : diagnostics.length > 0
@@ -146,7 +206,7 @@ export function dependencyInstallPlan(
       started,
       {
         action: "plan",
-        planVersion: 1,
+        planVersion: INSTALL_PLAN_VERSION,
         root,
         profile: validationPlan.profile,
         tier: validationPlan.tier,
@@ -165,7 +225,7 @@ export function dependencyInstallPlan(
       "install",
       "error",
       started,
-      { action: "plan", planVersion: 1, root, tier: options.tier },
+      { action: "plan", planVersion: INSTALL_PLAN_VERSION, root, tier: options.tier },
       [
         {
           code: "dependency-install-plan-invalid",
