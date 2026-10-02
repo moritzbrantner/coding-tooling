@@ -99,6 +99,8 @@ Effective merged configs are generated as deterministic temporary artifacts and 
 
 Some installed rules include small JSON enforcement sidecars authored next to the convention. `coding-tooling run` consumes those descriptors before repository validation commands. It can run focused Oxlint or Clippy checks, perform a small set of structural checks, or require a semantic capability for a validation tier. The rule semantics remain owned by `coding-agent-conventions`; `coding-tooling` only executes the declared deterministic mechanism.
 
+`coding-tooling install prepare` (used by the action's `install-mode: auto`) acquires dependencies before that enforcement runs: `bun install --frozen-lockfile` or `npm ci` for locked packages, and `cargo fetch --locked` for every selector-matched Rust component with a committed `Cargo.lock`, so frozen Clippy sidecars work on a fresh runner. Repositories that declare `cargo.localOnly` in `.coding-tooling.source-deps.json` keep Cargo resolution in the source-aware pipeline. The `install plan --json` contract is `planVersion: 2`; version 2 added the `cargo` manager.
+
 Validation is fail-fast: convention checks and tier capabilities run in deterministic order and stop after the first failure or unavailable required enforcement. This makes the cheap-before-expensive validation policy executable rather than advisory.
 
 ### Refreshing the local convention cache

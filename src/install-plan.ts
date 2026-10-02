@@ -1,9 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { discoverComponents, planChecks } from "./core.ts";
+import { discoverComponents, loadConfig, planChecks } from "./core.ts";
 import type { Diagnostic, ResultEnvelope, ResultOperation, ResultStatus } from "./model.ts";
 import { relativePosix, repositoryRoot, runCommand } from "./shared.ts";
+
+// Version 2 added the `cargo` manager (`cargo fetch --locked` for locked Rust components).
+const INSTALL_PLAN_VERSION = 2;
 
 type InstallManager = "bun" | "npm" | "cargo";
 
@@ -160,7 +163,19 @@ export function dependencyInstallPlan(
     }
 
     if (!cargoSourceDevelopment(root)) {
-      for (const component of selectedComponents.filter((item) => item.kind === "rust")) {
+      // Convention enforcement (e.g. RUST-002 `cargo clippy --frozen`) inspects every
+      // selector-matched component, not only those with checks in the selected tier.
+      const conventionComponents = discoverComponents(
+        root,
+        loadConfig(root, options.configPath),
+      ).filter(
+        (component) =>
+          component.kind === "rust" &&
+          (!options.component ||
+            component.name === options.component ||
+            component.path === options.component),
+      );
+      for (const component of conventionComponents) {
         const directory = component.path === "." ? root : join(root, component.path);
         const owner = cargoOwnerAt(root, directory);
         if (!owner) continue;
@@ -191,7 +206,7 @@ export function dependencyInstallPlan(
       started,
       {
         action: "plan",
-        planVersion: 1,
+        planVersion: INSTALL_PLAN_VERSION,
         root,
         profile: validationPlan.profile,
         tier: validationPlan.tier,
@@ -210,7 +225,7 @@ export function dependencyInstallPlan(
       "install",
       "error",
       started,
-      { action: "plan", planVersion: 1, root, tier: options.tier },
+      { action: "plan", planVersion: INSTALL_PLAN_VERSION, root, tier: options.tier },
       [
         {
           code: "dependency-install-plan-invalid",

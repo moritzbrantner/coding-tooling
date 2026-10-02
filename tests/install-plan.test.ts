@@ -206,4 +206,34 @@ describe("dependency install plan", () => {
         .map((step) => step.path),
     ).toEqual(["."]);
   });
+
+  test("fetches locked crates that only convention enforcement inspects in the tier", () => {
+    const root = repository();
+    writeFileSync(join(root, "bun.lock"), "root\n");
+    writeFileSync(join(root, "packages", "nested", "bun.lock"), "nested\n");
+    writeJson(join(root, ".coding-tooling.json"), {
+      schemaVersion: 1,
+      tiers: { fast: ["build"], performance: ["load:smoke"] },
+    });
+    mkdirSync(join(root, "crates", "engine"), { recursive: true });
+    writeFileSync(
+      join(root, "crates", "engine", "Cargo.toml"),
+      '[package]\nname = "engine"\nversion = "0.1.0"\n',
+    );
+    writeFileSync(join(root, "crates", "engine", "Cargo.lock"), "version = 4\n");
+
+    const result = dependencyInstallPlan({ root, tier: "performance" });
+
+    expect(result.data.planVersion).toBe(2);
+    expect(result.data.selectedComponents).toEqual([]);
+    expect(steps(result)).toEqual([
+      {
+        path: "crates/engine",
+        manager: "cargo",
+        lockfile: "Cargo.lock",
+        command: ["cargo", "fetch", "--locked"],
+        components: ["engine"],
+      },
+    ]);
+  });
 });
