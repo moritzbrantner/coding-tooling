@@ -131,6 +131,22 @@ test("proves only tests reachable through complete static dependencies", () => {
   expect(decision.execution).toBe("not-run");
 });
 
+test("separately declared test capabilities require full verification", () => {
+  const root = fixture();
+  file(
+    root,
+    ".coding-tooling.json",
+    JSON.stringify({
+      schemaVersion: 1,
+      capabilityCommands: { ".": { "test:e2e": ["bun", "test", "tests/other.test.ts"] } },
+    }),
+  );
+  const runner = () => ({ command: ["bun", "test"], status: 0, stdout: "", stderr: "" });
+  const decision = selectMergeVerification(root, sha, ["src/feature.ts"], product(), runner);
+  expect(decision.mode).toBe("full-required");
+  expect(decision.reason).toBe("additional-test-capabilities-unmapped");
+});
+
 test("falls back to full suite for unknown imports or shared boundaries", () => {
   const root = fixture();
   const runner = () => ({ command: ["bun", "test"], status: 0, stdout: "", stderr: "" });
