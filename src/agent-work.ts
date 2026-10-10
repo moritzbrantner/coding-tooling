@@ -495,14 +495,25 @@ export function agentVerificationCommand(
   }
   let mergeVerification: MergeVerificationDecision | null = null;
   if (product) {
-    const diff = runner("git", ["diff", "--name-only", `${read.packet.baselineSha}...${candidateSha}`], root);
+    const diff = runner(
+      "git",
+      ["diff", "--name-only", `${read.packet.baselineSha}...${candidateSha}`],
+      root,
+    );
     if (diff.status !== 0) {
       return envelope("agent-verification", "error", started, { root, packetPath, candidateSha }, [
-        { code: "verification-diff-unavailable", message: diff.stderr || "Cannot enumerate changes" },
+        {
+          code: "verification-diff-unavailable",
+          message: diff.stderr || "Cannot enumerate changes",
+        },
       ]);
     }
     mergeVerification = selectMergeVerification(
-      root, candidateSha, diff.stdout.split(/\r?\n/).filter(Boolean), product, runner,
+      root,
+      candidateSha,
+      diff.stdout.split(/\r?\n/).filter(Boolean),
+      product,
+      runner,
     );
   }
   // Canonical capability execution remains authoritative; the affected list is a
@@ -517,7 +528,10 @@ export function agentVerificationCommand(
       }
     } catch (error) {
       return envelope("agent-verification", "error", started, { root, packetPath, candidateSha }, [
-        { code: "verification-capability-discovery-failed", message: error instanceof Error ? error.message : String(error) },
+        {
+          code: "verification-capability-discovery-failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
       ]);
     }
   }
@@ -560,50 +574,78 @@ export function agentVerificationCommand(
   const contractDiagnostics: Diagnostic[] = [];
   if (product) {
     const newTests = runner(
-      "git", ["diff", "--diff-filter=A", "--name-only", `${read.packet.baselineSha}...${candidateSha}`], root,
+      "git",
+      ["diff", "--diff-filter=A", "--name-only", `${read.packet.baselineSha}...${candidateSha}`],
+      root,
     );
     if (newTests.status !== 0) {
-      return envelope("agent-verification", "error", started, { root, packetPath, candidateSha, results }, [
-        { code: "verification-added-tests-unavailable", message: newTests.stderr || "Cannot enumerate new tests" },
-      ]);
-    }
-    const requiredFiles = [...new Set([
-      ...product.contracts.map((reference) => reference.path),
-      ...newTests.stdout.split(/\r?\n/).filter((path) => /(?:\.test|_test|\.spec|_spec)\.(?:[cm]?[jt]sx?)$/i.test(path)),
-    ])].sort();
-    for (const path of requiredFiles) {
-      const declaredCapability = product.contracts.find((contract) => contract.path === path)?.capability;
-      const discovered = results.some((entry) =>
-        (!declaredCapability || entry.capability === declaredCapability) &&
-        entry.result.status === "passed" &&
-        Array.isArray(entry.result.data.results) &&
-        (entry.result.data.results as Array<{ path: string; testDiscovery?: {
-          status: string; truncated: boolean; discoveredFiles: string[] | null;
-        } }>).some((check) =>
-          check.testDiscovery?.status === "available" &&
-          check.testDiscovery.truncated === false &&
-          check.testDiscovery.discoveredFiles?.some((local) =>
-            resolve(root, check.path, local) === resolve(root, path),
-          ),
-        ),
+      return envelope(
+        "agent-verification",
+        "error",
+        started,
+        { root, packetPath, candidateSha, results },
+        [
+          {
+            code: "verification-added-tests-unavailable",
+            message: newTests.stderr || "Cannot enumerate new tests",
+          },
+        ],
       );
-      if (!discovered) contractDiagnostics.push({
-        code: "verification-acceptance-test-unproven",
-        path,
-        message: "No passed capability proves this new or pinned acceptance test was executed",
-      });
+    }
+    const requiredFiles = [
+      ...new Set([
+        ...product.contracts.map((reference) => reference.path),
+        ...newTests.stdout
+          .split(/\r?\n/)
+          .filter((path) => /(?:\.test|_test|\.spec|_spec)\.(?:[cm]?[jt]sx?)$/i.test(path)),
+      ]),
+    ].sort();
+    for (const path of requiredFiles) {
+      const declaredCapability = product.contracts.find(
+        (contract) => contract.path === path,
+      )?.capability;
+      const discovered = results.some(
+        (entry) =>
+          (!declaredCapability || entry.capability === declaredCapability) &&
+          entry.result.status === "passed" &&
+          Array.isArray(entry.result.data.results) &&
+          (
+            entry.result.data.results as Array<{
+              path: string;
+              testDiscovery?: {
+                status: string;
+                truncated: boolean;
+                discoveredFiles: string[] | null;
+              };
+            }>
+          ).some(
+            (check) =>
+              check.testDiscovery?.status === "available" &&
+              check.testDiscovery.truncated === false &&
+              check.testDiscovery.discoveredFiles?.some(
+                (local) => resolve(root, check.path, local) === resolve(root, path),
+              ),
+          ),
+      );
+      if (!discovered)
+        contractDiagnostics.push({
+          code: "verification-acceptance-test-unproven",
+          path,
+          message: "No passed capability proves this new or pinned acceptance test was executed",
+        });
     }
   }
   const statuses = results.map((entry) => entry.result.status);
-  const status: ResultStatus = contractDiagnostics.length > 0
-    ? "unavailable"
-    : statuses.includes("error")
-    ? "error"
-    : statuses.includes("failed")
-      ? "failed"
-      : statuses.includes("unavailable")
-        ? "unavailable"
-        : "passed";
+  const status: ResultStatus =
+    contractDiagnostics.length > 0
+      ? "unavailable"
+      : statuses.includes("error")
+        ? "error"
+        : statuses.includes("failed")
+          ? "failed"
+          : statuses.includes("unavailable")
+            ? "unavailable"
+            : "passed";
   const diagnostics = [
     ...contractDiagnostics,
     ...results.flatMap((entry) =>
@@ -632,9 +674,13 @@ export function agentVerificationCommand(
       },
       evidencePlan,
       mergeVerification: mergeVerification ?? {
-        mode: "full-required", reason: "legacy-packet-no-dependency-proof",
-        sourceRevision: candidateSha, selectedTests: [], coreSmokeCapabilities: [],
-        coverageBasis: "unproven", execution: "full-capability-checks",
+        mode: "full-required",
+        reason: "legacy-packet-no-dependency-proof",
+        sourceRevision: candidateSha,
+        selectedTests: [],
+        coreSmokeCapabilities: [],
+        coverageBasis: "unproven",
+        execution: "full-capability-checks",
       },
       independence: {
         claim: product?.independentAgentClaim ?? null,
@@ -815,7 +861,9 @@ export function agentHandoffCommand(
     verification: verificationSummary,
     mergeVerification: verification.report.data.mergeVerification ?? null,
     independence: verification.report.data.independence ?? {
-      claim: null, status: "not-claimed", machineVerified: false,
+      claim: null,
+      status: "not-claimed",
+      machineVerified: false,
     },
     environment: verification.report.data.environment ?? null,
     semanticReview: {
