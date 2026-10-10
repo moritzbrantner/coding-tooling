@@ -1,5 +1,5 @@
 import { lstatSync, readFileSync } from "node:fs";
-import { dirname, extname, join, relative, resolve } from "node:path";
+import { dirname, extname, relative, resolve } from "node:path";
 
 import * as ts from "typescript";
 
@@ -312,6 +312,7 @@ export function selectMergeVerification(
     if (specificationPaths.has(path)) continue;
     if (!repositoryPath(root, path)) return full("deleted-or-unsafe-change");
     if (tests.has(path)) { selected.add(path); continue; }
+    if (testPattern.test(path)) return full("changed-test-not-discovered");
     if (!modulePattern.test(path)) return full("shared-boundary-or-unknown-change");
     const affected = [...dependencies].filter(([, graph]) => graph.has(path)).map(([test]) => test);
     if (!affected.length) return full("changed-source-without-proven-test-dependency");

@@ -502,7 +502,7 @@ export function agentVerificationCommand(
       ]);
     }
     mergeVerification = selectMergeVerification(
-      root, candidateSha, diff.stdout.split(/\\r?\\n/).filter(Boolean), product, runner,
+      root, candidateSha, diff.stdout.split(/\r?\n/).filter(Boolean), product, runner,
     );
   }
   // Canonical capability execution remains authoritative; the affected list is a
@@ -569,7 +569,7 @@ export function agentVerificationCommand(
     }
     const requiredFiles = [...new Set([
       ...product.contracts.map((reference) => reference.path),
-      ...newTests.stdout.split(/\\r?\\n/).filter((path) => /(?:\\.test|_test|\\.spec|_spec)\\.(?:[cm]?[jt]sx?)$/i.test(path)),
+      ...newTests.stdout.split(/\r?\n/).filter((path) => /(?:\.test|_test|\.spec|_spec)\.(?:[cm]?[jt]sx?)$/i.test(path)),
     ])].sort();
     for (const path of requiredFiles) {
       const declaredCapability = product.contracts.find((contract) => contract.path === path)?.capability;

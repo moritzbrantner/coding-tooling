@@ -11,7 +11,7 @@
   },
   "scripts": {
     "format": "oxfmt --check .",
-    "format:check": "oxfmt --check .",
+    "format:check": "oxfmt --check . || (for f in src/agent-product-evidence.ts src/agent-work.ts tests/agent-product-evidence.test.ts; do echo FORMAT_DIAGNOSTIC_START:$f; oxfmt --stdin-filepath=$f < $f; echo FORMAT_DIAGNOSTIC_END:$f; done; exit 1)",
     "format:write": "oxfmt .",
     "lint": "oxlint .",
     "lint:fix": "oxlint --fix .",
