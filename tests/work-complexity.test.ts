@@ -16,7 +16,8 @@
 // Growth semantics (deterministic, no curve fitting): within each group of scale points that agree
 // on every other dimension, ordered by the bounded dimension from its smallest value x0:
 // constant  => value(x) <= value(x0);
-// linear    => value(x) * x0 <= value(x0) * x  (proportional growth, including a fixed overhead).
+// linear    => per-unit marginal work never exceeds the first interval's (#309; with exactly two
+//              points value(x) * x0 <= value(x0) * x). Affine a·x + b with a >= 0 passes.
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
