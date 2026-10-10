@@ -475,7 +475,8 @@ export function agentVerificationCommand(
       [
         {
           code: "verification-source-revision-mismatch",
-          message: "Product verification requires the checkout HEAD to equal the candidate revision",
+          message:
+            "Product verification requires the checkout HEAD to equal the candidate revision",
         },
       ],
     );
