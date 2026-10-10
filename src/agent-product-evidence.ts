@@ -35,6 +35,15 @@ export type MergeVerificationDecision = {
 const shaPattern = /^[0-9a-f]{40}$/i;
 const testPattern = /(?:\.test|_test|\.spec|_spec)\.(?:[cm]?[jt]sx?)$/i;
 const modulePattern = /\.(?:[cm]?[jt]sx?)$/i;
+const unresolvedModuleLoaders = new Set([
+  "vi.mock",
+  "vi.doMock",
+  "jest.mock",
+  "jest.doMock",
+  "jest.unstable_mockModule",
+  "Bun.mock.module",
+  "require.resolve",
+]);
 
 function sorted(values: string[]): string[] {
   return [...new Set(values)].sort();
@@ -260,6 +269,7 @@ function specifiers(file: string, content: string): string[] | null {
       if (ts.isLiteralTypeNode(node.argument)) add(node.argument.literal);
       else unsupported = true;
     } else if (ts.isCallExpression(node)) {
+      if (unresolvedModuleLoaders.has(node.expression.getText(parsed))) unsupported = true;
       if (
         node.expression.kind === ts.SyntaxKind.ImportKeyword ||
         (ts.isIdentifier(node.expression) && node.expression.text === "require")
@@ -362,14 +372,18 @@ export function selectMergeVerification(
   } catch {
     return full("capability-discovery-unavailable");
   }
-  // The native inventory below covers only the plain test capability.
-  // Additional test tiers may exercise paths absent from that inventory.
+  // The inventory covers one test command per component. Other tiers need full
+  // verification unless their argv are identical aliases of that command.
   if (
-    components.some((component) =>
-      Object.keys(component.capabilities).some(
-        (capability) => capability !== "test" && isTestCapability(capability as Capability),
-      ),
-    )
+    components.some((component) => {
+      const generic = component.capabilities.test;
+      return Object.entries(component.capabilities).some(
+        ([capability, command]) =>
+          capability !== "test" &&
+          isTestCapability(capability as Capability) &&
+          (!generic || JSON.stringify(command) !== JSON.stringify(generic)),
+      );
+    })
   )
     return full("additional-test-capabilities-unmapped");
   const tests = new Set<string>();
