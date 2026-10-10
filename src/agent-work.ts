@@ -515,12 +515,18 @@ export function agentVerificationCommand(
     runner("git", ["merge-base", "--is-ancestor", read.packet.baselineSha, candidateSha], root)
       .status !== 0
   ) {
-    return envelope("agent-verification", "unavailable", started, { root, packetPath, candidateSha }, [
-      {
-        code: "verification-baseline-not-ancestor",
-        message: "Product verification requires the baseline to be an ancestor of the candidate",
-      },
-    ]);
+    return envelope(
+      "agent-verification",
+      "unavailable",
+      started,
+      { root, packetPath, candidateSha },
+      [
+        {
+          code: "verification-baseline-not-ancestor",
+          message: "Product verification requires the baseline to be an ancestor of the candidate",
+        },
+      ],
+    );
   }
   const evidencePlan = packetEvidencePlan(read.packet);
   const referenceDiagnostics = product
@@ -664,7 +670,10 @@ export function agentVerificationCommand(
               testScope?: { status: string };
             }>
           ).some((check) => {
-            if (check.testDiscovery?.status !== "available" || check.testScope?.status !== "matched")
+            if (
+              check.testDiscovery?.status !== "available" ||
+              check.testScope?.status !== "matched"
+            )
               return false;
             const cwd = resolve(root, check.path);
             const local = relative(cwd, resolve(root, path)).replaceAll("\\", "/");
@@ -689,7 +698,9 @@ export function agentVerificationCommand(
               excludedSubtrees,
               requiredFiles: [local],
             });
-            return evidence?.status === "available" && evidence.provenRequestedFiles?.includes(local);
+            return (
+              evidence?.status === "available" && evidence.provenRequestedFiles?.includes(local)
+            );
           }),
       );
       if (!discovered)
