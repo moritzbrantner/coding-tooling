@@ -60,12 +60,18 @@ Version 2 is version 1 plus optional `operations`. Version 1 contracts remain va
 
 ## Growth semantics
 
-Samples are grouped so that each group agrees on every dimension except the bounded one. Within each group, x0 is the smallest value of the bounded dimension and v(x) is the counter:
+Samples are grouped so that each group agrees on every dimension except the bounded one. Within each group, the points are ordered by the bounded dimension, x0 < x1 < … < xk, and v(x) is the counter (a non-negative integer):
 
-- `constant`: v(x) ≤ v(x0).
-- `linear`: v(x) · x0 ≤ v(x0) · x. This accepts proportional work with a fixed overhead (for example `2N + 7`) and rejects `N log N` and `N²` growth between the declared points.
+- `constant`: v(xi) ≤ v(x0) for every i.
+- `linear` with three or more points in the group: the per-unit marginal work of every later interval does not exceed the first interval's marginal rate. For every i ≥ 1:
 
-When v(x0) is 0, a `linear` bound therefore requires 0 at every larger point of the group. Groups with a single point add no growth check. Comparisons use exact integer arithmetic. A budget is checked at every scale point. Each growth bound and each budget is reported as a separate check `{ metric, kind, dimension?, bound?, max?, state, violations }`, so a regression names the exact metric and dimension.
+  (v(x[i+1]) − v(x[i])) · (x1 − x0) ≤ max(v(x1) − v(x0), 0) · (x[i+1] − x[i])
+
+  This accepts every affine count a·x + b with a ≥ 0, whatever the sign of b (for example `2N + 7`, `2N − 1` and `5N − 4`), and concave growth. It rejects `N log N`, `N²` and any sequence whose marginal work increases between the declared points. When the first interval is flat or decreasing, the reference rate is 0, so later intervals may only stay flat or decrease.
+
+- `linear` with exactly two points in the group: there is only one interval, so the ratio test v(x1) · x0 ≤ v(x0) · x1 applies. It accepts proportional work and work with a non-negative fixed overhead and rejects super-linear growth between the two points. When v(x0) is 0, it requires v(x1) to be 0.
+
+Groups with a single point add no growth check. Comparisons use exact integer arithmetic (BigInt), so products of large counters and scale values do not overflow or round. A budget is checked at every scale point. Each growth bound and each budget is reported as a separate check `{ metric, kind, dimension?, bound?, max?, state, violations }`, so a regression names the exact metric and dimension. A growth violation names the failing `point` and `value` and the group's smallest point as `baseline` and `baselineValue`; a marginal-rate `linear` violation (three or more points) also names the start of the failing interval as `previous` and `previousValue`.
 
 The checks cover the declared scale points only. They are executable architectural budgets, not a proof of asymptotic complexity between or beyond those points.
 

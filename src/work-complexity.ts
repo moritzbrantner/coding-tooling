@@ -26,6 +26,12 @@ type Violation = {
   /** The smallest point of the group for a growth bound; absent for a budget. */
   baseline?: Point;
   baselineValue?: number;
+  /**
+   * For a `linear` marginal-rate violation (groups of three or more points): the preceding point
+   * of the interval whose per-unit marginal work exceeded the first interval's rate.
+   */
+  previous?: Point;
+  previousValue?: number;
 };
 export type WorkCheck = {
   metric: string;
@@ -262,9 +268,17 @@ function parseEvidence(
 }
 
 /**
- * Within every group of samples that agree on all other dimensions, compare each sample with the
- * group's smallest value x0 of the bounded dimension:
- * constant => v(x) <= v(x0); linear => v(x) * x0 <= v(x0) * x (exact integer arithmetic).
+ * Within every group of samples that agree on all other dimensions, order the group by the bounded
+ * dimension x0 < x1 < … < xk and let v(x) be the counter (a non-negative integer). All comparisons
+ * use exact BigInt arithmetic.
+ *
+ * - constant: v(xi) <= v(x0) for every i.
+ * - linear, two points: v(x1) * x0 <= v(x0) * x1 (the ratio test).
+ * - linear, three or more points: the per-unit marginal work of every later interval must not
+ *   exceed the first interval's, i.e. for every i >= 1
+ *   (v(x[i+1]) - v(x[i])) * (x1 - x0) <= max(v(x1) - v(x0), 0) * (x[i+1] - x[i]).
+ *   This accepts every affine a*x + b with a >= 0, whatever the sign of b, and concave growth,
+ *   and rejects growth whose marginal work increases (N log N, N²).
  */
 function growthCheck(
   operation: WorkOperation,
@@ -282,23 +296,38 @@ function growthCheck(
   const violations: Violation[] = [];
   for (const group of groups.values()) {
     if (group.length < 2) continue;
-    const ordered = group.reduce((smallest, sample) =>
-      sample.dimensions[dimension]! < smallest.dimensions[dimension]! ? sample : smallest,
+    // Points within a group differ only in the bounded dimension, so its values are distinct.
+    const ordered = [...group].sort(
+      (left, right) => left.dimensions[dimension]! - right.dimensions[dimension]!,
     );
-    const x0 = BigInt(ordered.dimensions[dimension]!);
-    const v0 = BigInt(ordered.metrics[metric]!);
-    for (const sample of group) {
-      if (sample === ordered) continue;
-      const x = BigInt(sample.dimensions[dimension]!);
-      const v = BigInt(sample.metrics[metric]!);
-      const within = bound === "constant" ? v <= v0 : v * x0 <= v0 * x;
-      if (!within)
-        violations.push({
-          point: sample.dimensions,
-          value: sample.metrics[metric]!,
-          baseline: ordered.dimensions,
-          baselineValue: ordered.metrics[metric]!,
-        });
+    const x = ordered.map((sample) => BigInt(sample.dimensions[dimension]!));
+    const v = ordered.map((sample) => BigInt(sample.metrics[metric]!));
+    const first = ordered[0]!;
+    const violation = (index: number, previous?: Sample): Violation => ({
+      point: ordered[index]!.dimensions,
+      value: ordered[index]!.metrics[metric]!,
+      baseline: first.dimensions,
+      baselineValue: first.metrics[metric]!,
+      ...(previous === undefined
+        ? {}
+        : { previous: previous.dimensions, previousValue: previous.metrics[metric]! }),
+    });
+    if (bound === "constant") {
+      for (let index = 1; index < ordered.length; index++)
+        if (v[index]! > v[0]!) violations.push(violation(index));
+    } else if (ordered.length === 2) {
+      if (v[1]! * x[0]! > v[0]! * x[1]!) violations.push(violation(1));
+    } else {
+      // A decreasing first interval would make every later flat interval fail; a non-negative
+      // reference rate keeps "drops, then stays flat" within the bound (it is still bounded by v(x1)).
+      const firstWork = v[1]! > v[0]! ? v[1]! - v[0]! : 0n;
+      const firstSpan = x[1]! - x[0]!;
+      for (let index = 1; index + 1 < ordered.length; index++) {
+        const work = v[index + 1]! - v[index]!;
+        const span = x[index + 1]! - x[index]!;
+        if (work * firstSpan > firstWork * span)
+          violations.push(violation(index + 1, ordered[index]!));
+      }
     }
   }
   return {
