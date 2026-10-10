@@ -1,13 +1,26 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 
-import { check } from "./core.ts";
+import { check, declaredComponents } from "./core.ts";
+import {
+  normalizeProductAcceptance,
+  selectMergeVerification,
+  validateProductReferences,
+  type ProductAcceptance,
+  type MergeVerificationDecision,
+} from "./agent-product-evidence.ts";
 import { expectedEnvironmentFingerprint } from "./environment-fingerprint.ts";
 import { findingsCommand } from "./expectations.ts";
 import { parseAuthorityBoundaries } from "./fleet-authority-graph.ts";
 import type { Capability, Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { capabilities } from "./model.ts";
+import { collectTestDiscoveryEvidence, isolatedTestCommand } from "./test-discovery-evidence.ts";
+import {
+  collectTestExecutionEvidence,
+  isTestCapability,
+  resolveTestRunner,
+} from "./test-execution-evidence.ts";
 import { remediationPlanCommand } from "./remediation-plan.ts";
 import {
   forbiddenAuthorityClaims,
@@ -23,6 +36,7 @@ export const AGENT_HANDOFF_VERSION = "coding-tooling/agent-handoff/v1" as const;
 
 export const changeKinds = [
   "behavior",
+  "architecture",
   "refactor",
   "performance",
   "protocol",
@@ -50,6 +64,7 @@ export type TaskPacket = {
   acceptance?: {
     requiredCapabilities?: Capability[];
     reviewRequirements?: string[];
+    product?: ProductAcceptance;
   };
   integrationCondition?: string;
 };
@@ -71,6 +86,10 @@ type VerificationReport = ResultEnvelope<Record<string, unknown>> & {
 };
 
 const kindEvidence: Record<ChangeKind, EvidencePlan> = {
+  architecture: {
+    requiredCapabilities: ["test"],
+    reviewRequirements: [],
+  },
   behavior: {
     requiredCapabilities: ["test"],
     reviewRequirements: [],
@@ -206,6 +225,7 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
 
   let requiredCapabilities: Capability[] = [];
   let reviewRequirements: string[] = [];
+  let product: ProductAcceptance | undefined;
   if (source.acceptance !== undefined) {
     if (
       !source.acceptance ||
@@ -231,6 +251,11 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
         } else {
           requiredCapabilities = rawCapabilities as Capability[];
         }
+      }
+      if (acceptance.product !== undefined) {
+        const parsed = normalizeProductAcceptance(acceptance.product);
+        diagnostics.push(...parsed.diagnostics);
+        product = parsed.product;
       }
       if (acceptance.reviewRequirements !== undefined) {
         const evidence = stringArray(acceptance.reviewRequirements);
@@ -272,16 +297,39 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
     outOfScope,
     changeKinds: uniqueSorted(kinds),
   };
-  if (requiredCapabilities.length > 0 || reviewRequirements.length > 0) {
+  if (requiredCapabilities.length > 0 || reviewRequirements.length > 0 || product) {
     packet.acceptance = {};
     if (requiredCapabilities.length > 0)
       packet.acceptance.requiredCapabilities = requiredCapabilities;
     if (reviewRequirements.length > 0) packet.acceptance.reviewRequirements = reviewRequirements;
+    if (product) packet.acceptance.product = product;
   }
   if (integrationCondition) packet.integrationCondition = integrationCondition;
 
   const digest = createHash("sha256").update(JSON.stringify(packet)).digest("hex");
   return { packet, digest, diagnostics: [] };
+}
+
+function packetEvidencePlan(packet: TaskPacket): EvidencePlan {
+  const product = packet.acceptance?.product;
+  return evidenceForChangeKinds(
+    packet.changeKinds,
+    [
+      ...(packet.acceptance?.requiredCapabilities ?? []),
+      ...(product?.coreSmokeCapabilities ?? []),
+      ...(product?.contracts.map((contract) => contract.capability) ?? []),
+    ],
+    packet.acceptance?.reviewRequirements ?? [],
+  );
+}
+
+function independenceFromPacket(packet: TaskPacket) {
+  const claim = packet.acceptance?.product?.independentAgentClaim ?? null;
+  return {
+    claim,
+    status: claim ? "claimed-unverified" : "not-claimed",
+    machineVerified: false,
+  };
 }
 
 function readTaskPacket(root: string, packetPath: string): PacketRead {
@@ -353,6 +401,80 @@ function envelope(
   };
 }
 
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(
+          Object.entries(entry as Record<string, unknown>).sort(([left], [right]) =>
+            left.localeCompare(right),
+          ),
+        )
+      : entry,
+  );
+}
+
+/** Packets without product acceptance carry no dependency proof: always full verification. */
+function legacyMergeVerification(candidateSha: string) {
+  return {
+    mode: "full-required" as const,
+    reason: "legacy-packet-no-dependency-proof",
+    sourceRevision: candidateSha,
+    selectedTests: [] as string[],
+    coreSmokeCapabilities: [] as string[],
+    coverageBasis: "unproven" as const,
+    execution: "full-capability-checks" as const,
+  };
+}
+
+function exactCheckout(root: string, sha: string, runner: Runner): boolean {
+  const checkout = runner("git", ["rev-parse", "HEAD"], root);
+  return checkout.status === 0 && checkout.stdout.trim().toLowerCase() === sha;
+}
+
+/**
+ * Verify that at least one behavioral test case in the required file really ran,
+ * rather than relying on native discovery alone.
+ */
+function verifyAcceptanceFileExecution(
+  cwd: string,
+  local: string,
+  capability: Capability,
+  command: string[],
+): boolean {
+  const resolution = resolveTestRunner(cwd, command);
+  if (!resolution.command) return false;
+  const isolated = isolatedTestCommand(resolution.command, local);
+  if (!isolated) return false;
+  const discovered = collectTestDiscoveryEvidence({
+    cwd,
+    capability,
+    command: isolated,
+    requiredFiles: [local],
+  });
+  if (
+    discovered?.status !== "available" ||
+    discovered.discoveredFileCount !== 1 ||
+    !discovered.provenRequestedFiles?.includes(local)
+  )
+    return false;
+  const executed = runCommand(isolated[0]!, isolated.slice(1), cwd);
+  if (executed.error || executed.status !== 0) return false;
+  const evidence = collectTestExecutionEvidence({
+    cwd,
+    capability,
+    command: isolated,
+    stdout: executed.stdout,
+    stderr: executed.stderr,
+  });
+  return (
+    evidence?.status === "available" &&
+    evidence.passedCases !== null &&
+    evidence.passedCases > 0 &&
+    evidence.failedCases === 0 &&
+    evidence.executedFiles === 1
+  );
+}
+
 function cleanWorktree(root: string, runner: Runner): { clean?: boolean; diagnostic?: Diagnostic } {
   const result = runner("git", ["status", "--porcelain"], root);
   if (result.status !== 0) {
@@ -375,11 +497,7 @@ export function taskPacketCommand(
   if (!read.packet || !read.digest) {
     return envelope("agent-task-packet", "failed", started, { root, packetPath }, read.diagnostics);
   }
-  const evidencePlan = evidenceForChangeKinds(
-    read.packet.changeKinds,
-    read.packet.acceptance?.requiredCapabilities ?? [],
-    read.packet.acceptance?.reviewRequirements ?? [],
-  );
+  const evidencePlan = packetEvidencePlan(read.packet);
   return envelope("agent-task-packet", "passed", started, {
     root,
     packetPath,
@@ -430,6 +548,22 @@ export function agentVerificationCommand(
       },
     ]);
   }
+  const product = read.packet.acceptance?.product;
+  if (product && !exactCheckout(root, candidateSha, runner)) {
+    return envelope(
+      "agent-verification",
+      "unavailable",
+      started,
+      { root, packetPath, candidateSha },
+      [
+        {
+          code: "verification-source-revision-mismatch",
+          message:
+            "Product verification requires the checkout HEAD to equal the candidate revision",
+        },
+      ],
+    );
+  }
   const baselineExists = runner(
     "git",
     ["cat-file", "-e", `${read.packet.baselineSha}^{commit}`],
@@ -449,17 +583,86 @@ export function agentVerificationCommand(
       ],
     );
   }
-  const evidencePlan = evidenceForChangeKinds(
-    read.packet.changeKinds,
-    read.packet.acceptance?.requiredCapabilities ?? [],
-    read.packet.acceptance?.reviewRequirements ?? [],
-  );
-  const results = evidencePlan.requiredCapabilities.map((capability) => ({
+  if (
+    product &&
+    runner("git", ["merge-base", "--is-ancestor", read.packet.baselineSha, candidateSha], root)
+      .status !== 0
+  ) {
+    return envelope(
+      "agent-verification",
+      "unavailable",
+      started,
+      { root, packetPath, candidateSha },
+      [
+        {
+          code: "verification-baseline-not-ancestor",
+          message: "Product verification requires the baseline to be an ancestor of the candidate",
+        },
+      ],
+    );
+  }
+  const evidencePlan = packetEvidencePlan(read.packet);
+  const referenceDiagnostics = product
+    ? validateProductReferences(root, product, candidateSha, runner)
+    : [];
+  if (referenceDiagnostics.length) {
+    return envelope(
+      "agent-verification",
+      "unavailable",
+      started,
+      { root, packetPath, candidateSha, referenceValidation: "failed" },
+      referenceDiagnostics,
+    );
+  }
+  let mergeVerification: MergeVerificationDecision | null = null;
+  if (product) {
+    const diff = runner(
+      "git",
+      ["diff", "--name-only", `${read.packet.baselineSha}...${candidateSha}`],
+      root,
+    );
+    if (diff.status !== 0) {
+      return envelope("agent-verification", "error", started, { root, packetPath, candidateSha }, [
+        {
+          code: "verification-diff-unavailable",
+          message: diff.stderr || "Cannot enumerate changes",
+        },
+      ]);
+    }
+    mergeVerification = selectMergeVerification(
+      root,
+      candidateSha,
+      diff.stdout.split(/\r?\n/).filter(Boolean),
+      product,
+      runner,
+    );
+  }
+  // Canonical capability execution remains authoritative; the affected list is a
+  // deterministic minimum, not a substitute for running the repository's existing gates.
+  const requiredCapabilities = new Set(evidencePlan.requiredCapabilities);
+  if (product && mergeVerification?.mode === "full-required") {
+    try {
+      for (const component of declaredComponents(root)) {
+        for (const capability of Object.keys(component.capabilities) as Capability[]) {
+          if (isTestCapability(capability)) requiredCapabilities.add(capability);
+        }
+      }
+    } catch (error) {
+      return envelope("agent-verification", "error", started, { root, packetPath, candidateSha }, [
+        {
+          code: "verification-capability-discovery-failed",
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ]);
+    }
+  }
+  const results = [...requiredCapabilities].sort().map((capability) => ({
     capability,
     result: check(root, capability),
   }));
+  if (mergeVerification) mergeVerification.execution = "full-capability-checks";
   const endingSha = sourceRevision(root, runner);
-  if (endingSha !== candidateSha) {
+  if (endingSha !== candidateSha || (product && !exactCheckout(root, candidateSha, runner))) {
     return envelope(
       "agent-verification",
       "unavailable",
@@ -489,20 +692,149 @@ export function agentVerificationCommand(
       ],
     );
   }
+  const contractDiagnostics: Diagnostic[] = [];
+  if (product) {
+    const newTests = runner(
+      "git",
+      // Added, copied and renamed destinations are all newly introduced test paths.
+      [
+        "diff",
+        "--diff-filter=ACR",
+        "--find-renames",
+        "--find-copies",
+        "--name-only",
+        `${read.packet.baselineSha}...${candidateSha}`,
+      ],
+      root,
+    );
+    if (newTests.status !== 0) {
+      return envelope(
+        "agent-verification",
+        "error",
+        started,
+        { root, packetPath, candidateSha, results },
+        [
+          {
+            code: "verification-added-tests-unavailable",
+            message: newTests.stderr || "Cannot enumerate new tests",
+          },
+        ],
+      );
+    }
+    const requiredFiles = [
+      ...new Set([
+        ...product.contracts.map((reference) => reference.path),
+        ...newTests.stdout
+          .split(/\r?\n/)
+          .filter((path) => /(?:\.test|_test|\.spec|_spec)\.(?:[cm]?[jt]sx?)$/i.test(path)),
+      ]),
+    ].sort();
+    const componentPaths = declaredComponents(root).map((component) => component.path);
+    for (const path of requiredFiles) {
+      const declaredCapability = product.contracts.find(
+        (contract) => contract.path === path,
+      )?.capability;
+      const discovered = results.some(
+        (entry) =>
+          (!declaredCapability || entry.capability === declaredCapability) &&
+          entry.result.status === "passed" &&
+          Array.isArray(entry.result.data.results) &&
+          (
+            entry.result.data.results as Array<{
+              path: string;
+              command: string[];
+              testDiscovery?: {
+                status: string;
+                truncated: boolean;
+                discoveredFiles: string[] | null;
+              };
+              testScope?: { status: string };
+            }>
+          ).some((check) => {
+            if (
+              check.testDiscovery?.status !== "available" ||
+              check.testScope?.status !== "matched"
+            )
+              return false;
+            const cwd = resolve(root, check.path);
+            const local = relative(cwd, resolve(root, path)).replaceAll("\\", "/");
+            if (local.startsWith("../") || local === ".." || local === "") return false;
+            if (check.testDiscovery.discoveredFiles?.includes(local))
+              return verifyAcceptanceFileExecution(cwd, local, entry.capability, check.command);
+            if (!check.testDiscovery.truncated) return false;
+            const prefix = check.path === "." ? "" : check.path + "/";
+            const excludedSubtrees = componentPaths
+              .filter(
+                (componentPath) =>
+                  componentPath !== "." &&
+                  componentPath !== check.path &&
+                  (check.path === "." || componentPath.startsWith(prefix)),
+              )
+              .map((componentPath) =>
+                relative(cwd, resolve(root, componentPath)).replaceAll("\\", "/"),
+              );
+            const evidence = collectTestDiscoveryEvidence({
+              cwd,
+              capability: entry.capability,
+              command: check.command,
+              excludedSubtrees,
+              requiredFiles: [local],
+            });
+            return (
+              evidence?.status === "available" &&
+              evidence.provenRequestedFiles?.includes(local) === true &&
+              verifyAcceptanceFileExecution(cwd, local, entry.capability, check.command)
+            );
+          }),
+      );
+      if (!discovered)
+        contractDiagnostics.push({
+          code: "verification-acceptance-test-unproven",
+          path,
+          message: "No passed capability proves this new or pinned acceptance test was executed",
+        });
+    }
+  }
+  // Isolated acceptance execution can also mutate the checkout.
+  if (product && !exactCheckout(root, candidateSha, runner)) {
+    return envelope(
+      "agent-verification",
+      "unavailable",
+      started,
+      { root, packetPath, candidateSha },
+      [
+        {
+          code: "verification-head-moved",
+          message: "Acceptance verification changed the checkout after canonical tests",
+        },
+      ],
+    );
+  }
+  if (product && cleanWorktree(root, runner).clean !== true) {
+    return envelope("agent-verification", "failed", started, { root, packetPath, candidateSha }, [
+      {
+        code: "verification-mutated-worktree",
+        message: "Acceptance verification changed the worktree",
+      },
+    ]);
+  }
   const statuses = results.map((entry) => entry.result.status);
   const status: ResultStatus = statuses.includes("error")
     ? "error"
     : statuses.includes("failed")
       ? "failed"
-      : statuses.includes("unavailable")
+      : statuses.includes("unavailable") || contractDiagnostics.length > 0
         ? "unavailable"
         : "passed";
-  const diagnostics = results.flatMap((entry) =>
-    entry.result.diagnostics.map((diagnostic) => ({
-      ...diagnostic,
-      message: `${entry.capability}: ${diagnostic.message}`,
-    })),
-  );
+  const diagnostics = [
+    ...contractDiagnostics,
+    ...results.flatMap((entry) =>
+      entry.result.diagnostics.map((diagnostic) => ({
+        ...diagnostic,
+        message: `${entry.capability}: ${diagnostic.message}`,
+      })),
+    ),
+  ];
   const environment = expectedEnvironmentFingerprint(root, "default");
   return envelope(
     "agent-verification",
@@ -521,6 +853,8 @@ export function agentVerificationCommand(
         diagnostics: environment.diagnostics,
       },
       evidencePlan,
+      mergeVerification: mergeVerification ?? legacyMergeVerification(candidateSha),
+      independence: independenceFromPacket(read.packet),
       results,
     },
     diagnostics,
@@ -581,6 +915,14 @@ export function agentHandoffCommand(
       {
         code: "handoff-candidate-not-stable",
         message: "Handoff requires a clean worktree bound to a source revision",
+      },
+    ]);
+  }
+  if (read.packet.acceptance?.product && !exactCheckout(root, candidateSha, runner)) {
+    return envelope("agent-handoff", "unavailable", started, { root, packetPath, candidateSha }, [
+      {
+        code: "handoff-source-revision-mismatch",
+        message: "Product handoff requires the checkout HEAD to equal the candidate revision",
       },
     ]);
   }
@@ -647,6 +989,29 @@ export function agentHandoffCommand(
       },
     ]);
   }
+  const changedFiles = diff.stdout.split(/\r?\n/).filter(Boolean).sort();
+  // A saved report is only bound by status, candidate and packet digest, so the
+  // merge-verification decision is recomputed from the exact candidate instead of
+  // trusting the report's copy; a mismatch means the report was edited or stale.
+  const product = read.packet.acceptance?.product;
+  const mergeVerification = product
+    ? {
+        ...selectMergeVerification(root, candidateSha, changedFiles, product, runner),
+        execution: "full-capability-checks" as const,
+      }
+    : legacyMergeVerification(candidateSha);
+  if (
+    canonicalJson(mergeVerification) !==
+    canonicalJson(verification.report.data.mergeVerification ?? null)
+  ) {
+    return envelope("agent-handoff", "unavailable", started, { root, packetPath, candidateSha }, [
+      {
+        code: "handoff-merge-verification-mismatch",
+        message:
+          "The verification report's merge-verification decision does not match the decision recomputed for this candidate",
+      },
+    ]);
+  }
   const branch = runner("git", ["branch", "--show-current"], root);
   const findings = findingsCommand(root, { includeSuppressed: false });
   const unresolvedFindings = Array.isArray(findings.data.findings)
@@ -691,8 +1056,10 @@ export function agentHandoffCommand(
     baselineSha: read.packet.baselineSha,
     candidateSha,
     branch: branch.status === 0 ? branch.stdout.trim() || null : null,
-    changedFiles: diff.stdout.split(/\r?\n/).filter(Boolean).sort(),
+    changedFiles,
     verification: verificationSummary,
+    mergeVerification,
+    independence: independenceFromPacket(read.packet),
     environment: verification.report.data.environment ?? null,
     semanticReview: {
       required: read.packet.acceptance?.reviewRequirements ?? [],

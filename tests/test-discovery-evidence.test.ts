@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   collectTestDiscoveryEvidence,
+  isolatedTestCommand,
   reconcileTestScope,
 } from "../src/test-discovery-evidence.ts";
 import { collectTestExecutionEvidence } from "../src/test-execution-evidence.ts";
@@ -41,6 +42,40 @@ afterEach(() => {
 });
 
 describe("native test discovery evidence", () => {
+  test("isolates one file by replacing existing positional filters", () => {
+    expect(isolatedTestCommand(["bun", "test", "tests/unit"], "tests/unit/a.test.ts")).toEqual([
+      "bun",
+      "test",
+      "./tests/unit/a.test.ts",
+    ]);
+    expect(
+      isolatedTestCommand(["bun", "test", "--timeout", "5000", "tests/unit"], "tests/a.test.ts"),
+    ).toEqual(["bun", "test", "--timeout", "5000", "./tests/a.test.ts"]);
+    expect(isolatedTestCommand(["bun", "test"], "/abs/a.test.ts")).toEqual([
+      "bun",
+      "test",
+      "/abs/a.test.ts",
+    ]);
+    expect(isolatedTestCommand(["vitest", "run", "--reporter=dot"], "a.test.ts")).toEqual([
+      "vitest",
+      "run",
+      "--reporter=dot",
+      "a.test.ts",
+    ]);
+    expect(isolatedTestCommand(["vitest", "run", "tests/unit"], "a.test.ts")).toBeNull();
+  });
+
+  test("inventories every Bun-supported test module extension", () => {
+    const root = repository();
+    for (const extension of ["js", "jsx", "ts", "tsx", "mjs", "cjs", "mts", "cts"])
+      file(root, `tests/alpha.test.${extension}`);
+    const result = collectTestDiscoveryEvidence(
+      { cwd: root, capability: "test:unit", command: ["bun", "test"] },
+      successfulRunner().run,
+    );
+    expect(result?.conventionalCandidateFileCount).toBe(8);
+  });
+
   test("discovers conventional Bun test files and proves the native dry-run is available", () => {
     const root = repository();
     file(root, "tests/alpha.test.ts");
