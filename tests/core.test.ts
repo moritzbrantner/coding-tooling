@@ -121,6 +121,63 @@ describe("coding-tooling plans", () => {
     expect(plan.missing).toEqual([]);
   });
 
+  test("does not run identical package and workspace root checks twice", () => {
+    const root = repository();
+    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = []\nresolver = "2"\n');
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { shared: ["lint", "test:unit"] },
+        capabilityCommands: {
+          ".": {
+            lint: ["node", "scripts/lint.mjs"],
+            "test:unit": ["node", "scripts/test.mjs"],
+          },
+        },
+      }),
+    );
+
+    expect(discoverComponents(root).map((component) => component.path)).toEqual([".", "."]);
+    const plan = planChecks({ root, tier: "shared" });
+    expect(plan.checks.map(({ capability, command }) => ({ capability, command }))).toEqual([
+      { capability: "lint", command: ["node", "scripts/lint.mjs"] },
+      { capability: "test:unit", command: ["node", "scripts/test.mjs"] },
+    ]);
+  });
+
+  test("preserves checks with different commands or working directories", () => {
+    const root = repository();
+    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = []\nresolver = "2"\n');
+    addRustComponent(root);
+
+    const plan = planChecks({ root, tier: "full" });
+    expect(
+      plan.checks
+        .filter((check) => check.capability === "lint")
+        .map(({ path, command }) => ({ path, command })),
+    ).toEqual([
+      { path: ".", command: ["npm", "run", "lint"] },
+      {
+        path: ".",
+        command: [
+          "cargo",
+          "clippy",
+          "--workspace",
+          "--all-targets",
+          "--all-features",
+          "--",
+          "-D",
+          "warnings",
+        ],
+      },
+      {
+        path: "crates/backend",
+        command: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+      },
+    ]);
+  });
+
   test("installed conventions can require an additional full-tier capability", () => {
     const root = repository();
     const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
