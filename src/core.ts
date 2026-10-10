@@ -373,11 +373,17 @@ export function planChecks(options: {
   if (options.component && components.length === 0)
     throw new Error(`Unknown component: ${options.component}`);
   const checks: PlannedCheck[] = [];
+  const plannedInvocations = new Set<string>();
   for (const component of components) {
     for (const capability of selected) {
       const command = component.capabilities[capability];
-      if (command)
-        checks.push({ capability, component: component.name, path: component.path, command });
+      if (!command) continue;
+      // Distinct component discoveries may share a working directory and exact command.
+      // Running the same semantic capability twice cannot add independent evidence.
+      const invocation = JSON.stringify([component.path, capability, command]);
+      if (plannedInvocations.has(invocation)) continue;
+      plannedInvocations.add(invocation);
+      checks.push({ capability, component: component.name, path: component.path, command });
     }
   }
 
