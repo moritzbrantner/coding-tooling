@@ -36,6 +36,7 @@ type Options = Record<string, OptionValue>;
 type PlannedCheckView = {
   capability?: unknown;
   component?: unknown;
+  components?: unknown;
 };
 
 function parse(argv: string[]): { command?: string; positional: string[]; options: Options } {
@@ -107,7 +108,13 @@ function reportPullRequestIntegrationStart(
       `  Local ${tier} pipeline: ${checks.length} planned check${checks.length === 1 ? "" : "s"}:`,
     );
     for (const check of checks) {
-      const component = typeof check.component === "string" ? check.component : "repository";
+      const component =
+        Array.isArray(check.components) &&
+        check.components.every((name) => typeof name === "string")
+          ? check.components.join(", ")
+          : typeof check.component === "string"
+            ? check.component
+            : "repository";
       const capability = typeof check.capability === "string" ? check.capability : "unknown";
       console.error(`    - ${component}: ${capability}`);
     }

@@ -121,6 +121,8 @@ export type ToolingConfig = {
 export type PlannedCheck = {
   capability: Capability;
   component: string;
+  /** Every owning component when identical invocations were coalesced; absent for a single owner. */
+  components?: string[];
   path: string;
   command: string[];
 };

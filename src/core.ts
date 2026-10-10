@@ -373,17 +373,29 @@ export function planChecks(options: {
   if (options.component && components.length === 0)
     throw new Error(`Unknown component: ${options.component}`);
   const checks: PlannedCheck[] = [];
-  const plannedInvocations = new Set<string>();
+  // Equivalent discoveries (for example a root package and a root Cargo workspace)
+  // can share a working directory and exact command. Run that invocation once and
+  // keep every owning component in `components` so attribution is not lost.
+  const plannedInvocations = new Map<string, PlannedCheck>();
   for (const component of components) {
     for (const capability of selected) {
       const command = component.capabilities[capability];
       if (!command) continue;
-      // Equivalent discoveries can share an identity, working directory, and command.
-      // Keep checks for distinct component names so attribution remains unchanged.
-      const invocation = JSON.stringify([component.name, component.path, capability, command]);
-      if (plannedInvocations.has(invocation)) continue;
-      plannedInvocations.add(invocation);
-      checks.push({ capability, component: component.name, path: component.path, command });
+      const invocation = JSON.stringify([component.path, capability, command]);
+      const existing = plannedInvocations.get(invocation);
+      if (existing) {
+        const owners = existing.components ?? [existing.component];
+        if (!owners.includes(component.name)) existing.components = [...owners, component.name];
+        continue;
+      }
+      const check: PlannedCheck = {
+        capability,
+        component: component.name,
+        path: component.path,
+        command,
+      };
+      plannedInvocations.set(invocation, check);
+      checks.push(check);
     }
   }
 
