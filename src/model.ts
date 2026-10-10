@@ -22,6 +22,7 @@ export const capabilities = [
   "profile:memory",
   "load:smoke",
   "size:budget",
+  "performance:work",
   "storybook:check",
   "web:audit",
   "template:smoke",
@@ -44,6 +45,7 @@ export type ResultOperation =
   | "repository-evidence"
   | "fleet"
   | "size-evidence"
+  | "work-complexity"
   | "performance-applicability"
   | "fleet-performance-applicability"
   | "fleet-authority-graph"

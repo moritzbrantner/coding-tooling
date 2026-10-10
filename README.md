@@ -40,6 +40,9 @@ coding-tooling conventions check [--json]
 coding-tooling conventions diff [--json]
 coding-tooling conventions update [--json]
 coding-tooling workflow-profile audit [--root <path>] [--json]
+coding-tooling performance size [--root <path>] [--baseline <path>] [--json]
+coding-tooling performance applicability [--root <path>] [--json]
+coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
 ```
 
 `coding-tooling conventions resolve` remains available when callers need direct current-source resolution.

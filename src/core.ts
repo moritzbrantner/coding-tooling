@@ -60,6 +60,7 @@ const scriptCandidates: Record<Capability, string[]> = {
   "profile:memory": ["profile:memory"],
   "load:smoke": ["load:smoke"],
   "size:budget": ["size:budget"],
+  "performance:work": ["performance:work"],
   "storybook:check": ["storybook:check"],
   "web:audit": ["web:audit"],
   "template:smoke": ["template:smoke"],

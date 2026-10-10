@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/coding-tooling/work-evidence.schema.json",
+  "title": "coding-tooling work evidence",
+  "description": "Emitted on stdout by a repository's performance:work capability, or passed with --evidence. Matching against the declared operations and scale points is enforced by src/work-complexity.ts.",
+  "type": "object",
+  "required": ["schemaVersion", "suite", "contractSha256", "operations"],
+  "properties": {
+    "schemaVersion": {
+      "const": "coding-tooling/work-evidence/v1"
+    },
+    "suite": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contractSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "sha256 of the exact .performance/contract.json bytes the evidence was produced for."
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "samples"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "samples": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["dimensions", "metrics"],
+              "properties": {
+                "dimensions": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "metrics": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
