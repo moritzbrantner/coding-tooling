@@ -378,9 +378,9 @@ export function planChecks(options: {
     for (const capability of selected) {
       const command = component.capabilities[capability];
       if (!command) continue;
-      // Distinct component discoveries may share a working directory and exact command.
-      // Running the same semantic capability twice cannot add independent evidence.
-      const invocation = JSON.stringify([component.path, capability, command]);
+      // Equivalent discoveries can share an identity, working directory, and command.
+      // Keep checks for distinct component names so attribution remains unchanged.
+      const invocation = JSON.stringify([component.name, component.path, capability, command]);
       if (plannedInvocations.has(invocation)) continue;
       plannedInvocations.add(invocation);
       checks.push({ capability, component: component.name, path: component.path, command });
