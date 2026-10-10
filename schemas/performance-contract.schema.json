@@ -157,24 +157,30 @@
           },
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           },
           "publicContract": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           },
           "dimensions": {
             "type": "object",
             "minProperties": 1,
             "propertyNames": {
-              "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+              "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+              "not": {
+                "enum": ["constructor", "prototype"]
+              }
             },
             "additionalProperties": {
               "type": "object",
               "properties": {
                 "description": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "\\S"
                 }
               },
               "additionalProperties": false
@@ -201,11 +207,16 @@
               "properties": {
                 "name": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "not": {
+                    "enum": ["__proto__", "constructor", "prototype"]
+                  }
                 },
                 "unit": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "\\S"
                 },
                 "signal": {
                   "enum": [
@@ -248,7 +259,8 @@
                 },
                 "notes": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "\\S"
                 }
               },
               "anyOf": [

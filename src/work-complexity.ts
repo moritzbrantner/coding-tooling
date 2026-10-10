@@ -89,12 +89,26 @@ function only(value: Record<string, unknown>, allowed: string[], where: string):
 }
 
 function collect(root: string, data: WorkComplexityData): string {
-  const component = declaredComponents(root, loadConfig(root)).find((value) => value.path === ".");
-  const command = component?.capabilities[capability];
-  if (!command?.length)
+  // A polyglot root can hold several components at "."; only those exposing the capability count.
+  const commands = declaredComponents(root, loadConfig(root))
+    .filter((value) => value.path === ".")
+    .flatMap((value) => {
+      const declared = value.capabilities[capability];
+      return declared?.length ? [{ name: value.name, command: declared }] : [];
+    });
+  const command = commands[0]?.command;
+  if (!command)
     throw new Unavailable(
-      `The root component declares no ${capability} capability command.`,
+      `No root component declares a ${capability} capability command.`,
       "work-collector-unavailable",
+      ".coding-tooling.json",
+    );
+  if (commands.some((value) => JSON.stringify(value.command) !== JSON.stringify(command)))
+    throw new Unavailable(
+      `Root components declare different ${capability} commands (${commands
+        .map((value) => value.name)
+        .join(", ")}); the collector is ambiguous.`,
+      "work-collector-ambiguous",
       ".coding-tooling.json",
     );
   data.evidence.source = "capability";
@@ -193,7 +207,7 @@ function parseEvidence(
       const dimensions = rawSample.dimensions;
       const metrics = rawSample.metrics;
       only(dimensions, declared.dimensions, `${at}.dimensions`);
-      const point: Point = {};
+      const point: Point = Object.create(null);
       for (const dimension of declared.dimensions) {
         const scale = dimensions[dimension];
         if (typeof scale !== "number")
@@ -213,7 +227,7 @@ function parseEvidence(
         declared.metrics.map((metric) => metric.name),
         `${at}.metrics`,
       );
-      const values: Record<string, number> = {};
+      const values: Record<string, number> = Object.create(null);
       for (const metric of declared.metrics) {
         const observed = metrics[metric.name];
         if (observed === undefined)

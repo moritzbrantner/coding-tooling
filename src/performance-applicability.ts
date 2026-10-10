@@ -250,9 +250,8 @@ function declaresWorkOperations(root: string, diagnostics: Diagnostic[]): boolea
   const file = join(root, performanceContractPath);
   if (!existsSync(file)) return false;
   try {
-    const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
-    if (!record(parsed) || parsed.schemaVersion !== 2) return false;
-    return parsePerformanceContract(parsed).operations.length > 0;
+    // Validate every existing contract (any version) before reading its operations.
+    return parsePerformanceContract(JSON.parse(readFileSync(file, "utf8"))).operations.length > 0;
   } catch (error: unknown) {
     diagnostics.push({
       code: "performance-contract-invalid",
@@ -413,6 +412,11 @@ export function performanceApplicability(
     data.declarationSha256 = declared.sha256;
     const components = declaredComponents(resolvedRoot, loadConfig(resolvedRoot));
     const workOperations = declaresWorkOperations(resolvedRoot, diagnostics);
+    // The contract and its collector belong to the repository root. With several root components,
+    // only those exposing performance:work own the family unless none does (missing wiring).
+    const rootComponents = components.filter((value) => value.path === ".");
+    const collectorRoots = rootComponents.filter((value) => value.capabilities["performance:work"]);
+    const workRoots = new Set(collectorRoots.length ? collectorRoots : rootComponents);
     if (!components.length)
       diagnostics.push({
         code: "performance-components-unavailable",
@@ -442,8 +446,7 @@ export function performanceApplicability(
       ]);
       const selectedRoles = roles.filter((value) => roleSet.has(value));
       const applicable = new Set<Family>(selectedRoles.flatMap((value) => roleFamilies[value]));
-      // The contract and its performance:work collector belong to the repository root.
-      if (workOperations && component.path === ".") applicable.add("work-complexity");
+      if (workOperations && workRoots.has(component)) applicable.add("work-complexity");
       return {
         name: component.name,
         path: component.path,

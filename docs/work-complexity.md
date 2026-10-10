@@ -55,6 +55,7 @@ Version 2 is version 1 plus optional `operations`. Version 1 contracts remain va
 - `dimensions` are named scale dimensions. Each scale point gives one positive integer per dimension, so "vary N with M fixed" and "vary M with N fixed" are both expressible.
 - `signal` must be a deterministic counter signal: `operation-count`, `allocation-count`, `instruction-count`, `cache-event-count`, `memory`, `size` or `custom`. `wall-clock` and `throughput` belong to runtime evidence.
 - Every metric declares an absolute `budget.max`, growth bounds, or both. Each growth bound names exactly one declared dimension. The growth vocabulary is closed: `constant` and `linear`.
+- `__proto__`, `constructor` and `prototype` are reserved metric and dimension names, and optional metric `notes` must be a non-empty string.
 - A growth bound is refused unless some group of scale points varies its dimension while holding the other dimensions fixed.
 
 ## Growth semantics
@@ -70,7 +71,7 @@ The checks cover the declared scale points only. They are executable architectur
 
 ## Evidence: `coding-tooling/work-evidence/v1`
 
-Without `--evidence`, the command runs the root component's `performance:work` capability (a package script or a `capabilityCommands["."]` argv) in the repository root without a shell, and reads the evidence JSON from stdout. With `--evidence`, it reads that file (relative to the current directory) and does not run the collector. See `schemas/work-evidence.schema.json`.
+Without `--evidence`, the command runs the `performance:work` capability of the root component that declares it (when several root components declare different commands, the result is unavailable as ambiguous) (a package script or a `capabilityCommands["."]` argv) in the repository root without a shell, and reads the evidence JSON from stdout. With `--evidence`, it reads that file (relative to the current directory) and does not run the collector. See `schemas/work-evidence.schema.json`.
 
 ```json
 {
@@ -95,7 +96,7 @@ Without `--evidence`, the command runs the root component's `performance:work` c
 The result is `unavailable`, with diagnostics, when any of these holds:
 
 - the contract is missing or invalid, or it declares no operations;
-- the collector is not declared, exits non-zero, is killed, or writes nothing;
+- the collector is not declared, is ambiguous between root components, exits non-zero, is killed, or writes nothing;
 - the evidence is not JSON, has another schema version or unknown fields, names another suite, or carries a stale `contractSha256`;
 - an operation is missing, undeclared or repeated;
 - a scale point is missing, undeclared or repeated;
@@ -103,7 +104,7 @@ The result is `unavailable`, with diagnostics, when any of these holds:
 
 ## Applicability
 
-`performance applicability` reports the `work-complexity` family, backed by the `performance:work` capability, for the repository root component. The family is applicable only when the root contract is schemaVersion 2 and declares at least one operation. The audit does not decide which product operations matter.
+`performance applicability` reports the `work-complexity` family, backed by the `performance:work` capability, for the repository root component. The family is applicable only when the root contract is schemaVersion 2 and declares at least one operation. With several root components, it belongs to those that expose `performance:work`, or to all of them when none does. Every existing contract is validated with the shared parser, so a malformed or unsupported-version contract adds a `performance-contract-invalid` diagnostic. The audit does not decide which product operations matter.
 
 | State                     | Meaning                                                                                                           |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |

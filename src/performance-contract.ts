@@ -73,6 +73,8 @@ function only(value: Record<string, unknown>, allowed: string[], prefix: string)
 }
 
 const kebab = /^[a-z0-9][a-z0-9-]*$/;
+/** Names that would hit inherited accessors when used as plain-object keys. */
+const prototypeSensitive = new Set(["__proto__", "constructor", "prototype"]);
 const identifier = /^[A-Za-z][A-Za-z0-9_]*$/;
 
 /** A canonical, order-independent key for one scale point restricted to `dimensions`. */
@@ -128,7 +130,11 @@ function parseMetric(raw: unknown, prefix: string, dimensions: string[]): WorkMe
   if (!metric) throw new ContractError(`${prefix} must be an object`);
   only(metric, ["name", "unit", "signal", "budget", "growth", "notes"], prefix);
   if (!nonEmptyString(metric.name)) throw new ContractError(`${prefix}.name must be non-empty`);
+  if (prototypeSensitive.has(metric.name))
+    throw new ContractError(`${prefix}.name ${metric.name} is reserved`);
   if (!nonEmptyString(metric.unit)) throw new ContractError(`${prefix}.unit must be non-empty`);
+  if (metric.notes !== undefined && !nonEmptyString(metric.notes))
+    throw new ContractError(`${prefix}.notes must be a non-empty string`);
   if (!workSignals.has(String(metric.signal)))
     throw new ContractError(
       `${prefix}.signal must be a deterministic counter signal (${[...workSignals].join(", ")})`,
@@ -181,7 +187,7 @@ function parseOperation(raw: unknown, prefix: string): WorkOperation {
     throw new ContractError(`${prefix}.dimensions must declare at least one dimension`);
   for (const [name, value] of Object.entries(declaredDimensions)) {
     const dimension = record(value);
-    if (!identifier.test(name) || !dimension)
+    if (!identifier.test(name) || prototypeSensitive.has(name) || !dimension)
       throw new ContractError(`${prefix}.dimensions.${name} must be an identifier with an object`);
     only(dimension, ["description"], `${prefix}.dimensions.${name}`);
     if (dimension.description !== undefined && !nonEmptyString(dimension.description))
@@ -197,7 +203,7 @@ function parseOperation(raw: unknown, prefix: string): WorkOperation {
     const pointPrefix = `${prefix}.scalePoints[${index}]`;
     if (!point) throw new ContractError(`${pointPrefix} must be an object`);
     only(point, dimensions, pointPrefix);
-    const values: Record<string, number> = {};
+    const values: Record<string, number> = Object.create(null);
     for (const dimension of dimensions) {
       const value = point[dimension];
       if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
