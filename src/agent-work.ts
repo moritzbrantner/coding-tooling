@@ -16,7 +16,11 @@ import { parseAuthorityBoundaries } from "./fleet-authority-graph.ts";
 import type { Capability, Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { capabilities } from "./model.ts";
 import { collectTestDiscoveryEvidence } from "./test-discovery-evidence.ts";
-import { isTestCapability } from "./test-execution-evidence.ts";
+import {
+  collectTestExecutionEvidence,
+  isTestCapability,
+  resolveTestRunner,
+} from "./test-execution-evidence.ts";
 import { remediationPlanCommand } from "./remediation-plan.ts";
 import {
   forbiddenAuthorityClaims,
@@ -402,6 +406,49 @@ function exactCheckout(root: string, sha: string, runner: Runner): boolean {
   return checkout.status === 0 && checkout.stdout.trim().toLowerCase() === sha;
 }
 
+/**
+ * Verify that at least one behavioral test case in the required file really ran,
+ * rather than relying on native discovery alone.
+ */
+function verifyAcceptanceFileExecution(
+  cwd: string,
+  local: string,
+  capability: Capability,
+  command: string[],
+): boolean {
+  const resolution = resolveTestRunner(cwd, command);
+  if (!resolution.command) return false;
+  const isolated = [...resolution.command, local];
+  const discovered = collectTestDiscoveryEvidence({
+    cwd,
+    capability,
+    command: isolated,
+    requiredFiles: [local],
+  });
+  if (
+    discovered?.status !== "available" ||
+    discovered.discoveredFileCount !== 1 ||
+    !discovered.provenRequestedFiles?.includes(local)
+  )
+    return false;
+  const executed = runCommand(isolated[0]!, isolated.slice(1), cwd);
+  if (executed.error || executed.status !== 0) return false;
+  const evidence = collectTestExecutionEvidence({
+    cwd,
+    capability,
+    command: isolated,
+    stdout: executed.stdout,
+    stderr: executed.stderr,
+  });
+  return (
+    evidence?.status === "available" &&
+    evidence.passedCases !== null &&
+    evidence.passedCases > 0 &&
+    evidence.failedCases === 0 &&
+    evidence.executedFiles === 1
+  );
+}
+
 function cleanWorktree(root: string, runner: Runner): { clean?: boolean; diagnostic?: Diagnostic } {
   const result = runner("git", ["status", "--porcelain"], root);
   if (result.status !== 0) {
@@ -678,7 +725,8 @@ export function agentVerificationCommand(
             const cwd = resolve(root, check.path);
             const local = relative(cwd, resolve(root, path)).replaceAll("\\", "/");
             if (local.startsWith("../") || local === ".." || local === "") return false;
-            if (check.testDiscovery.discoveredFiles?.includes(local)) return true;
+            if (check.testDiscovery.discoveredFiles?.includes(local))
+              return verifyAcceptanceFileExecution(cwd, local, entry.capability, check.command);
             if (!check.testDiscovery.truncated) return false;
             const prefix = check.path === "." ? "" : check.path + "/";
             const excludedSubtrees = componentPaths
@@ -699,7 +747,9 @@ export function agentVerificationCommand(
               requiredFiles: [local],
             });
             return (
-              evidence?.status === "available" && evidence.provenRequestedFiles?.includes(local)
+              evidence?.status === "available" &&
+              evidence.provenRequestedFiles?.includes(local) === true &&
+              verifyAcceptanceFileExecution(cwd, local, entry.capability, check.command)
             );
           }),
       );
@@ -710,6 +760,23 @@ export function agentVerificationCommand(
           message: "No passed capability proves this new or pinned acceptance test was executed",
         });
     }
+  }
+  // Isolated acceptance execution can also mutate the checkout.
+  if (product && !exactCheckout(root, candidateSha, runner)) {
+    return envelope("agent-verification", "unavailable", started, { root, packetPath, candidateSha }, [
+      {
+        code: "verification-head-moved",
+        message: "Acceptance verification changed the checkout after canonical tests",
+      },
+    ]);
+  }
+  if (product && cleanWorktree(root, runner).clean !== true) {
+    return envelope("agent-verification", "failed", started, { root, packetPath, candidateSha }, [
+      {
+        code: "verification-mutated-worktree",
+        message: "Acceptance verification changed the worktree",
+      },
+    ]);
   }
   const statuses = results.map((entry) => entry.result.status);
   const status: ResultStatus = statuses.includes("error")
