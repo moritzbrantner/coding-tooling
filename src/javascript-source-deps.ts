@@ -4,11 +4,14 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+
+import { canonicalGitRepository as canonicalRepository } from "./shared.ts";
 
 export type JavaScriptSourcePackage = {
   package: string;
@@ -104,14 +107,6 @@ function requireString(value: unknown, message: string): string {
 function record(value: unknown, message: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(message);
   return value as Record<string, unknown>;
-}
-
-function canonicalRepository(git: string): string {
-  return git
-    .trim()
-    .replace(/\.git$/i, "")
-    .replace(/\/$/, "")
-    .toLowerCase();
 }
 
 const upstreamKeys = new Set(["env", "git", "rev", "localPath", "revisionField"]);
@@ -279,7 +274,7 @@ export function parseJavaScriptSourceConfig(
       repository.localPath,
       `JavaScript source repository ${git} requires localPath: ${configPath}`,
     );
-    const repositoryKey = git.replace(/\.git$/i, "").toLowerCase();
+    const repositoryKey = canonicalRepository(git);
     if (seenRepositories.has(repositoryKey)) {
       throw new Error(`JavaScript source repository is declared more than once: ${git}`);
     }
@@ -521,6 +516,10 @@ function manifestField(manifest: unknown, field: string): unknown {
   return current;
 }
 
+function realPath(path: string): string {
+  return existsSync(path) ? realpathSync(path) : path;
+}
+
 /**
  * Validates every declared upstream checkout before any build runs: the checkout must exist
  * locally (never fetched), its HEAD must equal the declared revision, and the wrapper's own
@@ -528,20 +527,24 @@ function manifestField(manifest: unknown, field: string): unknown {
  */
 function resolveUpstreams(root: string, config: JavaScriptSourceConfig): ResolvedUpstream[] {
   const consumerRoot = resolve(root);
+  const realConsumer = realPath(consumerRoot);
   const result: ResolvedUpstream[] = [];
   for (const repository of config.repositories) {
     if (!repository.upstreams?.length) continue;
     const repositoryRoot = resolve(consumerRoot, repository.localPath);
     for (const upstream of repository.upstreams) {
       const sourceDir = resolve(consumerRoot, upstream.localPath);
-      if (sourceDir === consumerRoot || sourceDir === repositoryRoot) {
-        throw new Error(
-          `Upstream ${upstream.git} of ${repository.git} must not resolve to the consumer or wrapper checkout: ${sourceDir}`,
-        );
-      }
       if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) {
         throw new Error(
           `Local upstream ${upstream.git} of ${repository.git} is missing at ${sourceDir}; local-only source mode never fetches repository sources`,
+        );
+      }
+      // Compare real paths so a symlink alias cannot make the consumer or wrapper checkout
+      // pass as its own upstream.
+      const realSource = realPath(sourceDir);
+      if (realSource === realConsumer || realSource === realPath(repositoryRoot)) {
+        throw new Error(
+          `Upstream ${upstream.git} of ${repository.git} must not resolve to the consumer or wrapper checkout: ${sourceDir}`,
         );
       }
       const revision = localRevision(sourceDir);
@@ -670,22 +673,28 @@ export function activateJavaScriptSourceDependencies(
   if (primaryError) throw primaryError;
 
   for (const entry of ordered) materializePackage(root, entry);
-  const state: JavaScriptSourceState = {
-    schemaVersion: 2,
-    packages: ordered.map((entry) => ({
-      package: entry.packageName,
-      git: entry.repository.git,
-      revision: entry.repository.rev,
-      sourceDir: entry.packageRoot,
-    })),
-    upstreams: upstreams.map((upstream) => ({
-      repository: upstream.repository,
-      env: upstream.env,
-      git: upstream.git,
-      revision: upstream.rev,
-      sourceDir: upstream.sourceDir,
-    })),
-  };
+  const packageState = ordered.map((entry) => ({
+    package: entry.packageName,
+    git: entry.repository.git,
+    revision: entry.repository.rev,
+    sourceDir: entry.packageRoot,
+  }));
+  // State schema 2 and the upstream fields appear only when upstreams are declared, so a
+  // schema-v4 activation stays byte-compatible with older tooling.
+  const state: JavaScriptSourceState =
+    upstreams.length === 0
+      ? { schemaVersion: 1, packages: packageState }
+      : {
+          schemaVersion: 2,
+          packages: packageState,
+          upstreams: upstreams.map((upstream) => ({
+            repository: upstream.repository,
+            env: upstream.env,
+            git: upstream.git,
+            revision: upstream.rev,
+            sourceDir: upstream.sourceDir,
+          })),
+        };
   const path = statePath(root);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`);
@@ -693,7 +702,7 @@ export function activateJavaScriptSourceDependencies(
     active: true,
     statePath: path,
     packages: state.packages,
-    upstreams: state.upstreams,
+    ...(state.upstreams ? { upstreams: state.upstreams } : {}),
     buildOrder: ordered.map((entry) => entry.packageName),
   };
 }
@@ -761,7 +770,7 @@ export function statusJavaScriptSourceDependencies(
       upstreams.every((entry) => entry.active),
     statePath: statePath(root),
     packages,
-    upstreams,
+    ...(upstreams.length > 0 ? { upstreams } : {}),
   };
 }
 
@@ -785,7 +794,11 @@ export function smokeJavaScriptSourceDependencies(
       root,
     );
   }
-  return { active: true, packages: packageNames, upstreams: status.upstreams };
+  return {
+    active: true,
+    packages: packageNames,
+    ...(status.upstreams ? { upstreams: status.upstreams } : {}),
+  };
 }
 
 export function deactivateJavaScriptSourceDependencies(

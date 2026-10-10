@@ -8,7 +8,11 @@ import {
   readSourceDependencyConfig,
   type SourceRepository,
 } from "./source-deps.ts";
-import { type CommandResult, runCommand } from "./shared.ts";
+import {
+  canonicalGitRepository as canonicalRepository,
+  type CommandResult,
+  runCommand,
+} from "./shared.ts";
 
 type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
 
@@ -21,14 +25,6 @@ type Expectation = {
   localRoot: string | null;
   actualRevision: string | null;
 };
-
-function canonicalRepository(git: string): string {
-  return git
-    .trim()
-    .replace(/\.git$/i, "")
-    .replace(/\/$/, "")
-    .toLowerCase();
-}
 
 function localRepositoryRoot(
   consumerRoot: string,

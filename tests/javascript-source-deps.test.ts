@@ -187,8 +187,22 @@ describe("JavaScript source dependency mode", () => {
       },
     ]);
 
+    // Schema-v4 activations keep the original state and payload shape (#308 review): no state
+    // schema 2 and no upstream fields unless upstreams are declared.
+    expect(state.schemaVersion).toBe(1);
+    expect(Object.keys(state).sort()).toEqual(["packages", "schemaVersion"]);
+    expect(Object.keys(activated.data.javascript as object).sort()).toEqual([
+      "active",
+      "buildOrder",
+      "packages",
+      "statePath",
+    ]);
+    const status = sourceDependencies(consumer, "status");
+    expect(status.data.javascript).not.toHaveProperty("upstreams");
+
     const smoke = sourceDependencies(consumer, "smoke");
     expect(smoke.status).toBe("passed");
+    expect(smoke.data.javascript).toEqual({ active: true, packages: ["a-package", "b-package"] });
 
     const deactivated = sourceDependencies(consumer, "deactivate");
     expect(deactivated.status).toBe("passed");
