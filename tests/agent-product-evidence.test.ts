@@ -109,7 +109,7 @@ test("rejects missing fields, escaping paths and unsupported smoke capabilities"
 
 test("proves only tests reachable through complete static dependencies", () => {
   const root = fixture();
-  const response = { command: ["bun","test"], status: 0, stdout: "", stderr: "" };
+  const response = { command: ["bun", "test"], status: 0, stdout: "", stderr: "" };
   const decision = selectMergeVerification(
     root,
     sha,
@@ -126,7 +126,7 @@ test("proves only tests reachable through complete static dependencies", () => {
 
 test("falls back to full suite for unknown imports or shared boundaries", () => {
   const root = fixture();
-  const runner = () => ({ command: ["bun","test"], status: 0, stdout: "", stderr: "" });
+  const runner = () => ({ command: ["bun", "test"], status: 0, stdout: "", stderr: "" });
   expect(selectMergeVerification(root, sha, ["package.json"], product(), runner).mode).toBe(
     "full-required",
   );
@@ -142,7 +142,7 @@ test("falls back to full suite for unknown imports or shared boundaries", () => 
 
 test("incomplete or excluded native test discovery cannot select affected tests", () => {
   const root = fixture();
-  const runner = () => ({ command: ["bun","test"], status: 1, stdout: "", stderr: "unavailable" });
+  const runner = () => ({ command: ["bun", "test"], status: 1, stdout: "", stderr: "unavailable" });
   expect(selectMergeVerification(root, sha, ["src/feature.ts"], product(), runner).reason).toBe(
     "test-discovery-incomplete",
   );
