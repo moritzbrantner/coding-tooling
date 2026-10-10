@@ -396,7 +396,9 @@ test("a skipped acceptance file is not proven by another passing test", () => {
   );
   const result = agentVerificationCommand(root, ".git/task.json");
   expect(result.status).toBe("unavailable");
-  expect(result.diagnostics.map((item) => item.code)).toContain("verification-acceptance-test-unproven");
+  expect(result.diagnostics.map((item) => item.code)).toContain(
+    "verification-acceptance-test-unproven",
+  );
 });
 
 test("a separately executed acceptance file provides current-head evidence", () => {
