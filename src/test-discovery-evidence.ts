@@ -24,6 +24,8 @@ export type TestDiscoveryEvidence = {
   conventionalCandidateFiles: string[];
   discoveredFiles: string[] | null;
   excludedFiles: string[] | null;
+  /** Unbounded native-discovery membership for specifically requested files, when requested. */
+  provenRequestedFiles?: string[];
   truncated: boolean;
   command: string[] | null;
   reason: string;
@@ -42,6 +44,8 @@ export type TestDiscoveryInput = {
   capability: Capability;
   command: string[];
   excludedSubtrees?: readonly string[];
+  /** Explicit relative paths to verify without lifting the 50-file display cap. */
+  requiredFiles?: readonly string[];
 };
 
 type Runner = (command: string, args?: string[], cwd?: string) => CommandResult;
@@ -176,6 +180,7 @@ function availableEvidence(
   discovered: readonly string[],
   command: string[],
   reason: string,
+  requiredFiles?: readonly string[],
 ): TestDiscoveryEvidence {
   const discoveredSet = new Set(discovered);
   const excluded = candidates.filter((path) => !discoveredSet.has(path));
@@ -193,6 +198,9 @@ function availableEvidence(
     conventionalCandidateFiles: boundedCandidates.values,
     discoveredFiles: boundedDiscovered.values,
     excludedFiles: boundedExcluded.values,
+    ...(requiredFiles
+      ? { provenRequestedFiles: [...new Set(requiredFiles)].filter((path) => discoveredSet.has(path)).sort() }
+      : {}),
     truncated:
       boundedCandidates.truncated || boundedDiscovered.truncated || boundedExcluded.truncated,
     command,
@@ -398,6 +406,7 @@ function bunDiscovery(
     discovered,
     dryRunCommand,
     "bun-native-config-and-documented-file-selection",
+    input.requiredFiles,
   );
 }
 
@@ -475,6 +484,7 @@ function vitestDiscovery(
     parsed.files,
     listCommand,
     "vitest-native-file-list",
+    input.requiredFiles,
   );
 }
 
