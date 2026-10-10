@@ -219,7 +219,11 @@ test("rejects an approved-specification edit as unproven affected-test scope", (
 test("checks requested test membership beyond the 50-file discovery display cap", () => {
   const root = fixture();
   for (let index = 0; index < 55; index += 1) {
-    file(root, `tests/extra-${String(index).padStart(2, "0")}.test.ts`, 'import { test } from "bun:test";\n');
+    file(
+      root,
+      `tests/extra-${String(index).padStart(2, "0")}.test.ts`,
+      'import { test } from "bun:test";\n',
+    );
   }
   file(root, "tests/zz-last.test.ts", 'import { test } from "bun:test";\n');
   const discovery = collectTestDiscoveryEvidence(
@@ -240,13 +244,12 @@ test("checks requested test membership beyond the 50-file discovery display cap"
 test("unknown mock loaders prevent affected-test selection", () => {
   const root = fixture();
   file(root, "tests/other.test.ts", 'vi.mock("../src/feature.ts", () => ({}));\n');
-  const decision = selectMergeVerification(
-    root,
-    sha,
-    ["src/feature.ts"],
-    product(),
-    () => ({ command: ["bun", "test"], status: 0, stdout: "", stderr: "" }),
-  );
+  const decision = selectMergeVerification(root, sha, ["src/feature.ts"], product(), () => ({
+    command: ["bun", "test"],
+    status: 0,
+    stdout: "",
+    stderr: "",
+  }));
   expect(decision.mode).toBe("full-required");
   expect(decision.reason).toBe("dependency-graph-incomplete");
 });
@@ -276,7 +279,9 @@ test("rejects a descendant baseline rather than deriving an empty three-dot diff
   );
   const result = agentVerificationCommand(root, ".git/task.json");
   expect(result.status).toBe("unavailable");
-  expect(result.diagnostics.map((item) => item.code)).toContain("verification-baseline-not-ancestor");
+  expect(result.diagnostics.map((item) => item.code)).toContain(
+    "verification-baseline-not-ancestor",
+  );
 });
 
 test("capability failures remain failures when acceptance membership is unavailable", () => {
@@ -284,12 +289,16 @@ test("capability failures remain failures when acceptance membership is unavaila
   git(root, "init", "-q");
   git(root, "config", "user.email", "fixture@example.test");
   git(root, "config", "user.name", "Fixture");
-  file(root, "package.json", JSON.stringify({
-    name: "test-project",
-    version: "1.0.0",
-    type: "module",
-    scripts: { test: "exit 12" },
-  }));
+  file(
+    root,
+    "package.json",
+    JSON.stringify({
+      name: "test-project",
+      version: "1.0.0",
+      type: "module",
+      scripts: { test: "exit 12" },
+    }),
+  );
   const baseline = commit(root);
   file(
     root,
@@ -307,7 +316,9 @@ test("capability failures remain failures when acceptance membership is unavaila
   );
   const result = agentVerificationCommand(root, ".git/task.json");
   expect(result.status).toBe("failed");
-  expect(result.diagnostics.map((item) => item.code)).toContain("verification-acceptance-test-unproven");
+  expect(result.diagnostics.map((item) => item.code)).toContain(
+    "verification-acceptance-test-unproven",
+  );
 });
 
 test("post-check checkout is verified independently of the injected source SHA", () => {
@@ -316,12 +327,16 @@ test("post-check checkout is verified independently of the injected source SHA",
   git(root, "config", "user.email", "fixture@example.test");
   git(root, "config", "user.name", "Fixture");
   const baseline = commit(root);
-  file(root, "package.json", JSON.stringify({
-    name: "test-project",
-    version: "1.0.0",
-    type: "module",
-    scripts: { test: `git checkout --detach ${baseline}` },
-  }));
+  file(
+    root,
+    "package.json",
+    JSON.stringify({
+      name: "test-project",
+      version: "1.0.0",
+      type: "module",
+      scripts: { test: `git checkout --detach ${baseline}` },
+    }),
+  );
   const candidate = commit(root);
   file(
     root,
