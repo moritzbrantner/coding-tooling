@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export type JavaScriptSourcePackage = {
@@ -7,11 +15,20 @@ export type JavaScriptSourcePackage = {
   path?: string;
 };
 
+export type JavaScriptSourceUpstream = {
+  env: string;
+  git: string;
+  rev: string;
+  localPath: string;
+  revisionField?: string;
+};
+
 export type JavaScriptSourceRepository = {
   git: string;
   rev: string;
   localPath: string;
   packages: JavaScriptSourcePackage[];
+  upstreams?: JavaScriptSourceUpstream[];
 };
 
 export type JavaScriptSourceConfig = {
@@ -38,15 +55,26 @@ type SourcePackage = {
   sourceDependencies: string[];
 };
 
+type JavaScriptSourceStateUpstream = {
+  repository: string;
+  env: string;
+  git: string;
+  revision: string;
+  sourceDir: string;
+};
+
 type JavaScriptSourceState = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   packages: Array<{
     package: string;
     git: string;
     revision: string;
     sourceDir: string;
   }>;
+  upstreams?: JavaScriptSourceStateUpstream[];
 };
+
+type ResolvedUpstream = JavaScriptSourceUpstream & { repository: string; sourceDir: string };
 
 const stateRelativePath = join("node_modules", ".coding-tooling-source-deps", "javascript.json");
 
@@ -78,9 +106,143 @@ function record(value: unknown, message: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function canonicalRepository(git: string): string {
+  return git
+    .trim()
+    .replace(/\.git$/i, "")
+    .replace(/\/$/, "")
+    .toLowerCase();
+}
+
+const upstreamKeys = new Set(["env", "git", "rev", "localPath", "revisionField"]);
+// Variables that steer the package manager, runtime, Git, or the dynamic loader. An upstream
+// declaration must never be able to redirect the wrapper build through one of them.
+const reservedEnvironmentNames = new Set([
+  "HOME",
+  "PATH",
+  "PWD",
+  "OLDPWD",
+  "SHELL",
+  "USER",
+  "LOGNAME",
+  "TMPDIR",
+  "TMP",
+  "TEMP",
+  "LANG",
+  "TERM",
+  "CI",
+  "INIT_CWD",
+]);
+const reservedEnvironmentPrefixes = [
+  "BUN_",
+  "NODE_",
+  "NPM_",
+  "YARN_",
+  "PNPM_",
+  "GIT_",
+  "LD_",
+  "DYLD_",
+  "CARGO_",
+  "RUST",
+  "XDG_",
+  "LC_",
+  "SSH_",
+];
+const unsafeFieldSegments = new Set(["__proto__", "prototype", "constructor"]);
+
+function parseUpstreams(
+  value: unknown,
+  repositoryGit: string,
+  configPath: string,
+): JavaScriptSourceUpstream[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(
+      `JavaScript source repository ${repositoryGit} upstreams must be a non-empty array: ${configPath}`,
+    );
+  }
+  const seenEnvironment = new Set<string>();
+  const seenRepositories = new Set<string>([canonicalRepository(repositoryGit)]);
+  return value
+    .map((candidate, index) => {
+      const upstream = record(
+        candidate,
+        `Invalid upstream at ${repositoryGit} index ${index}: ${configPath}`,
+      );
+      for (const key of Object.keys(upstream)) {
+        if (!upstreamKeys.has(key)) {
+          throw new Error(`Unknown upstream field ${key} for ${repositoryGit}: ${configPath}`);
+        }
+      }
+      const required = `Every upstream of ${repositoryGit} requires env, git, rev, and localPath: ${configPath}`;
+      const env = requireString(upstream.env, required);
+      const git = requireString(upstream.git, required);
+      const rev = requireString(upstream.rev, required);
+      const localPath = requireString(upstream.localPath, required);
+      if (!/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$/.test(env)) {
+        throw new Error(
+          `Upstream env ${env} of ${repositoryGit} must be an UPPER_SNAKE environment variable name: ${configPath}`,
+        );
+      }
+      if (
+        reservedEnvironmentNames.has(env) ||
+        reservedEnvironmentPrefixes.some((prefix) => env.startsWith(prefix))
+      ) {
+        throw new Error(
+          `Upstream env ${env} of ${repositoryGit} is reserved for the toolchain environment: ${configPath}`,
+        );
+      }
+      if (seenEnvironment.has(env)) {
+        throw new Error(`Upstream env ${env} is declared more than once for ${repositoryGit}`);
+      }
+      seenEnvironment.add(env);
+      if (!exactRevision(rev)) {
+        throw new Error(
+          `Upstream ${git} of ${repositoryGit} requires an exact 40-character revision`,
+        );
+      }
+      const repositoryKey = canonicalRepository(git);
+      if (seenRepositories.has(repositoryKey)) {
+        throw new Error(
+          `Upstream ${git} of ${repositoryGit} repeats the wrapper or another upstream repository`,
+        );
+      }
+      seenRepositories.add(repositoryKey);
+      if (isAbsolute(localPath) || localPath.includes("\0")) {
+        throw new Error(
+          `Upstream ${git} localPath must be relative to the consumer repository: ${configPath}`,
+        );
+      }
+      let revisionField: string | undefined;
+      if (upstream.revisionField !== undefined) {
+        revisionField = requireString(
+          upstream.revisionField,
+          `Upstream ${git} revisionField must be a string: ${configPath}`,
+        );
+        const segments = revisionField.split(".");
+        if (
+          !segments.every((segment) => /^[A-Za-z_$][\w$-]*$/.test(segment)) ||
+          segments.some((segment) => unsafeFieldSegments.has(segment))
+        ) {
+          throw new Error(
+            `Upstream ${git} revisionField must be a dotted package.json path: ${revisionField}`,
+          );
+        }
+      }
+      return {
+        env,
+        git,
+        rev: rev.toLowerCase(),
+        localPath,
+        ...(revisionField ? { revisionField } : {}),
+      };
+    })
+    .sort((left, right) => left.env.localeCompare(right.env));
+}
+
 export function parseJavaScriptSourceConfig(
   value: unknown,
   configPath: string,
+  options: { upstreams?: boolean } = {},
 ): JavaScriptSourceConfig | null {
   if (value === undefined) return null;
   const javascript = record(value, `javascript must be an object: ${configPath}`);
@@ -151,17 +313,39 @@ export function parseJavaScriptSourceConfig(
       return { package: packageName, ...(packagePath ? { path: packagePath } : {}) };
     });
     packages.sort((left, right) => left.package.localeCompare(right.package));
-    return { git, rev: rev.toLowerCase(), localPath, packages };
+    if (repository.upstreams !== undefined && !options.upstreams) {
+      throw new Error(
+        `JavaScript source repository ${git} declares upstreams, which require schemaVersion 5: ${configPath}`,
+      );
+    }
+    const upstreams =
+      repository.upstreams === undefined
+        ? undefined
+        : parseUpstreams(repository.upstreams, git, configPath);
+    return {
+      git,
+      rev: rev.toLowerCase(),
+      localPath,
+      packages,
+      ...(upstreams ? { upstreams } : {}),
+    };
   });
   repositories.sort((left, right) => left.git.localeCompare(right.git));
   return { localOnly: true, repositories };
 }
 
-function command(command: string, args: string[], cwd: string, capture = false): string {
+function command(
+  command: string,
+  args: string[],
+  cwd: string,
+  capture = false,
+  environment?: Record<string, string>,
+): string {
   const result = spawnSync(command, args, {
     cwd,
     encoding: capture ? "utf8" : undefined,
     stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit",
+    ...(environment ? { env: { ...process.env, ...environment } } : {}),
   });
   if (result.status !== 0) {
     const stderr = capture && typeof result.stderr === "string" ? result.stderr.trim() : "";
@@ -327,6 +511,77 @@ function materializePackage(root: string, entry: SourcePackage): void {
   }
 }
 
+function manifestField(manifest: unknown, field: string): unknown {
+  let current: unknown = manifest;
+  for (const segment of field.split(".")) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
+    if (!Object.hasOwn(current, segment)) return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+/**
+ * Validates every declared upstream checkout before any build runs: the checkout must exist
+ * locally (never fetched), its HEAD must equal the declared revision, and the wrapper's own
+ * revision pin (`revisionField`) must agree with that revision.
+ */
+function resolveUpstreams(root: string, config: JavaScriptSourceConfig): ResolvedUpstream[] {
+  const consumerRoot = resolve(root);
+  const result: ResolvedUpstream[] = [];
+  for (const repository of config.repositories) {
+    if (!repository.upstreams?.length) continue;
+    const repositoryRoot = resolve(consumerRoot, repository.localPath);
+    for (const upstream of repository.upstreams) {
+      const sourceDir = resolve(consumerRoot, upstream.localPath);
+      if (sourceDir === consumerRoot || sourceDir === repositoryRoot) {
+        throw new Error(
+          `Upstream ${upstream.git} of ${repository.git} must not resolve to the consumer or wrapper checkout: ${sourceDir}`,
+        );
+      }
+      if (!existsSync(sourceDir) || !statSync(sourceDir).isDirectory()) {
+        throw new Error(
+          `Local upstream ${upstream.git} of ${repository.git} is missing at ${sourceDir}; local-only source mode never fetches repository sources`,
+        );
+      }
+      const revision = localRevision(sourceDir);
+      if (revision !== upstream.rev) {
+        throw new Error(
+          `Local upstream ${upstream.git} of ${repository.git} is at ${revision}, expected ${upstream.rev}`,
+        );
+      }
+      if (upstream.revisionField) {
+        const manifestPath = join(repositoryRoot, "package.json");
+        if (!existsSync(manifestPath)) {
+          throw new Error(
+            `Wrapper ${repository.git} has no package.json for revisionField ${upstream.revisionField}: ${manifestPath}`,
+          );
+        }
+        const pinned = manifestField(
+          JSON.parse(readFileSync(manifestPath, "utf8")),
+          upstream.revisionField,
+        );
+        if (typeof pinned !== "string" || pinned.toLowerCase() !== upstream.rev) {
+          throw new Error(
+            `Wrapper ${repository.git} package.json ${upstream.revisionField} is ${pinned === undefined ? "missing" : JSON.stringify(pinned)}, expected the declared upstream revision ${upstream.rev}`,
+          );
+        }
+      }
+      result.push({ ...upstream, repository: repository.git, sourceDir });
+    }
+  }
+  return result;
+}
+
+function upstreamEnvironment(
+  upstreams: ResolvedUpstream[],
+  repository: JavaScriptSourceRepository,
+): Record<string, string> | undefined {
+  const selected = upstreams.filter((upstream) => upstream.repository === repository.git);
+  if (selected.length === 0) return undefined;
+  return Object.fromEntries(selected.map((upstream) => [upstream.env, upstream.sourceDir]));
+}
+
 function statePath(root: string): string {
   return join(root, stateRelativePath);
 }
@@ -336,7 +591,15 @@ function readState(root: string): JavaScriptSourceState | null {
   if (!existsSync(path)) return null;
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8")) as JavaScriptSourceState;
-    return parsed.schemaVersion === 1 && Array.isArray(parsed.packages) ? parsed : null;
+    if (parsed.schemaVersion === 1 && Array.isArray(parsed.packages)) return parsed;
+    if (
+      parsed.schemaVersion === 2 &&
+      Array.isArray(parsed.packages) &&
+      Array.isArray(parsed.upstreams)
+    ) {
+      return parsed;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -346,17 +609,27 @@ export function activateJavaScriptSourceDependencies(
   root: string,
   config: JavaScriptSourceConfig,
 ): Record<string, unknown> {
+  const upstreams = resolveUpstreams(root, config);
   command("bun", ["install", "--frozen-lockfile", "--force"], root);
   const packages = sourcePackages(root, config);
   const ordered = buildOrder(packages);
-  const touchedRepositories = new Set<string>();
+  // Wrapper repositories receive their upstream checkout paths for every command run in them,
+  // including install lifecycle scripts, so no step falls back to fetching the upstream.
+  const touchedRepositories = new Map<string, Record<string, string> | undefined>();
   let primaryError: unknown;
 
   try {
     for (const entry of ordered) {
+      const environment = upstreamEnvironment(upstreams, entry.repository);
       if (!touchedRepositories.has(entry.repositoryRoot)) {
-        command("bun", ["install", "--frozen-lockfile", "--force"], entry.repositoryRoot);
-        touchedRepositories.add(entry.repositoryRoot);
+        touchedRepositories.set(entry.repositoryRoot, environment);
+        command(
+          "bun",
+          ["install", "--frozen-lockfile", "--force"],
+          entry.repositoryRoot,
+          false,
+          environment,
+        );
       }
       for (const dependencyName of entry.sourceDependencies) {
         const dependency = packages.find((candidate) => candidate.packageName === dependencyName);
@@ -367,7 +640,7 @@ export function activateJavaScriptSourceDependencies(
           `${entry.packageName} source checkout has no build script: ${entry.packageRoot}`,
         );
       }
-      command("bun", ["run", "build"], entry.packageRoot);
+      command("bun", ["run", "build"], entry.packageRoot, false, environment);
       for (const packageFile of packageFiles(entry)) {
         const source = join(entry.packageRoot, packageFile);
         if (!existsSync(source)) {
@@ -380,9 +653,15 @@ export function activateJavaScriptSourceDependencies(
   } catch (error) {
     primaryError = error;
   } finally {
-    for (const repositoryRoot of [...touchedRepositories].reverse()) {
+    for (const [repositoryRoot, environment] of [...touchedRepositories].reverse()) {
       try {
-        command("bun", ["install", "--frozen-lockfile", "--force"], repositoryRoot);
+        command(
+          "bun",
+          ["install", "--frozen-lockfile", "--force"],
+          repositoryRoot,
+          false,
+          environment,
+        );
       } catch (error) {
         primaryError ??= error;
       }
@@ -392,12 +671,19 @@ export function activateJavaScriptSourceDependencies(
 
   for (const entry of ordered) materializePackage(root, entry);
   const state: JavaScriptSourceState = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     packages: ordered.map((entry) => ({
       package: entry.packageName,
       git: entry.repository.git,
       revision: entry.repository.rev,
       sourceDir: entry.packageRoot,
+    })),
+    upstreams: upstreams.map((upstream) => ({
+      repository: upstream.repository,
+      env: upstream.env,
+      git: upstream.git,
+      revision: upstream.rev,
+      sourceDir: upstream.sourceDir,
     })),
   };
   const path = statePath(root);
@@ -407,6 +693,7 @@ export function activateJavaScriptSourceDependencies(
     active: true,
     statePath: path,
     packages: state.packages,
+    upstreams: state.upstreams,
     buildOrder: ordered.map((entry) => entry.packageName),
   };
 }
@@ -445,10 +732,36 @@ export function statusJavaScriptSourceDependencies(
       active: active?.revision === entry.revision && identityMatches,
     };
   });
+  const observedUpstreams = new Map(
+    (state?.upstreams ?? []).map((entry) => [`${entry.repository}\n${entry.env}`, entry]),
+  );
+  const upstreams = config.repositories
+    .flatMap((repository) =>
+      (repository.upstreams ?? []).map((upstream) => {
+        const active = observedUpstreams.get(`${repository.git}\n${upstream.env}`);
+        return {
+          repository: repository.git,
+          env: upstream.env,
+          git: upstream.git,
+          expectedRevision: upstream.rev,
+          activeRevision: active?.revision ?? null,
+          sourceDir: active?.sourceDir ?? null,
+          active: active?.revision === upstream.rev && active.git === upstream.git,
+        };
+      }),
+    )
+    .sort(
+      (left, right) =>
+        left.repository.localeCompare(right.repository) || left.env.localeCompare(right.env),
+    );
   return {
-    active: packages.every((entry) => entry.active) && packages.length === expected.length,
+    active:
+      packages.every((entry) => entry.active) &&
+      packages.length === expected.length &&
+      upstreams.every((entry) => entry.active),
     statePath: statePath(root),
     packages,
+    upstreams,
   };
 }
 
@@ -472,7 +785,7 @@ export function smokeJavaScriptSourceDependencies(
       root,
     );
   }
-  return { active: true, packages: packageNames };
+  return { active: true, packages: packageNames, upstreams: status.upstreams };
 }
 
 export function deactivateJavaScriptSourceDependencies(

@@ -149,7 +149,7 @@ export function verifySourceDependencyGraph(
       } else if (actual && actual !== repository.rev.toLowerCase()) {
         diagnostics.push({
           code: "source-graph-revision-drift",
-          message: `${repository.git} local source is ${actual}, expected ${repository.rev.toLowerCase()}`,
+          message: `${repository.git}${repository.upstreamOf ? ` (upstream of ${repository.upstreamOf})` : ""} local source is ${actual}, expected ${repository.rev.toLowerCase()}`,
           path: loaded.path,
         });
       }
