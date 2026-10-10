@@ -155,9 +155,13 @@ describe("coding-tooling plans", () => {
     expect(
       plan.checks
         .filter((check) => check.capability === "lint")
-        .map(({ path, command }) => ({ path, command })),
+        .map(({ path, command }) => ({ path, command }))
+        .sort(
+          (left, right) =>
+            left.path.localeCompare(right.path) ||
+            left.command.join(" ").localeCompare(right.command.join(" ")),
+        ),
     ).toEqual([
-      { path: ".", command: ["npm", "run", "lint"] },
       {
         path: ".",
         command: [
@@ -171,6 +175,7 @@ describe("coding-tooling plans", () => {
           "warnings",
         ],
       },
+      { path: ".", command: ["npm", "run", "lint"] },
       {
         path: "crates/backend",
         command: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
