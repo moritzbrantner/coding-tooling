@@ -556,3 +556,100 @@ test("handoff rejects a saved report whose merge verification was edited", () =>
     );
   }
 });
+
+test("a renamed acceptance file with only skipped tests is not proven", () => {
+  const root = fixture();
+  const skipped = 'import { test } from "bun:test";\ntest.skip("renamed acceptance", () => {});\n';
+  file(root, "drafts/renamed-acceptance.ts", skipped);
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const baseline = commit(root);
+  git(root, "mv", "drafts/renamed-acceptance.ts", "tests/renamed.test.ts");
+  commit(root);
+  expect(git(root, "diff", "--name-status", "--find-renames", `${baseline}...HEAD`)).toMatch(/^R/);
+  file(
+    root,
+    ".git/task.json",
+    JSON.stringify({
+      schemaVersion: TASK_PACKET_VERSION,
+      goal: "Prove renamed acceptance execution",
+      baselineSha: baseline,
+      ownedCapability: "example/feature",
+      mustPreserve: [],
+      outOfScope: [],
+      changeKinds: ["behavior"],
+      acceptance: { product: product(baseline) },
+    }),
+  );
+  const result = agentVerificationCommand(root, ".git/task.json");
+  expect(result.status).toBe("unavailable");
+  expect(result.diagnostics.map((item) => item.code)).toContain(
+    "verification-acceptance-test-unproven",
+  );
+});
+
+test("an acceptance file is isolated from a same-named nested test", () => {
+  const root = fixture();
+  file(
+    root,
+    "nested/tests/feature.test.ts",
+    'import { test } from "bun:test";\ntest("nested", () => {});\n',
+  );
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const baseline = commit(root);
+  file(
+    root,
+    ".git/task.json",
+    JSON.stringify({
+      schemaVersion: TASK_PACKET_VERSION,
+      goal: "Prove acceptance execution",
+      baselineSha: baseline,
+      ownedCapability: "example/feature",
+      mustPreserve: [],
+      outOfScope: [],
+      changeKinds: ["behavior"],
+      acceptance: { product: product(baseline) },
+    }),
+  );
+  const result = agentVerificationCommand(root, ".git/task.json");
+  expect(result.diagnostics.map((item) => item.code)).not.toContain(
+    "verification-acceptance-test-unproven",
+  );
+  expect(result.status).toBe("passed");
+});
+
+test("handoff accepts a genuine report for a legacy packet without product acceptance", () => {
+  const root = fixture();
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const baseline = commit(root);
+  file(
+    root,
+    ".git/task.json",
+    JSON.stringify({
+      schemaVersion: TASK_PACKET_VERSION,
+      goal: "Keep legacy behavior",
+      baselineSha: baseline,
+      ownedCapability: "example/feature",
+      mustPreserve: [],
+      outOfScope: [],
+      changeKinds: ["behavior"],
+    }),
+  );
+  const verification = agentVerificationCommand(root, ".git/task.json");
+  expect(verification.status).toBe("passed");
+  expect(verification.data.mergeVerification).toMatchObject({
+    mode: "full-required",
+    reason: "legacy-packet-no-dependency-proof",
+  });
+  file(root, ".git/verification.json", JSON.stringify(verification));
+  const handoff = agentHandoffCommand(root, ".git/task.json", ".git/verification.json");
+  expect(handoff.diagnostics.map((item) => item.code)).not.toContain(
+    "handoff-merge-verification-mismatch",
+  );
+  expect(handoff.status).toBe("passed");
+});

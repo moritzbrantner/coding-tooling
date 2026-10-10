@@ -413,6 +413,19 @@ function canonicalJson(value: unknown): string {
   );
 }
 
+/** Packets without product acceptance carry no dependency proof: always full verification. */
+function legacyMergeVerification(candidateSha: string) {
+  return {
+    mode: "full-required" as const,
+    reason: "legacy-packet-no-dependency-proof",
+    sourceRevision: candidateSha,
+    selectedTests: [] as string[],
+    coreSmokeCapabilities: [] as string[],
+    coverageBasis: "unproven" as const,
+    execution: "full-capability-checks" as const,
+  };
+}
+
 function exactCheckout(root: string, sha: string, runner: Runner): boolean {
   const checkout = runner("git", ["rev-parse", "HEAD"], root);
   return checkout.status === 0 && checkout.stdout.trim().toLowerCase() === sha;
@@ -840,15 +853,7 @@ export function agentVerificationCommand(
         diagnostics: environment.diagnostics,
       },
       evidencePlan,
-      mergeVerification: mergeVerification ?? {
-        mode: "full-required",
-        reason: "legacy-packet-no-dependency-proof",
-        sourceRevision: candidateSha,
-        selectedTests: [],
-        coreSmokeCapabilities: [],
-        coverageBasis: "unproven",
-        execution: "full-capability-checks",
-      },
+      mergeVerification: mergeVerification ?? legacyMergeVerification(candidateSha),
       independence: independenceFromPacket(read.packet),
       results,
     },
@@ -994,7 +999,7 @@ export function agentHandoffCommand(
         ...selectMergeVerification(root, candidateSha, changedFiles, product, runner),
         execution: "full-capability-checks" as const,
       }
-    : null;
+    : legacyMergeVerification(candidateSha);
   if (
     canonicalJson(mergeVerification) !==
     canonicalJson(verification.report.data.mergeVerification ?? null)

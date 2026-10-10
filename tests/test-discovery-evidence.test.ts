@@ -46,11 +46,16 @@ describe("native test discovery evidence", () => {
     expect(isolatedTestCommand(["bun", "test", "tests/unit"], "tests/unit/a.test.ts")).toEqual([
       "bun",
       "test",
-      "tests/unit/a.test.ts",
+      "./tests/unit/a.test.ts",
     ]);
     expect(
       isolatedTestCommand(["bun", "test", "--timeout", "5000", "tests/unit"], "tests/a.test.ts"),
-    ).toEqual(["bun", "test", "--timeout", "5000", "tests/a.test.ts"]);
+    ).toEqual(["bun", "test", "--timeout", "5000", "./tests/a.test.ts"]);
+    expect(isolatedTestCommand(["bun", "test"], "/abs/a.test.ts")).toEqual([
+      "bun",
+      "test",
+      "/abs/a.test.ts",
+    ]);
     expect(isolatedTestCommand(["vitest", "run", "--reporter=dot"], "a.test.ts")).toEqual([
       "vitest",
       "run",

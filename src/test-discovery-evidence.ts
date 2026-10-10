@@ -442,7 +442,9 @@ function bunDiscovery(
 export function isolatedTestCommand(command: readonly string[], local: string): string[] | null {
   if (command[0] === "bun" && command[1] === "test") {
     const parsed = bunArguments(command);
-    return parsed.status === "available" ? [...parsed.unfiltered, local] : null;
+    // Bun treats a bare filter as a substring; only `./` or `/` selects one exact file.
+    const exact = isAbsolute(local) || local.startsWith("./") ? local : `./${local}`;
+    return parsed.status === "available" ? [...parsed.unfiltered, exact] : null;
   }
   const vitestIndex = command[0] === "vitest" ? 0 : command[1] === "vitest" ? 1 : -1;
   if (vitestIndex < 0) return null;
