@@ -123,7 +123,10 @@ describe("coding-tooling plans", () => {
 
   test("does not run identical package and workspace root checks twice", () => {
     const root = repository();
-    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = []\nresolver = "2"\n');
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      '[package]\nname = "fixture"\nversion = "0.1.0"\nedition = "2024"\n\n[workspace]\nmembers = []\nresolver = "2"\n',
+    );
     writeFileSync(
       join(root, ".coding-tooling.json"),
       JSON.stringify({
@@ -144,6 +147,30 @@ describe("coding-tooling plans", () => {
       { capability: "lint", command: ["node", "scripts/lint.mjs"] },
       { capability: "test:unit", command: ["node", "scripts/test.mjs"] },
     ]);
+  });
+
+  test("keeps separate named component attribution for identical root commands", () => {
+    const root = repository();
+    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = []\nresolver = "2"\n');
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { shared: ["lint"] },
+        capabilityCommands: { ".": { lint: ["node", "scripts/lint.mjs"] } },
+      }),
+    );
+
+    const components = discoverComponents(root);
+    expect(components).toHaveLength(2);
+    expect(new Set(components.map((component) => component.name)).size).toBe(2);
+    const plan = planChecks({ root, tier: "shared" });
+    expect(plan.checks).toHaveLength(2);
+    expect(new Set(plan.checks.map((check) => check.component)).size).toBe(2);
+    expect(plan.checks.every((check) => check.path === ".")).toBe(true);
+    expect(plan.checks.every((check) => check.command.join(" ") === "node scripts/lint.mjs")).toBe(
+      true,
+    );
   });
 
   test("preserves checks with different commands or working directories", () => {
