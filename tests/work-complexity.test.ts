@@ -17,7 +17,8 @@
 // on every other dimension, ordered by the bounded dimension from its smallest value x0:
 // constant  => value(x) <= value(x0);
 // linear    => per-unit marginal work never exceeds the first interval's (#309; with exactly two
-//              points value(x) * x0 <= value(x0) * x). Affine a·x + b with a >= 0 passes.
+//              points value(x) * x0 <= value(x0) * x). With three or more points every affine a·x + b
+//              with a >= 0 passes; with two points only b >= 0 is guaranteed.
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
