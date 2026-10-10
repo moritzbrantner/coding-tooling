@@ -362,6 +362,16 @@ export function selectMergeVerification(
   } catch {
     return full("capability-discovery-unavailable");
   }
+  // The native inventory below covers only the plain test capability.
+  // Additional test tiers may exercise paths absent from that inventory.
+  if (
+    components.some((component) =>
+      Object.keys(component.capabilities).some(
+        (capability) => capability !== "test" && isTestCapability(capability as Capability),
+      ),
+    )
+  )
+    return full("additional-test-capabilities-unmapped");
   const tests = new Set<string>();
   const paths = components.map((component) => component.path);
   for (const component of components) {
