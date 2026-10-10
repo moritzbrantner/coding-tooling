@@ -384,8 +384,8 @@ export function planChecks(options: {
       const invocation = JSON.stringify([component.path, capability, command]);
       const existing = plannedInvocations.get(invocation);
       if (existing) {
-        const owners = existing.components ?? [existing.component];
-        if (!owners.includes(component.name)) existing.components = [...owners, component.name];
+        // Append every discovered owner, even when two owners share a name.
+        existing.components = [...(existing.components ?? [existing.component]), component.name];
         continue;
       }
       const check: PlannedCheck = {

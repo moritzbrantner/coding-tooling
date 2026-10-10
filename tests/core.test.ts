@@ -121,6 +121,32 @@ describe("coding-tooling plans", () => {
     expect(plan.missing).toEqual([]);
   });
 
+  test("attributes same-named coalesced owners individually", () => {
+    const root = repository();
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ ...manifest, name: basename(root) }),
+    );
+    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = []\nresolver = "2"\n');
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { shared: ["lint"] },
+        capabilityCommands: { ".": { lint: ["node", "scripts/lint.mjs"] } },
+      }),
+    );
+
+    expect(discoverComponents(root).map((component) => component.name)).toEqual([
+      basename(root),
+      basename(root),
+    ]);
+    const plan = planChecks({ root, tier: "shared" });
+    expect(plan.checks).toHaveLength(1);
+    expect(plan.checks[0]?.components).toEqual([basename(root), basename(root)]);
+  });
+
   test("plans an identical mixed-root invocation once with every owning component attributed", () => {
     const root = repository();
     writeFileSync(
