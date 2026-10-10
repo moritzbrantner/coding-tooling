@@ -137,9 +137,9 @@ affected-test dependency proof.
   requires on every verification, irrespective of affected-test selection.
 
 Optionally, `independentAgentClaim` names the separate authoring context.
-This is **an unverified claim**, never proof of agent separation. The report
-preserves `machineVerified: false`; reviewers must validate that handoff
-procedurally. Neither a particular commit author nor an older timestamp is
+This is **an unverified claim**, never proof of agent separation. The report and handoff reconstruct `machineVerified: false` directly from the
+validated task packet rather than trusting the contents of stored reports;
+reviewers must validate the claim procedurally. Neither a particular commit author nor an older timestamp is
 mechanical evidence of independence.
 
 See `fixtures/agent-product-acceptance.json` for an illustrative v1 packet;

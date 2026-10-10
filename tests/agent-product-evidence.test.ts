@@ -234,3 +234,46 @@ test("does not verify or hand off product evidence bound to a different checkout
     else process.env[SOURCE_ROOT_ENV] = priorRoot;
   }
 });
+
+test("handoff never upgrades an independent-agent claim from a saved report", () => {
+  const root = fixture();
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const baseline = commit(root);
+  const packet: TaskPacket = {
+    schemaVersion: TASK_PACKET_VERSION,
+    goal: "Keep approved behavior",
+    baselineSha: baseline,
+    ownedCapability: "example/feature",
+    mustPreserve: [],
+    outOfScope: [],
+    changeKinds: ["behavior"],
+    acceptance: { product: product(baseline) },
+  };
+  const normalized = normalizeTaskPacket(packet);
+  file(root, ".git/task.json", JSON.stringify(packet));
+  file(
+    root,
+    ".git/verification.json",
+    JSON.stringify({
+      schemaVersion: 1,
+      operation: "agent-verification",
+      status: "passed",
+      durationMs: 0,
+      data: {
+        candidateSha: baseline,
+        packetDigest: normalized.digest,
+        independence: { claim: "forged-authority", status: "verified", machineVerified: true },
+      },
+      diagnostics: [],
+    }),
+  );
+  const handoff = agentHandoffCommand(root, ".git/task.json", ".git/verification.json");
+  expect(handoff.status).toBe("passed");
+  expect(handoff.data.independence).toEqual({
+    claim: "reviewer-context",
+    status: "claimed-unverified",
+    machineVerified: false,
+  });
+});

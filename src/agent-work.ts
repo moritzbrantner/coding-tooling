@@ -318,6 +318,15 @@ function packetEvidencePlan(packet: TaskPacket): EvidencePlan {
   );
 }
 
+function independenceFromPacket(packet: TaskPacket) {
+  const claim = packet.acceptance?.product?.independentAgentClaim ?? null;
+  return {
+    claim,
+    status: claim ? "claimed-unverified" : "not-claimed",
+    machineVerified: false,
+  };
+}
+
 function readTaskPacket(root: string, packetPath: string): PacketRead {
   try {
     const result = normalizeTaskPacket(JSON.parse(readFileSync(resolve(root, packetPath), "utf8")));
@@ -702,11 +711,7 @@ export function agentVerificationCommand(
         coverageBasis: "unproven",
         execution: "full-capability-checks",
       },
-      independence: {
-        claim: product?.independentAgentClaim ?? null,
-        status: product?.independentAgentClaim ? "claimed-unverified" : "not-claimed",
-        machineVerified: false,
-      },
+      independence: independenceFromPacket(read.packet),
       results,
     },
     diagnostics,
@@ -888,11 +893,7 @@ export function agentHandoffCommand(
     changedFiles: diff.stdout.split(/\r?\n/).filter(Boolean).sort(),
     verification: verificationSummary,
     mergeVerification: verification.report.data.mergeVerification ?? null,
-    independence: verification.report.data.independence ?? {
-      claim: null,
-      status: "not-claimed",
-      machineVerified: false,
-    },
+    independence: independenceFromPacket(read.packet),
     environment: verification.report.data.environment ?? null,
     semanticReview: {
       required: read.packet.acceptance?.reviewRequirements ?? [],
