@@ -509,6 +509,18 @@ export function agentVerificationCommand(
       ],
     );
   }
+  if (
+    product &&
+    runner("git", ["merge-base", "--is-ancestor", read.packet.baselineSha, candidateSha], root)
+      .status !== 0
+  ) {
+    return envelope("agent-verification", "unavailable", started, { root, packetPath, candidateSha }, [
+      {
+        code: "verification-baseline-not-ancestor",
+        message: "Product verification requires the baseline to be an ancestor of the candidate",
+      },
+    ]);
+  }
   const evidencePlan = packetEvidencePlan(read.packet);
   const referenceDiagnostics = product
     ? validateProductReferences(root, product, candidateSha, runner)
@@ -570,7 +582,7 @@ export function agentVerificationCommand(
   }));
   if (mergeVerification) mergeVerification.execution = "full-capability-checks";
   const endingSha = sourceRevision(root, runner);
-  if (endingSha !== candidateSha) {
+  if (endingSha !== candidateSha || (product && !exactCheckout(root, candidateSha, runner))) {
     return envelope(
       "agent-verification",
       "unavailable",
@@ -665,16 +677,13 @@ export function agentVerificationCommand(
     }
   }
   const statuses = results.map((entry) => entry.result.status);
-  const status: ResultStatus =
-    contractDiagnostics.length > 0
-      ? "unavailable"
-      : statuses.includes("error")
-        ? "error"
-        : statuses.includes("failed")
-          ? "failed"
-          : statuses.includes("unavailable")
-            ? "unavailable"
-            : "passed";
+  const status: ResultStatus = statuses.includes("error")
+    ? "error"
+    : statuses.includes("failed")
+      ? "failed"
+      : statuses.includes("unavailable") || contractDiagnostics.length > 0
+        ? "unavailable"
+        : "passed";
   const diagnostics = [
     ...contractDiagnostics,
     ...results.flatMap((entry) =>
