@@ -447,20 +447,38 @@ export function performanceApplicability(
       const selectedRoles = roles.filter((value) => roleSet.has(value));
       const applicable = new Set<Family>(selectedRoles.flatMap((value) => roleFamilies[value]));
       if (workOperations && workRoots.has(component)) applicable.add("work-complexity");
+      // A declaration selected by the shared "." path (not by this component's name) is matched to
+      // every root component; its work-complexity wiring belongs to the collector roots only.
+      const sharedRootWiring =
+        component.path === "." &&
+        rootComponents.length > 1 &&
+        !workRoots.has(component) &&
+        declaration !== undefined &&
+        declaration.component !== component.name;
       return {
         name: component.name,
         path: component.path,
         roles: selectedRoles,
         families: families.map((value) =>
-          observeFamily(
-            resolvedRoot,
-            component,
-            applicable,
-            declaration,
-            value,
-            options.available ?? executableAvailable,
-            diagnostics,
-          ),
+          value === "work-complexity" && sharedRootWiring
+            ? {
+                family: value,
+                command: null,
+                scenario: null,
+                missingTools: [],
+                state: "not-applicable" as const,
+                reason:
+                  "Another root component exposes performance:work and owns the shared work-complexity wiring.",
+              }
+            : observeFamily(
+                resolvedRoot,
+                component,
+                applicable,
+                declaration,
+                value,
+                options.available ?? executableAvailable,
+                diagnostics,
+              ),
         ),
       };
     });
