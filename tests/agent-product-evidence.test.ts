@@ -492,6 +492,10 @@ test("handoff never upgrades an independent-agent claim from a saved report", ()
         candidateSha: baseline,
         packetDigest: normalized.digest,
         independence: { claim: "forged-authority", status: "verified", machineVerified: true },
+        mergeVerification: {
+          ...selectMergeVerification(root, baseline, [], normalized.packet!.acceptance!.product!),
+          execution: "full-capability-checks",
+        },
       },
       diagnostics: [],
     }),
@@ -503,4 +507,52 @@ test("handoff never upgrades an independent-agent claim from a saved report", ()
     status: "claimed-unverified",
     machineVerified: false,
   });
+});
+
+test("handoff rejects a saved report whose merge verification was edited", () => {
+  const root = fixture();
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const baseline = commit(root);
+  const packet: TaskPacket = {
+    schemaVersion: TASK_PACKET_VERSION,
+    goal: "Keep approved behavior",
+    baselineSha: baseline,
+    ownedCapability: "example/feature",
+    mustPreserve: [],
+    outOfScope: [],
+    changeKinds: ["behavior"],
+    acceptance: { product: product(baseline) },
+  };
+  const normalized = normalizeTaskPacket(packet);
+  file(root, ".git/task.json", JSON.stringify(packet));
+  const genuine = {
+    ...selectMergeVerification(root, baseline, [], normalized.packet!.acceptance!.product!),
+    execution: "full-capability-checks" as const,
+  };
+  for (const mergeVerification of [
+    null,
+    { ...genuine, mode: genuine.mode === "affected" ? "full-required" : "affected" },
+    { ...genuine, sourceRevision: "0".repeat(40) },
+    { ...genuine, coverageBasis: "closed-static-import-graph", selectedTests: ["forged.test.ts"] },
+  ]) {
+    file(
+      root,
+      ".git/verification.json",
+      JSON.stringify({
+        schemaVersion: 1,
+        operation: "agent-verification",
+        status: "passed",
+        durationMs: 0,
+        data: { candidateSha: baseline, packetDigest: normalized.digest, mergeVerification },
+        diagnostics: [],
+      }),
+    );
+    const handoff = agentHandoffCommand(root, ".git/task.json", ".git/verification.json");
+    expect(handoff.status).toBe("unavailable");
+    expect(handoff.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      "handoff-merge-verification-mismatch",
+    );
+  }
 });

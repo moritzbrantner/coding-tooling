@@ -15,7 +15,7 @@ import { findingsCommand } from "./expectations.ts";
 import { parseAuthorityBoundaries } from "./fleet-authority-graph.ts";
 import type { Capability, Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { capabilities } from "./model.ts";
-import { collectTestDiscoveryEvidence } from "./test-discovery-evidence.ts";
+import { collectTestDiscoveryEvidence, isolatedTestCommand } from "./test-discovery-evidence.ts";
 import {
   collectTestExecutionEvidence,
   isTestCapability,
@@ -401,6 +401,18 @@ function envelope(
   };
 }
 
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(
+          Object.entries(entry as Record<string, unknown>).sort(([left], [right]) =>
+            left.localeCompare(right),
+          ),
+        )
+      : entry,
+  );
+}
+
 function exactCheckout(root: string, sha: string, runner: Runner): boolean {
   const checkout = runner("git", ["rev-parse", "HEAD"], root);
   return checkout.status === 0 && checkout.stdout.trim().toLowerCase() === sha;
@@ -418,7 +430,8 @@ function verifyAcceptanceFileExecution(
 ): boolean {
   const resolution = resolveTestRunner(cwd, command);
   if (!resolution.command) return false;
-  const isolated = [...resolution.command, local];
+  const isolated = isolatedTestCommand(resolution.command, local);
+  if (!isolated) return false;
   const discovered = collectTestDiscoveryEvidence({
     cwd,
     capability,
@@ -670,7 +683,15 @@ export function agentVerificationCommand(
   if (product) {
     const newTests = runner(
       "git",
-      ["diff", "--diff-filter=A", "--name-only", `${read.packet.baselineSha}...${candidateSha}`],
+      // Added, copied and renamed destinations are all newly introduced test paths.
+      [
+        "diff",
+        "--diff-filter=ACR",
+        "--find-renames",
+        "--find-copies",
+        "--name-only",
+        `${read.packet.baselineSha}...${candidateSha}`,
+      ],
       root,
     );
     if (newTests.status !== 0) {
@@ -963,6 +984,29 @@ export function agentHandoffCommand(
       },
     ]);
   }
+  const changedFiles = diff.stdout.split(/\r?\n/).filter(Boolean).sort();
+  // A saved report is only bound by status, candidate and packet digest, so the
+  // merge-verification decision is recomputed from the exact candidate instead of
+  // trusting the report's copy; a mismatch means the report was edited or stale.
+  const product = read.packet.acceptance?.product;
+  const mergeVerification = product
+    ? {
+        ...selectMergeVerification(root, candidateSha, changedFiles, product, runner),
+        execution: "full-capability-checks" as const,
+      }
+    : null;
+  if (
+    canonicalJson(mergeVerification) !==
+    canonicalJson(verification.report.data.mergeVerification ?? null)
+  ) {
+    return envelope("agent-handoff", "unavailable", started, { root, packetPath, candidateSha }, [
+      {
+        code: "handoff-merge-verification-mismatch",
+        message:
+          "The verification report's merge-verification decision does not match the decision recomputed for this candidate",
+      },
+    ]);
+  }
   const branch = runner("git", ["branch", "--show-current"], root);
   const findings = findingsCommand(root, { includeSuppressed: false });
   const unresolvedFindings = Array.isArray(findings.data.findings)
@@ -1007,9 +1051,9 @@ export function agentHandoffCommand(
     baselineSha: read.packet.baselineSha,
     candidateSha,
     branch: branch.status === 0 ? branch.stdout.trim() || null : null,
-    changedFiles: diff.stdout.split(/\r?\n/).filter(Boolean).sort(),
+    changedFiles,
     verification: verificationSummary,
-    mergeVerification: verification.report.data.mergeVerification ?? null,
+    mergeVerification,
     independence: independenceFromPacket(read.packet),
     environment: verification.report.data.environment ?? null,
     semanticReview: {

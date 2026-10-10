@@ -60,12 +60,15 @@ type BunDiscoveryConfig = {
 type BunArguments = {
   status: "available" | "incomplete";
   filters: string[];
+  /** The command without its positional filters (runner, options and option values). */
+  unfiltered: string[];
   ignorePatterns: string[] | null;
   reason: string;
 };
 
 const evidenceFileLimit = 50;
-const bunTestFilePattern = /(?:\.test|_test|\.spec|_spec)\.(?:js|jsx|ts|tsx)$/i;
+// Bun discovers every module extension it executes: js, jsx, ts, tsx, mjs, cjs, mts, cts.
+const bunTestFilePattern = /(?:\.test|_test|\.spec|_spec)\.(?:[cm]?[jt]s|[jt]sx)$/i;
 const vitestCandidateFilePattern = /\.(?:test|spec)\.(?:[cm]?[jt]sx?)$/i;
 const ansiEscapePattern = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 const bunValueFlags = new Set([
@@ -264,12 +267,14 @@ function bunArguments(command: readonly string[]): BunArguments {
     return {
       status: "incomplete",
       filters: [],
+      unfiltered: [],
       ignorePatterns: null,
       reason: "bun-command-unavailable",
     };
   }
 
   const filters: string[] = [];
+  const unfiltered: string[] = command.slice(0, 2);
   const ignorePatterns: string[] = [];
   let hasCliIgnorePatterns = false;
   for (let index = 2; index < command.length; index += 1) {
@@ -280,24 +285,28 @@ function bunArguments(command: readonly string[]): BunArguments {
         return {
           status: "incomplete",
           filters,
+          unfiltered,
           ignorePatterns: null,
           reason: "bun-path-ignore-pattern-missing",
         };
       }
       hasCliIgnorePatterns = true;
       ignorePatterns.push(next);
+      unfiltered.push(value, next);
       index += 1;
       continue;
     }
     if (value.startsWith("--path-ignore-patterns=")) {
       hasCliIgnorePatterns = true;
       ignorePatterns.push(value.slice("--path-ignore-patterns=".length));
+      unfiltered.push(value);
       continue;
     }
     if (value === "--config" || value.startsWith("--config=")) {
       return {
         status: "incomplete",
         filters,
+        unfiltered,
         ignorePatterns: null,
         reason: "bun-named-config-unsupported",
       };
@@ -307,19 +316,28 @@ function bunArguments(command: readonly string[]): BunArguments {
         return {
           status: "incomplete",
           filters,
+          unfiltered,
           ignorePatterns: null,
           reason: "bun-option-value-missing",
         };
       }
+      unfiltered.push(value, command[index + 1]!);
       index += 1;
       continue;
     }
-    if (value.startsWith("--bail=")) continue;
-    if (bunBooleanFlags.has(value) || value.startsWith("--coverage-reporter=")) continue;
+    if (
+      value.startsWith("--bail=") ||
+      bunBooleanFlags.has(value) ||
+      value.startsWith("--coverage-reporter=")
+    ) {
+      unfiltered.push(value);
+      continue;
+    }
     if (value.startsWith("-")) {
       return {
         status: "incomplete",
         filters,
+        unfiltered,
         ignorePatterns: null,
         reason: "bun-option-unsupported",
       };
@@ -330,6 +348,7 @@ function bunArguments(command: readonly string[]): BunArguments {
   return {
     status: "available",
     filters,
+    unfiltered,
     ignorePatterns: hasCliIgnorePatterns ? ignorePatterns : null,
     reason: "bun-command-scope",
   };
@@ -412,6 +431,26 @@ function bunDiscovery(
     "bun-native-config-and-documented-file-selection",
     input.requiredFiles,
   );
+}
+
+/**
+ * The native test command scoped to exactly one file: existing positional
+ * filters are replaced (runners OR their filters, so appending would not
+ * isolate). Returns null when the command's positional filters cannot be
+ * identified unambiguously, so callers fail closed.
+ */
+export function isolatedTestCommand(command: readonly string[], local: string): string[] | null {
+  if (command[0] === "bun" && command[1] === "test") {
+    const parsed = bunArguments(command);
+    return parsed.status === "available" ? [...parsed.unfiltered, local] : null;
+  }
+  const vitestIndex = command[0] === "vitest" ? 0 : command[1] === "vitest" ? 1 : -1;
+  if (vitestIndex < 0) return null;
+  const rest = command.slice(vitestIndex + 1);
+  const options = rest[0] === "run" ? rest.slice(1) : rest;
+  // Vitest option values are not modelled; any bare token may be a filter.
+  if (options.some((value) => !value.startsWith("-"))) return null;
+  return [...command, local];
 }
 
 function vitestListCommand(command: readonly string[]): string[] | null {
