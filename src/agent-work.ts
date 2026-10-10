@@ -763,12 +763,18 @@ export function agentVerificationCommand(
   }
   // Isolated acceptance execution can also mutate the checkout.
   if (product && !exactCheckout(root, candidateSha, runner)) {
-    return envelope("agent-verification", "unavailable", started, { root, packetPath, candidateSha }, [
-      {
-        code: "verification-head-moved",
-        message: "Acceptance verification changed the checkout after canonical tests",
-      },
-    ]);
+    return envelope(
+      "agent-verification",
+      "unavailable",
+      started,
+      { root, packetPath, candidateSha },
+      [
+        {
+          code: "verification-head-moved",
+          message: "Acceptance verification changed the checkout after canonical tests",
+        },
+      ],
+    );
   }
   if (product && cleanWorktree(root, runner).clean !== true) {
     return envelope("agent-verification", "failed", started, { root, packetPath, candidateSha }, [
