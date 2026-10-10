@@ -10,7 +10,8 @@
     },
     "suite": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "\\S"
     },
     "description": {
       "type": "string"
@@ -31,7 +32,8 @@
           },
           "description": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "pattern": "\\S"
           },
           "dimensions": {
             "type": "object",
@@ -66,11 +68,13 @@
               "properties": {
                 "name": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "\\S"
                 },
                 "unit": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "pattern": "\\S"
                 },
                 "direction": {
                   "enum": ["lower", "higher"]
@@ -248,7 +252,7 @@
                     "properties": {
                       "dimension": {
                         "type": "string",
-                        "minLength": 1
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
                       },
                       "bound": {
                         "enum": ["constant", "linear"]
@@ -302,5 +306,5 @@
       }
     }
   ],
-  "$comment": "schemaVersion 1 contracts remain valid unchanged. schemaVersion 2 adds optional operations. Cross-field rules (growth dimensions are declared, scale points name exactly the declared dimensions and vary each bounded dimension) are enforced by src/performance-contract.ts."
+  "$comment": "schemaVersion 1 contracts that the parser accepts remain valid unchanged. schemaVersion 2 adds optional operations. Cross-field rules (growth dimensions are declared, scale points name exactly the declared dimensions and vary each bounded dimension) are enforced by src/performance-contract.ts. Every string the parser checks as non-empty (suite, scenario and operation descriptions, metric names and units, notes, publicContract, dimension descriptions) must contain a non-space character (pattern \\S), matching the parser's trim-based check; whitespace-only values were never accepted by the parser."
 }

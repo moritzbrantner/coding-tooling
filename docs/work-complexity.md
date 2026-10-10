@@ -57,6 +57,7 @@ Version 2 is version 1 plus optional `operations`. Version 1 contracts remain va
 - Every metric declares an absolute `budget.max`, growth bounds, or both. Each growth bound names exactly one declared dimension. The growth vocabulary is closed: `constant` and `linear`.
 - `__proto__`, `constructor` and `prototype` are reserved metric and dimension names, and optional metric `notes` must be a non-empty string.
 - A growth bound is refused unless some group of scale points varies its dimension while holding the other dimensions fixed.
+- Free-text strings must contain a non-space character: `suite`, scenario and operation `description`, metric `name` and `unit`, `notes`, `publicContract` and dimension `description`. The shared parser trims these values and refuses whitespace-only ones in both versions, and the published schema expresses the same rule with the pattern `\S`. A growth bound's `dimension` uses the dimension-name pattern. The parser checks version 1 metric `notes` only where a blocking `wall-clock` metric requires them, and does not check `correctnessEvidence` entries or the top-level `description`.
 
 ## Growth semantics
 
@@ -110,7 +111,7 @@ The result is `unavailable`, with diagnostics, when any of these holds:
 
 ## Applicability
 
-`performance applicability` reports the `work-complexity` family, backed by the `performance:work` capability, for the repository root component. The family is applicable only when the root contract is schemaVersion 2 and declares at least one operation. With several root components, it belongs to those that expose `performance:work`, or to all of them when none does. Every existing contract is validated with the shared parser, so a malformed or unsupported-version contract adds a `performance-contract-invalid` diagnostic. The audit does not decide which product operations matter.
+`performance applicability` reports the `work-complexity` family, backed by the `performance:work` capability, for the repository root component. The family is applicable only when the root contract is schemaVersion 2 and declares at least one operation. With several root components, it belongs to those that expose `performance:work`, or to all of them when none does. A `.performance/applicability.json` entry with `component: "."` matches every root component, but its `work-complexity` wiring is read only for the roots that own the family. The other root components report `not-applicable`. An entry that names a root component explicitly is still read for that component. Every existing contract is validated with the shared parser, so a malformed or unsupported-version contract adds a `performance-contract-invalid` diagnostic. The audit does not decide which product operations matter.
 
 | State                     | Meaning                                                                                                           |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |

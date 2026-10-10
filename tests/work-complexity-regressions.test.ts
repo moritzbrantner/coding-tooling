@@ -171,6 +171,51 @@ describe("polyglot repository roots", () => {
     expect(families).toContainEqual([basename(root), "not-applicable"]);
   });
 
+  const wiring = (component: string) =>
+    JSON.stringify({
+      schemaVersion: 1,
+      components: [
+        {
+          component,
+          scenarios: [
+            {
+              family: "work-complexity",
+              capability: "performance:work",
+              path: ".performance/contract.json",
+              tools: [],
+              platforms: [],
+            },
+          ],
+        },
+      ],
+    });
+  const workStates = (root: string) =>
+    performanceApplicability(root, { available: () => true })
+      .data.components.filter((component) => component.path === ".")
+      .map((component) => [
+        component.name,
+        component.families.find((value) => value.family === "work-complexity")?.state,
+      ]);
+
+  test("a root component named explicitly keeps its declared work-complexity wiring (#307)", () => {
+    const root = fixture(contract(uploads), files);
+    writeFileSync(join(root, ".performance/applicability.json"), wiring(basename(root)));
+    const states = workStates(root);
+    expect(states).toContainEqual([basename(root), "applicable-missing"]);
+    expect(states).toContainEqual(["zz-web", "applicable-missing"]);
+  });
+
+  test("without a collector root, a '.' declaration still covers every root (#307)", () => {
+    const root = fixture(contract(uploads), {
+      ...files,
+      "package.json": JSON.stringify({ name: "zz-web", private: true }),
+      ".performance/applicability.json": wiring("."),
+    });
+    const states = workStates(root);
+    expect(states).toContainEqual([basename(root), "applicable-missing"]);
+    expect(states).toContainEqual(["zz-web", "applicable-missing"]);
+  });
+
   test("different root collector commands are an explicit ambiguity", () => {
     const root = fixture(contract(uploads), files);
     writeFileSync(
