@@ -199,7 +199,11 @@ function availableEvidence(
     discoveredFiles: boundedDiscovered.values,
     excludedFiles: boundedExcluded.values,
     ...(requiredFiles
-      ? { provenRequestedFiles: [...new Set(requiredFiles)].filter((path) => discoveredSet.has(path)).sort() }
+      ? {
+          provenRequestedFiles: [...new Set(requiredFiles)]
+            .filter((path) => discoveredSet.has(path))
+            .sort(),
+        }
       : {}),
     truncated:
       boundedCandidates.truncated || boundedDiscovered.truncated || boundedExcluded.truncated,
