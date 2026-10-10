@@ -387,6 +387,11 @@ function envelope(
   };
 }
 
+function exactCheckout(root: string, sha: string, runner: Runner): boolean {
+  const checkout = runner("git", ["rev-parse", "HEAD"], root);
+  return checkout.status === 0 && checkout.stdout.trim().toLowerCase() === sha;
+}
+
 function cleanWorktree(root: string, runner: Runner): { clean?: boolean; diagnostic?: Diagnostic } {
   const result = runner("git", ["status", "--porcelain"], root);
   if (result.status !== 0) {
@@ -460,6 +465,15 @@ export function agentVerificationCommand(
       },
     ]);
   }
+  const product = read.packet.acceptance?.product;
+  if (product && !exactCheckout(root, candidateSha, runner)) {
+    return envelope("agent-verification", "unavailable", started, { root, packetPath, candidateSha }, [
+      {
+        code: "verification-source-revision-mismatch",
+        message: "Product verification requires the checkout HEAD to equal the candidate revision",
+      },
+    ]);
+  }
   const baselineExists = runner(
     "git",
     ["cat-file", "-e", `${read.packet.baselineSha}^{commit}`],
@@ -480,7 +494,6 @@ export function agentVerificationCommand(
     );
   }
   const evidencePlan = packetEvidencePlan(read.packet);
-  const product = read.packet.acceptance?.product;
   const referenceDiagnostics = product
     ? validateProductReferences(root, product, candidateSha, runner)
     : [];
@@ -747,6 +760,14 @@ export function agentHandoffCommand(
       {
         code: "handoff-candidate-not-stable",
         message: "Handoff requires a clean worktree bound to a source revision",
+      },
+    ]);
+  }
+  if (read.packet.acceptance?.product && !exactCheckout(root, candidateSha, runner)) {
+    return envelope("agent-handoff", "unavailable", started, { root, packetPath, candidateSha }, [
+      {
+        code: "handoff-source-revision-mismatch",
+        message: "Product handoff requires the checkout HEAD to equal the candidate revision",
       },
     ]);
   }

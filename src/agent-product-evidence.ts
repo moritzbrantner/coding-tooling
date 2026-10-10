@@ -407,7 +407,7 @@ export function selectMergeVerification(
   const selected = new Set(contracts);
   const specificationPaths = new Set(product.specifications.map((reference) => reference.path));
   for (const path of sorted(changedFiles)) {
-    if (specificationPaths.has(path)) continue;
+    if (specificationPaths.has(path)) return full("approved-specification-changed");
     if (!repositoryPath(root, path)) return full("deleted-or-unsafe-change");
     if (tests.has(path)) {
       selected.add(path);

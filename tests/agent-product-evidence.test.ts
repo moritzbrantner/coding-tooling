@@ -10,7 +10,14 @@ import {
   validateProductReferences,
   type ProductAcceptance,
 } from "../src/agent-product-evidence.ts";
-import { normalizeTaskPacket, TASK_PACKET_VERSION, type TaskPacket } from "../src/agent-work.ts";
+import {
+  agentHandoffCommand,
+  agentVerificationCommand,
+  normalizeTaskPacket,
+  TASK_PACKET_VERSION,
+  type TaskPacket,
+} from "../src/agent-work.ts";
+import { SOURCE_REVISION_ENV, SOURCE_ROOT_ENV } from "../src/source-context.ts";
 
 const roots: string[] = [];
 const sha = "0123456789abcdef0123456789abcdef01234567";
@@ -182,4 +189,48 @@ test("rejects stale, missing, non-ancestor and symlink-escaping product referenc
   expect(validateProductReferences(root, escaped, candidate).map((d) => d.code)).toContain(
     "verification-reference-unsafe",
   );
+});
+
+test("rejects an approved-specification edit as unproven affected-test scope", () => {
+  const root = fixture();
+  const runner = () => ({ command: ["bun", "test"], status: 0, stdout: "", stderr: "" });
+  const decision = selectMergeVerification(root, sha, ["docs/approved.md"], product(), runner);
+  expect(decision.mode).toBe("full-required");
+  expect(decision.reason).toBe("approved-specification-changed");
+});
+
+test("does not verify or hand off product evidence bound to a different checkout", () => {
+  const root = fixture();
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const baseline = commit(root);
+  const packet: TaskPacket = {
+    schemaVersion: TASK_PACKET_VERSION,
+    goal: "Keep approved behavior",
+    baselineSha: baseline,
+    ownedCapability: "example/feature",
+    mustPreserve: [],
+    outOfScope: [],
+    changeKinds: ["behavior"],
+    acceptance: { product: product(baseline) },
+  };
+  file(root, ".git/task.json", JSON.stringify(packet));
+  const priorSha = process.env[SOURCE_REVISION_ENV];
+  const priorRoot = process.env[SOURCE_ROOT_ENV];
+  process.env[SOURCE_REVISION_ENV] = sha;
+  process.env[SOURCE_ROOT_ENV] = root;
+  try {
+    const verification = agentVerificationCommand(root, ".git/task.json");
+    expect(verification.status).toBe("unavailable");
+    expect(verification.diagnostics[0]?.code).toBe("verification-source-revision-mismatch");
+    const handoff = agentHandoffCommand(root, ".git/task.json", "not-created.json");
+    expect(handoff.status).toBe("unavailable");
+    expect(handoff.diagnostics[0]?.code).toBe("handoff-source-revision-mismatch");
+  } finally {
+    if (priorSha === undefined) delete process.env[SOURCE_REVISION_ENV];
+    else process.env[SOURCE_REVISION_ENV] = priorSha;
+    if (priorRoot === undefined) delete process.env[SOURCE_ROOT_ENV];
+    else process.env[SOURCE_ROOT_ENV] = priorRoot;
+  }
 });
