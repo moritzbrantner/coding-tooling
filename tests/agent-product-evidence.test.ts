@@ -369,6 +369,61 @@ test("post-check checkout is verified independently of the injected source SHA",
   }
 });
 
+test("a skipped acceptance file is not proven by another passing test", () => {
+  const root = fixture();
+  file(
+    root,
+    "tests/feature.test.ts",
+    'import { test } from "bun:test";\ntest.skip("feature", () => {});\n',
+  );
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const baseline = commit(root);
+  file(
+    root,
+    ".git/task.json",
+    JSON.stringify({
+      schemaVersion: TASK_PACKET_VERSION,
+      goal: "Prove acceptance execution",
+      baselineSha: baseline,
+      ownedCapability: "example/feature",
+      mustPreserve: [],
+      outOfScope: [],
+      changeKinds: ["behavior"],
+      acceptance: { product: product(baseline) },
+    }),
+  );
+  const result = agentVerificationCommand(root, ".git/task.json");
+  expect(result.status).toBe("unavailable");
+  expect(result.diagnostics.map((item) => item.code)).toContain("verification-acceptance-test-unproven");
+});
+
+test("a separately executed acceptance file provides current-head evidence", () => {
+  const root = fixture();
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const baseline = commit(root);
+  file(
+    root,
+    ".git/task.json",
+    JSON.stringify({
+      schemaVersion: TASK_PACKET_VERSION,
+      goal: "Prove acceptance execution",
+      baselineSha: baseline,
+      ownedCapability: "example/feature",
+      mustPreserve: [],
+      outOfScope: [],
+      changeKinds: ["behavior"],
+      acceptance: { product: product(baseline) },
+    }),
+  );
+  const result = agentVerificationCommand(root, ".git/task.json");
+  expect(result.status).toBe("passed");
+  expect(result.data.mergeVerification).toBeDefined();
+});
+
 test("does not verify or hand off product evidence bound to a different checkout", () => {
   const root = fixture();
   git(root, "init", "-q");
