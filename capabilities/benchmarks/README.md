@@ -19,6 +19,8 @@ Repositories where execution cost is an explicit engineering contract should com
 
 The performance contract is intentionally domain-neutral. Each repository owns its scenario dimensions, correctness evidence, metric names, and budgets. Prefer blocking deterministic work signals such as operation, allocation, instruction, or cache-event counts. Shared-runner wall-clock evidence is normally advisory; blocking wall-clock contracts must document the controlled execution boundary in the metric notes.
 
+Schema version 2 adds optional operation-level work contracts (`operations`): named scale dimensions, scale points, deterministic counters, absolute budgets and `constant`/`linear` growth bounds. A repository exposes `performance:work` to emit the matching evidence, and `coding-tooling performance work` verifies it; see [operation work complexity](../../docs/work-complexity.md). Version 1 contracts remain valid.
+
 A useful contract normally includes a common active scenario, an idle/quiescent scenario when meaningful, and one bounded scaling/stress scenario when its execution shape differs. Product repositories should describe composition journeys rather than copying every foundation microbenchmark.
 
 `coding-tooling` owns the shared contract schema and capability discovery. The repository owns generating and enforcing its domain-specific deterministic counters. `runtime-profiler` owns profiling captures, and Moonlight or another evaluator owns cross-revision comparison/verdicts.

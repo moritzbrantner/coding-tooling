@@ -54,6 +54,7 @@ profile:hotspots
 profile:memory
 load:smoke
 size:budget
+performance:work
 storybook:check
 web:audit
 template:smoke
@@ -73,6 +74,7 @@ An explicit nonempty `capabilityCommands["."]` declaration creates a root compon
 - `profile:runtime` captures a repository-declared representative runtime scenario.
 - `profile:hotspots` captures source-level CPU/hotspot evidence for a repository-declared scenario.
 - `size:budget` measures explicitly selected built artifact bytes with repository-owned budgets. See [size evidence](./size-evidence.md) for versioned baseline and comparability semantics.
+- `performance:work` emits `coding-tooling/work-evidence/v1` deterministic work counters for the operations declared in a schemaVersion 2 performance contract; `coding-tooling performance work` verifies them. See [operation work complexity](./work-complexity.md).
 - `profile:memory` captures repository-declared memory/allocation/GC evidence. The capability name does not imply that RSS, retained heap, allocations, or GC pauses are interchangeable.
 - `load:smoke` invokes a declared bounded HTTP/service scenario; its command reserves exit code 2 for unavailable profiler/collector support. Missing workloads and unsupported execution remain unavailable. See [service load smoke](./load-smoke.md).
 

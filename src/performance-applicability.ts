@@ -13,6 +13,7 @@ import { delimiter, dirname, isAbsolute, join, relative, resolve } from "node:pa
 import { cargoComponentManifestPaths, declaredComponents, loadConfig } from "./core.ts";
 import { fleetAuthorityGraph } from "./fleet-authority-graph.ts";
 import type { Component, Diagnostic, ResultEnvelope } from "./model.ts";
+import { parsePerformanceContract, performanceContractPath } from "./performance-contract.ts";
 import { readRepositoryMetadata } from "./repository-metadata.ts";
 import { runCommand, walkFiles } from "./shared.ts";
 
@@ -27,6 +28,7 @@ const families = [
   "startup",
   "frame-stall",
   "size-budget",
+  "work-complexity",
 ] as const;
 type Family = (typeof families)[number];
 const familyCapabilities: Record<Family, readonly string[]> = {
@@ -40,6 +42,7 @@ const familyCapabilities: Record<Family, readonly string[]> = {
   startup: ["profile:runtime"],
   "frame-stall": ["profile:runtime"],
   "size-budget": ["size:budget"],
+  "work-complexity": ["performance:work"],
 };
 const roles = [
   "rust-kernel",
@@ -239,6 +242,26 @@ function inferredRoles(root: string, component: Component): Role[] {
   }
   return [...result];
 }
+/**
+ * Work complexity applies only where the repository itself declares operations in a v2
+ * performance contract; the audit never invents which product operations matter.
+ */
+function declaresWorkOperations(root: string, diagnostics: Diagnostic[]): boolean {
+  const file = join(root, performanceContractPath);
+  if (!existsSync(file)) return false;
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (!record(parsed) || parsed.schemaVersion !== 2) return false;
+    return parsePerformanceContract(parsed).operations.length > 0;
+  } catch (error: unknown) {
+    diagnostics.push({
+      code: "performance-contract-invalid",
+      path: performanceContractPath,
+      message: `Work operations are unresolved: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    return false;
+  }
+}
 const roleFamilies: Record<Role, readonly Family[]> = {
   "rust-kernel": ["benchmark-smoke", "hotspots", "memory", "size-budget"],
   web: ["browser-audit", "runtime", "size-budget"],
@@ -297,6 +320,12 @@ function observeFamily(
       state: "applicable-missing",
       reason:
         "Applicable shape/workload has no repository-owned representative scenario declaration.",
+    };
+  if (selected === "work-complexity" && !applicable.has(selected))
+    return {
+      ...base,
+      state: "applicable-missing",
+      reason: "Declared work-complexity wiring has no operations in a schemaVersion 2 contract.",
     };
   const command = Object.entries(component.capabilities).find(
     ([name]) => name === scenario.capability,
@@ -383,6 +412,7 @@ export function performanceApplicability(
     const declared = declarations(resolvedRoot);
     data.declarationSha256 = declared.sha256;
     const components = declaredComponents(resolvedRoot, loadConfig(resolvedRoot));
+    const workOperations = declaresWorkOperations(resolvedRoot, diagnostics);
     if (!components.length)
       diagnostics.push({
         code: "performance-components-unavailable",
@@ -411,7 +441,9 @@ export function performanceApplicability(
         ...(declaration?.roles ?? []),
       ]);
       const selectedRoles = roles.filter((value) => roleSet.has(value));
-      const applicable = new Set(selectedRoles.flatMap((value) => roleFamilies[value]));
+      const applicable = new Set<Family>(selectedRoles.flatMap((value) => roleFamilies[value]));
+      // The contract and its performance:work collector belong to the repository root.
+      if (workOperations && component.path === ".") applicable.add("work-complexity");
       return {
         name: component.name,
         path: component.path,

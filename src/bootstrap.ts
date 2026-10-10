@@ -158,6 +158,7 @@ function recommendedConfig(
     "profile:memory",
     "load:smoke",
     "size:budget",
+    "performance:work",
     "storybook:check",
     "web:audit",
     "template:smoke",
@@ -188,6 +189,7 @@ function recommendedConfig(
       "profile:memory",
       "load:smoke",
       "size:budget",
+      "performance:work",
     ].filter((capability) => optional.has(capability as Capability)) as Capability[],
   );
   if (performance.length > 0) tiers.performance = performance;

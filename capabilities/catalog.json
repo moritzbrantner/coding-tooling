@@ -191,6 +191,15 @@
       "baselineRequired": true
     },
     {
+      "name": "performance:work",
+      "kind": "benchmark",
+      "tier": "performance",
+      "scriptCandidates": ["performance:work"],
+      "defaultArtifacts": [".artifacts/work-complexity"],
+      "optIn": true,
+      "baselineRequired": false
+    },
+    {
       "name": "storybook:check",
       "kind": "test",
       "tier": "system",
