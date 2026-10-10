@@ -17,6 +17,7 @@ import {
   TASK_PACKET_VERSION,
   type TaskPacket,
 } from "../src/agent-work.ts";
+import { collectTestDiscoveryEvidence } from "../src/test-discovery-evidence.ts";
 import { SOURCE_REVISION_ENV, SOURCE_ROOT_ENV } from "../src/source-context.ts";
 
 const roots: string[] = [];
@@ -213,6 +214,144 @@ test("rejects an approved-specification edit as unproven affected-test scope", (
   const decision = selectMergeVerification(root, sha, ["docs/approved.md"], product(), runner);
   expect(decision.mode).toBe("full-required");
   expect(decision.reason).toBe("approved-specification-changed");
+});
+
+test("checks requested test membership beyond the 50-file discovery display cap", () => {
+  const root = fixture();
+  for (let index = 0; index < 55; index += 1) {
+    file(root, `tests/extra-${String(index).padStart(2, "0")}.test.ts`, 'import { test } from "bun:test";\n');
+  }
+  file(root, "tests/zz-last.test.ts", 'import { test } from "bun:test";\n');
+  const discovery = collectTestDiscoveryEvidence(
+    {
+      cwd: root,
+      capability: "test",
+      command: ["bun", "test"],
+      requiredFiles: ["tests/zz-last.test.ts", "tests/not-present.test.ts"],
+    },
+    () => ({ command: ["bun", "test", "--dry-run"], status: 0, stdout: "", stderr: "" }),
+  );
+  expect(discovery?.status).toBe("available");
+  expect(discovery?.truncated).toBe(true);
+  expect(discovery?.discoveredFiles).not.toContain("tests/zz-last.test.ts");
+  expect(discovery?.provenRequestedFiles).toEqual(["tests/zz-last.test.ts"]);
+});
+
+test("unknown mock loaders prevent affected-test selection", () => {
+  const root = fixture();
+  file(root, "tests/other.test.ts", 'vi.mock("../src/feature.ts", () => ({}));\n');
+  const decision = selectMergeVerification(
+    root,
+    sha,
+    ["src/feature.ts"],
+    product(),
+    () => ({ command: ["bun", "test"], status: 0, stdout: "", stderr: "" }),
+  );
+  expect(decision.mode).toBe("full-required");
+  expect(decision.reason).toBe("dependency-graph-incomplete");
+});
+
+test("rejects a descendant baseline rather than deriving an empty three-dot diff", () => {
+  const root = fixture();
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const candidate = commit(root);
+  file(root, "src/feature.ts", "export const feature = 3;\n");
+  const descendant = commit(root);
+  git(root, "checkout", "--detach", candidate);
+  file(
+    root,
+    ".git/task.json",
+    JSON.stringify({
+      schemaVersion: TASK_PACKET_VERSION,
+      goal: "Keep approved behavior",
+      baselineSha: descendant,
+      ownedCapability: "example/feature",
+      mustPreserve: [],
+      outOfScope: [],
+      changeKinds: ["behavior"],
+      acceptance: { product: product(candidate) },
+    }),
+  );
+  const result = agentVerificationCommand(root, ".git/task.json");
+  expect(result.status).toBe("unavailable");
+  expect(result.diagnostics.map((item) => item.code)).toContain("verification-baseline-not-ancestor");
+});
+
+test("capability failures remain failures when acceptance membership is unavailable", () => {
+  const root = fixture();
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  file(root, "package.json", JSON.stringify({
+    name: "test-project",
+    version: "1.0.0",
+    type: "module",
+    scripts: { test: "exit 12" },
+  }));
+  const baseline = commit(root);
+  file(
+    root,
+    ".git/task.json",
+    JSON.stringify({
+      schemaVersion: TASK_PACKET_VERSION,
+      goal: "Keep approved behavior",
+      baselineSha: baseline,
+      ownedCapability: "example/feature",
+      mustPreserve: [],
+      outOfScope: [],
+      changeKinds: ["behavior"],
+      acceptance: { product: product(baseline) },
+    }),
+  );
+  const result = agentVerificationCommand(root, ".git/task.json");
+  expect(result.status).toBe("failed");
+  expect(result.diagnostics.map((item) => item.code)).toContain("verification-acceptance-test-unproven");
+});
+
+test("post-check checkout is verified independently of the injected source SHA", () => {
+  const root = fixture();
+  git(root, "init", "-q");
+  git(root, "config", "user.email", "fixture@example.test");
+  git(root, "config", "user.name", "Fixture");
+  const baseline = commit(root);
+  file(root, "package.json", JSON.stringify({
+    name: "test-project",
+    version: "1.0.0",
+    type: "module",
+    scripts: { test: `git checkout --detach ${baseline}` },
+  }));
+  const candidate = commit(root);
+  file(
+    root,
+    ".git/task.json",
+    JSON.stringify({
+      schemaVersion: TASK_PACKET_VERSION,
+      goal: "Keep approved behavior",
+      baselineSha: baseline,
+      ownedCapability: "example/feature",
+      mustPreserve: [],
+      outOfScope: [],
+      changeKinds: ["behavior"],
+      acceptance: { product: product(baseline) },
+    }),
+  );
+  const oldSha = process.env[SOURCE_REVISION_ENV];
+  const oldRoot = process.env[SOURCE_ROOT_ENV];
+  process.env[SOURCE_REVISION_ENV] = candidate;
+  process.env[SOURCE_ROOT_ENV] = root;
+  try {
+    const result = agentVerificationCommand(root, ".git/task.json");
+    expect(result.status).toBe("unavailable");
+    expect(result.diagnostics.map((item) => item.code)).toContain("verification-head-moved");
+    expect(git(root, "rev-parse", "HEAD")).toBe(baseline);
+  } finally {
+    if (oldSha === undefined) delete process.env[SOURCE_REVISION_ENV];
+    else process.env[SOURCE_REVISION_ENV] = oldSha;
+    if (oldRoot === undefined) delete process.env[SOURCE_ROOT_ENV];
+    else process.env[SOURCE_ROOT_ENV] = oldRoot;
+  }
 });
 
 test("does not verify or hand off product evidence bound to a different checkout", () => {
