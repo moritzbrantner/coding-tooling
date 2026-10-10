@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 
 import { check, declaredComponents } from "./core.ts";
 import {
@@ -15,6 +15,7 @@ import { findingsCommand } from "./expectations.ts";
 import { parseAuthorityBoundaries } from "./fleet-authority-graph.ts";
 import type { Capability, Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { capabilities } from "./model.ts";
+import { collectTestDiscoveryEvidence } from "./test-discovery-evidence.ts";
 import { isTestCapability } from "./test-execution-evidence.ts";
 import { remediationPlanCommand } from "./remediation-plan.ts";
 import {
@@ -641,6 +642,7 @@ export function agentVerificationCommand(
           .filter((path) => /(?:\.test|_test|\.spec|_spec)\.(?:[cm]?[jt]sx?)$/i.test(path)),
       ]),
     ].sort();
+    const componentPaths = declaredComponents(root).map((component) => component.path);
     for (const path of requiredFiles) {
       const declaredCapability = product.contracts.find(
         (contract) => contract.path === path,
@@ -653,20 +655,42 @@ export function agentVerificationCommand(
           (
             entry.result.data.results as Array<{
               path: string;
+              command: string[];
               testDiscovery?: {
                 status: string;
                 truncated: boolean;
                 discoveredFiles: string[] | null;
               };
+              testScope?: { status: string };
             }>
-          ).some(
-            (check) =>
-              check.testDiscovery?.status === "available" &&
-              check.testDiscovery.truncated === false &&
-              check.testDiscovery.discoveredFiles?.some(
-                (local) => resolve(root, check.path, local) === resolve(root, path),
-              ),
-          ),
+          ).some((check) => {
+            if (check.testDiscovery?.status !== "available" || check.testScope?.status !== "matched")
+              return false;
+            const cwd = resolve(root, check.path);
+            const local = relative(cwd, resolve(root, path)).replaceAll("\\", "/");
+            if (local.startsWith("../") || local === ".." || local === "") return false;
+            if (check.testDiscovery.discoveredFiles?.includes(local)) return true;
+            if (!check.testDiscovery.truncated) return false;
+            const prefix = check.path === "." ? "" : check.path + "/";
+            const excludedSubtrees = componentPaths
+              .filter(
+                (componentPath) =>
+                  componentPath !== "." &&
+                  componentPath !== check.path &&
+                  (check.path === "." || componentPath.startsWith(prefix)),
+              )
+              .map((componentPath) =>
+                relative(cwd, resolve(root, componentPath)).replaceAll("\\", "/"),
+              );
+            const evidence = collectTestDiscoveryEvidence({
+              cwd,
+              capability: entry.capability,
+              command: check.command,
+              excludedSubtrees,
+              requiredFiles: [local],
+            });
+            return evidence?.status === "available" && evidence.provenRequestedFiles?.includes(local);
+          }),
       );
       if (!discovered)
         contractDiagnostics.push({
