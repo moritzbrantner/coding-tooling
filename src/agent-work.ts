@@ -467,12 +467,18 @@ export function agentVerificationCommand(
   }
   const product = read.packet.acceptance?.product;
   if (product && !exactCheckout(root, candidateSha, runner)) {
-    return envelope("agent-verification", "unavailable", started, { root, packetPath, candidateSha }, [
-      {
-        code: "verification-source-revision-mismatch",
-        message: "Product verification requires the checkout HEAD to equal the candidate revision",
-      },
-    ]);
+    return envelope(
+      "agent-verification",
+      "unavailable",
+      started,
+      { root, packetPath, candidateSha },
+      [
+        {
+          code: "verification-source-revision-mismatch",
+          message: "Product verification requires the checkout HEAD to equal the candidate revision",
+        },
+      ],
+    );
   }
   const baselineExists = runner(
     "git",
