@@ -10,7 +10,11 @@ import {
   type LoadedSourceDependencyConfig,
 } from "./source-deps.ts";
 import { verifySourceDependencyGraph } from "./source-graph.ts";
-import { type CommandResult, runCommand } from "./shared.ts";
+import {
+  canonicalGitRepository as canonicalRepository,
+  type CommandResult,
+  runCommand,
+} from "./shared.ts";
 
 type Runner = (command: string, args?: string[], cwd?: string, inherit?: boolean) => CommandResult;
 
@@ -40,14 +44,6 @@ function repositoryDirectories(root: string): string[] {
   } catch {
     return [];
   }
-}
-
-function canonicalRepository(git: string): string {
-  return git
-    .trim()
-    .replace(/\.git$/i, "")
-    .replace(/\/$/, "")
-    .toLowerCase();
 }
 
 function gitLocation(path: string, cwd: string, runner: Runner): GitLocation | null {

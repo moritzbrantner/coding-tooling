@@ -45,7 +45,10 @@ export type DependencyFinding = {
 };
 
 function repositoryFromGit(value: string): string | undefined {
-  const normalized = value.replace(/\.git$/, "");
+  const normalized = value
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\.git$/i, "");
   const match = normalized.match(/github\.com[/:]([^/]+)\/([^/]+)$/i);
   return match ? `${match[1]}/${match[2]}` : undefined;
 }

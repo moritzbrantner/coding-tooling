@@ -2,6 +2,20 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
+/**
+ * Canonical identity of a Git repository URL for grouping and duplicate checks. Trailing
+ * slashes are stripped before and after the `.git` suffix so `repo.git/`, `repo/` and `repo`
+ * name the same repository.
+ */
+export function canonicalGitRepository(git: string): string {
+  return git
+    .trim()
+    .replace(/\/+$/, "")
+    .replace(/\.git$/i, "")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
 export type CommandResult = {
   command: string[];
   status: number;
