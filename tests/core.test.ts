@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -119,6 +119,143 @@ describe("coding-tooling plans", () => {
       "backend:build",
     ]);
     expect(plan.missing).toEqual([]);
+  });
+
+  test("attributes same-named coalesced owners individually", () => {
+    const root = repository();
+    const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ ...manifest, name: basename(root) }),
+    );
+    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = []\nresolver = "2"\n');
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { shared: ["lint"] },
+        capabilityCommands: { ".": { lint: ["node", "scripts/lint.mjs"] } },
+      }),
+    );
+
+    expect(discoverComponents(root).map((component) => component.name)).toEqual([
+      basename(root),
+      basename(root),
+    ]);
+    const plan = planChecks({ root, tier: "shared" });
+    expect(plan.checks).toHaveLength(1);
+    expect(plan.checks[0]?.components).toEqual([basename(root), basename(root)]);
+  });
+
+  test("plans an identical mixed-root invocation once with every owning component attributed", () => {
+    const root = repository();
+    writeFileSync(
+      join(root, "Cargo.toml"),
+      '[package]\nname = "fixture"\nversion = "0.1.0"\nedition = "2024"\n\n[workspace]\nmembers = []\nresolver = "2"\n',
+    );
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { shared: ["lint", "test:unit"] },
+        capabilityCommands: {
+          ".": {
+            lint: ["node", "scripts/lint.mjs"],
+            "test:unit": ["node", "scripts/test.mjs"],
+          },
+        },
+      }),
+    );
+
+    const owners = discoverComponents(root).map((component) => component.name);
+    expect(owners).toEqual([basename(root), "fixture"]);
+    const plan = planChecks({ root, tier: "shared" });
+    expect(plan.checks as unknown).toEqual([
+      {
+        capability: "lint",
+        component: basename(root),
+        components: owners,
+        path: ".",
+        command: ["node", "scripts/lint.mjs"],
+      },
+      {
+        capability: "test:unit",
+        component: basename(root),
+        components: owners,
+        path: ".",
+        command: ["node", "scripts/test.mjs"],
+      },
+    ]);
+  });
+
+  test("runs a coalesced mixed-root invocation once and reports all owning components", () => {
+    const root = repository();
+    const marker = join(root, "lint-invocations");
+    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = []\nresolver = "2"\n');
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { shared: ["lint"] },
+        capabilityCommands: {
+          ".": {
+            lint: [
+              "node",
+              "-e",
+              `require('node:fs').appendFileSync(${JSON.stringify(marker)}, 'x')`,
+            ],
+          },
+        },
+      }),
+    );
+
+    const result = runPlan({ root, tier: "shared" });
+    expect(result.status).toBe("passed");
+    const results = result.data.results as { component: string; components?: string[] }[];
+    expect(results.map(({ component, components }) => ({ component, components }))).toEqual([
+      { component: basename(root), components: [basename(root), "fixture"] },
+    ]);
+    expect(readFileSync(marker, "utf8")).toBe("x");
+  });
+
+  test("never merges checks that differ in working directory, capability or command", () => {
+    const root = repository();
+    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = []\nresolver = "2"\n');
+    addRustComponent(root);
+
+    const plan = planChecks({ root, tier: "full" });
+    const lint = plan.checks.filter((check) => check.capability === "lint");
+    expect(lint).toEqual([
+      {
+        capability: "lint",
+        component: basename(root),
+        path: ".",
+        command: [
+          "cargo",
+          "clippy",
+          "--workspace",
+          "--all-targets",
+          "--all-features",
+          "--",
+          "-D",
+          "warnings",
+        ],
+      },
+      { capability: "lint", component: "fixture", path: ".", command: ["npm", "run", "lint"] },
+      {
+        capability: "lint",
+        component: "backend",
+        path: "crates/backend",
+        command: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"],
+      },
+    ]);
+    expect(plan.checks.some((check) => "components" in check)).toBe(false);
+  });
+
+  test("keeps single-owner checks free of coalesced attribution", () => {
+    const root = repository();
+    const plan = planChecks({ root, tier: "fast" });
+    expect(plan.checks.every((check) => !("components" in check))).toBe(true);
   });
 
   test("installed conventions can require an additional full-tier capability", () => {
