@@ -114,3 +114,71 @@ Selection is deterministic and non-mutating. It chooses one candidate in this or
 7. remaining deterministic capability gaps.
 
 The full ranked evidence is returned alongside the one selected slice. A reasoning skill may turn that selected candidate into a task packet, but it must not silently substitute a different project direction.
+
+## Repository-owned product acceptance and merge verification
+
+Opt in only for behavioral or architectural work that has a repository-approved
+specification and an independently supplied acceptance contract. Existing v1
+packets without `acceptance.product` retain their current validation behavior
+and report `mergeVerification.mode: "full-required"` rather than inventing an
+affected-test dependency proof.
+
+`acceptance.product` adds three required fields:
+
+- `specifications`: repository-relative `{path, revision}` pointers to the
+  approved product description or ADR. Each `revision` is the full Git
+  commit SHA whose file content was approved.
+- `contracts`: repository-relative `{path, revision, capability}` pointers
+  to acceptance tests, with a canonical test capability responsible for
+  executing each contract. A test revision can be the earlier tests-first
+  acceptance commit. Git ancestry and unchanged blob identity are checked at
+  the current candidate SHA.
+- `coreSmokeCapabilities`: non-empty test capabilities that the repository
+  requires on every verification, irrespective of affected-test selection.
+
+Optionally, `independentAgentClaim` names the separate authoring context.
+This is **an unverified claim**, never proof of agent separation. The report
+preserves `machineVerified: false`; reviewers must validate that handoff
+procedurally. Neither a particular commit author nor an older timestamp is
+mechanical evidence of independence.
+
+See `fixtures/agent-product-acceptance.json` for an illustrative v1 packet;
+replace all fixture SHA and paths with actual committed repository-owned
+revisions before use.
+
+`agent task-packet` validates and normalizes these optional fields into its
+stable digest. `agent verify` requires a clean candidate checkout, validates
+every referenced path against repository containment (including symlink
+escapes), regular-file type, Git ancestry and unchanged content at HEAD, and
+runs the existing capability checks. Missing, deleted, modified, or
+non-ancestor references are unavailable evidence, not stale success.
+
+### `data.mergeVerification` in verification and handoff
+
+`mode` is `affected` or `full-required`. The object includes a stable
+`reason`, `sourceRevision`, `selectedTests`,
+`coreSmokeCapabilities`, `coverageBasis`, and `execution`.
+
+`affected` is allowed only when native Bun/Vitest discovery completely
+enumerates every conventional test in the selected `test` capability,
+without exclusions or truncation, every test has a closed static relative
+import graph, every changed source module is reachable from a discovered
+test, and all referenced acceptance tests are included. Unknown imports,
+runtime/dynamic resolution, cross-component or configuration changes,
+deleted paths, untested source, incomplete native discovery, unsupported
+runners, or the 50-file discovery display cap require `full-required`.
+Repository filenames, ranked candidate tests, and risk scores never prove
+coverage. This is structural dependency evidence, not a semantic proof that
+assertions sufficiently test behavior.
+
+The verifier currently **executes the full canonical capability commands**
+even when its minimum selection is `affected`; the report states
+`execution: "full-capability-checks"`, not that only selected test files
+ran. Under `full-required`, it includes all discovered test capabilities
+in addition to task, smoke, and contract capabilities. New test files and
+pinned acceptance contracts require available native execution-discovery
+evidence in passed capability results; otherwise verification is
+`unavailable`. Existing build, integration and review requirements remain
+in force. `agent handoff` passes along the decision only for an exact-head,
+passed verification with the matching task digest, and never marks
+independent authoring or semantic review as mechanically resolved.

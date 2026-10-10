@@ -2,12 +2,20 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { check } from "./core.ts";
+import { check, declaredComponents } from "./core.ts";
+import {
+  normalizeProductAcceptance,
+  selectMergeVerification,
+  validateProductReferences,
+  type ProductAcceptance,
+  type MergeVerificationDecision,
+} from "./agent-product-evidence.ts";
 import { expectedEnvironmentFingerprint } from "./environment-fingerprint.ts";
 import { findingsCommand } from "./expectations.ts";
 import { parseAuthorityBoundaries } from "./fleet-authority-graph.ts";
 import type { Capability, Diagnostic, ResultEnvelope, ResultStatus } from "./model.ts";
 import { capabilities } from "./model.ts";
+import { isTestCapability } from "./test-execution-evidence.ts";
 import { remediationPlanCommand } from "./remediation-plan.ts";
 import {
   forbiddenAuthorityClaims,
@@ -23,6 +31,7 @@ export const AGENT_HANDOFF_VERSION = "coding-tooling/agent-handoff/v1" as const;
 
 export const changeKinds = [
   "behavior",
+  "architecture",
   "refactor",
   "performance",
   "protocol",
@@ -50,6 +59,7 @@ export type TaskPacket = {
   acceptance?: {
     requiredCapabilities?: Capability[];
     reviewRequirements?: string[];
+    product?: ProductAcceptance;
   };
   integrationCondition?: string;
 };
@@ -71,6 +81,10 @@ type VerificationReport = ResultEnvelope<Record<string, unknown>> & {
 };
 
 const kindEvidence: Record<ChangeKind, EvidencePlan> = {
+  architecture: {
+    requiredCapabilities: ["test"],
+    reviewRequirements: [],
+  },
   behavior: {
     requiredCapabilities: ["test"],
     reviewRequirements: [],
@@ -206,6 +220,7 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
 
   let requiredCapabilities: Capability[] = [];
   let reviewRequirements: string[] = [];
+  let product: ProductAcceptance | undefined;
   if (source.acceptance !== undefined) {
     if (
       !source.acceptance ||
@@ -231,6 +246,11 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
         } else {
           requiredCapabilities = rawCapabilities as Capability[];
         }
+      }
+      if (acceptance.product !== undefined) {
+        const parsed = normalizeProductAcceptance(acceptance.product);
+        diagnostics.push(...parsed.diagnostics);
+        product = parsed.product;
       }
       if (acceptance.reviewRequirements !== undefined) {
         const evidence = stringArray(acceptance.reviewRequirements);
@@ -272,16 +292,30 @@ export function normalizeTaskPacket(value: unknown): PacketRead {
     outOfScope,
     changeKinds: uniqueSorted(kinds),
   };
-  if (requiredCapabilities.length > 0 || reviewRequirements.length > 0) {
+  if (requiredCapabilities.length > 0 || reviewRequirements.length > 0 || product) {
     packet.acceptance = {};
     if (requiredCapabilities.length > 0)
       packet.acceptance.requiredCapabilities = requiredCapabilities;
     if (reviewRequirements.length > 0) packet.acceptance.reviewRequirements = reviewRequirements;
+    if (product) packet.acceptance.product = product;
   }
   if (integrationCondition) packet.integrationCondition = integrationCondition;
 
   const digest = createHash("sha256").update(JSON.stringify(packet)).digest("hex");
   return { packet, digest, diagnostics: [] };
+}
+
+function packetEvidencePlan(packet: TaskPacket): EvidencePlan {
+  const product = packet.acceptance?.product;
+  return evidenceForChangeKinds(
+    packet.changeKinds,
+    [
+      ...(packet.acceptance?.requiredCapabilities ?? []),
+      ...(product?.coreSmokeCapabilities ?? []),
+      ...(product?.contracts.map((contract) => contract.capability) ?? []),
+    ],
+    packet.acceptance?.reviewRequirements ?? [],
+  );
 }
 
 function readTaskPacket(root: string, packetPath: string): PacketRead {
@@ -375,11 +409,7 @@ export function taskPacketCommand(
   if (!read.packet || !read.digest) {
     return envelope("agent-task-packet", "failed", started, { root, packetPath }, read.diagnostics);
   }
-  const evidencePlan = evidenceForChangeKinds(
-    read.packet.changeKinds,
-    read.packet.acceptance?.requiredCapabilities ?? [],
-    read.packet.acceptance?.reviewRequirements ?? [],
-  );
+  const evidencePlan = packetEvidencePlan(read.packet);
   return envelope("agent-task-packet", "passed", started, {
     root,
     packetPath,
@@ -449,15 +479,53 @@ export function agentVerificationCommand(
       ],
     );
   }
-  const evidencePlan = evidenceForChangeKinds(
-    read.packet.changeKinds,
-    read.packet.acceptance?.requiredCapabilities ?? [],
-    read.packet.acceptance?.reviewRequirements ?? [],
-  );
-  const results = evidencePlan.requiredCapabilities.map((capability) => ({
+  const evidencePlan = packetEvidencePlan(read.packet);
+  const product = read.packet.acceptance?.product;
+  const referenceDiagnostics = product
+    ? validateProductReferences(root, product, candidateSha, runner)
+    : [];
+  if (referenceDiagnostics.length) {
+    return envelope(
+      "agent-verification",
+      "unavailable",
+      started,
+      { root, packetPath, candidateSha, referenceValidation: "failed" },
+      referenceDiagnostics,
+    );
+  }
+  let mergeVerification: MergeVerificationDecision | null = null;
+  if (product) {
+    const diff = runner("git", ["diff", "--name-only", `${read.packet.baselineSha}...${candidateSha}`], root);
+    if (diff.status !== 0) {
+      return envelope("agent-verification", "error", started, { root, packetPath, candidateSha }, [
+        { code: "verification-diff-unavailable", message: diff.stderr || "Cannot enumerate changes" },
+      ]);
+    }
+    mergeVerification = selectMergeVerification(
+      root, candidateSha, diff.stdout.split(/\\r?\\n/).filter(Boolean), product, runner,
+    );
+  }
+  // Canonical capability execution remains authoritative; the affected list is a
+  // deterministic minimum, not a substitute for running the repository's existing gates.
+  const requiredCapabilities = new Set(evidencePlan.requiredCapabilities);
+  if (product && mergeVerification?.mode === "full-required") {
+    try {
+      for (const component of declaredComponents(root)) {
+        for (const capability of Object.keys(component.capabilities) as Capability[]) {
+          if (isTestCapability(capability)) requiredCapabilities.add(capability);
+        }
+      }
+    } catch (error) {
+      return envelope("agent-verification", "error", started, { root, packetPath, candidateSha }, [
+        { code: "verification-capability-discovery-failed", message: error instanceof Error ? error.message : String(error) },
+      ]);
+    }
+  }
+  const results = [...requiredCapabilities].sort().map((capability) => ({
     capability,
     result: check(root, capability),
   }));
+  if (mergeVerification) mergeVerification.execution = "full-capability-checks";
   const endingSha = sourceRevision(root, runner);
   if (endingSha !== candidateSha) {
     return envelope(
@@ -489,20 +557,62 @@ export function agentVerificationCommand(
       ],
     );
   }
+  const contractDiagnostics: Diagnostic[] = [];
+  if (product) {
+    const newTests = runner(
+      "git", ["diff", "--diff-filter=A", "--name-only", `${read.packet.baselineSha}...${candidateSha}`], root,
+    );
+    if (newTests.status !== 0) {
+      return envelope("agent-verification", "error", started, { root, packetPath, candidateSha, results }, [
+        { code: "verification-added-tests-unavailable", message: newTests.stderr || "Cannot enumerate new tests" },
+      ]);
+    }
+    const requiredFiles = [...new Set([
+      ...product.contracts.map((reference) => reference.path),
+      ...newTests.stdout.split(/\\r?\\n/).filter((path) => /(?:\\.test|_test|\\.spec|_spec)\\.(?:[cm]?[jt]sx?)$/i.test(path)),
+    ])].sort();
+    for (const path of requiredFiles) {
+      const declaredCapability = product.contracts.find((contract) => contract.path === path)?.capability;
+      const discovered = results.some((entry) =>
+        (!declaredCapability || entry.capability === declaredCapability) &&
+        entry.result.status === "passed" &&
+        Array.isArray(entry.result.data.results) &&
+        (entry.result.data.results as Array<{ path: string; testDiscovery?: {
+          status: string; truncated: boolean; discoveredFiles: string[] | null;
+        } }>).some((check) =>
+          check.testDiscovery?.status === "available" &&
+          check.testDiscovery.truncated === false &&
+          check.testDiscovery.discoveredFiles?.some((local) =>
+            resolve(root, check.path, local) === resolve(root, path),
+          ),
+        ),
+      );
+      if (!discovered) contractDiagnostics.push({
+        code: "verification-acceptance-test-unproven",
+        path,
+        message: "No passed capability proves this new or pinned acceptance test was executed",
+      });
+    }
+  }
   const statuses = results.map((entry) => entry.result.status);
-  const status: ResultStatus = statuses.includes("error")
+  const status: ResultStatus = contractDiagnostics.length > 0
+    ? "unavailable"
+    : statuses.includes("error")
     ? "error"
     : statuses.includes("failed")
       ? "failed"
       : statuses.includes("unavailable")
         ? "unavailable"
         : "passed";
-  const diagnostics = results.flatMap((entry) =>
-    entry.result.diagnostics.map((diagnostic) => ({
-      ...diagnostic,
-      message: `${entry.capability}: ${diagnostic.message}`,
-    })),
-  );
+  const diagnostics = [
+    ...contractDiagnostics,
+    ...results.flatMap((entry) =>
+      entry.result.diagnostics.map((diagnostic) => ({
+        ...diagnostic,
+        message: `${entry.capability}: ${diagnostic.message}`,
+      })),
+    ),
+  ];
   const environment = expectedEnvironmentFingerprint(root, "default");
   return envelope(
     "agent-verification",
@@ -521,6 +631,16 @@ export function agentVerificationCommand(
         diagnostics: environment.diagnostics,
       },
       evidencePlan,
+      mergeVerification: mergeVerification ?? {
+        mode: "full-required", reason: "legacy-packet-no-dependency-proof",
+        sourceRevision: candidateSha, selectedTests: [], coreSmokeCapabilities: [],
+        coverageBasis: "unproven", execution: "full-capability-checks",
+      },
+      independence: {
+        claim: product?.independentAgentClaim ?? null,
+        status: product?.independentAgentClaim ? "claimed-unverified" : "not-claimed",
+        machineVerified: false,
+      },
       results,
     },
     diagnostics,
@@ -693,6 +813,10 @@ export function agentHandoffCommand(
     branch: branch.status === 0 ? branch.stdout.trim() || null : null,
     changedFiles: diff.stdout.split(/\r?\n/).filter(Boolean).sort(),
     verification: verificationSummary,
+    mergeVerification: verification.report.data.mergeVerification ?? null,
+    independence: verification.report.data.independence ?? {
+      claim: null, status: "not-claimed", machineVerified: false,
+    },
     environment: verification.report.data.environment ?? null,
     semanticReview: {
       required: read.packet.acceptance?.reviewRequirements ?? [],

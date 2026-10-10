@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "coding-tooling/task-packet/v1",
+  "goal": "Preserve user-visible behavior against the approved contract",
+  "baselineSha": "0123456789abcdef0123456789abcdef01234567",
+  "ownedCapability": "example/product-behavior",
+  "mustPreserve": [
+    "Existing observable behavior and architecture ownership"
+  ],
+  "outOfScope": [],
+  "changeKinds": [
+    "behavior",
+    "architecture"
+  ],
+  "acceptance": {
+    "requiredCapabilities": [
+      "test:integration"
+    ],
+    "reviewRequirements": [
+      "Independent reviewer checks the separate-agent handoff"
+    ],
+    "product": {
+      "specifications": [
+        {
+          "path": "docs/product/approved.md",
+          "revision": "1111111111111111111111111111111111111111"
+        }
+      ],
+      "contracts": [
+        {
+          "path": "tests/product/approved.test.ts",
+          "revision": "2222222222222222222222222222222222222222",
+          "capability": "test"
+        }
+      ],
+      "coreSmokeCapabilities": [
+        "test"
+      ],
+      "independentAgentClaim": "acceptance-agent-context"
+    }
+  },
+  "integrationCondition": "Exact-head CI, complete verification and independent acceptance review"
+}
