@@ -129,3 +129,37 @@ jobs:
             --output "$RUNNER_TEMP/decision-atlas-my-farm"
           test -s "$RUNNER_TEMP/decision-atlas-my-farm/index.json"
           test -s "$RUNNER_TEMP/decision-atlas-my-farm/preview.html"
+
+  decision-atlas-formatting-diagnostics:
+    name: Decision Atlas / temporary formatting diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Format proposed files and emit repair material
+        run: |
+          bun run format:write
+          python3 - <<'PY'
+          import json
+          paths = [
+              "docs/decision-atlas.md",
+              "schemas/decision-atlas-decision.schema.json",
+              "schemas/decision-atlas-index.schema.json",
+              "src/decision-atlas-cli.ts",
+              "src/decision-atlas-preview.ts",
+              "src/decision-atlas.ts",
+              "tests/decision-atlas.test.ts",
+          ]
+          for path in paths:
+              with open(path, encoding="utf-8") as source:
+                  print("ATLAS_FORMATTED_JSON=" + json.dumps({"path": path, "content": source.read()}, ensure_ascii=True))
+          PY
+      - name: Lint, typecheck, and run focused tests
+        run: |
+          bun run lint
+          bun run typecheck
+          bun test tests/decision-atlas.test.ts
