@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { buildAtlasIndex, type AtlasFormat, type AtlasIndex, type AtlasSource } from "./decision-atlas.ts";
 import { renderAtlasPreview } from "./decision-atlas-preview.ts";
@@ -58,8 +58,8 @@ export function indexRepository(options: AtlasCommandOptions): AtlasIndex {
   const actual = git(root, "rev-parse", "HEAD").trim();
   if (actual !== options.revision) throw new Error(`stale source revision: expected ${options.revision}, checkout is ${actual}`);
   const remote = git(root, "config", "--get", "remote.origin.url").trim();
-  const qualified = options.repository.replace(/[.*+?^$()|[\]{}]/g, "\\$&");
-  if (!new RegExp(`(?:github\\.com[:/])${qualified}(?:\\.git)?$`).test(remote))
+  const normalizedRemote = remote.replace(/^git@github\\.com:/, "https://github.com/").replace(/\\.git$/, "");
+  if (normalizedRemote !== `https://github.com/${options.repository}`)
     throw new Error(`repository identity mismatch: origin is ${remote}`);
   const paths = sourcePaths(root, options.source, options.format);
   let bytes = 0;
@@ -124,8 +124,9 @@ export function decisionAtlasCommand(argv: string[]): number {
     if (output) {
       const destination = resolve(output);
       const relativePath = relative(resolve(root), destination);
-      if (relativePath === "" || (!relativePath.startsWith("..") && !relativePath.startsWith(`..${sep}`)) &&
-          !relativePath.startsWith(`.${sep}.artifacts`) && !relativePath.startsWith(".artifacts")) {
+      const insideCheckout = !isAbsolute(relativePath) && relativePath !== ".." && !relativePath.startsWith(`..${sep}`);
+      const disposable = relativePath === ".artifacts" || relativePath.startsWith(`.artifacts${sep}`);
+      if (insideCheckout && !disposable) {
         throw new Error("output must be outside the owner checkout or inside its .artifacts directory");
       }
       mkdirSync(destination, { recursive: true });
