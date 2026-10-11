@@ -207,11 +207,15 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       continue;
     }
     const tagged = body.match(/^\[([^\]]+)\]\s+(.+)$/u);
-    if (!tagged) fail(`${source.path}:${i + 1} ID ${id} lacks an implementation label`);
+    if (!tagged) fail(`${source.path}:${i + 1} ID ${id} lacks an entry kind/status label`);
     const statusLabel = tagged[1]!;
+    const kind: AtlasEntryKind = statusLabel === "question" ? "question" : "decision";
+    if (kind === "decision" && !/^(?:agreed|owner decision|implemented|not |documented limit|current limitation|future option)/.test(statusLabel))
+      fail(`${source.path}:${i + 1} ID ${id} has invalid decision status label ${statusLabel}`);
     const sourceBody = tagged[2]!;
-    const selected = sourceBody.match(/^\*\*(.+?)\*\*(?:\s+—\s+|\s+)(.*)$/u);
+    const selected = sourceBody.match(/^\*\*([ABC][^*]*)\*\*(?:\s+—\s+|\s+)(.*)$/u);
     const choice = selected ? selected[1]! : null;
+    if (kind === "question" && choice !== null) fail(`${source.path}:${i + 1} ID ${id} is a Question with a selected choice`);
     const statement = plainCitationFreeStatement(
       issueFreeStatement(selected ? selected[2]! : sourceBody),
     );
@@ -221,6 +225,8 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
     const rawTags = sourceBody.match(/\bTags:\s*((?:`[^`]+`(?:,\s*)?)+)/u)?.[1] ?? "";
     const tags = unique([...rawTags.matchAll(/`([^`]+)`/g)].map((tag) => tag[1]!));
     const references = statement.replace(/\[[^\]]+\]\(https?:\/\/[^)]+\)/g, "");
+    const typed = [...references.matchAll(/\b(answers|supersedes)\s+`?([1-9]\d*(?:\.[1-9]\d*){2,})`?/gi)]
+      .map((match) => ({ type: match[1]!.toLowerCase(), target: match[2]! }));
     const targets = unique(
       [...references.matchAll(/\b[1-9]\d*(?:\.[1-9]\d*){2,}\b/g)]
         .map((ref) => ref[0])
@@ -231,19 +237,22 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       .slice(0, -1)
       .map((_, index, parts) => headings.get(parts.slice(0, index + 1).join(".")) ?? "");
     decisions.push({
+      kind,
       id,
       aliases,
       parentId,
       path,
       choice,
       statement,
-      decisionStatus:
+      decisionStatus: kind === "question" ? null :
         statusLabel.includes("owner decision") || statusLabel.includes("agreed")
           ? "accepted"
           : "recorded",
-      implementation: { sourceLabel: statusLabel, verification: "unverified" },
+      implementation: { sourceLabel: kind === "question" ? "not-applicable" : statusLabel, verification: "unverified" },
       tags,
-      relations: targets.map((target) => ({ type: "references", target })),
+      relations: targets.map((target) =>
+        typed.find((edge) => edge.target === target) ?? { type: "references", target }
+      ),
       links: markdownLinks(tagged[2]!),
       source: { path: source.path, line: i + 1 },
     });
