@@ -81,8 +81,8 @@ export function indexRepository(options: AtlasCommandOptions): AtlasIndex {
     throw new Error(`stale source revision: expected ${options.revision}, checkout is ${actual}`);
   const remote = git(root, "config", "--get", "remote.origin.url").trim();
   const normalizedRemote = remote
-    .replace(/^git@github\\.com:/, "https://github.com/")
-    .replace(/\\.git$/, "");
+    .replace(/^git@github\.com:/, "https://github.com/")
+    .replace(/\.git$/, "");
   if (normalizedRemote !== `https://github.com/${options.repository}`)
     throw new Error(`repository identity mismatch: origin is ${remote}`);
   const paths = sourcePaths(root, options.source, options.format);
