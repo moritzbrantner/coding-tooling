@@ -120,9 +120,9 @@ test("unresolved Questions remain distinct and can be answered by a later Decisi
 test("duplicate IDs, aliases and invalid references fail; external links are optional", () => {
   expect(() => atlas(farm.replace("1.1.2**", "1.1.1**"))).toThrow("duplicate ID");
   expect(() => atlas(farm.replace("references 1.1.2", "references 1.9.9"))).toThrow("dangling");
-  expect(atlas(farm.replaceAll(issue(126), "").replaceAll(issue(153), "")).decisions[0]?.links).toEqual(
-    [],
-  );
+  expect(
+    atlas(farm.replaceAll(issue(126), "").replaceAll(issue(153), "")).decisions[0]?.links,
+  ).toEqual([]);
   expect(() => atlas(farm.replace("issues/126", "tree/main"))).toThrow("links must be");
   const collision = farm.replace(
     "my-farm/production/admission/one-off",
@@ -147,8 +147,10 @@ test("history preserves IDs and choices, but permits concise wording edits", () 
     "historical choice",
   );
   expect(
-    atlas(farm.replace("Browser-local gameplay first.", "Browser-local gameplay primarily."), previous)
-      .decisions[0]?.statement,
+    atlas(
+      farm.replace("Browser-local gameplay first.", "Browser-local gameplay primarily."),
+      previous,
+    ).decisions[0]?.statement,
   ).toContain("Browser-local gameplay primarily.");
   expect(() =>
     atlas(farm.replace("Legacy alias: `my-farm/production/admission/one-off`.", ""), previous),
@@ -191,7 +193,10 @@ test("strikethrough retires decisions or replaces them inline under the same ID"
   expect(revised.decisions[1]?.statement).toContain("~~**B** — Separate approved choice.~~");
   expect(renderAtlasPreview(revised)).toContain("<del>**B** — Separate approved choice.</del>");
   expect(() =>
-    atlas(farm.replace("**B** — Separate approved choice.", "**C** — Revised approved choice."), previous)
+    atlas(
+      farm.replace("**B** — Separate approved choice.", "**C** — Revised approved choice."),
+      previous,
+    ),
   ).toThrow("historical choice");
 });
 
@@ -203,14 +208,16 @@ test("struck references are no longer active and malformed strikethrough fails",
     ),
   );
   expect(revised.decisions[2]?.relations).toEqual([]);
-  expect(() => atlas(farm.replace("Separate approved choice.", "~~Separate approved choice."))).toThrow(
-    "malformed strikethrough",
-  );
+  expect(() =>
+    atlas(farm.replace("Separate approved choice.", "~~Separate approved choice.")),
+  ).toThrow("malformed strikethrough");
   const question = `- **8** Product
   - **8.1** Mode
     - **8.1.1** [question] ~~What mode should we use?~~
 `;
-  expect(() => buildAtlasIndex(repo, revision, source(question))).toThrow("cannot strike a Question");
+  expect(() => buildAtlasIndex(repo, revision, source(question))).toThrow(
+    "cannot strike a Question",
+  );
 });
 
 test("the previous path ID can map to a stable legacy alias after a lossless migration", () => {
