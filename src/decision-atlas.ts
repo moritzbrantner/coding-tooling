@@ -215,6 +215,8 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
     const aliases = unique(
       [...sourceBody.matchAll(/Legacy alias:\s*`([^`]+)`/g)].map((item) => item[1]!),
     );
+    const rawTags = sourceBody.match(/\bTags:\s*((?:`[^`]+`(?:,\s*)?)+)/u)?.[1] ?? "";
+    const tags = unique([...rawTags.matchAll(/`([^`]+)`/g)].map((tag) => tag[1]!));
     const references = statement.replace(/\[[^\]]+\]\(https?:\/\/[^)]+\)/g, "");
     const targets = unique(
       [...references.matchAll(/\b[1-9]\d*(?:\.[1-9]\d*){2,}\b/g)]
@@ -237,7 +239,7 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
           ? "accepted"
           : "recorded",
       implementation: { sourceLabel: statusLabel, verification: "unverified" },
-      tags: [],
+      tags,
       relations: targets.map((target) => ({ type: "references", target })),
       links: markdownLinks(tagged[2]!),
       source: { path: source.path, line: i + 1 },
