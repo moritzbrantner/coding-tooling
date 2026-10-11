@@ -6,7 +6,7 @@ The **owning repository** is authoritative. This tool reads a committed document
 
 - **`numbered-list`** reads explicit nested Markdown list identifiers (`1`, `1.2`, `1.2.3`) without reordering or allocating IDs. A list branch is navigation; a leaf must have an implementation-status label and owning-repository GitHub source links. This is the authoring format of the MMORPG PR #150 Atlas and, since its October 11 migration, the [My Farm Atlas](https://github.com/moritzbrantner/my-farm/blob/main/docs/decisions/atlas.md). The latter preserves all older `my-farm/...` IDs as **legacy aliases**, which are indexed and remain addressable.
 - **`my-farm-tree`** is the read-only compatibility adapter for the original dated My Farm tree, when indexing a commit where that path contained the actual decisions. The **current** dated file is merely a redirect and is not a valid decision source.
-- **`canonical`** reads a directory of one Markdown file per decision or an individual Markdown file, with the versioned restricted YAML frontmatter shown below. This is an available option for *new owner-authored sources*, not a demand to convert the other two formats. The schema describes normalized fields, not a competing writable database.
+- **`canonical`** reads a directory of one Markdown file per decision or an individual Markdown file, with the versioned restricted YAML frontmatter shown below. This is an available option for _new owner-authored sources_, not a demand to convert the other two formats. The schema describes normalized fields, not a competing writable database.
 
 Example of the **canonical per-decision Markdown/YAML v1 source** (`path` contains navigational categories; `id` is not derived from their names):
 
@@ -21,9 +21,10 @@ choice: C
 decision_status: accepted
 implementation_status: not-verified
 tags: ["input", "authority"]
-relations: [{"type":"requires","target":"my-farm/control/paused-task"}]
+relations: [{ "type": "requires", "target": "my-farm/control/paused-task" }]
 links: ["https://github.com/moritzbrantner/my-farm/issues/126"]
 ---
+
 Optional direct control uses the same authoritative Farm.
 ```
 
@@ -48,7 +49,7 @@ bun src/router.ts decision-atlas index \
 
 The example requires `../my-farm` checked out at the specified commit (not just the current main branch). Output is disposable. Opening `.artifacts/decision-atlas-my-farm/preview.html` locally shows expandable tree navigation, ID/tag search, choice, source citations and typed relationships. The `index.json` records the source commit, source-content SHA-256, paths and source lines. The command fails if `HEAD` differs, the checked-out decision source is dirty, the repository identity is wrong, or parsing/validation fails. No network lookups happen during indexing.
 
-For the **open MMORPG PR #150**, check out its *specific* head and index its `docs/decisions/atlas.md` with `--format numbered-list`, `--repository moritzbrantner/mmorpg`, and `--revision "$(git -C ../mmorpg rev-parse HEAD)"`. The adapter does not convert the file, reassign dotted IDs, or treat a source claim of `implemented` as independently verified.
+For the **open MMORPG PR #150**, check out its _specific_ head and index its `docs/decisions/atlas.md` with `--format numbered-list`, `--repository moritzbrantner/mmorpg`, and `--revision "$(git -C ../mmorpg rev-parse HEAD)"`. The adapter does not convert the file, reassign dotted IDs, or treat a source claim of `implemented` as independently verified.
 
 The optional `--previous-index path/to/index.json` compares stable IDs, choices and decision text against a prior **validated artifact**. It rejects disappearance/reuse and in-place historical changes while allowing category relabeling without ID changes. A source revision by itself cannot prove that old decisions were preserved without a prior baseline; publish consumers must carry forward their last known valid index externally when needed.
 
