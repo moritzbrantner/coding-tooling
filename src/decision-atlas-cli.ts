@@ -4,7 +4,6 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
-  readdirSync,
   writeFileSync,
 } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -17,9 +16,8 @@ import {
 } from "./decision-atlas.ts";
 import { renderAtlasPreview } from "./decision-atlas-preview.ts";
 
-const maxFiles = 256;
 const maxBytes = 2 * 1024 * 1024;
-const formats = new Set<AtlasFormat>(["my-farm-tree", "numbered-list", "canonical"]);
+const formats = new Set<AtlasFormat>(["my-farm-tree", "numbered-list"]);
 
 function git(root: string, ...args: string[]): string {
   return execFileSync("git", args, {
@@ -30,37 +28,17 @@ function git(root: string, ...args: string[]): string {
   });
 }
 
-function sourcePaths(root: string, relativeSource: string, format: AtlasFormat): string[] {
+function sourcePaths(root: string, relativeSource: string): string[] {
   if (
-    !/^docs\/decisions\/[A-Za-z0-9_./-]+$/.test(relativeSource) ||
+    !/^docs\\/decisions\\/[A-Za-z0-9_./-]+\\.md$/.test(relativeSource) ||
     relativeSource.split("/").some((piece) => piece === "." || piece === "..")
   ) {
-    throw new Error("source must be a repository-relative path inside docs/decisions");
+    throw new Error("source must be a repository-relative Markdown file inside docs/decisions");
   }
   const path = join(root, relativeSource);
   if (!existsSync(path)) throw new Error(`missing source: ${relativeSource}`);
-  const kind = lstatSync(path);
-  if (kind.isSymbolicLink()) throw new Error("symlinked decision sources are not followed");
-  if (kind.isFile()) {
-    if (!relativeSource.endsWith(".md")) throw new Error("decision source must be Markdown");
-    return [relativeSource];
-  }
-  if (!kind.isDirectory() || format !== "canonical")
-    throw new Error("only canonical sources can be directories");
-  const pending = [relativeSource];
-  const collected: string[] = [];
-  while (pending.length) {
-    const directory = pending.pop()!;
-    for (const entry of readdirSync(join(root, directory), { withFileTypes: true })) {
-      const child = `${directory}/${entry.name}`;
-      if (entry.isSymbolicLink()) throw new Error(`symlinked decision source: ${child}`);
-      if (entry.isDirectory()) pending.push(child);
-      else if (entry.isFile() && entry.name.endsWith(".md")) collected.push(child);
-      if (collected.length + pending.length > maxFiles)
-        throw new Error("decision source file budget exceeded");
-    }
-  }
-  return collected.sort();
+  if (!lstatSync(path).isFile()) throw new Error("decision source must be a regular Markdown file (no symlinks or directories)");
+  return [relativeSource];
 }
 
 export interface AtlasCommandOptions {
@@ -85,7 +63,7 @@ export function indexRepository(options: AtlasCommandOptions): AtlasIndex {
     .replace(/\.git$/, "");
   if (normalizedRemote !== `https://github.com/${options.repository}`)
     throw new Error(`repository identity mismatch: origin is ${remote}`);
-  const paths = sourcePaths(root, options.source, options.format);
+  const paths = sourcePaths(root, options.source);
   let bytes = 0;
   const sources: AtlasSource[] = paths.map((path) => {
     const file = join(root, path);
@@ -118,7 +96,7 @@ function writeIfChanged(path: string, content: string): void {
 
 function usage(): never {
   throw new Error(
-    "usage: coding-tooling decision-atlas index --root <checkout> --repository <owner/repo> --source docs/decisions/<file-or-directory> --format <my-farm-tree|numbered-list|canonical> --revision <40-char-commit> [--previous-index <index.json>] [--min-decisions <n>] [--output <directory>]",
+    "usage: coding-tooling decision-atlas index --root <checkout> --repository <owner/repo> --source docs/decisions/<file-or-directory> --format <my-farm-tree|numbered-list> --revision <40-char-commit> [--previous-index <index.json>] [--min-decisions <n>] [--output <directory>]",
   );
 }
 
