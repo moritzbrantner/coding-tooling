@@ -11,10 +11,9 @@ import { renderAtlasPreview } from "../src/decision-atlas-preview.ts";
 const revision = "a".repeat(40);
 const repo = "moritzbrantner/my-farm";
 const issue = (id: number) => `[#${id}](https://github.com/${repo}/issues/${id})`;
-const source = (
-  text: string,
-  format: "numbered-list" | "my-farm-tree" = "numbered-list",
-) => [{ path: "docs/decisions/atlas.md", format, text }];
+const source = (text: string, format: "numbered-list" | "my-farm-tree" = "numbered-list") => [
+  { path: "docs/decisions/atlas.md", format, text },
+];
 
 const farm = `- **How to use this Decision Atlas**
   - Explicit IDs and aliases never change.
@@ -43,7 +42,9 @@ test("My Farm adapter preserves numeric IDs, original path aliases, choices and 
   expect(index.decisions[0]?.tags).toEqual(["pages", "platform"]);
   expect(index.decisions[0]?.relations).toEqual([{ type: "cross-reference", target: "1.1.2" }]);
   expect(index.decisions[2]?.relations).toEqual([{ type: "references", target: "1.1.2" }]);
-  expect(index.decisions.every((item) => item.kind === "decision" && item.decisionStatus === "accepted")).toBe(true);
+  expect(
+    index.decisions.every((item) => item.kind === "decision" && item.decisionStatus === "accepted"),
+  ).toBe(true);
   expect(index.decisions.every((item) => item.implementation.verification === "unverified")).toBe(
     true,
   );
@@ -106,7 +107,13 @@ test("unresolved Questions remain distinct and can be answered by a later Decisi
   expect(idx.decisions[1]?.kind).toBe("decision");
   expect(idx.decisions[1]?.relations).toEqual([{ type: "answers", target: "8.1.1" }]);
   expect(renderAtlasPreview(idx)).toContain("Question: unresolved");
-  expect(() => buildAtlasIndex("moritzbrantner/mmorpg", revision, source(mm.replace("[question] Should", "[question] **A** — Should")))).toThrow("Question with a selected choice");
+  expect(() =>
+    buildAtlasIndex(
+      "moritzbrantner/mmorpg",
+      revision,
+      source(mm.replace("[question] Should", "[question] **A** — Should")),
+    ),
+  ).toThrow("Question with a selected choice");
 });
 
 test("duplicate IDs, aliases, missing references and missing links fail closed", () => {
@@ -116,12 +123,17 @@ test("duplicate IDs, aliases, missing references and missing links fail closed",
     "no source links",
   );
   expect(() => atlas(farm.replace("issues/126", "tree/main"))).toThrow("links must be");
-  const collision = farm.replace("my-farm/production/admission/one-off", "my-farm/experience/platform/pages-single-player");
+  const collision = farm.replace(
+    "my-farm/production/admission/one-off",
+    "my-farm/experience/platform/pages-single-player",
+  );
   expect(() => atlas(collision)).toThrow("duplicate or invalid legacy alias");
 });
 
 test("unknown source status and parent cycles fail validation", () => {
-  expect(() => atlas(farm.replace("[agreed; implementation unverified]", "[anything goes]"))).toThrow("invalid decision status label");
+  expect(() =>
+    atlas(farm.replace("[agreed; implementation unverified]", "[anything goes]")),
+  ).toThrow("invalid decision status label");
   const cycle = structuredClone(atlas());
   cycle.decisions[0]!.parentId = "1.1.2";
   cycle.decisions[1]!.parentId = "1.1.1";
@@ -131,7 +143,9 @@ test("unknown source status and parent cycles fail validation", () => {
 test("append-only compare rejects changed choices and disappearing IDs; category labels may change", () => {
   const previous = atlas();
   expect(() => atlas(farm.replace("**A now; C later**", "**B**"), previous)).toThrow("changed");
-  expect(() => atlas(farm.replace("Legacy alias: `my-farm/production/admission/one-off`.", ""), previous)).toThrow("historical ID my-farm/production/admission/one-off");
+  expect(() =>
+    atlas(farm.replace("Legacy alias: `my-farm/production/admission/one-off`.", ""), previous),
+  ).toThrow("historical ID my-farm/production/admission/one-off");
   expect(() =>
     atlas(
       farm
