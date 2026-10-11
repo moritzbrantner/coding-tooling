@@ -206,8 +206,8 @@ test("choice-less retirement must preserve the previous statement", () => {
     - **1.1.1** [decision] Enable backups.
 `;
   const previous = atlas(original);
-  expect(atlas(original.replace("Enable backups.", "~~Enable backups.~~"), previous)
-    .decisions[0]?.decisionStatus).toBe("superseded");
+  const retired = atlas(original.replace("Enable backups.", "~~Enable backups.~~"), previous);
+  expect(retired.decisions[0]?.decisionStatus).toBe("superseded");
   expect(() =>
     atlas(original.replace("Enable backups.", "~~Disable backups.~~"), previous),
   ).toThrow("did not preserve previous wording");
