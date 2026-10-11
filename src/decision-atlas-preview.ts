@@ -1,8 +1,11 @@
 import type { AtlasDecision, AtlasIndex } from "./decision-atlas.ts";
 
 function html(value: string): string {
-  return value.replace(/[&<>"']/g, (character) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
+  return value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!,
+  );
 }
 
 function anchor(id: string): string {
@@ -20,12 +23,18 @@ function makeBranch(title: string): Branch {
 }
 
 function navigation(branch: Branch): string {
-  const children = [...branch.children.values()].map((child) =>
-    `<details open><summary>${html(child.title)}</summary>${navigation(child)}</details>`).join("");
-  const decisions = branch.decisions.map((decision) => {
-    const label = decision.statement.split(/\.\s/)[0]!.slice(0, 94);
-    return `<a class="node" data-search="${html([decision.id, ...decision.aliases, label, ...decision.tags].join(" ").toLowerCase())}" href="#${anchor(decision.id)}"><code>${html(decision.id)}</code> ${html(label)}</a>`;
-  }).join("");
+  const children = [...branch.children.values()]
+    .map(
+      (child) =>
+        `<details open><summary>${html(child.title)}</summary>${navigation(child)}</details>`,
+    )
+    .join("");
+  const decisions = branch.decisions
+    .map((decision) => {
+      const label = decision.statement.split(/\.\s/)[0]!.slice(0, 94);
+      return `<a class="node" data-search="${html([decision.id, ...decision.aliases, label, ...decision.tags].join(" ").toLowerCase())}" href="#${anchor(decision.id)}"><code>${html(decision.id)}</code> ${html(label)}</a>`;
+    })
+    .join("");
   return children + decisions;
 }
 
@@ -39,15 +48,26 @@ export function renderAtlasPreview(index: AtlasIndex): string {
     }
     branch.decisions.push(decision);
   }
-  const sections = index.decisions.map((decision) => {
-    const sourceUrl = `https://github.com/${index.repository}/blob/${index.sourceRevision}/${decision.source.path}#L${decision.source.line}`;
-    const edges = decision.relations.map((relation) =>
-      `<li><strong>${html(relation.type)}</strong> → <a href="#${anchor(relation.target)}">${html(relation.target)}</a></li>`).join("");
-    const references = decision.links.map((url) =>
-      `<li><a href="${html(url)}" rel="noreferrer">${html(url)}</a></li>`).join("");
-    const tags = decision.tags.map((tag) => `<span class="tag">${html(tag)}</span>`).join(" ");
-    const aliases = decision.aliases.map((alias) => `<span class="tag">Legacy alias: <code>${html(alias)}</code></span><span id="${anchor(alias)}"></span>`).join(" ");
-    return `<article id="${anchor(decision.id)}">
+  const sections = index.decisions
+    .map((decision) => {
+      const sourceUrl = `https://github.com/${index.repository}/blob/${index.sourceRevision}/${decision.source.path}#L${decision.source.line}`;
+      const edges = decision.relations
+        .map(
+          (relation) =>
+            `<li><strong>${html(relation.type)}</strong> → <a href="#${anchor(relation.target)}">${html(relation.target)}</a></li>`,
+        )
+        .join("");
+      const references = decision.links
+        .map((url) => `<li><a href="${html(url)}" rel="noreferrer">${html(url)}</a></li>`)
+        .join("");
+      const tags = decision.tags.map((tag) => `<span class="tag">${html(tag)}</span>`).join(" ");
+      const aliases = decision.aliases
+        .map(
+          (alias) =>
+            `<span class="tag">Legacy alias: <code>${html(alias)}</code></span><span id="${anchor(alias)}"></span>`,
+        )
+        .join(" ");
+      return `<article id="${anchor(decision.id)}">
       <h2><code>${html(decision.id)}</code></h2>
       <p class="meta">Decision: ${html(decision.decisionStatus)}${decision.choice === null ? "" : ` · Choice: ${html(decision.choice)}`} · Implementation claim: ${html(decision.implementation.sourceLabel)} · <strong>Not independently verified</strong></p>
       <p>${html(decision.statement)}</p>
@@ -56,7 +76,8 @@ export function renderAtlasPreview(index: AtlasIndex): string {
       ${edges ? `<h3>Relationships</h3><ul>${edges}</ul>` : ""}
       <h3>Declared sources (not independently verified)</h3><ul class="sources">${references}</ul>
     </article>`;
-  }).join("\n");
+    })
+    .join("\n");
   const title = `${index.repository} · Decision Atlas`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
