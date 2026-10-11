@@ -90,6 +90,28 @@ test("find uses deterministic AND terms, relevance and only current wording", ()
   expect(() => queryDecisionAtlas(data, { action: "find", value: "" })).toThrow("search terms");
 });
 
+test("recorded answers close Questions and citations do not become search terms", () => {
+  const answered = index(
+    "- **9** World\n" +
+      "  - **9.1** Trade\n" +
+      "    - **9.1.1** [question] Should barter be allowed?\n" +
+      "    - **9.1.2** [implemented in reference] Barter is allowed. Answers 9.1.1.\n",
+  );
+  expect(answered.decisions[1]?.decisionStatus).toBe("recorded");
+  expect(queryDecisionAtlas(answered, { action: "questions" }).shown).toBe(0);
+
+  const linked = index(
+    content.replace(
+      "Block on input.",
+      "Block on input. ([owner PR](https://github.com/moritzbrantner/daq-fixture/pull/2))",
+    ),
+  );
+  expect(queryDecisionAtlas(linked, { action: "get", value: "1.1.2" }).entries[0]?.text).toBe(
+    "Block on input.",
+  );
+  expect(queryDecisionAtlas(linked, { action: "find", value: "owner" }).shown).toBe(0);
+});
+
 test("topic, kind, unanswered questions, and inactive controls are explicit", () => {
   const data = index();
   expect(queryDecisionAtlas(data, { action: "questions" }).entries.map((e) => e.id)).toEqual([
