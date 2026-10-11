@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/moritzbrantner/coding-tooling/blob/main/schemas/decision-atlas-index.schema.json",
+  "title": "Revision-bound read-only Decision and Question Atlas index v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "repository",
+    "sourceRevision",
+    "sources",
+    "groups",
+    "decisions",
+    "provenance"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "sourceRevision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "format", "sha256"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^docs/decisions/"
+          },
+          "format": {
+            "enum": ["my-farm-tree", "numbered-list"]
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "parentId", "title"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": ["string", "null"]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "decision-atlas-decision.schema.json"
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "implementation", "note"],
+      "properties": {
+        "source": {
+          "const": "committed-revision"
+        },
+        "implementation": {
+          "const": "not-verified"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

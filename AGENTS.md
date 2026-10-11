@@ -22,6 +22,10 @@ This file contains repository-specific guidance for coding agents working in `co
 - Non-authoritative: `product-domain-semantics`, `human-architecture-decisions`
 - Prohibited write-back: remote or browser analysis must not mutate repository state except through an explicit authoritative local command
 
+## Decision Atlas owner intent
+
+For the approved Decision Atlas product contract, consult [`docs/decisions/atlas.md`](docs/decisions/atlas.md). It contains only Decisions and Questions; it is an owner-authored intent record, not an output of this tooling. Do not infer approval, rename IDs, or create a second decision authority while implementing its indexer.
+
 ## Change discipline
 
 - Add or update tests for behavioral changes.

@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/moritzbrantner/coding-tooling/blob/main/schemas/decision-atlas-decision.schema.json",
+  "title": "Decision Atlas indexed Decision or Question v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "id",
+    "aliases",
+    "parentId",
+    "path",
+    "choice",
+    "statement",
+    "decisionStatus",
+    "implementation",
+    "tags",
+    "relations",
+    "links",
+    "source"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Opaque stable ID: never renumber or rewrite."
+    },
+    "aliases": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "parentId": {
+      "type": ["string", "null"]
+    },
+    "path": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "choice": {
+      "type": ["string", "null"]
+    },
+    "statement": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decisionStatus": {
+      "type": ["string", "null"],
+      "enum": ["accepted", "recorded", "proposed", "superseded", null]
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceLabel", "verification"],
+      "properties": {
+        "sourceLabel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "verification": {
+          "const": "unverified"
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "target"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "pattern": "^[a-z][a-z-]*$"
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "uniqueItems": true,
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "format": "uri"
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "line"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^docs/decisions/"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "kind": {
+      "enum": ["decision", "question"]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "question"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decisionStatus": {
+            "const": null
+          },
+          "choice": {
+            "const": null
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "decision"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decisionStatus": {
+            "enum": ["accepted", "recorded", "proposed", "superseded"]
+          }
+        }
+      }
+    }
+  ]
+}
