@@ -200,6 +200,19 @@ test("strikethrough retires decisions or replaces them inline under the same ID"
   ).toThrow("historical choice");
 });
 
+test("choice-less retirement must preserve the previous statement", () => {
+  const original = `- **1** Product
+  - **1.1** Backup
+    - **1.1.1** [decision] Enable backups.
+`;
+  const previous = atlas(original);
+  expect(atlas(original.replace("Enable backups.", "~~Enable backups.~~"), previous)
+    .decisions[0]?.decisionStatus).toBe("superseded");
+  expect(() =>
+    atlas(original.replace("Enable backups.", "~~Disable backups.~~"), previous),
+  ).toThrow("did not preserve previous wording");
+});
+
 test("struck references are no longer active and malformed strikethrough fails", () => {
   const revised = atlas(
     farm.replace(
