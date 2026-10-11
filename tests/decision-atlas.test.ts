@@ -11,8 +11,10 @@ import { renderAtlasPreview } from "../src/decision-atlas-preview.ts";
 const revision = "a".repeat(40);
 const repo = "moritzbrantner/my-farm";
 const issue = (id: number) => `[#${id}](https://github.com/${repo}/issues/${id})`;
-const source = (text: string, format: "numbered-list" | "my-farm-tree" | "canonical" = "numbered-list") =>
-  [{ path: "docs/decisions/atlas.md", format, text }];
+const source = (
+  text: string,
+  format: "numbered-list" | "my-farm-tree" | "canonical" = "numbered-list",
+) => [{ path: "docs/decisions/atlas.md", format, text }];
 
 const farm = `- **How to use this Decision Atlas**
   - Explicit IDs and aliases never change.
@@ -34,14 +36,22 @@ function atlas(text = farm, previous?: AtlasIndex): AtlasIndex {
 
 function canonical(id: string, extras: Record<string, unknown> = {}): string {
   const fields: Record<string, unknown> = {
-    atlas_version: 1, id, parent: null, choice: "A",
-    path: ["control"], decision_status: "accepted",
+    atlas_version: 1,
+    id,
+    parent: null,
+    choice: "A",
+    path: ["control"],
+    decision_status: "accepted",
     implementation_status: "not-verified",
-    tags: ["ux"], relations: [], links: [`https://github.com/${repo}/issues/126`],
+    tags: ["ux"],
+    relations: [],
+    links: [`https://github.com/${repo}/issues/126`],
     ...extras,
   };
-  const serialized = Object.entries(fields).map(([key, value]) =>
-    `${key}: ${typeof value === "string" && /^[A-Za-z0-9._/-]+$/.test(value) ? value : JSON.stringify(value)}`);
+  const serialized = Object.entries(fields).map(
+    ([key, value]) =>
+      `${key}: ${typeof value === "string" && /^[A-Za-z0-9._/-]+$/.test(value) ? value : JSON.stringify(value)}`,
+  );
   return `---\n${serialized.join("\n")}\n---\nDo not silently change this decision.\n`;
 }
 
@@ -55,7 +65,9 @@ test("My Farm adapter preserves numeric IDs, original path aliases, choices and 
   expect(index.decisions[0]?.relations).toEqual([{ type: "cross-reference", target: "1.1.2" }]);
   expect(index.decisions[2]?.relations).toEqual([{ type: "references", target: "1.1.2" }]);
   expect(index.decisions.every((item) => item.decisionStatus === "accepted")).toBe(true);
-  expect(index.decisions.every((item) => item.implementation.verification === "unverified")).toBe(true);
+  expect(index.decisions.every((item) => item.implementation.verification === "unverified")).toBe(
+    true,
+  );
   expect(atlas()).toEqual(index);
 });
 
@@ -103,61 +115,112 @@ test("canonical YAML-frontmatter sources are typed, versioned, and retain explic
     { path: "docs/decisions/002.md", text: second, format: "canonical" },
   ]);
   expect(index.decisions[1]?.aliases).toEqual(["my-farm/control/old-name"]);
-  expect(index.decisions[1]?.relations).toEqual([{ type: "supersedes", target: "my-farm/control/first" }]);
-  expect(() => buildAtlasIndex(repo, revision, source(canonical("my-farm/control/first", { atlas_version: 2 }), "canonical"))).toThrow("invalid versioned");
+  expect(index.decisions[1]?.relations).toEqual([
+    { type: "supersedes", target: "my-farm/control/first" },
+  ]);
+  expect(() =>
+    buildAtlasIndex(
+      repo,
+      revision,
+      source(canonical("my-farm/control/first", { atlas_version: 2 }), "canonical"),
+    ),
+  ).toThrow("invalid versioned");
 });
 
 test("duplicate IDs, aliases, missing references and missing links fail closed", () => {
   expect(() => atlas(farm.replace("1.1.2**", "1.1.1**"))).toThrow("duplicate ID");
   expect(() => atlas(farm.replace("references 1.1.2", "references 1.9.9"))).toThrow("dangling");
-  expect(() => atlas(farm.replaceAll(issue(126), "").replaceAll(issue(153), ""))).toThrow("no source links");
+  expect(() => atlas(farm.replaceAll(issue(126), "").replaceAll(issue(153), ""))).toThrow(
+    "no source links",
+  );
   expect(() => atlas(farm.replace("issues/126", "tree/main"))).toThrow("links must be");
   const collision = canonical("my-farm/control/second", { aliases: ["my-farm/control/first"] });
-  expect(() => buildAtlasIndex(repo, revision, [
-    { path: "docs/decisions/001.md", text: canonical("my-farm/control/first"), format: "canonical" },
-    { path: "docs/decisions/002.md", text: collision, format: "canonical" },
-  ])).toThrow("shadows");
+  expect(() =>
+    buildAtlasIndex(repo, revision, [
+      {
+        path: "docs/decisions/001.md",
+        text: canonical("my-farm/control/first"),
+        format: "canonical",
+      },
+      { path: "docs/decisions/002.md", text: collision, format: "canonical" },
+    ]),
+  ).toThrow("shadows");
 });
 
 test("invalid status and parent cycles are rejected independently of source format", () => {
-  expect(() => buildAtlasIndex(repo, revision, source(canonical("my-farm/control/first", {
-    decision_status: "implemented",
-  }), "canonical"))).toThrow("invalid decision status");
+  expect(() =>
+    buildAtlasIndex(
+      repo,
+      revision,
+      source(
+        canonical("my-farm/control/first", {
+          decision_status: "implemented",
+        }),
+        "canonical",
+      ),
+    ),
+  ).toThrow("invalid decision status");
   const first = canonical("my-farm/control/first", { parent: "my-farm/control/second" });
   const second = canonical("my-farm/control/second", { parent: "my-farm/control/first" });
-  expect(() => buildAtlasIndex(repo, revision, [
-    { path: "docs/decisions/001.md", text: first, format: "canonical" },
-    { path: "docs/decisions/002.md", text: second, format: "canonical" },
-  ])).toThrow("parent cycle");
+  expect(() =>
+    buildAtlasIndex(repo, revision, [
+      { path: "docs/decisions/001.md", text: first, format: "canonical" },
+      { path: "docs/decisions/002.md", text: second, format: "canonical" },
+    ]),
+  ).toThrow("parent cycle");
 });
 
 test("append-only compare rejects changed choices and disappearing IDs; category labels may change", () => {
   const previous = atlas();
   expect(() => atlas(farm.replace("**A now; C later**", "**B**"), previous)).toThrow("changed");
-  expect(() => atlas(farm.replace(/\s+- \*\*1\.1\.2\*\*[^\n]*/, "").replace(/\s+- \`1\.1\.1\` \(platform\)[^\n]*/, ""), previous)).toThrow("removed");
+  expect(() =>
+    atlas(
+      farm
+        .replace(/\s+- \*\*1\.1\.2\*\*[^\n]*/, "")
+        .replace(/\s+- \`1\.1\.1\` \(platform\)[^\n]*/, ""),
+      previous,
+    ),
+  ).toThrow("removed");
   const renamed = farm.replace("**1.1** Platform", "**1.1** Browser delivery");
-  expect(atlas(renamed, previous).decisions[0]?.path).toEqual(["Player experience", "Browser delivery"]);
+  expect(atlas(renamed, previous).decisions[0]?.path).toEqual([
+    "Player experience",
+    "Browser delivery",
+  ]);
 });
 
 test("the previous path ID can map to a stable legacy alias after a lossless migration", () => {
-  const original = buildAtlasIndex(repo, revision, source(`## Hierarchical decisions
+  const original = buildAtlasIndex(
+    repo,
+    revision,
+    source(
+      `## Hierarchical decisions
 - **My Farm**
   - **experience**
     - **platform**
       - **\`my-farm/experience/platform/pages-single-player\`** — **A now; C later**: Browser-local gameplay first. ${issue(126)}.
 ## Cross-branch relationships for the graph
-`, "my-farm-tree"));
-  const migrated = buildAtlasIndex(repo, revision, source(`- **1** Player experience
+`,
+      "my-farm-tree",
+    ),
+  );
+  const migrated = buildAtlasIndex(
+    repo,
+    revision,
+    source(`- **1** Player experience
   - **1.1** Platform
     - **1.1.1** [agreed; implementation unverified] **A now; C later** — Browser-local gameplay first. ${issue(126)}. Legacy alias: \`my-farm/experience/platform/pages-single-player\`.
-`), original);
+`),
+    original,
+  );
   expect(migrated.decisions[0]?.aliases).toContain(original.decisions[0]?.id);
 });
 
 test("local preview escapes authored text and supplies a useful hierarchy and source navigation", () => {
-  const index = atlas(farm.replace("Browser-local gameplay first.", "Escaped <script>alert(1)</script> content."));
+  const index = atlas(
+    farm.replace("Browser-local gameplay first.", "Escaped <script>alert(1)</script> content."),
+  );
   const page = renderAtlasPreview(index);
-  expect(page).toContain("id=\"atlas-filter\"");
+  expect(page).toContain('id="atlas-filter"');
   expect(page).toContain("Legacy alias");
   expect(page).not.toContain("<script>alert(1)</script>");
   expect(page).toContain("&lt;script&gt;");
@@ -166,7 +229,8 @@ test("local preview escapes authored text and supplies a useful hierarchy and so
 
 const directories: string[] = [];
 afterEach(() => {
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+  for (const directory of directories.splice(0))
+    rmSync(directory, { recursive: true, force: true });
 });
 
 test("revision-bound CLI rejects a stale ref, a dirty source and the wrong repository", () => {
@@ -176,7 +240,8 @@ test("revision-bound CLI rejects a stale ref, a dirty source and the wrong repos
   mkdirSync(dir, { recursive: true });
   const path = join(dir, "atlas.md");
   writeFileSync(path, farm);
-  const run = (...args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  const run = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
   run("init", "-q");
   run("config", "user.name", "test");
   run("config", "user.email", "test@example.invalid");
@@ -184,10 +249,18 @@ test("revision-bound CLI rejects a stale ref, a dirty source and the wrong repos
   run("add", ".");
   run("commit", "-qm", "fixture");
   const commit = run("rev-parse", "HEAD");
-  const options = { root, repository: repo, source: "docs/decisions/atlas.md", format: "numbered-list" as const, revision: commit };
+  const options = {
+    root,
+    repository: repo,
+    source: "docs/decisions/atlas.md",
+    format: "numbered-list" as const,
+    revision: commit,
+  };
   expect(indexRepository(options).decisions).toHaveLength(3);
   expect(() => indexRepository({ ...options, revision })).toThrow("stale source revision");
-  expect(() => indexRepository({ ...options, repository: "moritzbrantner/mmorpg" })).toThrow("repository identity mismatch");
+  expect(() => indexRepository({ ...options, repository: "moritzbrantner/mmorpg" })).toThrow(
+    "repository identity mismatch",
+  );
   writeFileSync(path, farm.replace("Browser-local", "Changed"));
   expect(() => indexRepository(options)).toThrow("uncommitted or stale");
 });
