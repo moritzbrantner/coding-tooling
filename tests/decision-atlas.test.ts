@@ -83,7 +83,7 @@ implementation_status: not-verified
   expect(index.decisions[0]?.path).toEqual(["residents", "control"]);
 });
 
-test("the Decision Atlas indexes its own 16 Decisions and 1 Question without a second authority", () => {
+test("the Atlas indexes its own 16 Decisions and 1 Question", () => {
   const markdown = readFileSync(new URL("../docs/decisions/atlas.md", import.meta.url), "utf8");
   const index = buildAtlasIndex("moritzbrantner/coding-tooling", revision, source(markdown));
   expect(index.decisions.filter((entry) => entry.kind === "decision")).toHaveLength(16);
