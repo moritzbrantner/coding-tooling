@@ -144,7 +144,7 @@ test("duplicate IDs, aliases, missing references and missing links fail closed",
       },
       { path: "docs/decisions/002.md", text: collision, format: "canonical" },
     ]),
-  ).toThrow("shadows");
+  ).toThrow("duplicate or invalid legacy alias");
 });
 
 test("invalid status and parent cycles are rejected independently of source format", () => {
