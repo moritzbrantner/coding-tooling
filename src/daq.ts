@@ -139,11 +139,7 @@ export function queryDecisionAtlas(index: AtlasIndex, query: DaqQuery): DaqResul
 
   const tokens =
     query.action === "find"
-      ? (query.value ?? "")
-          .trim()
-          .toLowerCase()
-          .split(/\s+/u)
-          .filter(Boolean)
+      ? (query.value ?? "").trim().toLowerCase().split(/\s+/u).filter(Boolean)
       : [];
   if (query.action === "find" && tokens.length === 0)
     throw new Error("daq: find requires search terms");
@@ -160,11 +156,9 @@ export function queryDecisionAtlas(index: AtlasIndex, query: DaqQuery): DaqResul
   const scored = index.decisions
     .filter((decision) => {
       if (query.action === "questions" && decision.kind !== "question") return false;
-      if (query.action !== "questions" && kind !== "all" && decision.kind !== kind)
-        return false;
+      if (query.action !== "questions" && kind !== "all" && decision.kind !== kind) return false;
       if (!query.includeInactive) {
-        if (decision.kind === "decision" && decision.decisionStatus === "superseded")
-          return false;
+        if (decision.kind === "decision" && decision.decisionStatus === "superseded") return false;
         if (decision.kind === "question" && answered.has(decision.id)) return false;
       }
       if (query.topic && !topicMatches(decision, query.topic)) return false;
