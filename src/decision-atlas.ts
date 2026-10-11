@@ -210,12 +210,18 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
     if (!tagged) fail(`${source.path}:${i + 1} ID ${id} lacks an entry kind/status label`);
     const statusLabel = tagged[1]!;
     const kind: AtlasEntryKind = statusLabel === "question" ? "question" : "decision";
-    if (kind === "decision" && !/^(?:agreed|owner decision|implemented|not |documented limit|current limitation|future option)/.test(statusLabel))
+    if (
+      kind === "decision" &&
+      !/^(?:agreed|owner decision|implemented|not |documented limit|current limitation|future option)/.test(
+        statusLabel,
+      )
+    )
       fail(`${source.path}:${i + 1} ID ${id} has invalid decision status label ${statusLabel}`);
     const sourceBody = tagged[2]!;
     const selected = sourceBody.match(/^\*\*([ABC][^*]*)\*\*(?:\s+—\s+|\s+)(.*)$/u);
     const choice = selected ? selected[1]! : null;
-    if (kind === "question" && choice !== null) fail(`${source.path}:${i + 1} ID ${id} is a Question with a selected choice`);
+    if (kind === "question" && choice !== null)
+      fail(`${source.path}:${i + 1} ID ${id} is a Question with a selected choice`);
     const statement = plainCitationFreeStatement(
       issueFreeStatement(selected ? selected[2]! : sourceBody),
     );
@@ -225,8 +231,9 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
     const rawTags = sourceBody.match(/\bTags:\s*((?:`[^`]+`(?:,\s*)?)+)/u)?.[1] ?? "";
     const tags = unique([...rawTags.matchAll(/`([^`]+)`/g)].map((tag) => tag[1]!));
     const references = statement.replace(/\[[^\]]+\]\(https?:\/\/[^)]+\)/g, "");
-    const typed = [...references.matchAll(/\b(answers|supersedes)\s+`?([1-9]\d*(?:\.[1-9]\d*){2,})`?/gi)]
-      .map((match) => ({ type: match[1]!.toLowerCase(), target: match[2]! }));
+    const typed = [
+      ...references.matchAll(/\b(answers|supersedes)\s+`?([1-9]\d*(?:\.[1-9]\d*){2,})`?/gi),
+    ].map((match) => ({ type: match[1]!.toLowerCase(), target: match[2]! }));
     const targets = unique(
       [...references.matchAll(/\b[1-9]\d*(?:\.[1-9]\d*){2,}\b/g)]
         .map((ref) => ref[0])
@@ -244,14 +251,19 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       path,
       choice,
       statement,
-      decisionStatus: kind === "question" ? null :
-        statusLabel.includes("owner decision") || statusLabel.includes("agreed")
-          ? "accepted"
-          : "recorded",
-      implementation: { sourceLabel: kind === "question" ? "not-applicable" : statusLabel, verification: "unverified" },
+      decisionStatus:
+        kind === "question"
+          ? null
+          : statusLabel.includes("owner decision") || statusLabel.includes("agreed")
+            ? "accepted"
+            : "recorded",
+      implementation: {
+        sourceLabel: kind === "question" ? "not-applicable" : statusLabel,
+        verification: "unverified",
+      },
       tags,
-      relations: targets.map((target) =>
-        typed.find((edge) => edge.target === target) ?? { type: "references", target }
+      relations: targets.map(
+        (target) => typed.find((edge) => edge.target === target) ?? { type: "references", target },
       ),
       links: markdownLinks(tagged[2]!),
       source: { path: source.path, line: i + 1 },
@@ -298,9 +310,15 @@ export function validateAtlasIndex(index: AtlasIndex): void {
     if (ids.has(decision.id)) fail(`duplicate ID ${decision.id}`);
     if (decision.kind !== "decision" && decision.kind !== "question")
       fail(`${decision.id}: invalid entry kind`);
-    if (decision.kind === "decision" && (decision.decisionStatus === null || !decisionStatuses.has(decision.decisionStatus)))
+    if (
+      decision.kind === "decision" &&
+      (decision.decisionStatus === null || !decisionStatuses.has(decision.decisionStatus))
+    )
       fail(`${decision.id}: invalid decision status`);
-    if (decision.kind === "question" && (decision.decisionStatus !== null || decision.choice !== null))
+    if (
+      decision.kind === "question" &&
+      (decision.decisionStatus !== null || decision.choice !== null)
+    )
       fail(`${decision.id}: unresolved questions must have no decision status or choice`);
     if (
       !decision.implementation.sourceLabel.trim() ||
@@ -349,9 +367,11 @@ export function validateAtlasIndex(index: AtlasIndex): void {
 export function assertPreservedDecisions(previous: AtlasIndex, current: AtlasIndex): void {
   if (previous.schemaVersion !== 1 || previous.repository !== current.repository)
     fail("previous index has a different schema or repository");
-  const old = new Map(previous.decisions.flatMap((decision) =>
-    [decision.id, ...decision.aliases].map((id) => [id, decision] as const)
-  ));
+  const old = new Map(
+    previous.decisions.flatMap((decision) =>
+      [decision.id, ...decision.aliases].map((id) => [id, decision] as const),
+    ),
+  );
   const now = new Map(
     current.decisions.flatMap((decision) =>
       [decision.id, ...decision.aliases].map((id) => [id, decision] as const),
@@ -360,7 +380,11 @@ export function assertPreservedDecisions(previous: AtlasIndex, current: AtlasInd
   for (const [id, decision] of old) {
     const next = now.get(id);
     if (!next) fail(`historical ID ${id} was removed or renumbered`);
-    if (decision.kind !== next.kind || decision.choice !== next.choice || decision.statement !== next.statement)
+    if (
+      decision.kind !== next.kind ||
+      decision.choice !== next.choice ||
+      decision.statement !== next.statement
+    )
       fail(`historical decision ${id} changed; append a new ID and supersedes relation instead`);
   }
 }
@@ -386,10 +410,7 @@ export function buildAtlasIndex(
       fail(`unsafe source path ${source.path}`);
     if (indexedSources.some((item) => item.path === source.path))
       fail(`duplicate source ${source.path}`);
-    const parsed =
-      source.format === "my-farm-tree"
-        ? fromFarm(source)
-        : fromNumbered(source);
+    const parsed = source.format === "my-farm-tree" ? fromFarm(source) : fromNumbered(source);
     groups.push(...parsed.groups);
     decisions.push(...parsed.decisions);
     indexedSources.push({
