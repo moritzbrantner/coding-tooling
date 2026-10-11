@@ -179,7 +179,7 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       crossReferences = true;
       continue;
     }
-    if (crossReferences && /^- \*\*/.test(line)) crossReferences = false;
+    if (crossReferences && line.startsWith("- **")) crossReferences = false;
     if (crossReferences) {
       const ids = [...line.matchAll(/`([1-9]\d*(?:\.[1-9]\d*){2,})`/g)].map((match) => match[1]!);
       if (ids.length > 1) {
