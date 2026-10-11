@@ -67,9 +67,10 @@ export function renderAtlasPreview(index: AtlasIndex): string {
             `<span class="tag">Legacy alias: <code>${html(alias)}</code></span><span id="${anchor(alias)}"></span>`,
         )
         .join(" ");
-      const detail = decision.kind === "question"
-        ? "Question: unresolved · No owner-selected choice"
-        : `Decision: ${html(decision.decisionStatus ?? "")}${decision.choice === null ? "" : ` · Choice: ${html(decision.choice)}`} · Source implementation claim: ${html(decision.implementation.sourceLabel)}`;
+      const detail =
+        decision.kind === "question"
+          ? "Question: unresolved · No owner-selected choice"
+          : `Decision: ${html(decision.decisionStatus ?? "")}${decision.choice === null ? "" : ` · Choice: ${html(decision.choice)}`} · Source implementation claim: ${html(decision.implementation.sourceLabel)}`;
       return `<article id="${anchor(decision.id)}">
       <h2><code>${html(decision.id)}</code> · ${html(decision.kind)}</h2>
       <p class="meta">${detail} · <strong>Implementation not independently verified</strong></p>
