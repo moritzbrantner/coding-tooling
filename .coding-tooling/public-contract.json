@@ -3,9 +3,9 @@
   "kind": "coding-tooling-public-contract-snapshot",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "d49e43aa0de207cb2463eda42a8a717eb5efe4ba"
+    "revision": "cae0f0c4b6454cc6b134b7d8633bd8c763a1de66"
   },
-  "generatedAt": "2026-10-11T18:42:45.000Z",
+  "generatedAt": "2026-10-11T19:24:06.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1,
@@ -14,14 +14,14 @@
   },
   "report": {
     "schemaVersion": 1,
-    "revision": "d49e43aa0de207cb2463eda42a8a717eb5efe4ba",
+    "revision": "cae0f0c4b6454cc6b134b7d8633bd8c763a1de66",
     "enforcement": "observe",
     "manifestPath": ".coding-tooling.contracts.json",
     "summary": {
-      "discovered": 3,
+      "discovered": 4,
       "verified": 0,
-      "unverified": 3,
-      "incompleteDiscovery": 2,
+      "unverified": 4,
+      "incompleteDiscovery": 3,
       "failedEvidence": 0,
       "unavailableEvidence": 0,
       "errorEvidence": 0,
@@ -34,6 +34,18 @@
         "kind": "cli-command",
         "component": ".",
         "subject": "coding-tooling",
+        "discovery": {
+          "status": "partial",
+          "reason": "The executable is discovered from package metadata; subcommands and flags are not enumerated yet."
+        },
+        "status": "unverified",
+        "evidence": []
+      },
+      {
+        "id": "cli-command:daq",
+        "kind": "cli-command",
+        "component": ".",
+        "subject": "daq",
         "discovery": {
           "status": "partial",
           "reason": "The executable is discovered from package metadata; subcommands and flags are not enumerated yet."
