@@ -10,18 +10,19 @@ import { queryDecisionAtlas } from "../src/daq.ts";
 
 const repository = "moritzbrantner/daq-fixture";
 const revision = "a".repeat(40);
-const content = [
-  "- **1** Game",
-  "  - **1.1** Combat",
-  "    - **1.1.1** [decision] **A** — Block with a shield. Tags: \x60block\x60, \x60combat\x60. Legacy alias: \x60game/combat/blocking\x60.",
-  "    - **1.1.2** [decision] ~~Block automatically.~~ Block on input.",
-  "    - **1.1.3** [decision] ~~Old parry mode.~~",
-  "    - **1.1.4** [question] Should attacks be parried?",
-  "    - **1.1.5** [decision] Yes, parry deliberately. Answers 1.1.4.",
-  "  - **1.2** Travel",
-  "    - **1.2.1** [question] Should mounts be allowed?",
-  "    - **1.2.2** [decision] Allow fast travel.",
-].join("\n") + "\n";
+const content =
+  [
+    "- **1** Game",
+    "  - **1.1** Combat",
+    "    - **1.1.1** [decision] **A** — Block with a shield. Tags: \x60block\x60, \x60combat\x60. Legacy alias: \x60game/combat/blocking\x60.",
+    "    - **1.1.2** [decision] ~~Block automatically.~~ Block on input.",
+    "    - **1.1.3** [decision] ~~Old parry mode.~~",
+    "    - **1.1.4** [question] Should attacks be parried?",
+    "    - **1.1.5** [decision] Yes, parry deliberately. Answers 1.1.4.",
+    "  - **1.2** Travel",
+    "    - **1.2.1** [question] Should mounts be allowed?",
+    "    - **1.2.2** [decision] Allow fast travel.",
+  ].join("\n") + "\n";
 
 function index(text = content) {
   return buildAtlasIndex(repository, revision, [
@@ -44,8 +45,12 @@ function capture(argv: string[]): { code: number; out: string; err: string } {
   let out = "";
   let err = "";
   const code = daqCommand(argv, {
-    write: (message) => { out += message; },
-    error: (message) => { err += message; },
+    write: (message) => {
+      out += message;
+    },
+    error: (message) => {
+      err += message;
+    },
   });
   return { code, out, err };
 }
@@ -56,8 +61,9 @@ test("get resolves stable IDs, project-scoped IDs, aliases, and retired entries"
     "Block with a shield",
   );
   expect(queryDecisionAtlas(data, { action: "get", value: "daq-fixture:1.1.1" }).shown).toBe(1);
-  expect(queryDecisionAtlas(data, { action: "get", value: "game/combat/blocking" }).entries[0]?.id)
-    .toBe("1.1.1");
+  expect(
+    queryDecisionAtlas(data, { action: "get", value: "game/combat/blocking" }).entries[0]?.id,
+  ).toBe("1.1.1");
   const retired = queryDecisionAtlas(data, { action: "get", value: "1.1.3" }).entries[0];
   expect(retired?.status).toBe("superseded");
   expect(retired?.text).toBe("");
@@ -75,28 +81,34 @@ test("find uses deterministic AND terms, relevance and only current wording", ()
   expect(results.entries[0]?.text).not.toContain("Legacy alias:");
   expect(results.entries[1]?.text).toBe("Block on input.");
   expect(queryDecisionAtlas(data, { action: "find", value: "automatically" }).shown).toBe(0);
-  expect(queryDecisionAtlas(data, { action: "find", value: "combat BLOCK", limit: 1 }).total)
-    .toBe(2);
-  expect(queryDecisionAtlas(data, { action: "find", value: "combat BLOCK", limit: 1 }).shown)
-    .toBe(1);
+  expect(queryDecisionAtlas(data, { action: "find", value: "combat BLOCK", limit: 1 }).total).toBe(
+    2,
+  );
+  expect(queryDecisionAtlas(data, { action: "find", value: "combat BLOCK", limit: 1 }).shown).toBe(
+    1,
+  );
   expect(() => queryDecisionAtlas(data, { action: "find", value: "" })).toThrow("search terms");
 });
 
 test("topic, kind, unanswered questions, and inactive controls are explicit", () => {
   const data = index();
-  expect(queryDecisionAtlas(data, { action: "questions" }).entries.map((e) => e.id))
-    .toEqual(["1.2.1"]);
+  expect(queryDecisionAtlas(data, { action: "questions" }).entries.map((e) => e.id)).toEqual([
+    "1.2.1",
+  ]);
   expect(
-    queryDecisionAtlas(data, { action: "questions", includeInactive: true })
-      .entries.map((entry) => entry.id),
+    queryDecisionAtlas(data, { action: "questions", includeInactive: true }).entries.map(
+      (entry) => entry.id,
+    ),
   ).toEqual(["1.1.4", "1.2.1"]);
   expect(
-    queryDecisionAtlas(data, { action: "list", topic: "1.1" })
-      .entries.map((entry) => entry.id),
+    queryDecisionAtlas(data, { action: "list", topic: "1.1" }).entries.map((entry) => entry.id),
   ).toEqual(["1.1.1", "1.1.2", "1.1.5"]);
   expect(
-    queryDecisionAtlas(data, { action: "list", topic: "COMBAT", includeInactive: true })
-      .entries.map((entry) => entry.id),
+    queryDecisionAtlas(data, {
+      action: "list",
+      topic: "COMBAT",
+      includeInactive: true,
+    }).entries.map((entry) => entry.id),
   ).toEqual(["1.1.1", "1.1.2", "1.1.3", "1.1.4", "1.1.5"]);
   expect(queryDecisionAtlas(data, { action: "list", kind: "question" }).shown).toBe(1);
   expect(() => queryDecisionAtlas(data, { action: "list", limit: 101 })).toThrow("limit");
