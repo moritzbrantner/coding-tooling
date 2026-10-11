@@ -33,10 +33,7 @@
       }
     },
     "parentId": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "path": {
       "type": "array",
@@ -46,30 +43,19 @@
       }
     },
     "choice": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "statement": {
       "type": "string",
       "minLength": 1
     },
     "decisionStatus": {
-      "enum": [
-        "accepted",
-        "recorded",
-        "proposed",
-        "superseded"
-      ]
+      "enum": ["accepted", "recorded", "proposed", "superseded"]
     },
     "implementation": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "sourceLabel",
-        "verification"
-      ],
+      "required": ["sourceLabel", "verification"],
       "properties": {
         "sourceLabel": {
           "type": "string",
@@ -93,10 +79,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "type",
-          "target"
-        ],
+        "required": ["type", "target"],
         "properties": {
           "type": {
             "type": "string",
@@ -121,10 +104,7 @@
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "path",
-        "line"
-      ],
+      "required": ["path", "line"],
       "properties": {
         "path": {
           "type": "string",
