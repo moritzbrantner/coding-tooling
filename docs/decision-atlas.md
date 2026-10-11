@@ -43,6 +43,25 @@ The first entry uses its replacement; the second is retired. `[question]` remain
 
 Every semantic entry has a stable ID; legacy aliases have unique identities of their own and may not shadow IDs. Parent edges define hierarchy, while independently typed `relations` edges describe references, requirements, or supersession. Neither sort order nor source line number becomes an identifier. IDs and known aliases must remain in future editions. Source text may be shortened; striking retired wording makes replacements explicit. Changing a branch label must not force an ID change.
 
+## Query with daq
+
+`daq` retrieves a small selection from an Atlas without making an agent read the entire Markdown document. It uses the **existing deterministic indexer**, never semantic inference, network discovery, or a second editable decision database.
+
+```sh
+# From the coding-tooling checkout; --root selects the owning project:
+bun src/daq-cli.ts get 2.2.1
+bun src/daq-cli.ts find "decision provenance" --limit 5
+bun src/daq-cli.ts questions --root ../mmorpg --json
+bun src/daq-cli.ts list --topic "Combat" --root ../arpg
+bun src/daq-cli.ts find "combat" --index .artifacts/my-farm-decision-atlas/index.json --json
+```
+
+The package also exposes a `daq` executable when linked as a Bun package, or use `coding-tooling daq ...` through the existing router.
+
+`get` accepts a stable ID or legacy alias, optionally prefixed with the repo name. `find` matches all space-separated terms against current text, ID, tags and topics using fixed deterministic scoring. `questions` lists unanswered questions only; `--include-inactive` also includes retired decisions and answered questions. `--kind` filters entry kinds. Results default to **12 entries**, with `--limit` capped at 100. `--json` returns only matches, source lines, relationships and the revision for scripts.
+
+Without `--index`, daq reads the canonical **committed** `docs/decisions/atlas.md` in the selected checkout, rejecting stale/uncommitted source edits. `--index <file>` (or `--index -` for standard input) queries a previously validated disposable JSON index offline without rescanning the Markdown. It does not claim that a cached index is fresh.
+
 ## Pinned My Farm pilot
 
 Use a **checkout of the exact owner source revision**. The first v1 pilot pins the observed 25-decision source at `e66ab2b327334fe5ba9b0941cdfbcaf6be8627b3`. It remains reproducible even when My Farm's main branch advances:
