@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -81,6 +81,16 @@ implementation_status: not-verified
   expect(index.decisions[0]?.id).toBe("my-farm/residents/control/hybrid");
   expect(index.decisions[0]?.choice).toBe("C");
   expect(index.decisions[0]?.path).toEqual(["residents", "control"]);
+});
+
+test("the Decision Atlas indexes its own 16 Decisions and 1 Question without a second authority", () => {
+  const markdown = readFileSync(new URL("../docs/decisions/atlas.md", import.meta.url), "utf8");
+  const index = buildAtlasIndex("moritzbrantner/coding-tooling", revision, source(markdown));
+  expect(index.decisions.filter((entry) => entry.kind === "decision")).toHaveLength(16);
+  expect(index.decisions.filter((entry) => entry.kind === "question")).toHaveLength(1);
+  expect(index.decisions.find((entry) => entry.id === "4.2.1")?.decisionStatus).toBeNull();
+  expect(index.decisions.find((entry) => entry.id === "1.1.1")?.decisionStatus).toBe("accepted");
+  expect(renderAtlasPreview(index)).toContain("Question: unresolved");
 });
 
 test("unresolved Questions remain distinct and can be answered by a later Decision", () => {
