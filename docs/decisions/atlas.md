@@ -40,9 +40,9 @@ The numbered hierarchy below is **project-scoped and immutable**: never renumber
     - **4.1.2** [owner decision; implementation unverified] **Pilot coverage** — Initial intended product pilots are ARPG, physics-engine, and input-bindings (product behavior, technical constraints, and cross-repository contracts). Use the already-committed My Farm Atlas as the first parser fixture and the MMORPG PR #150 numbered Atlas for compatibility; do not replace their sources. [Tracker](https://github.com/moritzbrantner/coding-tooling/issues/315).
 
   - **4.2** Cross-repository publication
-    - **Question `4.2.1`** — When cross-repository publication is implemented, should indexes be propagated event-by-event, reconciled periodically, or use another explicitly selected policy? This is not required to build a deterministic local index and should be asked only when publication needs the choice. [Tracker](https://github.com/moritzbrantner/coding-tooling/issues/315).
+    - **4.2.1** [question] When cross-repository publication is implemented, should indexes be propagated event-by-event, reconciled periodically, or use another explicitly selected policy? This is not required to build a deterministic local index and should be asked only when publication needs the choice. [Tracker](https://github.com/moritzbrantner/coding-tooling/issues/315).
 
-Questions also have immutable project-scoped IDs. **The current PR #316 indexer does not yet index this kind**, so the question above remains readable and authoritative in Markdown until explicit Question support is implemented. It must never be normalized as an approved Decision merely to make the v1 index pass.
+Questions also have immutable project-scoped IDs. The PR #316 branch includes parser support for `[question]` entries, but that feature is not shipped until the pull request is validated and merged. A Question must never be normalized as an approved Decision.
 
 ## Agent reading and implementation rule
 
