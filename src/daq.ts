@@ -175,15 +175,23 @@ export function queryDecisionAtlas(index: AtlasIndex, query: DaqQuery): DaqResul
       score: tokens.length === 0 ? 1 : searchScore(decision, tokens),
     }))
     .filter((item) => item.score > 0);
-  const ranked =
-    query.action === "find"
-      ? scored.toSorted(
-          (a, b) =>
-            b.score - a.score ||
-            (a.decision.id < b.decision.id ? -1 : a.decision.id > b.decision.id ? 1 : 0),
-        )
-      : scored;
-  const entries = ranked.slice(0, limit).map(({ decision }) => toResult(index, decision));
+  // Keep only the best bounded set; no unbounded result sorting or output.
+  const ranked: typeof scored = [];
+  if (query.action === "find") {
+    for (const candidate of scored) {
+      const before = ranked.findIndex(
+        (current) =>
+          candidate.score > current.score ||
+          (candidate.score === current.score && candidate.decision.id < current.decision.id),
+      );
+      if (before === -1) ranked.push(candidate);
+      else ranked.splice(before, 0, candidate);
+      if (ranked.length > limit) ranked.pop();
+    }
+  } else {
+    ranked.push(...scored.slice(0, limit));
+  }
+  const entries = ranked.map(({ decision }) => toResult(index, decision));
   return {
     repository: index.repository,
     revision: index.sourceRevision,
