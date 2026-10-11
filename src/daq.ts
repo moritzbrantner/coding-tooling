@@ -36,6 +36,7 @@ export function activeDecisionText(statement: string): string {
     .replace(/~~.*?~~/gu, "")
     .replace(/\s+Legacy alias:\s*\x60[^\x60]+\x60\.?/gu, "")
     .replace(/\s+Tags:\s*(?:\x60[^\x60]+\x60(?:,\s*)?)+\.?/gu, "")
+    .replace(/\s+\(\[[^\]]+\]\(https:\/\/[^)]+\)\)/gu, "")
     .replace(/\s+\[[^\]]+\]\(https:\/\/[^)]+\)/gu, "")
     .replace(/\s+/gu, " ")
     .trim();
@@ -146,7 +147,12 @@ export function queryDecisionAtlas(index: AtlasIndex, query: DaqQuery): DaqResul
 
   const answered = new Set(
     index.decisions
-      .filter((decision) => decision.kind === "decision" && decision.decisionStatus === "accepted")
+      .filter(
+        (decision) =>
+          decision.kind === "decision" &&
+          decision.decisionStatus !== "superseded" &&
+          decision.decisionStatus !== "proposed",
+      )
       .flatMap((decision) =>
         decision.relations
           .filter((relation) => relation.type === "answers")
@@ -169,10 +175,15 @@ export function queryDecisionAtlas(index: AtlasIndex, query: DaqQuery): DaqResul
       score: tokens.length === 0 ? 1 : searchScore(decision, tokens),
     }))
     .filter((item) => item.score > 0);
-  if (query.action === "find") {
-    scored.sort((a, b) => b.score - a.score || a.decision.id.localeCompare(b.decision.id));
-  }
-  const entries = scored.slice(0, limit).map(({ decision }) => toResult(index, decision));
+  const ranked =
+    query.action === "find"
+      ? scored.toSorted(
+          (a, b) =>
+            b.score - a.score ||
+            (a.decision.id < b.decision.id ? -1 : a.decision.id > b.decision.id ? 1 : 0),
+        )
+      : scored;
+  const entries = ranked.slice(0, limit).map(({ decision }) => toResult(index, decision));
   return {
     repository: index.repository,
     revision: index.sourceRevision,
