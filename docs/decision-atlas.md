@@ -1,5 +1,7 @@
 # Decision Atlas v1: read-only indexes
 
+The [Decision Atlas for the Decision Atlas](decisions/atlas.md) is the owner-approved specification for this capability. This guide describes the current implementation, not a second source of product decisions.
+
 The **owning repository** is authoritative. This tool reads a committed document under `docs/decisions/`, validates it, and emits a deterministic `index.json` and offline `preview.html`. It does not update decisions, source issues, repositories, or a fleet index.
 
 ## Product semantics: Decisions and Questions only
