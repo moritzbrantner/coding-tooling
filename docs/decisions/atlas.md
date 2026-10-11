@@ -34,6 +34,7 @@ Owner-approved product rules (2026-10-11). Only **Decisions** and **Questions**;
   - **4.1** First version
     - **4.1.1** [decision] Build a deterministic index and local preview first; defer fleet aggregation and inference.
     - **4.1.2** [decision] Pilot ARPG, physics-engine, input-bindings; use My Farm and MMORPG as parser fixtures.
+    - **4.1.3** [decision] `daq` retrieves bounded, relevant Decisions and Questions by ID, topic, and words; no implicit discovery.
   - **4.2** Publication
     - **4.2.1** [question] How should indexes synchronize across repositories? Decide when publication needs it.
 

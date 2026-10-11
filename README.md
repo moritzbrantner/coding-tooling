@@ -19,6 +19,18 @@ This repository contains mechanical operations that should not require an LLM to
 
 It deliberately does **not** decide what task to implement, how an agent should reason, what engineering policy should be, or whether one implementation is semantically preferable. Those concerns belong to callers, `coding-agent-skills`, `coding-agent-conventions`, orchestration, and evaluation respectively.
 
+## Decision Atlas queries
+
+Use `daq` to retrieve relevant Decisions or Questions without loading a whole Atlas into an agent's context:
+
+```sh
+bun src/daq-cli.ts find "combat block" --root ../arpg
+bun src/daq-cli.ts get 2.2.1
+bun src/daq-cli.ts questions --json
+```
+
+Use `--index <index.json>` to query a previously generated index, `--topic` to narrow by subsystem, and `--limit` for bounded output. See [Decision Atlas queries](docs/decision-atlas.md#query-with-daq).
+
 ## Commands
 
 ```bash
