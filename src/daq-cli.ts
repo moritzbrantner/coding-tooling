@@ -6,11 +6,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { indexRepository } from "./decision-atlas-cli.ts";
-import {
-  validateAtlasIndex,
-  type AtlasFormat,
-  type AtlasIndex,
-} from "./decision-atlas.ts";
+import { validateAtlasIndex, type AtlasFormat, type AtlasIndex } from "./decision-atlas.ts";
 import { queryDecisionAtlas, type DaqAction, type DaqKind, type DaqResult } from "./daq.ts";
 
 const usage = [
@@ -48,8 +44,7 @@ function indexFromCheckout(rootPath: string, source: string, format: AtlasFormat
     .replace(/^git@github\.com:/u, "https://github.com/")
     .replace(/\.git$/u, "");
   const match = remote.match(/^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/u);
-  if (!match)
-    throw new Error("daq: cannot infer GitHub owner/repository from origin; use --index");
+  if (!match) throw new Error("daq: cannot infer GitHub owner/repository from origin; use --index");
   return indexRepository({
     root,
     source,
@@ -64,8 +59,7 @@ function indexFromFile(path: string): AtlasIndex {
   if (Buffer.byteLength(content, "utf8") > 4 * 1024 * 1024)
     throw new Error("daq: index exceeds the 4 MiB input budget");
   const parsed: unknown = JSON.parse(content);
-  if (!parsed || typeof parsed !== "object")
-    throw new Error("daq: invalid index");
+  if (!parsed || typeof parsed !== "object") throw new Error("daq: invalid index");
   const index = parsed as AtlasIndex;
   if (
     index.schemaVersion !== 1 ||
@@ -91,14 +85,8 @@ function formatText(result: DaqResult): string {
       result.revision.slice(0, 12),
   ];
   for (const entry of result.entries) {
-    const label = entry.kind === "question" ? "question" : entry.status ?? "decision";
-    lines.push(
-      entry.id +
-        " [" +
-        label +
-        "] " +
-        (entry.text || "(retired; see source)"),
-    );
+    const label = entry.kind === "question" ? "question" : (entry.status ?? "decision");
+    lines.push(entry.id + " [" + label + "] " + (entry.text || "(retired; see source)"));
     lines.push(
       "  " +
         (entry.path.length ? entry.path.join(" > ") + " · " : "") +
@@ -117,13 +105,11 @@ export function daqCommand(argv: string[], io: DaqIo = stdio): number {
       return 0;
     }
     const action = argv[0] as DaqAction | undefined;
-    if (!action || !["get", "find", "list", "questions"].includes(action))
-      throw new Error(usage);
+    if (!action || !["get", "find", "list", "questions"].includes(action)) throw new Error(usage);
 
     const needsValue = action === "get" || action === "find";
     const value = needsValue ? argv[1] : undefined;
-    if (needsValue && (!value || value.startsWith("--")))
-      throw new Error(usage);
+    if (needsValue && (!value || value.startsWith("--"))) throw new Error(usage);
 
     const options = new Map<string, string>();
     const allowed = new Set([
