@@ -11,37 +11,25 @@ The source Atlas exists to answer **what the product should be**. Its semantic l
 
 Navigation branches are not entries. Do not derive extra semantic kinds such as constraint, deferred decision, assumption, principle, proposal, or implementation state. Those may be expressed in entry text, relationships, or separate evidence metadata. Answering a Question preserves it and appends a Decision with an `answers` relationship; changing intent preserves the old Decision and appends a Decision with `supersedes`.
 
-The owner-source model is authoritative. The indexer must preserve this distinction rather than encode Questions as a status of Decision. **The current v1 implementation on this PR still normalizes only Decision leaves; Question preservation/indexing is therefore a required remaining part of #315 before full Decision Atlas semantic support is complete.** Agents can meanwhile retrieve Questions directly from the owning Markdown source.
+The owner-source model is authoritative. The indexer preserves Question leaves distinctly using `kind: "question"`, `choice: null`, and `decisionStatus: null`; Question is not an implementation state or an unapproved Decision.
 
 ## Source contracts and stable identifiers
 
 - **`numbered-list`** reads explicit nested Markdown list identifiers (`1`, `1.2`, `1.2.3`) without reordering or allocating IDs. A list branch is navigation; a leaf must have an implementation-status label and owning-repository GitHub source links. This is the authoring format of the MMORPG PR #150 Atlas and, since its October 11 migration, the [My Farm Atlas](https://github.com/moritzbrantner/my-farm/blob/main/docs/decisions/atlas.md). The latter preserves all older `my-farm/...` IDs as **legacy aliases**, which are indexed and remain addressable.
 - **`my-farm-tree`** is the read-only compatibility adapter for the original dated My Farm tree, when indexing a commit where that path contained the actual decisions. The **current** dated file is merely a redirect and is not a valid decision source.
-- **`canonical`** reads a directory of one Markdown file per decision or an individual Markdown file, with the versioned restricted YAML frontmatter shown below. This is an available option for _new owner-authored sources_, not a demand to convert the other two formats. The schema describes normalized fields, not a competing writable database.
+The normalized derived index is validated against [decision-atlas-decision.schema.json](../schemas/decision-atlas-decision.schema.json) and [decision-atlas-index.schema.json](../schemas/decision-atlas-index.schema.json). These are **JSON output contracts**, not instructions to create extra authoritative per-decision Markdown or YAML files. A schema change must be explicit and versioned.
 
-Example of the **canonical per-decision Markdown/YAML v1 source** (`path` contains navigational categories; `id` is not derived from their names):
-
+Question syntax within the same numbered Markdown list:
 ```md
----
-atlas_version: 1
-id: my-farm/control/direct-control
-aliases: []
-parent: null
-path: ["Residents", "Control"]
-choice: C
-decision_status: accepted
-implementation_status: not-verified
-tags: ["input", "authority"]
-relations: [{ "type": "requires", "target": "my-farm/control/paused-task" }]
-links: ["https://github.com/moritzbrantner/my-farm/issues/126"]
----
-
-Optional direct control uses the same authoritative Farm.
+- **8** Duels
+  - **8.1** Duel outcome
+    - **8.1.1** [question] Should duels be nonlethal? ([#150](https://github.com/moritzbrantner/mmorpg/pull/150))
+    - **8.1.2** [owner decision; implementation pending] Duels are nonlethal. Answers 8.1.1. ([#150](https://github.com/moritzbrantner/mmorpg/pull/150))
 ```
 
-The canonical metadata parser deliberately supports a small, deterministic YAML subset: `key: value` scalars, `null`, numbers, and JSON-compatible inline arrays/objects (valid YAML). It rejects unsupported/ambiguous YAML features rather than silently guessing. The normalized contracts are [decision-atlas-decision.schema.json](../schemas/decision-atlas-decision.schema.json) and [decision-atlas-index.schema.json](../schemas/decision-atlas-index.schema.json); changes to their contract require a new `schemaVersion`.
+`[question]` is an unresolved Question without an owner choice. A later numbered Decision may explicitly `Answers` or `Supersedes` an earlier entry; these are typed directed relationships, not hierarchy edges. Other dotted references become `references` edges. The validator rejects dangling IDs.
 
-Every decision has a stable ID; legacy aliases have unique identities of their own and may not shadow IDs. Parent edges define hierarchy, while independently typed `relations` edges describe references, requirements, or supersession. Neither sort order nor source line number becomes an identifier. An accepted or otherwise recorded historical decision must remain in future editions; a new decision can explicitly supersede its ID. Changing a branch label must not force an ID change.
+Every semantic entry has a stable ID; legacy aliases have unique identities of their own and may not shadow IDs. Parent edges define hierarchy, while independently typed `relations` edges describe references, requirements, or supersession. Neither sort order nor source line number becomes an identifier. An accepted Decision or unanswered Question must remain in future editions; a new decision can explicitly supersede its ID. Changing a branch label must not force an ID change.
 
 ## Pinned My Farm pilot
 
@@ -66,6 +54,6 @@ The optional `--previous-index path/to/index.json` compares stable IDs, choices 
 
 ## Validation boundaries
 
-Validation covers duplicate/missing identifiers, duplicate aliases, invalid status/choice, broken parents and cycles, dangling/colliding relationship edges, absent or malformed owning-repository issue/PR/immutable-blob citations, malformed canonical metadata, missing source, unexpected uncommitted edits, and stale commit revisions. GitHub issue links are treated as **declared specification anchors**, not remote existence or acceptance evidence. Published code symbols, executable acceptance tests, and behavior are always `unverified` until a future deterministic provenance-checking capability establishes them.
+Validation covers duplicate/missing identifiers, duplicate aliases, invalid status/choice, broken parents and cycles, dangling/colliding relationship edges, absent or malformed owning-repository issue/PR/immutable-blob citations, malformed list entries or Question-specific fields, missing source, unexpected uncommitted edits, and stale commit revisions. GitHub issue links are treated as **declared specification anchors**, not remote existence or acceptance evidence. Published code symbols, executable acceptance tests, and behavior are always `unverified` until a future deterministic provenance-checking capability establishes them.
 
 The local output is a **preview**, not a deployed GitHub Pages Atlas. Cross-repository aggregation, reusable-workflows CI publication, verification of actual code/test symbols and automatic decision capture remain separate follow-ups. This does **not** choose Decision Atlas question 12's publishing/synchronization policy. Indexing only reads owner records and requires no synchronization write-back.
