@@ -236,16 +236,19 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       .replace(/[\s.,;:()\-]+/g, "");
     const retired = kind === "decision" && struck.length > 0 && substantiveText.length === 0;
     // Retain struck history for the Markdown preview; use only live text for active relationships.
-    const statement = struck.length > 0
-      ? sourceBody
-      : plainCitationFreeStatement(issueFreeStatement(activeStatement));
+    const statement =
+      struck.length > 0
+        ? sourceBody
+        : plainCitationFreeStatement(issueFreeStatement(activeStatement));
     const aliases = unique(
       [...sourceBody.matchAll(/Legacy alias:\s*`([^`]+)`/g)].map((item) => item[1]!),
     );
     const rawTags = sourceBody.match(/\bTags:\s*((?:`[^`]+`(?:,\s*)?)+)/u)?.[1] ?? "";
     const tags = unique([...rawTags.matchAll(/`([^`]+)`/g)].map((tag) => tag[1]!));
-    const references = plainCitationFreeStatement(issueFreeStatement(activeStatement))
-      .replace(/\[[^\]]+\]\(https?:\/\/[^)]+\)/g, "");
+    const references = plainCitationFreeStatement(issueFreeStatement(activeStatement)).replace(
+      /\[[^\]]+\]\(https?:\/\/[^)]+\)/g,
+      "",
+    );
     const typed = [
       ...references.matchAll(/\b(answers|supersedes)\s+`?([1-9]\d*(?:\.[1-9]\d*){2,})`?/gi),
     ].map((match) => ({ type: match[1]!.toLowerCase(), target: match[2]! }));
@@ -404,8 +407,7 @@ export function assertPreservedDecisions(previous: AtlasIndex, current: AtlasInd
           ? text.includes(decision.statement)
           : text.includes(`**${decision.choice}**`),
       );
-      if (!preserved)
-        fail(`historical choice ${id} changed without striking the previous choice`);
+      if (!preserved) fail(`historical choice ${id} changed without striking the previous choice`);
     }
   }
 }
