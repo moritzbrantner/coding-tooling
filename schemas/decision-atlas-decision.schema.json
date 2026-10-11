@@ -34,10 +34,7 @@
       }
     },
     "parentId": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "path": {
       "type": "array",
@@ -47,10 +44,7 @@
       }
     },
     "choice": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "statement": {
       "type": "string",
@@ -58,26 +52,14 @@
       "description": "Current authored Markdown text. Strike-through preserves retired wording; a replacement follows it inline."
     },
     "decisionStatus": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "enum": [
-        "accepted",
-        "recorded",
-        "proposed",
-        "superseded",
-        null
-      ],
+      "type": ["string", "null"],
+      "enum": ["accepted", "recorded", "proposed", "superseded", null],
       "description": "Superseded means the authored decision has no remaining active wording."
     },
     "implementation": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "sourceLabel",
-        "verification"
-      ],
+      "required": ["sourceLabel", "verification"],
       "properties": {
         "sourceLabel": {
           "type": "string",
@@ -101,10 +83,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "type",
-          "target"
-        ],
+        "required": ["type", "target"],
         "properties": {
           "type": {
             "type": "string",
@@ -128,10 +107,7 @@
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "path",
-        "line"
-      ],
+      "required": ["path", "line"],
       "properties": {
         "path": {
           "type": "string",
@@ -144,10 +120,7 @@
       }
     },
     "kind": {
-      "enum": [
-        "decision",
-        "question"
-      ]
+      "enum": ["decision", "question"]
     }
   },
   "allOf": [
@@ -181,12 +154,7 @@
       "then": {
         "properties": {
           "decisionStatus": {
-            "enum": [
-              "accepted",
-              "recorded",
-              "proposed",
-              "superseded"
-            ]
+            "enum": ["accepted", "recorded", "proposed", "superseded"]
           }
         }
       }
