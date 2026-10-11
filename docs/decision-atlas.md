@@ -2,6 +2,17 @@
 
 The **owning repository** is authoritative. This tool reads a committed document under `docs/decisions/`, validates it, and emits a deterministic `index.json` and offline `preview.html`. It does not update decisions, source issues, repositories, or a fleet index.
 
+## Product semantics: Decisions and Questions only
+
+The source Atlas exists to answer **what the product should be**. Its semantic leaf entries are deliberately limited to two kinds:
+
+- **Decision:** owner-selected product intent. Agents follow it until a later Decision explicitly supersedes it.
+- **Question:** a consequential unresolved choice. It remains visible and is not automatically blocking; an agent asks the owner one at a time only when that Question materially affects current work.
+
+Navigation branches are not entries. Do not derive extra semantic kinds such as constraint, deferred decision, assumption, principle, proposal, or implementation state. Those may be expressed in entry text, relationships, or separate evidence metadata. Answering a Question preserves it and appends a Decision with an `answers` relationship; changing intent preserves the old Decision and appends a Decision with `supersedes`.
+
+The owner-source model is authoritative. The indexer must preserve this distinction rather than encode Questions as a status of Decision. **The current v1 implementation on this PR still normalizes only Decision leaves; Question preservation/indexing is therefore a required remaining part of #315 before full Decision Atlas semantic support is complete.** Agents can meanwhile retrieve Questions directly from the owning Markdown source.
+
 ## Source contracts and stable identifiers
 
 - **`numbered-list`** reads explicit nested Markdown list identifiers (`1`, `1.2`, `1.2.3`) without reordering or allocating IDs. A list branch is navigation; a leaf must have an implementation-status label and owning-repository GitHub source links. This is the authoring format of the MMORPG PR #150 Atlas and, since its October 11 migration, the [My Farm Atlas](https://github.com/moritzbrantner/my-farm/blob/main/docs/decisions/atlas.md). The latter preserves all older `my-farm/...` IDs as **legacy aliases**, which are indexed and remain addressable.
