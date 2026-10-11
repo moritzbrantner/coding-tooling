@@ -68,9 +68,8 @@ function localOnlyRepository(): { root: string; source: string; revision: string
   return { root, source, revision };
 }
 
-function tomlString(value: string): string {
-  if (value.includes("\\") && !value.includes("'")) return `'${value}'`;
-  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+function escapeTomlString(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
 describe("source dependency mode", () => {
@@ -105,7 +104,7 @@ describe("source dependency mode", () => {
     const { root, source } = localOnlyRepository();
     const rendered = renderSourceDependencies(root);
     expect(rendered.localOnly).toBe(true);
-    expect(rendered.content).toContain(`path = ${tomlString(source)}`);
+    expect(rendered.content).toContain(`path = "${escapeTomlString(source)}"`);
     expect(rendered.content).not.toContain("git =");
 
     const activated = sourceDependencies(root, "activate");

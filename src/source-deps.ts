@@ -352,12 +352,6 @@ function localRevision(path: string): string {
   return result.stdout.trim();
 }
 
-function tomlString(value: string): string {
-  // Windows paths read better (and stay byte-identical to the path) as TOML literal strings.
-  if (value.includes("\\") && !/['\r\n]/.test(value)) return `'${value}'`;
-  return `"${escapeToml(value)}"`;
-}
-
 type PatchTarget = { localPath: string } | { git: string; rev: string };
 
 function patchTarget(root: string, patch: CargoSourcePatch, localOnly: boolean): PatchTarget {
@@ -383,7 +377,7 @@ function patchTarget(root: string, patch: CargoSourcePatch, localOnly: boolean):
 
 function renderPatchLine(name: string, target: PatchTarget): string {
   if ("localPath" in target)
-    return `"${escapeToml(name)}" = { path = ${tomlString(target.localPath)} }`;
+    return `"${escapeToml(name)}" = { path = "${escapeToml(target.localPath)}" }`;
   return `"${escapeToml(name)}" = { git = "${escapeToml(target.git)}", rev = "${escapeToml(target.rev)}" }`;
 }
 

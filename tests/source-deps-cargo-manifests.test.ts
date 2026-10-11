@@ -1,11 +1,23 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, test } from "bun:test";
 
 import { renderSourceDependencies, sourceDependencies } from "../src/source-deps.ts";
-import { cargoDependencyDeclarations } from "../src/source-deps-cargo.ts";
+import {
+  cargoDependencyDeclarations,
+  globSegment,
+  workspaceLockfile,
+} from "../src/source-deps-cargo.ts";
 
 const URL = "https://github.com/example/nlp-stack";
 
@@ -76,6 +88,8 @@ describe("Cargo manifest discovery for source patches (#313)", () => {
           "",
           "[workspace.dependencies]",
           `text-core = { package = "moenarch-text-core", git = "${URL}", rev = "abc" }`,
+          `orphan = { git = "${URL}" }`,
+          'unused-registry = "1"',
           "",
         ].join("\n"),
         "crates/app/Cargo.toml": [
@@ -107,6 +121,8 @@ describe("Cargo manifest discovery for source patches (#313)", () => {
     ]);
     expect([...(declarations.git.get("tokenizer") ?? [])]).toEqual([`${URL}.git`]);
     expect(declarations.git.has("hidden")).toBe(false);
+    // Workspace entries count only when a member inherits them with `workspace = true`.
+    expect(declarations.git.has("orphan")).toBe(false);
     expect([...declarations.registry].sort()).toEqual(["moenarch-text-core", "serde"]);
   });
 
@@ -166,5 +182,145 @@ describe("Cargo manifest discovery for source patches (#313)", () => {
     const activated = sourceDependencies(root, "activate");
     expect(activated.status).toBe("error");
     expect(activated.diagnostics[0]?.message).toContain("local checkout is required");
+  });
+});
+
+describe("Cargo workspace glob classes (#313 review)", () => {
+  test("glob segments support character classes, ranges and negation", () => {
+    expect(globSegment("[ab]*").test("alpha")).toBe(true);
+    expect(globSegment("[ab]*").test("beta")).toBe(true);
+    expect(globSegment("[ab]*").test("gamma")).toBe(false);
+    expect(globSegment("crate-[0-9]").test("crate-7")).toBe(true);
+    expect(globSegment("crate-[0-9]").test("crate-x")).toBe(false);
+    expect(globSegment("[!x]*").test("xtask")).toBe(false);
+    expect(globSegment("[!x]*").test("core")).toBe(true);
+    expect(globSegment("[]]").test("]")).toBe(true);
+    expect(globSegment("a[b").test("a[b")).toBe(true);
+    expect(globSegment("a.b").test("axb")).toBe(false);
+  });
+
+  test("workspace members and exclude expand character classes", () => {
+    const root = consumer(
+      {
+        "Cargo.toml": '[workspace]\nmembers = ["crates/[ab]*"]\nexclude = ["crates/[!a]*"]\n',
+        "crates/alpha/Cargo.toml": `[package]\nname = "alpha"\n\n[dependencies]\nkept = { git = "${URL}" }\n`,
+        "crates/beta/Cargo.toml": `[package]\nname = "beta"\n\n[dependencies]\nexcluded = { git = "${URL}" }\n`,
+        "crates/gamma/Cargo.toml": `[package]\nname = "gamma"\n\n[dependencies]\nunmatched = { git = "${URL}" }\n`,
+      },
+      [],
+    );
+    expect([...cargoDependencyDeclarations(root).git.keys()]).toEqual(["kept"]);
+  });
+});
+
+function git(root: string, ...args: string[]): string {
+  const result = spawnSync("git", ["-C", root, ...args], { encoding: "utf8" });
+  expect(result.status, result.stderr).toBe(0);
+  return result.stdout.trim();
+}
+
+function crate(root: string, name: string): void {
+  write(
+    join(root, "Cargo.toml"),
+    `[package]\nname = "${name}"\nversion = "0.1.0"\nedition = "2021"\n`,
+  );
+  write(join(root, "src", "lib.rs"), "pub fn value() -> u32 { 1 }\n");
+}
+
+/** A consumer that is a member of an enclosing workspace and inherits a git dependency. */
+function enclosingWorkspace(): { outer: string; consumer: string } {
+  const workspace = realpathSync(mkdtempSync(join(tmpdir(), "coding-tooling-enclosing-")));
+  const source = join(workspace, "source");
+  mkdirSync(source, { recursive: true });
+  expect(spawnSync("git", ["init", "--initial-branch=main", source]).status).toBe(0);
+  git(source, "config", "user.email", "test@example.com");
+  git(source, "config", "user.name", "Test");
+  write(join(source, "Cargo.toml"), '[workspace]\nmembers = ["core", "unused"]\nresolver = "2"\n');
+  crate(join(source, "core"), "moenarch-text-core");
+  crate(join(source, "unused"), "source-unused");
+  git(source, "add", ".");
+  git(source, "commit", "-m", "source");
+  const rev = git(source, "rev-parse", "HEAD");
+  const url = pathToFileURL(source).href;
+
+  const outer = join(workspace, "outer");
+  const consumerRoot = join(outer, "consumer");
+  write(
+    join(outer, "Cargo.toml"),
+    `[workspace]\nmembers = ["consumer"]\nresolver = "2"\n\n[workspace.dependencies]\ntext-core = { package = "moenarch-text-core", git = "${url}", rev = "${rev}" }\n`,
+  );
+  crate(consumerRoot, "consumer");
+  write(
+    join(consumerRoot, "Cargo.toml"),
+    `[package]\nname = "consumer"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\ntext-core = { workspace = true }\n`,
+  );
+  writeFileSync(
+    join(consumerRoot, ".coding-tooling.source-deps.json"),
+    JSON.stringify({
+      schemaVersion: 3,
+      cargo: {
+        localOnly: true,
+        repositories: [
+          {
+            git: url,
+            rev,
+            localPath: "../../source",
+            packages: [{ package: "moenarch-text-core", path: "core" }],
+          },
+        ],
+      },
+    }),
+  );
+  return { outer, consumer: consumerRoot };
+}
+
+function comparable(path: string): string {
+  const real = realpathSync.native(path);
+  return process.platform === "win32" ? real.toLowerCase() : real;
+}
+
+function declareUnused(consumerRoot: string): void {
+  const path = join(consumerRoot, ".coding-tooling.source-deps.json");
+  const config = JSON.parse(readFileSync(path, "utf8"));
+  config.cargo.repositories[0].packages.push({ package: "source-unused", path: "unused" });
+  writeFileSync(path, JSON.stringify(config));
+}
+
+describe("activation leaves the enclosing workspace lockfile unchanged (#313 review)", () => {
+  test("an inherited git dependency of an enclosing workspace is patched and verified", () => {
+    const { outer, consumer: consumerRoot } = enclosingWorkspace();
+    const lockfile = workspaceLockfile(consumerRoot);
+    expect(basename(lockfile)).toBe("Cargo.lock");
+    expect(comparable(dirname(lockfile))).toBe(comparable(outer));
+    const rendered = renderSourceDependencies(consumerRoot);
+    expect(rendered.patches[0]?.sources).toHaveLength(1);
+    expect(rendered.patches[0]?.sources[0]).not.toBe("crates-io");
+
+    const activated = sourceDependencies(consumerRoot, "activate");
+    expect(activated.status, JSON.stringify(activated.diagnostics)).toBe("passed");
+    expect(activated.data.cargoVerification).toBe("verified");
+    expect(existsSync(join(outer, "Cargo.lock"))).toBe(false);
+    expect(existsSync(join(consumerRoot, "Cargo.lock"))).toBe(false);
+    sourceDependencies(consumerRoot, "deactivate");
+  });
+
+  test("an existing enclosing lockfile is restored after passing and failing verification", () => {
+    const { outer, consumer: consumerRoot } = enclosingWorkspace();
+    const generated = spawnSync("cargo", ["generate-lockfile"], { cwd: outer, encoding: "utf8" });
+    expect(generated.status, generated.stderr).toBe(0);
+    const lockfile = join(outer, "Cargo.lock");
+    const before = readFileSync(lockfile, "utf8");
+
+    const activated = sourceDependencies(consumerRoot, "activate");
+    expect(activated.status, JSON.stringify(activated.diagnostics)).toBe("passed");
+    expect(readFileSync(lockfile, "utf8")).toBe(before);
+    sourceDependencies(consumerRoot, "deactivate");
+
+    declareUnused(consumerRoot);
+    const failed = sourceDependencies(consumerRoot, "activate");
+    expect(failed.status).toBe("error");
+    expect(failed.diagnostics.map((value) => value.message).join("\n")).toContain("source-unused");
+    expect(readFileSync(lockfile, "utf8")).toBe(before);
+    expect(existsSync(join(consumerRoot, ".cargo", "config.toml"))).toBe(false);
   });
 });
