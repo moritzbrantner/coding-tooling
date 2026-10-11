@@ -48,11 +48,13 @@
     },
     "statement": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "Current authored Markdown text. Strike-through preserves retired wording; a replacement follows it inline."
     },
     "decisionStatus": {
       "type": ["string", "null"],
-      "enum": ["accepted", "recorded", "proposed", "superseded", null]
+      "enum": ["accepted", "recorded", "proposed", "superseded", null],
+      "description": "Superseded means the authored decision has no remaining active wording."
     },
     "implementation": {
       "type": "object",
@@ -97,7 +99,6 @@
     "links": {
       "type": "array",
       "uniqueItems": true,
-      "minItems": 1,
       "items": {
         "type": "string",
         "format": "uri"

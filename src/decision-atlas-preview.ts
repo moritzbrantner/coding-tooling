@@ -8,6 +8,17 @@ function html(value: string): string {
   );
 }
 
+function statementHtml(value: string): string {
+  return html(value).replace(/~~(.*?)~~/g, "<del>$1</del>");
+}
+
+function activeLabel(decision: AtlasDecision): string {
+  const active = decision.statement.replace(/~~.*?~~/g, "").trim();
+  const chosen = active.replace(/^\*\*[ABC][^*]*\*\*\s*—\s*/u, "").trim();
+  const label = chosen || decision.statement.replace(/~~/g, "");
+  return `${decision.decisionStatus === "superseded" ? "Retired: " : ""}${label.split(/\.\s/)[0]!.slice(0, 94)}`;
+}
+
 function anchor(id: string): string {
   return `decision-${encodeURIComponent(id)}`;
 }
@@ -31,7 +42,7 @@ function navigation(branch: Branch): string {
     .join("");
   const decisions = branch.decisions
     .map((decision) => {
-      const label = decision.statement.split(/\.\s/)[0]!.slice(0, 94);
+      const label = activeLabel(decision);
       return `<a class="node" data-search="${html([decision.kind, decision.id, ...decision.aliases, label, ...decision.tags].join(" ").toLowerCase())}" href="#${anchor(decision.id)}"><code>${html(decision.id)}</code> ${html(label)}</a>`;
     })
     .join("");
@@ -74,7 +85,7 @@ export function renderAtlasPreview(index: AtlasIndex): string {
       return `<article id="${anchor(decision.id)}">
       <h2><code>${html(decision.id)}</code> · ${html(decision.kind)}</h2>
       <p class="meta">${detail} · <strong>Implementation not independently verified</strong></p>
-      <p>${html(decision.statement)}</p>
+      <p>${statementHtml(decision.statement)}</p>
       <p>${tags} ${aliases}</p>
       <p class="meta"><a href="${html(sourceUrl)}">Owning source at committed revision, line ${decision.source.line}</a></p>
       ${edges ? `<h3>Relationships</h3><ul>${edges}</ul>` : ""}

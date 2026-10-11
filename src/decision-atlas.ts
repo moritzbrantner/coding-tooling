@@ -212,28 +212,46 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
     const kind: AtlasEntryKind = statusLabel === "question" ? "question" : "decision";
     if (
       kind === "decision" &&
-      !/^(?:agreed|owner decision|implemented|not |documented limit|current limitation|future option)/.test(
+      !/^(?:decision$|agreed|owner decision|implemented|not |documented limit|current limitation|future option)/.test(
         statusLabel,
       )
     )
       fail(`${source.path}:${i + 1} ID ${id} has invalid decision status label ${statusLabel}`);
     const sourceBody = tagged[2]!;
-    const selected = sourceBody.match(/^\*\*([ABC][^*]*)\*\*(?:\s+—\s+|\s+)(.*)$/u);
+    const struck = [...sourceBody.matchAll(/~~(.*?)~~/g)];
+    const activeBody = sourceBody.replace(/~~(.*?)~~/g, "").trim();
+    if (activeBody.includes("~~") || struck.some((span) => !span[1]?.trim()))
+      fail(`${source.path}:${i + 1} ID ${id} has malformed strikethrough`);
+    if (kind === "question" && struck.length > 0)
+      fail(`${source.path}:${i + 1} ID ${id} cannot strike a Question`);
+    const selected = activeBody.match(/^\*\*([ABC][^*]*)\*\*(?:\s+—\s+|\s+)(.*)$/u);
     const choice = selected ? selected[1]! : null;
     if (kind === "question" && choice !== null)
       fail(`${source.path}:${i + 1} ID ${id} is a Question with a selected choice`);
-    const statement = plainCitationFreeStatement(
-      issueFreeStatement(selected ? selected[2]! : sourceBody),
-    );
+    const activeStatement = selected ? selected[2]! : activeBody;
+    const substantiveText = activeStatement
+      .replace(/\[[^\]]+\]\(https?:\/\/[^)]+\)/g, "")
+      .replace(/\bTags:\s*(?:`[^`]+`(?:,\s*)?)+\.?/gu, "")
+      .replace(/\bLegacy alias:\s*`[^`]+`\.?/gu, "")
+      .replace(/[-\s.,;:()]+/g, "");
+    const retired = kind === "decision" && struck.length > 0 && substantiveText.length === 0;
+    // Retain struck history for the Markdown preview; use only live text for active relationships.
+    const statement =
+      struck.length > 0
+        ? sourceBody
+        : plainCitationFreeStatement(issueFreeStatement(activeStatement));
     const aliases = unique(
       [...sourceBody.matchAll(/Legacy alias:\s*`([^`]+)`/g)].map((item) => item[1]!),
     );
     const rawTags = sourceBody.match(/\bTags:\s*((?:`[^`]+`(?:,\s*)?)+)/u)?.[1] ?? "";
     const tags = unique([...rawTags.matchAll(/`([^`]+)`/g)].map((tag) => tag[1]!));
-    const references = statement.replace(/\[[^\]]+\]\(https?:\/\/[^)]+\)/g, "");
+    const references = plainCitationFreeStatement(issueFreeStatement(activeStatement)).replace(
+      /\[[^\]]+\]\(https?:\/\/[^)]+\)/g,
+      "",
+    );
     const typed = [
       ...references.matchAll(/\b(answers|supersedes)\s+`?([1-9]\d*(?:\.[1-9]\d*){2,})`?/gi),
-    ].map((match) => ({ type: match[1]!.toLowerCase(), target: match[2]! }));
+    ].map((edgeMatch) => ({ type: edgeMatch[1]!.toLowerCase(), target: edgeMatch[2]! }));
     const targets = unique(
       [...references.matchAll(/\b[1-9]\d*(?:\.[1-9]\d*){2,}\b/g)]
         .map((ref) => ref[0])
@@ -254,9 +272,13 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       decisionStatus:
         kind === "question"
           ? null
-          : statusLabel.includes("owner decision") || statusLabel.includes("agreed")
-            ? "accepted"
-            : "recorded",
+          : retired
+            ? "superseded"
+            : statusLabel === "decision" ||
+                statusLabel.includes("owner decision") ||
+                statusLabel.includes("agreed")
+              ? "accepted"
+              : "recorded",
       implementation: {
         sourceLabel: kind === "question" ? "not-applicable" : statusLabel,
         verification: "unverified",
@@ -273,9 +295,8 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
   return { groups, decisions };
 }
 
-function validateLinks(links: string[], repo: string, id: string): void {
-  if (links.length === 0) fail(`${id}: no source links`);
-  let owned = false;
+function validateLinks(links: string[], id: string): void {
+  // Local file and line already supply provenance; external issue links are optional.
   for (const link of links) {
     let url: URL;
     try {
@@ -289,9 +310,7 @@ function validateLinks(links: string[], repo: string, id: string): void {
       /^\/([^/]+)\/([^/]+)\/(issues\/\d+|pull\/\d+|blob\/[a-f0-9]{40}\/.+)$/,
     );
     if (!match) fail(`${id}: links must be GitHub issues, PRs or immutable blob URLs: ${link}`);
-    if (`${match[1]}/${match[2]}` === repo) owned = true;
   }
-  if (!owned) fail(`${id}: needs at least one owning-repository source link`);
 }
 
 export function validateAtlasIndex(index: AtlasIndex): void {
@@ -329,7 +348,7 @@ export function validateAtlasIndex(index: AtlasIndex): void {
       fail(`${decision.id}: empty decision text or hierarchy`);
     if (decision.choice !== null && !/^[ABC](?:\b|$)/.test(decision.choice))
       fail(`${decision.id}: invalid choice`);
-    validateLinks(decision.links, index.repository, decision.id);
+    validateLinks(decision.links, decision.id);
     ids.add(decision.id);
     for (const alias of decision.aliases) {
       if (!idPattern.test(alias) || aliases.has(alias) || ids.has(alias) || alias === decision.id)
@@ -380,12 +399,23 @@ export function assertPreservedDecisions(previous: AtlasIndex, current: AtlasInd
   for (const [id, decision] of old) {
     const next = now.get(id);
     if (!next) fail(`historical ID ${id} was removed or renumbered`);
+    if (decision.kind !== next.kind) fail(`historical entry ${id} changed kind`);
+    const struck = [...next.statement.matchAll(/~~(.*?)~~/g)].map((span) => span[1]!);
     if (
-      decision.kind !== next.kind ||
-      decision.choice !== next.choice ||
-      decision.statement !== next.statement
+      decision.kind === "decision" &&
+      decision.decisionStatus !== "superseded" &&
+      next.decisionStatus === "superseded" &&
+      !struck.some((text) => text.includes(decision.statement))
     )
-      fail(`historical decision ${id} changed; append a new ID and supersedes relation instead`);
+      fail(`retired decision ${id} did not preserve previous wording`);
+    if (decision.choice !== next.choice) {
+      const preserved = struck.some((text) =>
+        decision.choice === null
+          ? text.includes(decision.statement)
+          : text.includes(`**${decision.choice}**`),
+      );
+      if (!preserved) fail(`historical choice ${id} changed without striking the previous choice`);
+    }
   }
 }
 
