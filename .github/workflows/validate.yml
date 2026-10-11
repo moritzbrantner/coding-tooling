@@ -166,23 +166,3 @@ jobs:
           assert any(x["kind"] == "question" and x["choice"] is None and x["decisionStatus"] is None for x in index["decisions"])
           assert all(x["implementation"]["verification"] == "unverified" for x in index["decisions"])
           PY
-
-  daq-format-preview:
-    name: DAQ / temporary Oxfmt diagnostics
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-      - run: bun install --frozen-lockfile
-      - name: Emit exact formatted DAQ files
-        run: |
-          bun run format:write
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-          for name in ["src/daq.ts", "src/daq-cli.ts", "tests/daq.test.ts"]:
-              print("DAQ_FORMAT_RESULT=" + json.dumps({"path": name, "content": Path(name).read_text(encoding="utf-8")}))
-          PY
