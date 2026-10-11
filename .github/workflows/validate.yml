@@ -129,6 +129,43 @@ jobs:
             --output "$RUNNER_TEMP/decision-atlas-my-farm"
           test -s "$RUNNER_TEMP/decision-atlas-my-farm/index.json"
           test -s "$RUNNER_TEMP/decision-atlas-my-farm/preview.html"
+      - name: Assert all accepted My Farm selections and historic aliases were retained
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          index = json.loads((Path(os.environ["RUNNER_TEMP"]) / "decision-atlas-my-farm/index.json").read_text())
+          leaves = index["decisions"]
+          assert len(leaves) == 25, f"expected 25 authoritative choices, got {len(leaves)}"
+          assert all(x["kind"] == "decision" and x["decisionStatus"] == "accepted" and x["choice"] for x in leaves)
+          aliases = [alias for entry in leaves for alias in entry["aliases"]]
+          assert len(aliases) == 23 and len(set(aliases)) == 23, f"legacy aliases changed: {len(aliases)}"
+          PY
+      - name: Check out the open MMORPG PR's pinned authoring format
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: moritzbrantner/mmorpg
+          ref: 404f17552fe677d64a8aa638a1f5afa5f3570a94
+          path: .artifacts/mmorpg-decision-source
+      - name: Validate MMORPG numbered IDs and unresolved Questions
+        run: |
+          bun src/router.ts decision-atlas index \
+            --root .artifacts/mmorpg-decision-source \
+            --repository moritzbrantner/mmorpg \
+            --source docs/decisions/atlas.md \
+            --format numbered-list \
+            --revision 404f17552fe677d64a8aa638a1f5afa5f3570a94 \
+            --min-decisions 100 \
+            --output "$RUNNER_TEMP/decision-atlas-mmorpg"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          index = json.loads((Path(os.environ["RUNNER_TEMP"]) / "decision-atlas-mmorpg/index.json").read_text())
+          assert any(x["kind"] == "question" and x["choice"] is None and x["decisionStatus"] is None for x in index["decisions"])
+          assert all(x["implementation"]["verification"] == "unverified" for x in index["decisions"])
+          PY
 
   decision-atlas-formatting-diagnostics:
     name: Decision Atlas / temporary formatting diagnostics
