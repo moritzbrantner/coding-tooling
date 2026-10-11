@@ -1,11 +1,5 @@
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import {
@@ -37,7 +31,8 @@ function sourcePaths(root: string, relativeSource: string): string[] {
   }
   const path = join(root, relativeSource);
   if (!existsSync(path)) throw new Error(`missing source: ${relativeSource}`);
-  if (!lstatSync(path).isFile()) throw new Error("decision source must be a regular Markdown file (no symlinks or directories)");
+  if (!lstatSync(path).isFile())
+    throw new Error("decision source must be a regular Markdown file (no symlinks or directories)");
   return [relativeSource];
 }
 
