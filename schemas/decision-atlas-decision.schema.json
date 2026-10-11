@@ -1,10 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/moritzbrantner/coding-tooling/blob/main/schemas/decision-atlas-decision.schema.json",
-  "title": "Decision Atlas normalized decision v1",
+  "title": "Decision Atlas indexed Decision or Question v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
+    "kind",
     "id",
     "aliases",
     "parentId",
@@ -33,7 +34,10 @@
       }
     },
     "parentId": {
-      "type": ["string", "null"]
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "path": {
       "type": "array",
@@ -43,19 +47,35 @@
       }
     },
     "choice": {
-      "type": ["string", "null"]
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "statement": {
       "type": "string",
       "minLength": 1
     },
     "decisionStatus": {
-      "enum": ["accepted", "recorded", "proposed", "superseded"]
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "accepted",
+        "recorded",
+        "proposed",
+        "superseded",
+        null
+      ]
     },
     "implementation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sourceLabel", "verification"],
+      "required": [
+        "sourceLabel",
+        "verification"
+      ],
       "properties": {
         "sourceLabel": {
           "type": "string",
@@ -79,7 +99,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["type", "target"],
+        "required": [
+          "type",
+          "target"
+        ],
         "properties": {
           "type": {
             "type": "string",
@@ -104,7 +127,10 @@
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "line"],
+      "required": [
+        "path",
+        "line"
+      ],
       "properties": {
         "path": {
           "type": "string",
@@ -115,6 +141,54 @@
           "minimum": 1
         }
       }
+    },
+    "kind": {
+      "enum": [
+        "decision",
+        "question"
+      ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "question"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decisionStatus": {
+            "const": null
+          },
+          "choice": {
+            "const": null
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "decision"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decisionStatus": {
+            "enum": [
+              "accepted",
+              "recorded",
+              "proposed",
+              "superseded"
+            ]
+          }
+        }
+      }
+    }
+  ]
 }
