@@ -400,8 +400,15 @@ export function assertPreservedDecisions(previous: AtlasIndex, current: AtlasInd
     const next = now.get(id);
     if (!next) fail(`historical ID ${id} was removed or renumbered`);
     if (decision.kind !== next.kind) fail(`historical entry ${id} changed kind`);
+    const struck = [...next.statement.matchAll(/~~(.*?)~~/g)].map((span) => span[1]!);
+    if (
+      decision.kind === "decision" &&
+      decision.decisionStatus !== "superseded" &&
+      next.decisionStatus === "superseded" &&
+      !struck.some((text) => text.includes(decision.statement))
+    )
+      fail(`retired decision ${id} did not preserve previous wording`);
     if (decision.choice !== next.choice) {
-      const struck = [...next.statement.matchAll(/~~(.*?)~~/g)].map((match) => match[1]!);
       const preserved = struck.some((text) =>
         decision.choice === null
           ? text.includes(decision.statement)
