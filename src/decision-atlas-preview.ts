@@ -32,7 +32,7 @@ function navigation(branch: Branch): string {
   const decisions = branch.decisions
     .map((decision) => {
       const label = decision.statement.split(/\.\s/)[0]!.slice(0, 94);
-      return `<a class="node" data-search="${html([decision.id, ...decision.aliases, label, ...decision.tags].join(" ").toLowerCase())}" href="#${anchor(decision.id)}"><code>${html(decision.id)}</code> ${html(label)}</a>`;
+      return `<a class="node" data-search="${html([decision.kind, decision.id, ...decision.aliases, label, ...decision.tags].join(" ").toLowerCase())}" href="#${anchor(decision.id)}"><code>${html(decision.id)}</code> ${html(label)}</a>`;
     })
     .join("");
   return children + decisions;
@@ -67,9 +67,12 @@ export function renderAtlasPreview(index: AtlasIndex): string {
             `<span class="tag">Legacy alias: <code>${html(alias)}</code></span><span id="${anchor(alias)}"></span>`,
         )
         .join(" ");
+      const detail = decision.kind === "question"
+        ? "Question: unresolved · No owner-selected choice"
+        : `Decision: ${html(decision.decisionStatus ?? "")}${decision.choice === null ? "" : ` · Choice: ${html(decision.choice)}`} · Source implementation claim: ${html(decision.implementation.sourceLabel)}`;
       return `<article id="${anchor(decision.id)}">
-      <h2><code>${html(decision.id)}</code></h2>
-      <p class="meta">Decision: ${html(decision.decisionStatus)}${decision.choice === null ? "" : ` · Choice: ${html(decision.choice)}`} · Implementation claim: ${html(decision.implementation.sourceLabel)} · <strong>Not independently verified</strong></p>
+      <h2><code>${html(decision.id)}</code> · ${html(decision.kind)}</h2>
+      <p class="meta">${detail} · <strong>Implementation not independently verified</strong></p>
       <p>${html(decision.statement)}</p>
       <p>${tags} ${aliases}</p>
       <p class="meta"><a href="${html(sourceUrl)}">Owning source at committed revision, line ${decision.source.line}</a></p>
