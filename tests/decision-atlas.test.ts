@@ -177,7 +177,8 @@ test("append-only compare rejects changed choices and disappearing IDs; category
     atlas(
       farm
         .replace(/\s+- \*\*1\.1\.2\*\*[^\n]*/, "")
-        .replace(/\s+- \`1\.1\.1\` \(platform\)[^\n]*/, ""),
+        .replace("references 1.1.2", "without a secondary reference")
+        .replace(/\s+- `1\.1\.1` \(platform\)[^\n]*/, ""),
       previous,
     ),
   ).toThrow("removed");
