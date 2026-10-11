@@ -118,7 +118,8 @@ describe("Cargo source mode for git dependencies (#313)", () => {
     const rendered = renderSourceDependencies(setup.consumer);
     const gitSection = section(rendered.content, `[patch."${setup.url}"]`);
     expect(gitSection).toContain('"moenarch-text-core"');
-    expect(gitSection).toContain(join(setup.source, "crates", "core"));
+    // Same TOML basic-string escaping the existing source-deps tests expect (portable to Windows).
+    expect(gitSection).toContain(join(setup.source, "crates", "core").replaceAll("\\", "\\\\"));
     expect(section(rendered.content, "[patch.crates-io]")).not.toContain("moenarch-text-core");
   });
 
