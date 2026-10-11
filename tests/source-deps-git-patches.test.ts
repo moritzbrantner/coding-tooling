@@ -11,9 +11,17 @@
 // - Activation verifies every generated patch is used by the consumer's crate graph; an unused
 //   patch makes activation fail (status "error") and leaves no generated Cargo config behind.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, test } from "bun:test";
 
 import { renderSourceDependencies, sourceDependencies } from "../src/source-deps.ts";
@@ -36,7 +44,8 @@ function crate(root: string, name: string, body = "pub fn value() -> u32 { 1 }\n
 type Fixture = { workspace: string; consumer: string; source: string; url: string; rev: string };
 
 function fixture(consumerUrl?: (url: string) => string): Fixture {
-  const workspace = mkdtempSync(join(tmpdir(), "coding-tooling-git-patches-"));
+  // realpath: macOS tmpdir is a symlink, and cargo reports canonical manifest paths.
+  const workspace = realpathSync(mkdtempSync(join(tmpdir(), "coding-tooling-git-patches-")));
   const source = join(workspace, "source");
   const consumer = join(workspace, "consumer");
   mkdirSync(source, { recursive: true });
@@ -52,7 +61,7 @@ function fixture(consumerUrl?: (url: string) => string): Fixture {
   git(source, "add", ".");
   git(source, "commit", "-m", "source");
   const rev = git(source, "rev-parse", "HEAD");
-  const url = `file://${source}`;
+  const url = pathToFileURL(source).href;
 
   crate(consumer, "consumer", "pub use text_core::value;\n");
   writeFileSync(
