@@ -102,6 +102,18 @@ Schema versions 1 through 4 remain supported. A schema migration changes declara
 
 The versioned schemas are intentional safety behavior. Older tooling must reject a newer contract it cannot interpret rather than silently discarding local-only, repository-level, or JavaScript semantics.
 
+## Cargo patch sections and activation check
+
+Cargo applies a `[patch]` table per dependency source, so `activate` writes each declared Cargo package under the section that matches how the consumer actually depends on it:
+
+- coding-tooling reads the consumer's root `Cargo.toml` and its workspace members. Members come from the `workspace.members` globs (`*`, `?`, `**` and `[...]` classes) minus `workspace.exclude`. It inspects `[dependencies]`, `[dev-dependencies]` and `[build-dependencies]`, plus their `[target.<cfg>.*]` variants, and it honours `package = "..."` renames.
+- A `key = { workspace = true }` entry resolves through `[workspace.dependencies]` of the consumer's own workspace or, when the consumer root is a member of an enclosing workspace, of that workspace. Workspace entries that no inspected manifest inherits are ignored.
+- When the consumer declares a source package with `git = "<url>"` and that URL matches the declared source repository canonically (case, a trailing `/` and a trailing `.git` do not matter), the package goes under `[patch."<url>"]` with the URL spelled exactly as the consumer writes it. If the consumer uses several spellings of the same repository, each spelling gets its own section.
+- Every other package stays under `[patch.crates-io]`. A package that the consumer takes both from Git and from the registry is patched in both sections.
+- Matching uses the URL only. The declared `rev` is the local-development revision and may be ahead of the `rev` the consumer commits; that is how a consumer tests an unpushed upstream change. Cargo cannot patch a Git source with the same repository, so a Git-declared package needs its local checkout. Without one, activation fails instead of writing a patch that has no effect.
+
+After writing the generated config, `activate` runs `cargo metadata --format-version 1` in the consumer root. It runs offline first, so local sources and an already-filled Cargo cache need no network, and it retries online only when the offline run fails. Before the run it asks `cargo locate-project --workspace` for the workspace that owns the consumer, which can be an enclosing workspace. Afterwards it restores that workspace's `Cargo.lock`, or removes one the run created. It does this whether verification passes or fails. Every patch that resolves to a local checkout must appear in the metadata as a path package (`source: null`) whose manifest lies in that checkout, and the graph must not still contain the package from the declared Git repository. A Git-rendered patch (schema-1 local-or-Git mode without a checkout) must appear in the graph. Cargo's `Patch ... was not used in the crate graph` warning counts as a failure as well. On failure, activation reports `error` with a diagnostic naming each unused package, and the previous generated config is restored or the new one is removed. The result's `cargoVerification` field is `verified`, or `skipped` when the consumer root has no `Cargo.toml` or declares no Cargo patches.
+
 ## Exact transitive graph
 
 Direct revision checks are not enough once a source dependency has source dependencies of its own. A root consumer can otherwise override the revision against which an intermediate repository was developed without making that disagreement explicit.
