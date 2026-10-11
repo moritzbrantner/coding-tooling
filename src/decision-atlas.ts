@@ -220,7 +220,7 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
     const sourceBody = tagged[2]!;
     const struck = [...sourceBody.matchAll(/~~(.*?)~~/g)];
     const activeBody = sourceBody.replace(/~~(.*?)~~/g, "").trim();
-    if (activeBody.includes("~~") || struck.some((match) => !match[1]?.trim()))
+    if (activeBody.includes("~~") || struck.some((span) => !span[1]?.trim()))
       fail(`${source.path}:${i + 1} ID ${id} has malformed strikethrough`);
     if (kind === "question" && struck.length > 0)
       fail(`${source.path}:${i + 1} ID ${id} cannot strike a Question`);
@@ -233,7 +233,7 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       .replace(/\[[^\]]+\]\(https?:\/\/[^)]+\)/g, "")
       .replace(/\bTags:\s*(?:`[^`]+`(?:,\s*)?)+\.?/gu, "")
       .replace(/\bLegacy alias:\s*`[^`]+`\.?/gu, "")
-      .replace(/[\s.,;:()\-]+/g, "");
+      .replace(/[-\s.,;:()]+/g, "");
     const retired = kind === "decision" && struck.length > 0 && substantiveText.length === 0;
     // Retain struck history for the Markdown preview; use only live text for active relationships.
     const statement =
@@ -251,7 +251,7 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
     );
     const typed = [
       ...references.matchAll(/\b(answers|supersedes)\s+`?([1-9]\d*(?:\.[1-9]\d*){2,})`?/gi),
-    ].map((match) => ({ type: match[1]!.toLowerCase(), target: match[2]! }));
+    ].map((edgeMatch) => ({ type: edgeMatch[1]!.toLowerCase(), target: edgeMatch[2]! }));
     const targets = unique(
       [...references.matchAll(/\b[1-9]\d*(?:\.[1-9]\d*){2,}\b/g)]
         .map((ref) => ref[0])
