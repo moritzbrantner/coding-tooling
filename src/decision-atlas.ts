@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-export type AtlasFormat = "my-farm-tree" | "numbered-list" | "canonical";
+export type AtlasFormat = "my-farm-tree" | "numbered-list";
+export type AtlasEntryKind = "decision" | "question";
 export type AtlasDecisionStatus = "accepted" | "recorded" | "proposed" | "superseded";
 
 export interface AtlasRelation {
@@ -9,13 +10,14 @@ export interface AtlasRelation {
 }
 
 export interface AtlasDecision {
+  kind: AtlasEntryKind;
   id: string;
   aliases: string[];
   parentId: string | null;
   path: string[];
   choice: string | null;
   statement: string;
-  decisionStatus: AtlasDecisionStatus;
+  decisionStatus: AtlasDecisionStatus | null;
   implementation: { sourceLabel: string; verification: "unverified" };
   tags: string[];
   relations: AtlasRelation[];
@@ -134,6 +136,7 @@ function fromFarm(source: AtlasSource): { groups: AtlasGroup[]; decisions: Atlas
           : [];
         const body = answer[2]!.replace(/\s+Tags:\s*(?:`[^`]+`(?:,\s*)?)+\.?$/u, "");
         decisions.push({
+          kind: "decision",
           id,
           aliases: [],
           parentId: null,
@@ -249,107 +252,6 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
   return { groups, decisions };
 }
 
-function yamlValue(text: string): unknown {
-  if (text.startsWith("[") || text.startsWith("{") || text.startsWith('"')) {
-    try {
-      return JSON.parse(text);
-    } catch {
-      fail(`invalid JSON-compatible YAML value: ${text}`);
-    }
-  }
-  if (text === "null") return null;
-  if (text === "true") return true;
-  if (/^-?\d+$/.test(text)) return Number(text);
-  if (/^[a-zA-Z0-9._/-]+$/.test(text)) return text;
-  fail(`quote YAML scalar ${text}`);
-}
-
-function fromCanonical(source: AtlasSource): { groups: AtlasGroup[]; decisions: AtlasDecision[] } {
-  const match = source.text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]+)$/);
-  if (!match) fail(`${source.path}: missing canonical frontmatter and body`);
-  const metadata: Record<string, unknown> = {};
-  const allowed = new Set([
-    "atlas_version",
-    "id",
-    "aliases",
-    "parent",
-    "choice",
-    "path",
-    "decision_status",
-    "implementation_status",
-    "tags",
-    "relations",
-    "links",
-  ]);
-  for (const line of match[1]!.split(/\r?\n/)) {
-    if (!line.trim()) continue;
-    const field = line.match(/^([a-z_]+):\s*(.+)$/);
-    if (!field || !allowed.has(field[1]!))
-      fail(`${source.path}: unsupported or malformed YAML field ${line}`);
-    if (Object.hasOwn(metadata, field[1]!))
-      fail(`${source.path}: duplicate YAML field ${field[1]}`);
-    metadata[field[1]!] = yamlValue(field[2]!.trim());
-  }
-  const id = metadata.id;
-  const status = metadata.decision_status;
-  const path = metadata.path;
-  const tags = metadata.tags;
-  const relations = metadata.relations;
-  const links = metadata.links;
-  const parent = metadata.parent ?? null;
-  const choice = metadata.choice ?? null;
-  const aliases = metadata.aliases ?? [];
-  const impl = metadata.implementation_status;
-  if (
-    metadata.atlas_version !== 1 ||
-    typeof id !== "string" ||
-    typeof status !== "string" ||
-    typeof impl !== "string" ||
-    !Array.isArray(path) ||
-    !path.every((s) => typeof s === "string") ||
-    !Array.isArray(tags) ||
-    !tags.every((s) => typeof s === "string") ||
-    !Array.isArray(links) ||
-    !links.every((s) => typeof s === "string") ||
-    !Array.isArray(relations) ||
-    !relations.every(
-      (r) =>
-        !!r &&
-        typeof r === "object" &&
-        !Array.isArray(r) &&
-        Object.keys(r).sort().join(",") === "target,type" &&
-        typeof r.target === "string" &&
-        typeof r.type === "string",
-    ) ||
-    (parent !== null && typeof parent !== "string") ||
-    !Array.isArray(aliases) ||
-    !aliases.every((a) => typeof a === "string") ||
-    (choice !== null && typeof choice !== "string")
-  )
-    fail(`${source.path}: invalid versioned decision metadata`);
-  const statement = match[2]!.trim();
-  if (!statement) fail(`${source.path}: missing decision text`);
-  return {
-    groups: [],
-    decisions: [
-      {
-        id,
-        aliases: unique(aliases),
-        parentId: parent,
-        path,
-        choice,
-        statement,
-        decisionStatus: status as AtlasDecisionStatus,
-        implementation: { sourceLabel: impl, verification: "unverified" },
-        tags: unique(tags),
-        relations,
-        links: unique(links),
-        source: { path: source.path, line: match[1]!.split(/\r?\n/).length + 3 },
-      },
-    ],
-  };
-}
-
 function validateLinks(links: string[], repo: string, id: string): void {
   if (links.length === 0) fail(`${id}: no source links`);
   let owned = false;
@@ -385,8 +287,12 @@ function validateIndex(index: AtlasIndex): void {
   for (const decision of index.decisions) {
     if (!idPattern.test(decision.id)) fail(`invalid or missing ID ${decision.id}`);
     if (ids.has(decision.id)) fail(`duplicate ID ${decision.id}`);
-    if (!decisionStatuses.has(decision.decisionStatus))
+    if (decision.kind !== "decision" && decision.kind !== "question")
+      fail(`${decision.id}: invalid entry kind`);
+    if (decision.kind === "decision" && (decision.decisionStatus === null || !decisionStatuses.has(decision.decisionStatus)))
       fail(`${decision.id}: invalid decision status`);
+    if (decision.kind === "question" && (decision.decisionStatus !== null || decision.choice !== null))
+      fail(`${decision.id}: unresolved questions must have no decision status or choice`);
     if (
       !decision.implementation.sourceLabel.trim() ||
       decision.implementation.verification !== "unverified"
@@ -434,7 +340,9 @@ function validateIndex(index: AtlasIndex): void {
 export function assertPreservedDecisions(previous: AtlasIndex, current: AtlasIndex): void {
   if (previous.schemaVersion !== 1 || previous.repository !== current.repository)
     fail("previous index has a different schema or repository");
-  const old = new Map(previous.decisions.map((decision) => [decision.id, decision]));
+  const old = new Map(previous.decisions.flatMap((decision) =>
+    [decision.id, ...decision.aliases].map((id) => [id, decision] as const)
+  ));
   const now = new Map(
     current.decisions.flatMap((decision) =>
       [decision.id, ...decision.aliases].map((id) => [id, decision] as const),
@@ -443,7 +351,7 @@ export function assertPreservedDecisions(previous: AtlasIndex, current: AtlasInd
   for (const [id, decision] of old) {
     const next = now.get(id);
     if (!next) fail(`historical ID ${id} was removed or renumbered`);
-    if (decision.choice !== next.choice || decision.statement !== next.statement)
+    if (decision.kind !== next.kind || decision.choice !== next.choice || decision.statement !== next.statement)
       fail(`historical decision ${id} changed; append a new ID and supersedes relation instead`);
   }
 }
@@ -472,9 +380,7 @@ export function buildAtlasIndex(
     const parsed =
       source.format === "my-farm-tree"
         ? fromFarm(source)
-        : source.format === "numbered-list"
-          ? fromNumbered(source)
-          : fromCanonical(source);
+        : fromNumbered(source);
     groups.push(...parsed.groups);
     decisions.push(...parsed.decisions);
     indexedSources.push({
