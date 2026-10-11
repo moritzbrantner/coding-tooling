@@ -30,7 +30,7 @@ function git(root: string, ...args: string[]): string {
 
 function sourcePaths(root: string, relativeSource: string): string[] {
   if (
-    !/^docs\\/decisions\\/[A-Za-z0-9_./-]+\\.md$/.test(relativeSource) ||
+    !/^docs\/decisions\/[A-Za-z0-9_./-]+\.md$/.test(relativeSource) ||
     relativeSource.split("/").some((piece) => piece === "." || piece === "..")
   ) {
     throw new Error("source must be a repository-relative Markdown file inside docs/decisions");
