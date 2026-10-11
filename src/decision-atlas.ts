@@ -282,7 +282,7 @@ function validateLinks(links: string[], repo: string, id: string): void {
   if (!owned) fail(`${id}: needs at least one owning-repository source link`);
 }
 
-function validateIndex(index: AtlasIndex): void {
+export function validateAtlasIndex(index: AtlasIndex): void {
   const ids = new Set<string>();
   const aliases = new Set<string>();
   const parents = new Map<string, string | null>();
@@ -421,7 +421,7 @@ export function buildAtlasIndex(
       note: "Source links are declared citations; no code symbol or acceptance test is verified.",
     },
   };
-  validateIndex(index);
+  validateAtlasIndex(index);
   if (previous) assertPreservedDecisions(previous, index);
   return index;
 }
