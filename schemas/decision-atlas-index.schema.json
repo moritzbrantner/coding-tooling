@@ -31,22 +31,14 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "path",
-          "format",
-          "sha256"
-        ],
+        "required": ["path", "format", "sha256"],
         "properties": {
           "path": {
             "type": "string",
             "pattern": "^docs/decisions/"
           },
           "format": {
-            "enum": [
-              "my-farm-tree",
-              "numbered-list",
-              "canonical"
-            ]
+            "enum": ["my-farm-tree", "numbered-list", "canonical"]
           },
           "sha256": {
             "type": "string",
@@ -60,20 +52,13 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "id",
-          "parentId",
-          "title"
-        ],
+        "required": ["id", "parentId", "title"],
         "properties": {
           "id": {
             "type": "string"
           },
           "parentId": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "type": ["string", "null"]
           },
           "title": {
             "type": "string",
@@ -91,11 +76,7 @@
     "provenance": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "source",
-        "implementation",
-        "note"
-      ],
+      "required": ["source", "implementation", "note"],
       "properties": {
         "source": {
           "const": "committed-revision"
