@@ -24,7 +24,7 @@ This file contains repository-specific guidance for coding agents working in `co
 
 ## Decision Atlas owner intent
 
-For the approved Decision Atlas product contract, consult [`docs/decisions/atlas.md`](docs/decisions/atlas.md). It contains only Decisions and Questions; it is an owner-authored intent record, not an output of this tooling. Do not infer approval, rename IDs, or create a second decision authority while implementing its indexer.
+For the approved Decision Atlas product contract, consult [`docs/decisions/atlas.md`](docs/decisions/atlas.md). Prefer `bun src/daq-cli.ts find <words>` (or `get <ID>` / `questions`) to retrieve relevant entries before reading the entire source. Queries use explicit local evidence; they do not discover or approve new decisions. It contains only Decisions and Questions; it is an owner-authored intent record, not an output of this tooling. Do not infer approval, rename IDs, or create a second decision authority while implementing its indexer.
 
 ## Change discipline
 
