@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { indexRepository } from "../src/decision-atlas-cli.ts";
-import { buildAtlasIndex, type AtlasIndex } from "../src/decision-atlas.ts";
+import { buildAtlasIndex, validateAtlasIndex, type AtlasIndex } from "../src/decision-atlas.ts";
 import { renderAtlasPreview } from "../src/decision-atlas-preview.ts";
 
 const revision = "a".repeat(40);
@@ -13,7 +13,7 @@ const repo = "moritzbrantner/my-farm";
 const issue = (id: number) => `[#${id}](https://github.com/${repo}/issues/${id})`;
 const source = (
   text: string,
-  format: "numbered-list" | "my-farm-tree" | "canonical" = "numbered-list",
+  format: "numbered-list" | "my-farm-tree" = "numbered-list",
 ) => [{ path: "docs/decisions/atlas.md", format, text }];
 
 const farm = `- **How to use this Decision Atlas**
@@ -34,27 +34,6 @@ function atlas(text = farm, previous?: AtlasIndex): AtlasIndex {
   return buildAtlasIndex(repo, revision, source(text), previous);
 }
 
-function canonical(id: string, extras: Record<string, unknown> = {}): string {
-  const fields: Record<string, unknown> = {
-    atlas_version: 1,
-    id,
-    parent: null,
-    choice: "A",
-    path: ["control"],
-    decision_status: "accepted",
-    implementation_status: "not-verified",
-    tags: ["ux"],
-    relations: [],
-    links: [`https://github.com/${repo}/issues/126`],
-    ...extras,
-  };
-  const serialized = Object.entries(fields).map(
-    ([key, value]) =>
-      `${key}: ${typeof value === "string" && /^[A-Za-z0-9._/-]+$/.test(value) ? value : JSON.stringify(value)}`,
-  );
-  return `---\n${serialized.join("\n")}\n---\nDo not silently change this decision.\n`;
-}
-
 test("My Farm adapter preserves numeric IDs, original path aliases, choices and explicit relationships", () => {
   const index = atlas();
   expect(index.decisions.map((item) => item.id)).toEqual(["1.1.1", "1.1.2", "1.2.1"]);
@@ -64,7 +43,7 @@ test("My Farm adapter preserves numeric IDs, original path aliases, choices and 
   expect(index.decisions[0]?.tags).toEqual(["pages", "platform"]);
   expect(index.decisions[0]?.relations).toEqual([{ type: "cross-reference", target: "1.1.2" }]);
   expect(index.decisions[2]?.relations).toEqual([{ type: "references", target: "1.1.2" }]);
-  expect(index.decisions.every((item) => item.decisionStatus === "accepted")).toBe(true);
+  expect(index.decisions.every((item) => item.kind === "decision" && item.decisionStatus === "accepted")).toBe(true);
   expect(index.decisions.every((item) => item.implementation.verification === "unverified")).toBe(
     true,
   );
@@ -104,27 +83,20 @@ implementation_status: not-verified
   expect(index.decisions[0]?.path).toEqual(["residents", "control"]);
 });
 
-test("canonical YAML-frontmatter sources are typed, versioned, and retain explicit relations", () => {
-  const first = canonical("my-farm/control/first");
-  const second = canonical("my-farm/control/second", {
-    relations: [{ type: "supersedes", target: "my-farm/control/first" }],
-    aliases: ["my-farm/control/old-name"],
-  });
-  const index = buildAtlasIndex(repo, revision, [
-    { path: "docs/decisions/001.md", text: first, format: "canonical" },
-    { path: "docs/decisions/002.md", text: second, format: "canonical" },
-  ]);
-  expect(index.decisions[1]?.aliases).toEqual(["my-farm/control/old-name"]);
-  expect(index.decisions[1]?.relations).toEqual([
-    { type: "supersedes", target: "my-farm/control/first" },
-  ]);
-  expect(() =>
-    buildAtlasIndex(
-      repo,
-      revision,
-      source(canonical("my-farm/control/first", { atlas_version: 2 }), "canonical"),
-    ),
-  ).toThrow("invalid versioned");
+test("unresolved Questions remain distinct and can be answered by a later Decision", () => {
+  const mm = `- **8** Player interaction
+  - **8.1** Duels
+    - **8.1.1** [question] Should in-world duels be nonlethal? ([#150](https://github.com/moritzbrantner/mmorpg/pull/150))
+    - **8.1.2** [owner decision; implementation pending] In-world duels are nonlethal. Answers 8.1.1. ([#150](https://github.com/moritzbrantner/mmorpg/pull/150))
+`;
+  const idx = buildAtlasIndex("moritzbrantner/mmorpg", revision, source(mm));
+  expect(idx.decisions[0]?.kind).toBe("question");
+  expect(idx.decisions[0]?.choice).toBeNull();
+  expect(idx.decisions[0]?.decisionStatus).toBeNull();
+  expect(idx.decisions[1]?.kind).toBe("decision");
+  expect(idx.decisions[1]?.relations).toEqual([{ type: "answers", target: "8.1.1" }]);
+  expect(renderAtlasPreview(idx)).toContain("Question: unresolved");
+  expect(() => buildAtlasIndex("moritzbrantner/mmorpg", revision, source(mm.replace("[question] Should", "[question] **A** — Should")))).toThrow("Question with a selected choice");
 });
 
 test("duplicate IDs, aliases, missing references and missing links fail closed", () => {
@@ -134,45 +106,22 @@ test("duplicate IDs, aliases, missing references and missing links fail closed",
     "no source links",
   );
   expect(() => atlas(farm.replace("issues/126", "tree/main"))).toThrow("links must be");
-  const collision = canonical("my-farm/control/second", { aliases: ["my-farm/control/first"] });
-  expect(() =>
-    buildAtlasIndex(repo, revision, [
-      {
-        path: "docs/decisions/001.md",
-        text: canonical("my-farm/control/first"),
-        format: "canonical",
-      },
-      { path: "docs/decisions/002.md", text: collision, format: "canonical" },
-    ]),
-  ).toThrow("duplicate or invalid legacy alias");
+  const collision = farm.replace("my-farm/production/admission/one-off", "my-farm/experience/platform/pages-single-player");
+  expect(() => atlas(collision)).toThrow("duplicate or invalid legacy alias");
 });
 
-test("invalid status and parent cycles are rejected independently of source format", () => {
-  expect(() =>
-    buildAtlasIndex(
-      repo,
-      revision,
-      source(
-        canonical("my-farm/control/first", {
-          decision_status: "implemented",
-        }),
-        "canonical",
-      ),
-    ),
-  ).toThrow("invalid decision status");
-  const first = canonical("my-farm/control/first", { parent: "my-farm/control/second" });
-  const second = canonical("my-farm/control/second", { parent: "my-farm/control/first" });
-  expect(() =>
-    buildAtlasIndex(repo, revision, [
-      { path: "docs/decisions/001.md", text: first, format: "canonical" },
-      { path: "docs/decisions/002.md", text: second, format: "canonical" },
-    ]),
-  ).toThrow("parent cycle");
+test("unknown source status and parent cycles fail validation", () => {
+  expect(() => atlas(farm.replace("[agreed; implementation unverified]", "[anything goes]"))).toThrow("invalid decision status label");
+  const cycle = structuredClone(atlas());
+  cycle.decisions[0]!.parentId = "1.1.2";
+  cycle.decisions[1]!.parentId = "1.1.1";
+  expect(() => validateAtlasIndex(cycle)).toThrow("parent cycle");
 });
 
 test("append-only compare rejects changed choices and disappearing IDs; category labels may change", () => {
   const previous = atlas();
   expect(() => atlas(farm.replace("**A now; C later**", "**B**"), previous)).toThrow("changed");
+  expect(() => atlas(farm.replace("Legacy alias: `my-farm/production/admission/one-off`.", ""), previous)).toThrow("historical ID my-farm/production/admission/one-off");
   expect(() =>
     atlas(
       farm
