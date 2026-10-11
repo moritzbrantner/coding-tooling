@@ -24,7 +24,7 @@ function navigation(branch: Branch): string {
     `<details open><summary>${html(child.title)}</summary>${navigation(child)}</details>`).join("");
   const decisions = branch.decisions.map((decision) => {
     const label = decision.statement.split(/\.\s/)[0]!.slice(0, 94);
-    return `<a class="node" data-search="${html([decision.id, label, ...decision.tags].join(" ").toLowerCase())}" href="#${anchor(decision.id)}"><code>${html(decision.id)}</code> ${html(label)}</a>`;
+    return `<a class="node" data-search="${html([decision.id, ...decision.aliases, label, ...decision.tags].join(" ").toLowerCase())}" href="#${anchor(decision.id)}"><code>${html(decision.id)}</code> ${html(label)}</a>`;
   }).join("");
   return children + decisions;
 }
@@ -46,11 +46,12 @@ export function renderAtlasPreview(index: AtlasIndex): string {
     const references = decision.links.map((url) =>
       `<li><a href="${html(url)}" rel="noreferrer">${html(url)}</a></li>`).join("");
     const tags = decision.tags.map((tag) => `<span class="tag">${html(tag)}</span>`).join(" ");
+    const aliases = decision.aliases.map((alias) => `<span class="tag">Legacy alias: <code>${html(alias)}</code></span><span id="${anchor(alias)}"></span>`).join(" ");
     return `<article id="${anchor(decision.id)}">
       <h2><code>${html(decision.id)}</code></h2>
       <p class="meta">Decision: ${html(decision.decisionStatus)}${decision.choice === null ? "" : ` · Choice: ${html(decision.choice)}`} · Implementation claim: ${html(decision.implementation.sourceLabel)} · <strong>Not independently verified</strong></p>
       <p>${html(decision.statement)}</p>
-      <p>${tags}</p>
+      <p>${tags} ${aliases}</p>
       <p class="meta"><a href="${html(sourceUrl)}">Owning source at committed revision, line ${decision.source.line}</a></p>
       ${edges ? `<h3>Relationships</h3><ul>${edges}</ul>` : ""}
       <h3>Declared sources (not independently verified)</h3><ul class="sources">${references}</ul>
