@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 
 import { agentSummaryCommand } from "./agent-summary.ts";
 import { decisionAtlasCommand } from "./decision-atlas-cli.ts";
+import { daqCommand } from "./daq-cli.ts";
 import { agentHandoffCommand, agentVerificationCommand, taskPacketCommand } from "./agent-work.ts";
 import { writeReport } from "./core.ts";
 import { entryMain } from "./entry.ts";
@@ -102,6 +103,7 @@ export function routerMain(argv = process.argv.slice(2)): number {
   const root = resolve(option(argv, "root") ?? repositoryRoot());
 
   if (argv[0] === "decision-atlas") return decisionAtlasCommand(argv.slice(1));
+  if (argv[0] === "daq") return daqCommand(argv.slice(1));
 
   if (argv[0] === "agent") {
     const action = argv[1];
