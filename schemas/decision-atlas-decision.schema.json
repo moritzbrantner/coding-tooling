@@ -111,7 +111,7 @@
       "properties": {
         "path": {
           "type": "string",
-          "pattern": "^docs/decisions/"
+          "pattern": "^docs/"
         },
         "line": {
           "type": "integer",

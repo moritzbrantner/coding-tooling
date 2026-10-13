@@ -52,7 +52,7 @@ export interface AtlasSource {
 }
 
 const idPattern =
-  /^(?:[1-9][0-9]*(?:\.[1-9][0-9]*){2,}|[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)+)$/;
+  /^(?:[1-9][0-9]*(?:\.[1-9][0-9]*)+|[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)+)$/;
 const decisionStatuses = new Set(["accepted", "recorded", "proposed", "superseded"]);
 const shaPattern = /^[a-f0-9]{40}$/;
 
@@ -170,7 +170,125 @@ function fromFarm(source: AtlasSource): { groups: AtlasGroup[]; decisions: Atlas
   return { groups: [], decisions };
 }
 
+function fromApprovalChecklist(source: AtlasSource): {
+  groups: AtlasGroup[];
+  decisions: AtlasDecision[];
+} {
+  const groups: AtlasGroup[] = [];
+  const decisions: AtlasDecision[] = [];
+  const approvals = new Map<string, boolean>();
+  const parents: { indent: number; entry: AtlasDecision }[] = [];
+  const lines = source.text.split(/\r?\n/);
+  let group: AtlasGroup | undefined;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (line.startsWith("## ")) {
+      const heading = line.match(/^## ([1-9]\d*)\.\s+(.+)$/u);
+      group = heading ? { id: heading[1]!, parentId: null, title: heading[2]! } : undefined;
+      if (group) {
+        groups.push(group);
+      }
+      parents.length = 0;
+      continue;
+    }
+    const match = line.match(/^(\s*)- \[([^\]]*)\] \*\*(\d+(?:\.\d+)*)\*\*\s+(.+)$/u);
+    if (!match) {
+      continue;
+    }
+    const sourceLine = i + 1;
+    const indent = match[1]!.length;
+    const checked = match[2] === "x";
+    const id = match[3]!;
+    if (!group || indent % 2 !== 0 || (match[2] !== "x" && match[2] !== " ")) {
+      fail(`${source.path}:${sourceLine} invalid approval entry ${id}`);
+    }
+    const tagged = match[4]!.match(/^\[([^\]]+)\]\s+(.+)$/u);
+    if (tagged && tagged[1] !== "question" && tagged[1] !== "decision") {
+      fail(`${source.path}:${sourceLine} invalid entry kind ${tagged[1]}`);
+    }
+    const kind: AtlasEntryKind = tagged?.[1] === "question" ? "question" : "decision";
+    if (kind === "decision" && !checked) {
+      fail(`${source.path}:${sourceLine} Decision ${id} is not approved`);
+    }
+    const text = [tagged ? tagged[2]! : match[4]!];
+    while (i + 1 < lines.length) {
+      const next = lines[i + 1]!;
+      if (!next.trim()) {
+        i++;
+        continue;
+      }
+      if (/^\s*- \[[^\]]*\] \*\*\d/u.test(next) || !/^\s+/u.test(next)) {
+        break;
+      }
+      text.push(next.trim());
+      i++;
+    }
+    const statement = text.join(" ");
+    const references = statement
+      .replace(/~~.*?~~/gu, "")
+      .replace(/\[[^\]]+\]\(https?:\/\/[^)]+\)/gu, "");
+    const typed = [
+      ...references.matchAll(/\b(answers|supersedes)\s+`?([1-9]\d*(?:\.[1-9]\d*)+)`?/giu),
+    ].map((edge) => ({ type: edge[1]!.toLowerCase(), target: edge[2]! }));
+    const targets = unique(
+      [...references.matchAll(/\b[1-9]\d*(?:\.[1-9]\d*)+\b/gu)]
+        .map((reference) => reference[0])
+        .filter((reference) => reference !== id),
+    );
+    while (parents.length && parents[parents.length - 1]!.indent >= indent) {
+      parents.pop();
+    }
+    const parent = parents[parents.length - 1]?.entry;
+    const entry: AtlasDecision = {
+      kind,
+      id,
+      aliases: [],
+      parentId: parent?.id ?? group.id,
+      path: parent ? [...parent.path, parent.statement] : [group.title],
+      choice: null,
+      statement,
+      decisionStatus: kind === "question" ? null : "accepted",
+      implementation: {
+        sourceLabel: kind === "question" ? "not-applicable" : "approved product intent",
+        verification: "unverified",
+      },
+      tags: [],
+      relations: targets.map(
+        (target) => typed.find((edge) => edge.target === target) ?? { type: "references", target },
+      ),
+      // v1 structured citations remain issues/PRs/immutable files. General model
+      // resource links stay in the source statement, without verification claims.
+      links: markdownLinks(statement).filter((link) =>
+        /^https:\/\/github\.com\/[^/]+\/[^/]+\/(?:issues\/\d+|pull\/\d+|blob\/[a-f0-9]{40}\/.+)$/u.test(
+          link,
+        ),
+      ),
+      source: { path: source.path, line: sourceLine },
+    };
+    decisions.push(entry);
+    approvals.set(id, checked);
+    parents.push({ indent, entry });
+  }
+  for (const question of decisions.filter((entry) => entry.kind === "question")) {
+    const answered = decisions.some(
+      (entry) =>
+        entry.kind === "decision" &&
+        entry.relations.some((edge) => edge.type === "answers" && edge.target === question.id),
+    );
+    if (approvals.get(question.id) !== answered) {
+      fail(`${question.id}: approval checkbox disagrees with its linked answer`);
+    }
+  }
+  if (decisions.length === 0) {
+    fail(`${source.path}: no approval entries found`);
+  }
+  return { groups, decisions };
+}
+
 function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: AtlasDecision[] } {
+  if (/^\s*- \[[^\]]*\] \*\*\d/mu.test(source.text)) {
+    return fromApprovalChecklist(source);
+  }
   const groups: AtlasGroup[] = [];
   const decisions: AtlasDecision[] = [];
   const headings = new Map<string, string>();
@@ -434,7 +552,7 @@ export function buildAtlasIndex(
   const indexedSources: AtlasIndex["sources"] = [];
   for (const source of sorted) {
     if (
-      !/^docs\/decisions\/(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+\.md$/.test(source.path) ||
+      !/^docs\/(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+\.md$/.test(source.path) ||
       source.path.includes("..")
     )
       fail(`unsafe source path ${source.path}`);
