@@ -214,6 +214,24 @@ test("history rejects renumbered IDs and kind changes but permits authored topic
   expect(get(index(relocated, previous), "8.1")?.path).toEqual(["Inspect evidence"]);
 });
 
+test("ordinary Markdown navigation and citation bullets do not become approval entries", () => {
+  const link = "- [Open question](#6-run-locally-on-supported-devices)\n";
+  const linked =
+    minimal
+      .replace("# Decision Atlas\n", "# Decision Atlas\n" + link)
+      .replace("## 2. Import videos\n", "## 2. Import videos\n" + link) +
+    "- [Source citation](https://example.invalid/source)\n";
+  const expected = index(minimal);
+  const actual = index(linked);
+  expect(actual.decisions.map((entry) => [entry.id, entry.kind, entry.decisionStatus])).toEqual(
+    expected.decisions.map((entry) => [entry.id, entry.kind, entry.decisionStatus]),
+  );
+  expect(actual.groups).toEqual(expected.groups);
+  expect(
+    queryDecisionAtlas(actual, { action: "questions" }).entries.map((entry) => entry.id),
+  ).toEqual(["8.5"]);
+});
+
 test("real-source committed CLI queries and index roundtrip are read-only and reject dirty source", () => {
   const { root, git } = checkout();
   const options = {
