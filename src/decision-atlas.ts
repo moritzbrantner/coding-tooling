@@ -171,8 +171,9 @@ function fromFarm(source: AtlasSource): { groups: AtlasGroup[]; decisions: Atlas
 }
 
 function isApprovalEntryStart(text: string): boolean {
-  // Ordinary Markdown link bullets are prose, not approval checkboxes.
-  return /^\s*-\s+\[(?![^\]\r\n]*\]\()/mu.test(text);
+  // Recognize checkbox markers or an explicit bold ID, not arbitrary bracketed prose.
+  // This leaves inline, reference and shortcut links to the surrounding Markdown.
+  return /^\s*-\s+\[(?:[xX ]?\](?![([])|[^\]\r\n]*\]\s+\*\*|[^\]\r\n]*$)/mu.test(text);
 }
 
 function fromApprovalChecklist(source: AtlasSource): {
