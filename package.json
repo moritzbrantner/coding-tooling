@@ -33,6 +33,9 @@
     "pages:check": "bun scripts/check-pages.ts",
     "analysis:worker:bundle": "wrangler deploy --dry-run --outdir .artifacts/analysis-worker"
   },
+  "dependencies": {
+    "markdown-it": "15.0.2"
+  },
   "devDependencies": {
     "@types/bun": "1.4.2",
     "@typescript/typescript6": "6.0.2",

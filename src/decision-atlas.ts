@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import MarkdownIt, { type Env } from "markdown-it";
+
 export type AtlasFormat = "my-farm-tree" | "numbered-list";
 export type AtlasEntryKind = "decision" | "question";
 export type AtlasDecisionStatus = "accepted" | "recorded" | "proposed" | "superseded";
@@ -55,6 +57,10 @@ const idPattern =
   /^(?:[1-9][0-9]*(?:\.[1-9][0-9]*)+|[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)+)$/;
 const decisionStatuses = new Set(["accepted", "recorded", "proposed", "superseded"]);
 const shaPattern = /^[a-f0-9]{40}$/;
+const referenceParser = new MarkdownIt("commonmark");
+// Only definition metadata is consumed; rendering URL policy must not change
+// whether syntactically valid source text defines a reference.
+referenceParser.validateLink = () => true;
 
 function fail(message: string): never {
   throw new Error(`Decision Atlas: ${message}`);
@@ -171,15 +177,15 @@ function fromFarm(source: AtlasSource): { groups: AtlasGroup[]; decisions: Atlas
 }
 
 function referenceLabel(label: string): string {
-  return label.trim().replace(/\s+/gu, " ").toLowerCase();
+  return referenceParser.utils.normalizeReference(label);
 }
 
 function approvalReferenceLabels(text: string): ReadonlySet<string> {
-  return new Set(
-    [...text.matchAll(/^ {0,3}\[([^\]\r\n]+)\]:[ \t]*(?:<[^<>\r\n]+>|[^\s<>]+)/gmu)].map(
-      (definition) => referenceLabel(definition[1]!),
-    ),
-  );
+  // Let the CommonMark block parser distinguish definitions from literal text,
+  // invalid definitions and container content. No rendered HTML is consumed.
+  const environment: Env = {};
+  referenceParser.parse(text, environment);
+  return new Set(Object.keys(environment.references ?? {}));
 }
 
 function isApprovalEntryStart(line: string, references: ReadonlySet<string>): boolean {
