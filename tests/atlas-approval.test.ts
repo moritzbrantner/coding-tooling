@@ -232,7 +232,14 @@ test("ordinary Markdown navigation and citation bullets do not become approval e
   ).toEqual(["8.5"]);
 });
 
-for (const link of ["- [Open question][navigation]", "- [Open question]", "- [Open question][]"]) {
+for (const link of [
+  "- [Open question][navigation]",
+  "- [Open question]",
+  "- [Open question][]",
+  "- [Open question] **important**",
+  "- [Open question][] **important**",
+  "- [Open question][navigation] **important**",
+]) {
   test("reference-style Markdown navigation preserves approval identities: " + link, () => {
     const linked =
       minimal
