@@ -13,9 +13,12 @@ import { queryDecisionAtlas } from "../src/daq.ts";
 const repository = "moritzbrantner/video-to-3d";
 const revision = "9e66e206362d74bc855bc66064bef6e4287f6e1b";
 const sourcePath = "docs/DECISION-ATLAS.md";
-const realSource = readFileSync(
-  new URL("../fixtures/decision-atlas/video-to-3d/DECISION-ATLAS.md", import.meta.url),
-  "utf8",
+// The committed fixture owns byte identity; a Windows checkout may apply CRLF.
+// Read its immutable Git blob instead of treating checkout conversion as an owner edit.
+const realSource = execFileSync(
+  "git",
+  ["show", "HEAD:fixtures/decision-atlas/video-to-3d/DECISION-ATLAS.md"],
+  { cwd: new URL("../", import.meta.url), encoding: "utf8" },
 );
 const minimal = `# Decision Atlas
 ## 1. Reconstruct the scene
@@ -61,6 +64,7 @@ function checkout() {
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
   git("init", "-q");
+  git("config", "core.autocrlf", "false");
   git("config", "user.name", "Atlas acceptance");
   git("config", "user.email", "atlas@example.invalid");
   git("remote", "add", "origin", "https://github.com/" + repository + ".git");
@@ -175,6 +179,27 @@ for (const [name, text] of [
   test("approval source fails deterministically for " + name, () => {
     expect(() => index(minimal)).not.toThrow();
     expect(() => index(text)).toThrow();
+  });
+}
+
+// Independent review-regression acceptance at 388addf, before parser repair.
+// A valid neighboring Decision cannot hide malformed owner-authored identities.
+for (const [name, malformed] of [
+  ["alphabetic ID component", "- [x] **1.a** This owner entry must not disappear."],
+  ["missing closing bold marker", "- [x] **1.2 This owner entry must not disappear."],
+  ["indented malformed entry", "  - [x] **1.a** This entry must not become description text."],
+  ["empty hierarchical ID component", "- [x] **1..2** This owner entry must not disappear."],
+  ["trailing hierarchical separator", "- [x] **1.2.** This owner entry must not disappear."],
+]) {
+  test("approval source rejects mixed valid and malformed entries: " + name, () => {
+    const valid = "# Decision Atlas\n## 1. Topic\n- [x] **1.1** Valid owner decision.\n";
+    expect(index(valid).decisions.map((entry) => entry.id)).toEqual(["1.1"]);
+    expect(() => index(valid + malformed + "\n")).toThrow();
+    expect(() =>
+      index(
+        "# Decision Atlas\n## 1. Topic\n" + malformed + "\n- [x] **1.1** Valid owner decision.\n",
+      ),
+    ).toThrow();
   });
 }
 
