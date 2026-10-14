@@ -2,7 +2,7 @@
 
 The [Decision Atlas for the Decision Atlas](decisions/atlas.md) is the owner-approved specification for this capability. This guide describes the current implementation, not a second source of product decisions.
 
-The **owning repository** is authoritative. This tool reads a committed document under `docs/decisions/`, validates it, and emits a deterministic `index.json` and offline `preview.html`. It does not update decisions, source issues, repositories, or a fleet index.
+The **owning repository** is authoritative. This tool reads a committed Markdown document under `docs/`, validates it, and emits a deterministic `index.json` and offline `preview.html`. It does not update decisions, source issues, repositories, or a fleet index.
 
 ## Product semantics: Decisions and Questions only
 
@@ -29,6 +29,10 @@ Question syntax within the same numbered Markdown list:
     - **8.1.1** [question] Should duels be nonlethal? ([#150](https://github.com/moritzbrantner/mmorpg/pull/150))
     - **8.1.2** [owner decision; implementation pending] Duels are nonlethal. Answers 8.1.1. ([#150](https://github.com/moritzbrantner/mmorpg/pull/150))
 ```
+
+The same `numbered-list` adapter also reads the owner approval checklist used by Video-to-3D's `docs/DECISION-ATLAS.md`. Numbered level-two headings provide topics; indented checkbox entries preserve their authored IDs and multiline descriptions. Topic placement does not change an ID, and nested entries follow authored indentation. A checked Decision records owner approval, never verified implementation. A `[question]` stays a Question even when checked: its checkbox must agree with a linked Decision's `Answers <ID>` relation. Unchecked Decisions, unknown entry kinds, malformed checkboxes and dangling references fail validation. The byte-preserved owner source and its revision are recorded in [the fixture provenance](../fixtures/decision-atlas/video-to-3d/README.md).
+
+Pass `--source docs/DECISION-ATLAS.md` to select that committed source for indexing or local daq queries. The v1 JSON schemas explicitly extend accepted source paths from `docs/decisions/` to `docs/`; the output fields, format names and schema version remain unchanged, and existing indexes remain valid. General resource URLs remain authored statement text; v1 structured citations still contain only GitHub issues, PRs and immutable source files.
 
 Simple inline editing:
 

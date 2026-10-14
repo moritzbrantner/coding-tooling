@@ -35,7 +35,7 @@
         "properties": {
           "path": {
             "type": "string",
-            "pattern": "^docs/decisions/"
+            "pattern": "^docs/"
           },
           "format": {
             "enum": ["my-farm-tree", "numbered-list"]
