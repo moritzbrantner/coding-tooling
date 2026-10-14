@@ -237,6 +237,9 @@ for (const link of [
   "- [Open question]",
   "- [Open question][]",
   "- [Open question] **important**",
+  "- [Open question] **important.**",
+  "- [Open question] **1.2**",
+  "- [Open question] **v1.0**",
   "- [Open question][] **important**",
   "- [Open question][navigation] **important**",
 ]) {
