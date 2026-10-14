@@ -170,6 +170,11 @@ function fromFarm(source: AtlasSource): { groups: AtlasGroup[]; decisions: Atlas
   return { groups: [], decisions };
 }
 
+function isApprovalEntryStart(text: string): boolean {
+  // Ordinary Markdown link bullets are prose, not approval checkboxes.
+  return /^\s*-\s+\[(?![^\]\r\n]*\]\()/mu.test(text);
+}
+
 function fromApprovalChecklist(source: AtlasSource): {
   groups: AtlasGroup[];
   decisions: AtlasDecision[];
@@ -193,6 +198,9 @@ function fromApprovalChecklist(source: AtlasSource): {
     }
     const match = line.match(/^(\s*)- \[([^\]]*)\] \*\*(\d+(?:\.\d+)*)\*\*\s+(.+)$/u);
     if (!match) {
+      if (isApprovalEntryStart(line)) {
+        fail(`${source.path}:${i + 1} malformed approval entry`);
+      }
       continue;
     }
     const sourceLine = i + 1;
@@ -217,7 +225,7 @@ function fromApprovalChecklist(source: AtlasSource): {
         i++;
         continue;
       }
-      if (/^\s*- \[[^\]]*\] \*\*\d/u.test(next) || !/^\s+/u.test(next)) {
+      if (isApprovalEntryStart(next) || !/^\s+/u.test(next)) {
         break;
       }
       text.push(next.trim());
@@ -286,7 +294,7 @@ function fromApprovalChecklist(source: AtlasSource): {
 }
 
 function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: AtlasDecision[] } {
-  if (/^\s*- \[[^\]]*\] \*\*\d/mu.test(source.text)) {
+  if (isApprovalEntryStart(source.text)) {
     return fromApprovalChecklist(source);
   }
   const groups: AtlasGroup[] = [];
