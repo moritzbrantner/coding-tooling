@@ -274,7 +274,9 @@ for (const [name, block] of [
 ]) {
   test("literal fenced reference cannot hide a malformed owner entry: " + name, () => {
     const valid = "# Decision Atlas\n## 1. Topic\n- [x] **1.1** Valid owner decision.\n";
-    const fenced = valid + block + "\n\n";
+    // An unindented paragraph ends the preceding list. A blank line alone does
+    // not: a three-space fence would remain inside that list container.
+    const fenced = valid + "\nReference syntax examples:\n\n" + block + "\n\n";
     expect(index(fenced).decisions.map((entry) => entry.id)).toEqual(["1.1"]);
     // A genuine definition outside the fence still makes a valid shortcut link.
     expect(
