@@ -186,6 +186,7 @@ for (const [name, text] of [
 // A valid neighboring Decision cannot hide malformed owner-authored identities.
 for (const [name, malformed] of [
   ["alphabetic ID component", "- [x] **1.a** This owner entry must not disappear."],
+  ["alphabetic first ID component", "- [x] **a.1** This owner entry must not disappear."],
   ["missing closing bold marker", "- [x] **1.2 This owner entry must not disappear."],
   ["indented malformed entry", "  - [x] **1.a** This entry must not become description text."],
   ["empty hierarchical ID component", "- [x] **1..2** This owner entry must not disappear."],
