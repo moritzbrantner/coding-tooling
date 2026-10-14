@@ -261,6 +261,28 @@ for (const link of [
   });
 }
 
+// Independent regression for finding 4276480575, before repairing dd8ba48.
+for (const [name, block] of [
+  ["backtick fence", "```markdown\n[z]: #target\n```"],
+  ["tilde fence", "~~~markdown\n[z]: #target\n~~~"],
+  ["indented fence", "   ```markdown\n[z]: #target\n   ```"],
+  ["shorter inner fence", "````markdown\n```\n[z]: #target\n````"],
+]) {
+  test("literal fenced reference cannot hide a malformed owner entry: " + name, () => {
+    const valid = "# Decision Atlas\n## 1. Topic\n- [x] **1.1** Valid owner decision.\n";
+    const fenced = valid + block + "\n";
+    expect(index(fenced).decisions.map((entry) => entry.id)).toEqual(["1.1"]);
+    // A genuine definition outside the fence still makes a valid shortcut link.
+    expect(
+      index(fenced + "[z]: #target\n- [z] **1.2** Navigation.\n").decisions.map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(["1.1"]);
+    // With only literal code text, the unknown checkbox marker must fail closed.
+    expect(() => index(fenced + "- [z] **1.2** Malformed owner decision.\n")).toThrow();
+  });
+}
+
 test("real-source committed CLI queries and index roundtrip are read-only and reject dirty source", () => {
   const { root, git } = checkout();
   const options = {
