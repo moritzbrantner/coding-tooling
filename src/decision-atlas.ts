@@ -170,13 +170,32 @@ function fromFarm(source: AtlasSource): { groups: AtlasGroup[]; decisions: Atlas
   return { groups: [], decisions };
 }
 
-function isApprovalEntryStart(text: string): boolean {
-  // Recognize checkbox markers or an explicit bold ID, not arbitrary bracketed prose.
-  // This leaves inline, reference and shortcut links to the surrounding Markdown.
-  return /^\s*-\s+\[(?:[xX ]?\](?![([])|[^\]\r\n]*\]\s+\*\*|[^\]\r\n]*$)/mu.test(text);
+function referenceLabel(label: string): string {
+  return label.trim().replace(/\s+/gu, " ").toLowerCase();
 }
 
-function fromApprovalChecklist(source: AtlasSource): {
+function approvalReferenceLabels(text: string): ReadonlySet<string> {
+  return new Set(
+    [...text.matchAll(/^ {0,3}\[([^\]\r\n]+)\]:[ \t]*(?:<[^<>\r\n]+>|[^\s<>]+)/gmu)].map(
+      (definition) => referenceLabel(definition[1]!),
+    ),
+  );
+}
+
+function isApprovalEntryStart(line: string, references: ReadonlySet<string>): boolean {
+  const marker = line.match(/^\s*-\s+\[([^\]\r\n]*)\]/u)?.[1];
+  // Real checkbox markers remain strict even when a same-named reference exists.
+  // Other defined shortcut links are Markdown prose, including bold numeric text.
+  if (marker && !/^[xX ]$/u.test(marker) && references.has(referenceLabel(marker))) {
+    return false;
+  }
+  return /^\s*-\s+\[(?:[xX ]?\](?![([])|[^\]\r\n]*\]\s+\*\*|[^\]\r\n]*$)/u.test(line);
+}
+
+function fromApprovalChecklist(
+  source: AtlasSource,
+  referenceLabels: ReadonlySet<string>,
+): {
   groups: AtlasGroup[];
   decisions: AtlasDecision[];
 } {
@@ -197,9 +216,10 @@ function fromApprovalChecklist(source: AtlasSource): {
       parents.length = 0;
       continue;
     }
+    if (!isApprovalEntryStart(line, referenceLabels)) continue;
     const match = line.match(/^(\s*)- \[([^\]]*)\] \*\*(\d+(?:\.\d+)*)\*\*\s+(.+)$/u);
     if (!match) {
-      if (isApprovalEntryStart(line)) {
+      if (isApprovalEntryStart(line, referenceLabels)) {
         fail(`${source.path}:${i + 1} malformed approval entry`);
       }
       continue;
@@ -226,7 +246,7 @@ function fromApprovalChecklist(source: AtlasSource): {
         i++;
         continue;
       }
-      if (isApprovalEntryStart(next) || !/^\s+/u.test(next)) {
+      if (isApprovalEntryStart(next, referenceLabels) || !/^\s+/u.test(next)) {
         break;
       }
       text.push(next.trim());
@@ -295,8 +315,9 @@ function fromApprovalChecklist(source: AtlasSource): {
 }
 
 function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: AtlasDecision[] } {
-  if (isApprovalEntryStart(source.text)) {
-    return fromApprovalChecklist(source);
+  const references = approvalReferenceLabels(source.text);
+  if (source.text.split(/\r?\n/u).some((line) => isApprovalEntryStart(line, references))) {
+    return fromApprovalChecklist(source, references);
   }
   const groups: AtlasGroup[] = [];
   const decisions: AtlasDecision[] = [];
