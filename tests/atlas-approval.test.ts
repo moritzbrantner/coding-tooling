@@ -232,6 +232,25 @@ test("ordinary Markdown navigation and citation bullets do not become approval e
   ).toEqual(["8.5"]);
 });
 
+for (const link of ["- [Open question][navigation]", "- [Open question]", "- [Open question][]"]) {
+  test("reference-style Markdown navigation preserves approval identities: " + link, () => {
+    const linked =
+      minimal
+        .replace("# Decision Atlas\n", "# Decision Atlas\n" + link + "\n")
+        .replace("## 2. Import videos\n", "## 2. Import videos\n" + link + "\n") +
+      "\n[navigation]: #6-run-locally-on-supported-devices\n[Open question]: #6-run-locally-on-supported-devices\n";
+    const expected = index(minimal);
+    const actual = index(linked);
+    expect(actual.decisions.map((entry) => [entry.id, entry.kind, entry.decisionStatus])).toEqual(
+      expected.decisions.map((entry) => [entry.id, entry.kind, entry.decisionStatus]),
+    );
+    expect(actual.groups).toEqual(expected.groups);
+    expect(
+      queryDecisionAtlas(actual, { action: "questions" }).entries.map((entry) => entry.id),
+    ).toEqual(["8.5"]);
+  });
+}
+
 test("real-source committed CLI queries and index roundtrip are read-only and reject dirty source", () => {
   const { root, git } = checkout();
   const options = {
