@@ -267,10 +267,14 @@ for (const [name, block] of [
   ["tilde fence", "~~~markdown\n[z]: #target\n~~~"],
   ["indented fence", "   ```markdown\n[z]: #target\n   ```"],
   ["shorter inner fence", "````markdown\n```\n[z]: #target\n````"],
+  ["HTML comment", "<!--\n[z]: #target\n-->"],
+  ["raw HTML pre", "<pre>\n[z]: #target\n</pre>"],
+  ["raw HTML script", "<script>\n[z]: #target\n</script>"],
+  ["blank-line-ended HTML block", "<div>\n[z]: #target\n</div>"],
 ]) {
   test("literal fenced reference cannot hide a malformed owner entry: " + name, () => {
     const valid = "# Decision Atlas\n## 1. Topic\n- [x] **1.1** Valid owner decision.\n";
-    const fenced = valid + block + "\n";
+    const fenced = valid + block + "\n\n";
     expect(index(fenced).decisions.map((entry) => entry.id)).toEqual(["1.1"]);
     // A genuine definition outside the fence still makes a valid shortcut link.
     expect(
