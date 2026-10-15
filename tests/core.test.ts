@@ -1,7 +1,18 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import {
   check as checkCapability,
@@ -10,7 +21,7 @@ import {
   runPlan,
   writeReport,
 } from "../src/core.ts";
-import type { Capability } from "../src/model.ts";
+import type { Capability, ResultEnvelope } from "../src/model.ts";
 
 function repository(): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-"));
@@ -471,4 +482,176 @@ describe("coding-tooling plans", () => {
       "lint cannot be both required and optional",
     );
   });
+});
+
+function reportEnvelope(
+  status: "failed" | "passed",
+  marker: string,
+): ResultEnvelope<Record<string, unknown>> {
+  return {
+    schemaVersion: 1,
+    operation: "run",
+    status,
+    durationMs: 17,
+    data: {
+      results: [
+        {
+          processStatus: status,
+          exitCode: status === "failed" ? 1 : 0,
+          stdout: `raw stdout ${marker}\n`,
+          stderr: `raw stderr ${marker}\n`,
+        },
+      ],
+    },
+    diagnostics: [],
+  };
+}
+
+function reportArtifactBytes(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? reportArtifactBytes(path) : [readFileSync(path, "utf8")];
+  });
+}
+
+describe("validation report preservation", () => {
+  test("a partial legacy archival write cannot poison evidence preservation on retry", () => {
+    const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-partial-archive-"));
+    try {
+      const path = join(directory, "report.json");
+      const original = `  ${JSON.stringify(reportEnvelope("failed", "original partial-write evidence"))}\n\n`;
+      const passed = reportEnvelope("passed", "retry after archival I/O failure");
+      writeFileSync(path, original);
+      const child = spawnSync(
+        process.execPath,
+        [
+          "--eval",
+          `
+        import * as fs from "node:fs";
+        import { mock } from "bun:test";
+        const real = { ...fs };
+        const original = ${JSON.stringify(original)};
+        const path = ${JSON.stringify(path)};
+        const passed = ${JSON.stringify(passed)};
+        let injected = false;
+        mock.module("node:fs", () => ({
+          ...real,
+          writeFileSync(target, data, options) {
+            if (!injected && (typeof data === "string" || Buffer.isBuffer(data)) &&
+                data.toString() === original && target !== path) {
+              injected = true;
+              real.writeFileSync(target, original.slice(0, 23), options);
+              throw Object.assign(new Error("injected archival I/O failure"), { code: "EIO" });
+            }
+            return real.writeFileSync(target, data, options);
+          },
+        }));
+        const { writeReport } = await import(${JSON.stringify(join(import.meta.dir, "../src/core.ts"))});
+        let firstErrorCode;
+        try { writeReport(passed, path); } catch (error) { firstErrorCode = error.code; }
+        const aliasAfterFailure = real.readFileSync(path, "utf8");
+        writeReport(passed, path);
+        console.log(JSON.stringify({ injected, firstErrorCode, aliasAfterFailure }));
+      `,
+        ],
+        { encoding: "utf8" },
+      );
+
+      expect(child.status).toBe(0);
+      expect(JSON.parse(child.stdout)).toEqual({
+        injected: true,
+        firstErrorCode: "EIO",
+        aliasAfterFailure: original,
+      });
+      expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(passed);
+      expect(reportArtifactBytes(directory)).toContain(original);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("retains exact failed raw evidence while the requested report path becomes the latest result", () => {
+    const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-history-"));
+    try {
+      const path = join(directory, "report.json");
+      const failedBytes = `  ${JSON.stringify(reportEnvelope("failed", "original failure"))}\n\n`;
+      writeFileSync(path, failedBytes);
+      const passed = reportEnvelope("passed", "successful retry");
+
+      writeReport(passed, path);
+
+      expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(passed);
+      expect(reportArtifactBytes(directory)).toContain(failedBytes);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("retains every previous report without collisions when saves share the same clock instant", () => {
+    const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-collisions-"));
+    const clock = spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
+    try {
+      const path = join(directory, "report.json");
+      const previousBytes: string[] = [];
+      for (const marker of ["first failure", "second failure", "first pass", "latest pass"]) {
+        if (existsSync(path)) {
+          previousBytes.push(readFileSync(path, "utf8"));
+        }
+        writeReport(reportEnvelope(marker.includes("failure") ? "failed" : "passed", marker), path);
+        const saved = reportArtifactBytes(directory);
+        for (const previous of previousBytes) {
+          expect(saved).toContain(previous);
+        }
+        expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(
+          reportEnvelope(marker.includes("failure") ? "failed" : "passed", marker),
+        );
+      }
+      expect(new Set(reportArtifactBytes(directory)).size).toBe(4);
+    } finally {
+      clock.mockRestore();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test.skipIf(process.platform === "win32")(
+    "the latest report keeps an existing mode and new reports use normal creation permissions",
+    () => {
+      const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-mode-"));
+      const previousUmask = process.umask(0o022);
+      try {
+        const created = join(directory, "created.json");
+        writeReport(reportEnvelope("passed", "new report"), created);
+        expect(statSync(created).mode & 0o777).toBe(0o644);
+
+        const existing = join(directory, "existing.json");
+        writeFileSync(existing, `${JSON.stringify(reportEnvelope("failed", "shared"))}\n`);
+        chmodSync(existing, 0o640);
+        writeReport(reportEnvelope("passed", "retry"), existing);
+        expect(statSync(existing).mode & 0o777).toBe(0o640);
+      } finally {
+        process.umask(previousUmask);
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "a save that cannot publish in its directory preserves the complete current report",
+    () => {
+      const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-save-failure-"));
+      const path = join(directory, "report.json");
+      const original = `${JSON.stringify(reportEnvelope("failed", "irreplaceable failure"))}\n`;
+      try {
+        writeFileSync(path, original, { mode: 0o600 });
+        // Existing-file writes remain permitted; creating/replacing directory entries does not.
+        chmodSync(directory, 0o500);
+
+        expect(() => writeReport(reportEnvelope("passed", "unpublished retry"), path)).toThrow();
+        expect(readFileSync(path, "utf8")).toBe(original);
+      } finally {
+        chmodSync(directory, 0o700);
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 });

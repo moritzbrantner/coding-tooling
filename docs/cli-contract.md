@@ -115,6 +115,16 @@ A `Cargo.toml` with a `[workspace]` table is one Rust component that covers its 
 
 `plan` resolves a named validation tier without executing it. `run` executes that plan and may write the full result envelope to `--report`. Both use the same convention-aware capability resolution as `check`.
 
+Report writes retain the requested path as a latest-result alias. Each saved
+envelope is first retained in `<report-path>.history/` under an exclusive unique
+name, so same-path retries and saves at the same clock instant do not erase raw
+failure evidence. A pre-existing report is preserved with its original bytes.
+The latest alias is replaced atomically only after retention succeeds; a failed
+save leaves the previous alias intact and propagates the error. History files
+are evidence, not additional validation results or a change to the envelope
+schema. Remove retained history only through an explicit evidence-retention
+decision.
+
 The optional `.coding-tooling.json` defines repository validation tiers and explicit capability commands. It should not be used as the primary convention-distribution mechanism for new repositories.
 
 ## Installed convention lifecycle
