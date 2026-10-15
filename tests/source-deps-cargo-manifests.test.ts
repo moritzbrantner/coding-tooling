@@ -286,41 +286,56 @@ function declareUnused(consumerRoot: string): void {
   writeFileSync(path, JSON.stringify(config));
 }
 
+// `cargo metadata` resolves the local file:// git source through a fresh clone. On hosted
+// Windows that alone can exceed the CI-wide 15 s test timeout (#317), so these cargo-backed
+// cases get an explicit budget instead of failing intermittently.
+const CARGO_GIT_SOURCE_TIMEOUT_MS = 60_000;
+
 describe("activation leaves the enclosing workspace lockfile unchanged (#313 review)", () => {
-  test("an inherited git dependency of an enclosing workspace is patched and verified", () => {
-    const { outer, consumer: consumerRoot } = enclosingWorkspace();
-    const lockfile = workspaceLockfile(consumerRoot);
-    expect(basename(lockfile)).toBe("Cargo.lock");
-    expect(comparable(dirname(lockfile))).toBe(comparable(outer));
-    const rendered = renderSourceDependencies(consumerRoot);
-    expect(rendered.patches[0]?.sources).toHaveLength(1);
-    expect(rendered.patches[0]?.sources[0]).not.toBe("crates-io");
+  test(
+    "an inherited git dependency of an enclosing workspace is patched and verified",
+    () => {
+      const { outer, consumer: consumerRoot } = enclosingWorkspace();
+      const lockfile = workspaceLockfile(consumerRoot);
+      expect(basename(lockfile)).toBe("Cargo.lock");
+      expect(comparable(dirname(lockfile))).toBe(comparable(outer));
+      const rendered = renderSourceDependencies(consumerRoot);
+      expect(rendered.patches[0]?.sources).toHaveLength(1);
+      expect(rendered.patches[0]?.sources[0]).not.toBe("crates-io");
 
-    const activated = sourceDependencies(consumerRoot, "activate");
-    expect(activated.status, JSON.stringify(activated.diagnostics)).toBe("passed");
-    expect(activated.data.cargoVerification).toBe("verified");
-    expect(existsSync(join(outer, "Cargo.lock"))).toBe(false);
-    expect(existsSync(join(consumerRoot, "Cargo.lock"))).toBe(false);
-    sourceDependencies(consumerRoot, "deactivate");
-  });
+      const activated = sourceDependencies(consumerRoot, "activate");
+      expect(activated.status, JSON.stringify(activated.diagnostics)).toBe("passed");
+      expect(activated.data.cargoVerification).toBe("verified");
+      expect(existsSync(join(outer, "Cargo.lock"))).toBe(false);
+      expect(existsSync(join(consumerRoot, "Cargo.lock"))).toBe(false);
+      sourceDependencies(consumerRoot, "deactivate");
+    },
+    CARGO_GIT_SOURCE_TIMEOUT_MS,
+  );
 
-  test("an existing enclosing lockfile is restored after passing and failing verification", () => {
-    const { outer, consumer: consumerRoot } = enclosingWorkspace();
-    const generated = spawnSync("cargo", ["generate-lockfile"], { cwd: outer, encoding: "utf8" });
-    expect(generated.status, generated.stderr).toBe(0);
-    const lockfile = join(outer, "Cargo.lock");
-    const before = readFileSync(lockfile, "utf8");
+  test(
+    "an existing enclosing lockfile is restored after passing and failing verification",
+    () => {
+      const { outer, consumer: consumerRoot } = enclosingWorkspace();
+      const generated = spawnSync("cargo", ["generate-lockfile"], { cwd: outer, encoding: "utf8" });
+      expect(generated.status, generated.stderr).toBe(0);
+      const lockfile = join(outer, "Cargo.lock");
+      const before = readFileSync(lockfile, "utf8");
 
-    const activated = sourceDependencies(consumerRoot, "activate");
-    expect(activated.status, JSON.stringify(activated.diagnostics)).toBe("passed");
-    expect(readFileSync(lockfile, "utf8")).toBe(before);
-    sourceDependencies(consumerRoot, "deactivate");
+      const activated = sourceDependencies(consumerRoot, "activate");
+      expect(activated.status, JSON.stringify(activated.diagnostics)).toBe("passed");
+      expect(readFileSync(lockfile, "utf8")).toBe(before);
+      sourceDependencies(consumerRoot, "deactivate");
 
-    declareUnused(consumerRoot);
-    const failed = sourceDependencies(consumerRoot, "activate");
-    expect(failed.status).toBe("error");
-    expect(failed.diagnostics.map((value) => value.message).join("\n")).toContain("source-unused");
-    expect(readFileSync(lockfile, "utf8")).toBe(before);
-    expect(existsSync(join(consumerRoot, ".cargo", "config.toml"))).toBe(false);
-  });
+      declareUnused(consumerRoot);
+      const failed = sourceDependencies(consumerRoot, "activate");
+      expect(failed.status).toBe("error");
+      expect(failed.diagnostics.map((value) => value.message).join("\n")).toContain(
+        "source-unused",
+      );
+      expect(readFileSync(lockfile, "utf8")).toBe(before);
+      expect(existsSync(join(consumerRoot, ".cargo", "config.toml"))).toBe(false);
+    },
+    CARGO_GIT_SOURCE_TIMEOUT_MS,
+  );
 });
