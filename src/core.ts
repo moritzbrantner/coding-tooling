@@ -1,4 +1,13 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, dirname, join, posix } from "node:path";
 
 import { Glob, TOML } from "bun";
@@ -640,8 +649,36 @@ export function runPlan(options: {
 }
 
 export function writeReport(report: ResultEnvelope<Record<string, unknown>>, path: string): void {
+  const content = `${JSON.stringify(report, null, 2)}\n`;
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  const history = join(dirname(path), `${basename(path)}.history`);
+  mkdirSync(history, { recursive: true });
+  const attempt = mkdtempSync(join(history, "run-"));
+
+  const retain = (name: string, bytes: string | Buffer): void => {
+    const temporary = join(attempt, `${name}.tmp`);
+    try {
+      writeFileSync(temporary, bytes, { flag: "wx", mode: 0o600 });
+      renameSync(temporary, join(attempt, name));
+    } finally {
+      rmSync(temporary, { force: true });
+    }
+  };
+
+  // Never trust an earlier attempt's possibly incomplete archive as proof of retention.
+  if (existsSync(path)) {
+    retain("previous.json", readFileSync(path));
+  }
+
+  // Retain this run before publishing the latest alias, even for concurrent saves.
+  retain("report.json", content);
+  const temporary = join(attempt, "latest.tmp");
+  try {
+    writeFileSync(temporary, content, { flag: "wx", mode: 0o600 });
+    renameSync(temporary, path);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }
 
 export function inspect(root = repositoryRoot()): ResultEnvelope<Record<string, unknown>> {

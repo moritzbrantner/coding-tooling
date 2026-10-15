@@ -57,6 +57,13 @@ coding-tooling performance applicability [--root <path>] [--json]
 coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
 ```
 
+`--report` keeps the requested file as the latest result and retains immutable
+copies in its sibling `<filename>.history/` directory. Retrying a failed run at
+the same path preserves its captured output; an existing report from before
+history support is retained byte for byte. Publishing the latest file uses an
+atomic replacement, and a save failure is an error rather than permission to
+discard the previous report. Keep this evidence under ignored artifact storage.
+
 `coding-tooling conventions resolve` remains available when callers need direct current-source resolution.
 
 Run directly during development with Bun:
