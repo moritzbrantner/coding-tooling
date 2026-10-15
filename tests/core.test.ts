@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -513,6 +514,61 @@ function reportArtifactBytes(directory: string): string[] {
 }
 
 describe("validation report preservation", () => {
+  test("a partial legacy archival write cannot poison evidence preservation on retry", () => {
+    const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-partial-archive-"));
+    try {
+      const path = join(directory, "report.json");
+      const original = `  ${JSON.stringify(reportEnvelope("failed", "original partial-write evidence"))}\n\n`;
+      const passed = reportEnvelope("passed", "retry after archival I/O failure");
+      writeFileSync(path, original);
+      const child = spawnSync(
+        process.execPath,
+        [
+          "--eval",
+          `
+        import * as fs from "node:fs";
+        import { mock } from "bun:test";
+        const real = { ...fs };
+        const original = ${JSON.stringify(original)};
+        const path = ${JSON.stringify(path)};
+        const passed = ${JSON.stringify(passed)};
+        let injected = false;
+        mock.module("node:fs", () => ({
+          ...real,
+          writeFileSync(target, data, options) {
+            if (!injected && (typeof data === "string" || Buffer.isBuffer(data)) &&
+                data.toString() === original && target !== path) {
+              injected = true;
+              real.writeFileSync(target, original.slice(0, 23), options);
+              throw Object.assign(new Error("injected archival I/O failure"), { code: "EIO" });
+            }
+            return real.writeFileSync(target, data, options);
+          },
+        }));
+        const { writeReport } = await import(${JSON.stringify(join(import.meta.dir, "../src/core.ts"))});
+        let firstErrorCode;
+        try { writeReport(passed, path); } catch (error) { firstErrorCode = error.code; }
+        const aliasAfterFailure = real.readFileSync(path, "utf8");
+        writeReport(passed, path);
+        console.log(JSON.stringify({ injected, firstErrorCode, aliasAfterFailure }));
+      `,
+        ],
+        { encoding: "utf8" },
+      );
+
+      expect(child.status).toBe(0);
+      expect(JSON.parse(child.stdout)).toEqual({
+        injected: true,
+        firstErrorCode: "EIO",
+        aliasAfterFailure: original,
+      });
+      expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(passed);
+      expect(reportArtifactBytes(directory)).toContain(original);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("retains exact failed raw evidence while the requested report path becomes the latest result", () => {
     const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-history-"));
     try {
