@@ -1,7 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import {
   check as checkCapability,
@@ -10,7 +19,7 @@ import {
   runPlan,
   writeReport,
 } from "../src/core.ts";
-import type { Capability } from "../src/model.ts";
+import type { Capability, ResultEnvelope } from "../src/model.ts";
 
 function repository(): string {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-"));
@@ -471,4 +480,99 @@ describe("coding-tooling plans", () => {
       "lint cannot be both required and optional",
     );
   });
+});
+
+function reportEnvelope(
+  status: "failed" | "passed",
+  marker: string,
+): ResultEnvelope<Record<string, unknown>> {
+  return {
+    schemaVersion: 1,
+    operation: "run",
+    status,
+    durationMs: 17,
+    data: {
+      results: [
+        {
+          processStatus: status,
+          exitCode: status === "failed" ? 1 : 0,
+          stdout: `raw stdout ${marker}\n`,
+          stderr: `raw stderr ${marker}\n`,
+        },
+      ],
+    },
+    diagnostics: [],
+  };
+}
+
+function reportArtifactBytes(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? reportArtifactBytes(path) : [readFileSync(path, "utf8")];
+  });
+}
+
+describe("validation report preservation", () => {
+  test("retains exact failed raw evidence while the requested report path becomes the latest result", () => {
+    const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-history-"));
+    try {
+      const path = join(directory, "report.json");
+      const failedBytes = `  ${JSON.stringify(reportEnvelope("failed", "original failure"))}\n\n`;
+      writeFileSync(path, failedBytes);
+      const passed = reportEnvelope("passed", "successful retry");
+
+      writeReport(passed, path);
+
+      expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(passed);
+      expect(reportArtifactBytes(directory)).toContain(failedBytes);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("retains every previous report without collisions when saves share the same clock instant", () => {
+    const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-collisions-"));
+    const clock = spyOn(Date, "now").mockReturnValue(1_800_000_000_000);
+    try {
+      const path = join(directory, "report.json");
+      const previousBytes: string[] = [];
+      for (const marker of ["first failure", "second failure", "first pass", "latest pass"]) {
+        if (existsSync(path)) {
+          previousBytes.push(readFileSync(path, "utf8"));
+        }
+        writeReport(reportEnvelope(marker.includes("failure") ? "failed" : "passed", marker), path);
+        const saved = reportArtifactBytes(directory);
+        for (const previous of previousBytes) {
+          expect(saved).toContain(previous);
+        }
+        expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(
+          reportEnvelope(marker.includes("failure") ? "failed" : "passed", marker),
+        );
+      }
+      expect(new Set(reportArtifactBytes(directory)).size).toBe(4);
+    } finally {
+      clock.mockRestore();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "a save that cannot publish in its directory preserves the complete current report",
+    () => {
+      const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-save-failure-"));
+      const path = join(directory, "report.json");
+      const original = `${JSON.stringify(reportEnvelope("failed", "irreplaceable failure"))}\n`;
+      try {
+        writeFileSync(path, original, { mode: 0o600 });
+        // Existing-file writes remain permitted; creating/replacing directory entries does not.
+        chmodSync(directory, 0o500);
+
+        expect(() => writeReport(reportEnvelope("passed", "unpublished retry"), path)).toThrow();
+        expect(readFileSync(path, "utf8")).toBe(original);
+      } finally {
+        chmodSync(directory, 0o700);
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 });
