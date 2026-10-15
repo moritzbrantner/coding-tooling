@@ -7,6 +7,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -611,6 +612,28 @@ describe("validation report preservation", () => {
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+  test.skipIf(process.platform === "win32")(
+    "the latest report keeps an existing mode and new reports use normal creation permissions",
+    () => {
+      const directory = mkdtempSync(join(tmpdir(), "coding-tooling-report-mode-"));
+      const previousUmask = process.umask(0o022);
+      try {
+        const created = join(directory, "created.json");
+        writeReport(reportEnvelope("passed", "new report"), created);
+        expect(statSync(created).mode & 0o777).toBe(0o644);
+
+        const existing = join(directory, "existing.json");
+        writeFileSync(existing, `${JSON.stringify(reportEnvelope("failed", "shared"))}\n`);
+        chmodSync(existing, 0o640);
+        writeReport(reportEnvelope("passed", "retry"), existing);
+        expect(statSync(existing).mode & 0o777).toBe(0o640);
+      } finally {
+        process.umask(previousUmask);
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
 
   test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
     "a save that cannot publish in its directory preserves the complete current report",

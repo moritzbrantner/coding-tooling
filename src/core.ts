@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -6,6 +7,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, posix } from "node:path";
@@ -672,9 +674,14 @@ export function writeReport(report: ResultEnvelope<Record<string, unknown>>, pat
 
   // Retain this run before publishing the latest alias, even for concurrent saves.
   retain("report.json", content);
+  // The latest alias keeps the replaced report's mode, or normal creation permissions when new.
+  const existingMode = existsSync(path) ? statSync(path).mode & 0o7777 : undefined;
   const temporary = join(attempt, "latest.tmp");
   try {
-    writeFileSync(temporary, content, { flag: "wx", mode: 0o600 });
+    writeFileSync(temporary, content, { flag: "wx", mode: existingMode ?? 0o666 });
+    if (existingMode !== undefined) {
+      chmodSync(temporary, existingMode);
+    }
     renameSync(temporary, path);
   } finally {
     rmSync(temporary, { force: true });
