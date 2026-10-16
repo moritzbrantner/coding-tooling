@@ -6,7 +6,7 @@ Status: **owner-approved 2026-10-15 (choice B)**; infrastructure, security autho
 
 Use an **owner-provisioned, fixed/dedicated self-hosted benchmark runner** as the source of **comparable wall-clock performance history**. This is preferred over a CodSpeed service/account/token integration for the initial controlled-history rollout. The ordinary GitHub-hosted/shared runners are still permitted for correctness and advisory timing, **not** authoritative historical regression or latency-budget verdicts.
 
-This choice selects the evidence *source*, not a runner that already exists. No specific processor, operating system, physical/virtual setup, capacity, repository access or trigger policy is approved by this choice. The owner must provision the controlled host and approve its security/trust boundary before the implementation relies on it.
+This choice selects the evidence _source_, not a runner that already exists. No specific processor, operating system, physical/virtual setup, capacity, repository access or trigger policy is approved by this choice. The owner must provision the controlled host and approve its security/trust boundary before the implementation relies on it.
 
 ## Boundaries and acceptance
 

@@ -1,17 +1,6 @@
 name: Analysis API
 
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/analysis-api.yml"
-      - "package.json"
-      - "bun.lock"
-      - "src/react-update-boundaries.ts"
-      - "site/**"
-      - "tests/analysis-worker.test.js"
-      - "tests/analysis-worker-runtime.test.js"
-      - "worker/**"
-      - "wrangler.jsonc"
   push:
     branches: [main]
     paths:
