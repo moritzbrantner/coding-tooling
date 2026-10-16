@@ -102,7 +102,10 @@ function validFlags(
 
 export function routerMain(argv = process.argv.slice(2)): number {
   const compact = argv.includes("--json");
-  const root = resolve(option(argv, "root") ?? repositoryRoot());
+  const root = resolve(
+    option(argv, "root") ??
+      (argv[0] === "performance" && argv[1] === "bindings" ? process.cwd() : repositoryRoot()),
+  );
 
   if (argv[0] === "decision-atlas") return decisionAtlasCommand(argv.slice(1));
   if (argv[0] === "daq") return daqCommand(argv.slice(1));
