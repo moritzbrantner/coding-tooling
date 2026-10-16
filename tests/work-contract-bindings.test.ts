@@ -657,7 +657,10 @@ describe("CLI", () => {
   }
 
   test("omitting --root uses cwd without invoking git", () => {
-    const root = repo({ ...TS_PACKAGE, "src/server.ts": TS_ROUTER }, contract([operation("users-list")]));
+    const root = repo(
+      { ...TS_PACKAGE, "src/server.ts": TS_ROUTER },
+      contract([operation("users-list"), operation("users-create")]),
+    );
     const env = { ...process.env };
     if (process.platform !== "win32") {
       const bin = join(root, "bin");
