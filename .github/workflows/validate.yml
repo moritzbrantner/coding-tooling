@@ -60,4 +60,8 @@ jobs:
           operation: score
           validation-report: .artifacts/coding-tooling/report.json
           report-path: .artifacts/coding-tooling/score.json
-
+      - name: Inspect formatter correction (temporary diagnosis)
+        if: failure()
+        run: |
+          bun run format:write
+          git diff -- .github/workflows/validate.yml docs/adr/0002-controlled-performance-runner.md
