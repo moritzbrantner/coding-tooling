@@ -82,6 +82,80 @@ function isCommentOrAnnotation(line: string): boolean {
   );
 }
 
+/**
+ * Conservatively recognize comment-start lines, ignoring text inside JS/TS template
+ * literals, quoted strings and Rust raw strings. A marker is binding evidence only
+ * when the language lexer is in a comment, not when a string depicts one.
+ */
+function commentMarkerLines(lines: string[], rust: boolean): boolean[] {
+  let blockDepth = 0;
+  let quote: "\"" | "'" | "`" | null = null;
+  let rawEnd: string | null = null;
+  return lines.map((line) => {
+    const prefix = line.trimStart();
+    const startsBlockLine = blockDepth > 0 && prefix.startsWith("*") && !prefix.startsWith("*/");
+    const startsComment =
+      blockDepth === 0 &&
+      quote === null &&
+      rawEnd === null &&
+      (prefix.startsWith("//") || prefix.startsWith("/*"));
+    const isComment = startsBlockLine || startsComment;
+
+    for (let index = 0; index < line.length; ) {
+      if (rawEnd !== null) {
+        const end = line.indexOf(rawEnd, index);
+        if (end < 0) break;
+        index = end + rawEnd.length;
+        rawEnd = null;
+        continue;
+      }
+      if (quote !== null) {
+        if (line[index] === "\\") {
+          index += 2;
+          continue;
+        }
+        if (line[index] === quote) quote = null;
+        index += 1;
+        continue;
+      }
+      if (blockDepth > 0) {
+        if (line.startsWith("/*", index)) {
+          blockDepth += 1;
+          index += 2;
+        } else if (line.startsWith("*/", index)) {
+          blockDepth -= 1;
+          index += 2;
+        } else {
+          index += 1;
+        }
+        continue;
+      }
+      if (line.startsWith("//", index)) break;
+      if (line.startsWith("/*", index)) {
+        blockDepth += 1;
+        index += 2;
+        continue;
+      }
+      if (rust) {
+        const raw = /^(?:br|r)(#*)"/.exec(line.slice(index));
+        if (raw && (index === 0 || !/[A-Za-z0-9_]/.test(line[index - 1]!))) {
+          rawEnd = `\"${raw[1]}`;
+          index += raw[0].length;
+          continue;
+        }
+        if (line[index] === "'") {
+          const character = /^'(?:\\.|[^\\'])'/.exec(line.slice(index));
+          index += character?.[0].length ?? 1;
+          continue;
+        }
+      }
+      const character = line[index];
+      if (character === "\"" || character === "'" || character === "`") quote = character;
+      index += 1;
+    }
+    return isComment;
+  });
+}
 /** Reads source markers; malformed and detached markers become diagnostics and bind nothing. */
 function sourceMarkers(root: string, diagnostics: Diagnostic[]): Marker[] {
   const markers: Marker[] = [];
@@ -98,7 +172,9 @@ function sourceMarkers(root: string, diagnostics: Diagnostic[]): Marker[] {
     }
     if (!content.includes(markerToken)) continue;
     const lines = content.split(/\r?\n/);
+    const comments = commentMarkerLines(lines, extname(file) === ".rs");
     lines.forEach((text, index) => {
+      if (!comments[index]) return;
       const match = markerLine.exec(text);
       if (!match) return;
       const line = index + 1;
