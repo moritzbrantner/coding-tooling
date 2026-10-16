@@ -44,9 +44,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 
 import { workComplexityEvidence } from "../src/work-complexity.ts";
 
@@ -266,6 +266,42 @@ describe("source-adjacent markers where no inventory exists", () => {
     ]);
   });
 
+  test("marker-like lines inside TS template literals and Rust raw strings bind nothing", async () => {
+    const root = repo(
+      {
+        ...TS_PACKAGE,
+        ...RUST_PACKAGE,
+        "src/literals.ts": [
+          "const example = `",
+          "// @coding-tooling-work users-list",
+          "export const fake = () => {};",
+          "/** @coding-tooling-work users-list */",
+          "export const anotherFake = () => {};",
+          "`;",
+          "/*",
+          " * @coding-tooling-work users-real",
+          " */",
+          "export const actual = () => {};",
+        ].join("\n"),
+        "src/literals.rs": [
+          'const EXAMPLE: &str = r###"',
+          "/// @coding-tooling-work users-create",
+          "fn fake() {}",
+          '"###;',
+        ].join("\n"),
+      },
+      contract([operation("users-list"), operation("users-create"), operation("users-real")]),
+    );
+
+    const report = await bindings(root);
+    expect(report.status).toBe("passed");
+    expect(report.diagnostics).toEqual([]);
+    expect(op(report, "users-list").bindings).toEqual([]);
+    expect(op(report, "users-create").bindings).toEqual([]);
+    expect(op(report, "users-real").bindings).toEqual([
+      expect.objectContaining({ source: "source-marker", path: "src/literals.ts", line: 8 }),
+    ]);
+  });
   test("markers in node_modules and Rust target output are not repository declarations", async () => {
     const root = repo(
       {
@@ -620,6 +656,26 @@ describe("CLI", () => {
     );
   }
 
+  test("omitting --root uses cwd without invoking git", () => {
+    const root = repo({ ...TS_PACKAGE, "src/server.ts": TS_ROUTER }, contract([operation("users-list")]));
+    const env = { ...process.env };
+    if (process.platform !== "win32") {
+      const bin = join(root, "bin");
+      mkdirSync(bin);
+      const git = join(bin, "git");
+      writeFileSync(git, '#!/bin/sh\nprintf invoked > git-was-invoked\nexit 77\n');
+      chmodSync(git, 0o755);
+      env.PATH = `${bin}${delimiter}${env.PATH ?? ""}`;
+    }
+    const result = spawnSync(process.execPath, [router, "performance", "bindings", "--json"], {
+      cwd: root,
+      env,
+      encoding: "utf8",
+    });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).data.root).toBe(root);
+    expect(existsSync(join(root, "git-was-invoked"))).toBe(false);
+  });
   test("performance bindings prints a stable envelope and maps failures to exit codes", () => {
     const clean = repo(
       { ...TS_PACKAGE, "src/server.ts": TS_ROUTER },
