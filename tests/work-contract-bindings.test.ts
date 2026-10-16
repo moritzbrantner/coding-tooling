@@ -44,7 +44,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 
@@ -676,7 +676,7 @@ describe("CLI", () => {
       encoding: "utf8",
     });
     expect(result.status).toBe(0);
-    expect(JSON.parse(result.stdout).data.root).toBe(root);
+    expect(JSON.parse(result.stdout).data.root).toBe(realpathSync(root));
     expect(existsSync(join(root, "git-was-invoked"))).toBe(false);
   });
   test("performance bindings prints a stable envelope and maps failures to exit codes", () => {
