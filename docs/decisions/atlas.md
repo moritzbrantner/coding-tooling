@@ -9,6 +9,7 @@ Owner-approved product rules (2026-10-11). Only **Decisions** and **Questions**;
     - **1.1.1** [decision] Decisions and Questions are the only entry kinds.
     - **1.1.2** [decision] **B** — Require ID, kind, text, and source; all other metadata optional. Do not invent evidence.
     - **1.1.3** [decision] Answer Questions with a linked Decision; agents ask consequential unresolved Questions one at a time.
+    - **1.1.4** [decision] **B** — Everything written in the Atlas is approved: uncertainty is a Question, revisions strike through or supersede. `[x]`/`[ ]` mean only built/not built evidence; approval checkboxes are retired and agent proposals are Questions, never unchecked Decisions. [#348](https://github.com/moritzbrantner/coding-tooling/issues/348)
   - **1.2** Ownership
     - **1.2.1** [decision] **B** — Each repository owns its decisions. Indexes and viewers are read-only derivatives.
     - **1.2.2** [decision] **B** — Markdown-first; keep existing formats, with one Atlas file per project preferred.

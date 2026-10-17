@@ -2,8 +2,15 @@ import { expect, test } from "bun:test";
 
 import { buildAtlasIndex } from "../src/decision-atlas.ts";
 
-const owner = "# Decision Atlas\n## 1. Topic\n- [x] **1.1** Valid owner decision.\n";
-const examples = owner + "\nReference syntax examples:\n\n";
+// A numbered Atlas whose Decision 1.1 owns one checkbox-shaped child line. Whether
+// `[z]` is a real task-list marker (malformed: fails closed) or a Markdown
+// shortcut reference (prose) depends on actual CommonMark reference definitions.
+const atlas = (child: string, tail: string) =>
+  "# Decision Atlas\n\n## Entries\n\n- **1** Topic\n  - **1.1** Area\n    - **1.1.1** [decision] Valid owner decision.\n      " +
+  child +
+  "\n\nReference syntax examples:\n\n" +
+  tail +
+  "\n";
 
 function index(text: string) {
   return buildAtlasIndex("moritzbrantner/example", "a".repeat(40), [
@@ -21,11 +28,9 @@ for (const [name, definition] of [
   ["unrendered URL scheme", "[z]: javascript:example"],
 ]) {
   test("actual reference metadata preserves navigation: " + name, () => {
-    expect(
-      index(examples + definition + "\n\n- [z] **1.2** Navigation.\n").decisions.map(
-        (entry) => entry.id,
-      ),
-    ).toEqual(["1.1"]);
+    const built = index(atlas("- [z] Navigation.", definition));
+    expect(built.decisions.map((entry) => entry.id)).toEqual(["1.1.1"]);
+    expect(built.decisions[0]!.evidence).toEqual([]);
   });
 }
 
@@ -37,9 +42,7 @@ for (const [name, definition] of [
   ["paragraph continuation", "This remains a paragraph.\n[z]: #target"],
 ]) {
   test("invalid whole definition cannot conceal an owner marker: " + name, () => {
-    expect(() =>
-      index(examples + definition + "\n\n- [z] **1.2** Malformed owner entry.\n"),
-    ).toThrow();
+    expect(() => index(atlas("- [z] Malformed evidence.", definition))).toThrow();
   });
 }
 
@@ -56,14 +59,7 @@ for (const [name, literal] of [
   ["mismatched closer", "```\n~~~\n[z]: #target\n```"],
   ["unclosed fence", "~~~\n[z]: #target"],
 ]) {
-  test("inert Markdown region cannot supply approval references: " + name, () => {
-    expect(() =>
-      index(
-        examples +
-          "- [z] **1.2** Malformed owner entry.\n\nReference syntax examples:\n\n" +
-          literal +
-          "\n",
-      ),
-    ).toThrow();
+  test("inert Markdown region cannot supply checkbox references: " + name, () => {
+    expect(() => index(atlas("- [z] Malformed evidence.", literal))).toThrow();
   });
 }
