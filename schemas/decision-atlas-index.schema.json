@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/moritzbrantner/coding-tooling/blob/main/schemas/decision-atlas-index.schema.json",
-  "title": "Revision-bound read-only Decision and Question Atlas index v1",
+  "title": "Revision-bound read-only Decision and Question Atlas index (schemaVersion 1 or 2)",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -15,7 +15,8 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": 1
+      "enum": [1, 2],
+      "description": "2 is emitted and adds per-entry `evidence`; 1 is a legacy pre-evidence index, still accepted as input and reported as not audited."
     },
     "repository": {
       "type": "string",
@@ -89,5 +90,45 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schemaVersion": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decisions": {
+            "items": {
+              "required": ["evidence"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schemaVersion": {
+            "const": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "decisions": {
+            "items": {
+              "not": {
+                "required": ["evidence"]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
 }

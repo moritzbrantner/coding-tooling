@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/moritzbrantner/coding-tooling/blob/main/schemas/decision-atlas-decision.schema.json",
-  "title": "Decision Atlas indexed Decision or Question v1",
+  "title": "Decision Atlas indexed Decision or Question (index schemaVersion 1 and 2)",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -121,6 +121,25 @@
     },
     "kind": {
       "enum": ["decision", "question"]
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Binary implementation evidence children authored as `- [x] <text>` / `- [ ] <text>` under a Decision, in authored order. Present on every entry in schemaVersion 2 indexes and absent from schemaVersion 1 indexes. Empty for Questions and unaudited Decisions. A checked item covers only its own stated behavior and never verifies the parent Decision; progress (completed/total) is derived and not stored.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["text", "checked"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Trimmed authored Markdown after the checkbox marker; unique within its Decision."
+          },
+          "checked": {
+            "type": "boolean"
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -139,6 +158,9 @@
           },
           "choice": {
             "const": null
+          },
+          "evidence": {
+            "maxItems": 0
           }
         }
       }

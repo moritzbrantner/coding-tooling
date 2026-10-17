@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import {
   buildAtlasIndex,
+  supportedAtlasIndexSchemaVersions,
   type AtlasFormat,
   type AtlasIndex,
   type AtlasSource,
@@ -73,7 +74,11 @@ export function indexRepository(options: AtlasCommandOptions): AtlasIndex {
   let previous: AtlasIndex | undefined;
   if (options.previous) {
     previous = JSON.parse(readFileSync(resolve(options.previous), "utf8")) as AtlasIndex;
-    if (!previous || previous.schemaVersion !== 1 || !Array.isArray(previous.decisions))
+    if (
+      !previous ||
+      !supportedAtlasIndexSchemaVersions.includes(previous.schemaVersion) ||
+      !Array.isArray(previous.decisions)
+    )
       throw new Error("previous index has an unsupported schema");
   }
   const index = buildAtlasIndex(options.repository, actual, sources, previous);

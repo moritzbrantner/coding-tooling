@@ -1,4 +1,11 @@
-import type { AtlasDecision, AtlasIndex, AtlasRelation } from "./decision-atlas.ts";
+import {
+  evidenceProgress,
+  type AtlasDecision,
+  type AtlasEvidence,
+  type AtlasEvidenceProgress,
+  type AtlasIndex,
+  type AtlasRelation,
+} from "./decision-atlas.ts";
 
 export type DaqAction = "get" | "find" | "list" | "questions";
 export type DaqKind = "all" | "decision" | "question";
@@ -20,6 +27,10 @@ export interface DaqEntry {
   path: string[];
   aliases: string[];
   relations: AtlasRelation[];
+  /** Binary child evidence in authored order; empty for Questions and unaudited Decisions. */
+  evidence: AtlasEvidence[];
+  /** Derived from `evidence` only; never a verification of the parent Decision. */
+  progress: AtlasEvidenceProgress;
   source: { path: string; line: number; url: string };
 }
 
@@ -97,6 +108,8 @@ function toResult(index: AtlasIndex, decision: AtlasDecision): DaqEntry {
     path: [...decision.path],
     aliases: [...decision.aliases],
     relations: [...decision.relations],
+    evidence: (decision.evidence ?? []).map(({ text, checked }) => ({ text, checked })),
+    progress: evidenceProgress(decision),
     source: {
       path,
       line,

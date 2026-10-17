@@ -1,4 +1,4 @@
-# Decision Atlas v1: read-only indexes
+# Decision Atlas: read-only indexes
 
 The [Decision Atlas for the Decision Atlas](decisions/atlas.md) is the owner-approved specification for this capability. This guide describes the current implementation, not a second source of product decisions.
 
@@ -19,7 +19,7 @@ The owner-source model is authoritative. The indexer preserves Question leaves d
 
 - **`numbered-list`** reads explicit nested Markdown list identifiers (`1`, `1.2`, `1.2.3`) without reordering or allocating IDs. A list branch is navigation; a leaf has a `[decision]` or `[question]` label and substantive text. External GitHub links and implementation labels are optional; the committed file and line supply provenance. This is the authoring format of the MMORPG PR #150 Atlas and, since its October 11 migration, the [My Farm Atlas](https://github.com/moritzbrantner/my-farm/blob/main/docs/decisions/atlas.md). The latter preserves all older `my-farm/...` IDs as **legacy aliases**, which are indexed and remain addressable.
 - **`my-farm-tree`** is the read-only compatibility adapter for the original dated My Farm tree, when indexing a commit where that path contained the actual decisions. The **current** dated file is merely a redirect and is not a valid decision source.
-  The normalized derived index is validated against [decision-atlas-decision.schema.json](../schemas/decision-atlas-decision.schema.json) and [decision-atlas-index.schema.json](../schemas/decision-atlas-index.schema.json). These are **JSON output contracts**, not instructions to create extra authoritative per-decision Markdown or YAML files. A schema change must be explicit and versioned.
+  The normalized derived index is validated against [decision-atlas-decision.schema.json](../schemas/decision-atlas-decision.schema.json) and [decision-atlas-index.schema.json](../schemas/decision-atlas-index.schema.json). These are **JSON output contracts**, not instructions to create extra authoritative per-decision Markdown or YAML files. A schema change must be explicit and versioned. Indexes are now emitted with `schemaVersion: 2`, which adds `evidence` to every entry. Earlier validated `schemaVersion: 1` indexes, which have no `evidence`, remain accepted as `--previous-index` baselines and by `daq --index`, where their Decisions report `not-audited`. Any other version, or an index whose evidence is malformed (for example a non-boolean `checked`), is rejected.
 
 Question syntax within the same numbered Markdown list:
 
@@ -32,7 +32,40 @@ Question syntax within the same numbered Markdown list:
 
 The same `numbered-list` adapter also reads the owner approval checklist used by Video-to-3D's `docs/DECISION-ATLAS.md`. Numbered level-two headings provide topics; indented checkbox entries preserve their authored IDs and multiline descriptions. Topic placement does not change an ID, and nested entries follow authored indentation. A checked Decision records owner approval, never verified implementation. A `[question]` stays a Question even when checked: its checkbox must agree with a linked Decision's `Answers <ID>` relation. Unchecked Decisions, unknown entry kinds, malformed checkboxes and dangling references fail validation. The byte-preserved owner source and its revision are recorded in [the fixture provenance](../fixtures/decision-atlas/video-to-3d/README.md).
 
-Pass `--source docs/DECISION-ATLAS.md` to select that committed source for indexing or local daq queries. The v1 JSON schemas explicitly extend accepted source paths from `docs/decisions/` to `docs/`; the output fields, format names and schema version remain unchanged, and existing indexes remain valid. General resource URLs remain authored statement text; v1 structured citations still contain only GitHub issues, PRs and immutable source files.
+Pass `--source docs/DECISION-ATLAS.md` to select that committed source for indexing or local daq queries. The JSON schemas explicitly extend accepted source paths from `docs/decisions/` to `docs/`; format names are unchanged. General resource URLs remain authored statement text; v1 structured citations still contain only GitHub issues, PRs and immutable source files.
+
+### Implementation evidence checkboxes
+
+A `numbered-list` Decision may own nested **binary implementation evidence** children. Each child states one narrow, observable behavior and is either checked or unchecked:
+
+```md
+- **1** Product
+  - **1.1** Checkout
+    - **1.1.1** [decision] **B** — Checkout supports guest buyers.
+      - [x] Guest cart persists across reloads.
+      - [ ] Guest email is validated before payment.
+        - [x] Invalid email shows an inline error.
+      - [ ] Guest order appears in the admin list.
+      - [ ] Admin export includes guest orders.
+    - **1.1.2** [decision] Payments use one provider.
+    - **1.1.3** [question] Should saved cards be offered?
+```
+
+- Children keep authored order and belong to the **nearest owning Decision**, including checkboxes nested under another checkbox. The indexed `evidence` array holds `{ text, checked }`, where `text` is the trimmed Markdown after the marker. The Decision's `statement`, `choice`, links, relations, ID and aliases are unaffected.
+- Progress is **derived**, never stored: `daq` reports `progress` as `{ status: "audited", completed, total, percent }` (`percent` is display-only, `Math.round(completed / total * 100)`), `{ status: "not-audited" }` for a Decision with no children, or `{ status: "not-applicable" }` for a Question. In the example, 1.1.1 is `2/5` (40%), 1.1.2 is **not audited** (unknown, never 0%), and 1.1.3 is not applicable.
+- There are only two states. Partial, almost, draft and similar states do not exist; split the behavior into smaller children instead.
+- `[x]` applies **only to that child's stated behavior**. It never marks the parent Decision implemented or verified, even when every child is checked or links a merged PR. `implementation.verification` stays `unverified` and `provenance.implementation` stays `not-verified`; verifying code symbols or tests is a separate capability.
+- Adding, toggling, rewording or removing evidence is not a historical Decision rewrite, so `--previous-index` accepts it. Choice and ID changes stay guarded as before.
+- Checkboxes outside the entries list, such as a checklist under a separate `## Notes` heading or an inline `[x]` in prose, are ignored. The Video-to-3D approval-checklist variant is selected only by approval lines with a bold ID (`- [x] **1.2** ...`); its boxes mean owner approval and it carries no evidence children.
+
+Evidence fails closed. Each of these errors carries `<path>:<line>`:
+
+- a malformed marker (`[X]`, `[-]`, `[~]`, `[x ]`, `[ x]`, `[]`, `[  ]`, `[partial]`), or a marker without child text
+- the same child text twice under one Decision, whatever its state (the same text under different Decisions is allowed)
+- a checkbox under a Question; evidence does not apply to unresolved Questions
+- a checkbox in the entries list that no Decision owns, for example one directly under a navigation branch
+
+`daq get` prints `completed/total`, the percentage and one `[x]` / `[ ]` line per child, or `not audited`. The offline preview renders read-only (`disabled`) checkboxes, the count on the tree node, and "not audited" for Decisions without children.
 
 Simple inline editing:
 
