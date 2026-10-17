@@ -108,7 +108,11 @@ function toResult(index: AtlasIndex, decision: AtlasDecision): DaqEntry {
     path: [...decision.path],
     aliases: [...decision.aliases],
     relations: [...decision.relations],
-    evidence: (decision.evidence ?? []).map(({ text, checked }) => ({ text, checked })),
+    evidence: (decision.evidence ?? []).map(({ text, checked, anchors }) =>
+      anchors
+        ? { text, checked, anchors: anchors.map((anchor) => ({ ...anchor })) }
+        : { text, checked },
+    ),
     progress: evidenceProgress(decision),
     source: {
       path,

@@ -95,7 +95,14 @@ export function renderAtlasPreview(index: AtlasIndex): string {
       <ul class="evidence">${(decision.evidence ?? [])
         .map(
           (item) =>
-            `<li><label><input type="checkbox" disabled${item.checked ? " checked" : ""}> ${html(item.text)}</label></li>`,
+            `<li><label><input type="checkbox" disabled${item.checked ? " checked" : ""}> ${html(item.text)}</label>${(
+              item.anchors ?? []
+            )
+              .map(
+                (a) =>
+                  ` <code class="anchor">${html(a.kind === "proof" ? `proof: ${a.url ?? ""}` : `${a.kind}: ${a.path ?? ""}::${a.symbol ?? ""}${a.revision ? `@${a.revision.slice(0, 12)}` : ""}`)}</code>`,
+              )
+              .join("")}</li>`,
         )
         .join("")}</ul>`
           : progress.status === "not-audited"
