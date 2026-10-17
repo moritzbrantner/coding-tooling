@@ -401,11 +401,20 @@ async function githubOptionalJson(path, fetchImpl, signal) {
       },
     });
     if (!response.ok) return { status: "unavailable", reason: `github-http-${response.status}` };
-    return { status: "observed", value: await response.json() };
+    return {
+      status: "observed",
+      value: await response.json(),
+      hasNextPage: hasNextPageLink(response),
+    };
   } catch (error) {
     if (error?.name === "AbortError") throw error;
     return { status: "unavailable", reason: "request-failed" };
   }
+}
+
+function hasNextPageLink(response) {
+  const link = typeof response.headers?.get === "function" ? response.headers.get("link") : null;
+  return typeof link === "string" && /<[^>]*>\s*;\s*rel="?next"?/i.test(link);
 }
 
 function declaredMergeAuthorityFromSnapshot(snapshot) {
@@ -537,10 +546,22 @@ function rulesetRequiredStatusChecksSources(observation) {
         if (typeof check?.context === "string") entry.names.push(check.context);
     byRuleset.set(rulesetId, entry);
   }
-  return [...byRuleset.values()].map((entry) => ({
+  const sources = [...byRuleset.values()].map((entry) => ({
     ...entry,
     names: [...new Set(entry.names)].toSorted(),
   }));
+  // GitHub paginates branch rules (30 per page by default). A truncated first
+  // page cannot prove that a declared check is absent, so later pages are an
+  // explicit unavailable source and the union is at most partial.
+  if (observation.hasNextPage === true)
+    sources.push({
+      source: "ruleset",
+      status: "unavailable",
+      rulesetId: null,
+      names: null,
+      reason: "branch-rules-paginated",
+    });
+  return sources;
 }
 
 function unavailableBranchProtectionEvidence(reason) {
