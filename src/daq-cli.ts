@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { resolveAtlasAnchors, type AnchorResolution } from "./decision-atlas-anchors.ts";
+import { executionText } from "./decision-atlas-execution.ts";
 import { indexRepository } from "./decision-atlas-cli.ts";
 import {
   supportedAtlasIndexSchemaVersions,
@@ -23,6 +24,8 @@ const usage = [
   "Options: --root <checkout> --source <path> --format numbered-list|my-farm-tree",
   "         --index <index.json|-> --limit <1..100> --include-inactive --json",
   "         --resolve-anchors (report evidence anchors at the checkout's committed HEAD)",
+  "         --report <case-evidence.json> (with --resolve-anchors: one more test-case report)",
+  "         --run-tests (with --resolve-anchors: run each anchored test lacking a current report)",
   "Default: query the committed docs/decisions/atlas.md in the current repository;",
   "         results are deterministic, read-only, and limited to 12 entries.",
 ].join("\n");
@@ -86,6 +89,14 @@ type ResolvedAnchor = NonNullable<
 >[number] & {
   resolution?: Omit<AnchorResolution, "decisionId" | "evidence" | "anchor">;
 };
+
+function anchorLines(anchor: ResolvedAnchor): string[] {
+  const execution = anchor.resolution?.execution;
+  return [
+    "      " + anchorText(anchor),
+    ...(execution ? ["        " + executionText(execution)] : []),
+  ];
+}
 
 function anchorText(anchor: ResolvedAnchor): string {
   const target =
@@ -154,7 +165,7 @@ function formatText(result: DaqResult): string {
       );
       for (const item of entry.evidence) {
         lines.push("    " + (item.checked ? "[x] " : "[ ] ") + item.text);
-        for (const anchor of item.anchors ?? []) lines.push("      " + anchorText(anchor));
+        for (const anchor of item.anchors ?? []) lines.push(...anchorLines(anchor));
       }
     } else if (entry.progress.status === "not-audited") {
       lines.push("  Implementation evidence: not audited");
@@ -185,8 +196,9 @@ export function daqCommand(argv: string[], io: DaqIo = stdio): number {
       "--topic",
       "--kind",
       "--limit",
+      "--report",
     ]);
-    const flags = new Set(["--json", "--include-inactive", "--resolve-anchors"]);
+    const flags = new Set(["--json", "--include-inactive", "--resolve-anchors", "--run-tests"]);
     for (let i = needsValue ? 2 : 1; i < argv.length; i++) {
       const arg = argv[i]!;
       if (flags.has(arg)) {
@@ -211,6 +223,11 @@ export function daqCommand(argv: string[], io: DaqIo = stdio): number {
       throw new Error(
         "daq: --resolve-anchors reads committed git objects and needs --root, not --index",
       );
+    if (
+      (options.has("--report") || options.has("--run-tests")) &&
+      !options.has("--resolve-anchors")
+    )
+      throw new Error("daq: --report and --run-tests need --resolve-anchors");
     const root = options.get("--root") ?? process.cwd();
     const index = options.has("--index")
       ? indexFromFile(options.get("--index")!)
@@ -228,6 +245,9 @@ export function daqCommand(argv: string[], io: DaqIo = stdio): number {
         result,
         resolveAtlasAnchors(root, index, {
           decisionIds: new Set(result.entries.map((entry) => entry.id)),
+          reports: options.has("--report") ? [options.get("--report")!] : [],
+          runTests: options.has("--run-tests"),
+          diagnostic: (message) => io.error(message + "\n"),
         }),
       );
     io.write(options.has("--json") ? JSON.stringify(result, null, 2) + "\n" : formatText(result));

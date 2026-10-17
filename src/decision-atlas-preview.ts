@@ -1,4 +1,11 @@
-import { evidenceProgress, type AtlasDecision, type AtlasIndex } from "./decision-atlas.ts";
+import type { AnchorResolution } from "./decision-atlas-anchors.ts";
+import { executionText } from "./decision-atlas-execution.ts";
+import {
+  evidenceProgress,
+  type AtlasAnchor,
+  type AtlasDecision,
+  type AtlasIndex,
+} from "./decision-atlas.ts";
 
 function html(value: string): string {
   return value.replace(
@@ -54,7 +61,37 @@ function navigation(branch: Branch): string {
   return children + decisions;
 }
 
-export function renderAtlasPreview(index: AtlasIndex): string {
+export interface AtlasPreviewOptions {
+  /** Report-only anchor resolutions (`resolveAtlasAnchors`); adds `execution:` per `test:` anchor. */
+  resolutions?: readonly AnchorResolution[];
+}
+
+const sameAnchor = (a: AtlasAnchor, b: AtlasAnchor) =>
+  a.kind === b.kind &&
+  a.path === b.path &&
+  a.symbol === b.symbol &&
+  a.revision === b.revision &&
+  a.url === b.url;
+
+/** Pairs each anchor of `decision` with its resolution, in resolution order. */
+function decisionResolutions(
+  decision: AtlasDecision,
+  resolutions: readonly AnchorResolution[] | undefined,
+): (AnchorResolution | undefined)[][] {
+  const queue = (resolutions ?? []).filter((resolution) => resolution.decisionId === decision.id);
+  let next = 0;
+  return (decision.evidence ?? []).map((item) =>
+    (item.anchors ?? []).map((authored) => {
+      const candidate = queue[next];
+      if (!candidate || candidate.evidence !== item.text || !sameAnchor(candidate.anchor, authored))
+        return undefined;
+      next++;
+      return candidate;
+    }),
+  );
+}
+
+export function renderAtlasPreview(index: AtlasIndex, options: AtlasPreviewOptions = {}): string {
   const root = makeBranch("Decisions");
   for (const decision of index.decisions) {
     let branch = root;
@@ -88,20 +125,25 @@ export function renderAtlasPreview(index: AtlasIndex): string {
           ? "Question: unresolved · No owner-selected choice"
           : `Decision: ${html(decision.decisionStatus ?? "")}${decision.choice === null ? "" : ` · Choice: ${html(decision.choice)}`} · Source implementation claim: ${html(decision.implementation.sourceLabel)}`;
       const progress = evidenceProgress(decision);
+      const resolved = decisionResolutions(decision, options.resolutions);
       const evidence =
         progress.status === "audited"
           ? `<h3>Implementation evidence: ${progress.completed}/${progress.total} checked (${progress.percent}%)</h3>
       <p class="meta">Each checked item covers only its own stated behavior; it does not verify this Decision.</p>
       <ul class="evidence">${(decision.evidence ?? [])
         .map(
-          (item) =>
+          (item, itemIndex) =>
             `<li><label><input type="checkbox" disabled${item.checked ? " checked" : ""}> ${html(item.text)}</label>${(
               item.anchors ?? []
             )
-              .map(
-                (a) =>
-                  ` <code class="anchor">${html(a.kind === "proof" ? `proof: ${a.url ?? ""}` : `${a.kind}: ${a.path ?? ""}::${a.symbol ?? ""}${a.revision ? `@${a.revision.slice(0, 12)}` : ""}`)}</code>`,
-              )
+              .map((a, anchorIndex) => {
+                const execution = resolved[itemIndex]?.[anchorIndex]?.execution;
+                return ` <code class="anchor">${html(a.kind === "proof" ? `proof: ${a.url ?? ""}` : `${a.kind}: ${a.path ?? ""}::${a.symbol ?? ""}${a.revision ? `@${a.revision.slice(0, 12)}` : ""}`)}</code>${
+                  execution
+                    ? ` <span class="execution" title="Report-only test-case evidence">${html(executionText(execution))}</span>`
+                    : ""
+                }`;
+              })
               .join("")}</li>`,
         )
         .join("")}</ul>`

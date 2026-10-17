@@ -94,9 +94,9 @@ The index keeps `{ text, checked }` with the tail removed from `text`, and adds 
 | `ambiguous`  | Two or more matching declarations, such as `#[cfg]` twins or duplicate test names. TypeScript overloads, get/set pairs and interface or namespace merges count once.                                                                                                                           |
 | `unresolved` | The anchor cannot be checked here. This covers an unsupported language, a missing or unusable sibling checkout for another repository, a pinned SHA that is not a commit in the checkout being read, a Rust file with unbalanced delimiters, a symlink, a file over 2 MiB, and every `proof:`. |
 
-Non-resolved results carry a `reason` and no line or link. The line and link are **derived display output**. Moving code within a file changes only the line, and the anchor stays `resolved`. A rename or move to another file makes it `stale`. In JSON, each `entries[].evidence[].anchors[]` gains `resolution: { status, reason?, revision?, source?, line?, link? }`; `source` is present only for cross-repository reads. The text output prints each anchor's status and link under its checkbox. `--resolve-anchors` cannot be combined with `--index`, because it needs the checkout's git objects.
+Non-resolved results carry a `reason` and no line or link. The line and link are **derived display output**. Moving code within a file changes only the line, and the anchor stays `resolved`. A rename or move to another file makes it `stale`. In JSON, each `entries[].evidence[].anchors[]` gains `resolution: { status, reason?, revision?, source?, line?, link?, execution? }`; `source` is present only for cross-repository reads and `execution` only for `test:` anchors (see **Test-anchor execution evidence** below). The text output prints each anchor's status and link under its checkbox. `--resolve-anchors` cannot be combined with `--index`, because it needs the checkout's git objects.
 
-**Resolvable is not verified.** A `resolved` anchor shows only that the named declaration or test exists at that revision. Resolution never runs tests, never fetches proof URLs, never toggles `[x]` / `[ ]`, and never changes `completed/total`, `implementation.verification` (`unverified`) or `provenance.implementation` (`not-verified`). A proof keeps its immutable revision as recorded evidence, not as verification. Out of scope: out-of-line `mod x;` file contents, macro-generated items, `use` re-exports, items nested in function bodies, fetching other repositories and running the referenced tests.
+**Resolvable is not verified.** A `resolved` anchor shows only that the named declaration or test exists at that revision. Resolution runs no test unless `--run-tests` is given, never fetches proof URLs, never toggles `[x]` / `[ ]`, and never changes `completed/total`, `implementation.verification` (`unverified`) or `provenance.implementation` (`not-verified`). A proof keeps its immutable revision as recorded evidence, not as verification. Out of scope: out-of-line `mod x;` file contents, macro-generated items, `use` re-exports, items nested in function bodies, fetching other repositories.
 
 **Cross-repository anchors.** An anchor `<owner>/<repo>:<path>::<symbol>` into another repository is read from the **sibling checkout** `<dirname(root)>/<repo>`, that is `../<repo>` next to the Atlas checkout ([Atlas 4.3.6](decisions/atlas.md)). It is read through git objects only, like a same-repository anchor: the sibling's working tree and untracked files are ignored, and nothing is ever fetched. The same parsers and statuses apply, and a `resolved` link points at `https://github.com/<owner>/<repo>/blob/<revision>/<path>#L<line>`.
 
@@ -104,6 +104,61 @@ Non-resolved results carry a `reason` and no line or link. The line and link are
 - **Revision:** an unpinned anchor reads the commit of `origin/<default>`, where `<default>` is the branch `refs/remotes/origin/HEAD` points to (never a hard-coded `main`). If that ref is missing, it reads the sibling's `HEAD`. An `@<sha>` pin reads that commit, which must exist in the sibling.
 - **Source:** each read result records `source`: `origin/<default>`, `HEAD` or `pinned`. Same-repository results carry no `source`.
 - **Unusable sibling:** when the directory is missing, is not a git repository, has no origin remote or has an origin naming another repository, every anchor into that repository is `unresolved` with a reason that names the sibling (e.g. `cross-repository sibling checkout ../farm-engine for moritzbrantner/farm-engine not found; nothing is fetched`). This is never an error: indexing and `daq` still succeed.
+
+### Test-anchor execution evidence
+
+A resolved `test:` anchor proves only that the test exists. Execution evidence records whether that test **passed at a revision** ([Atlas 4.3.7–4.3.8](decisions/atlas.md)). It is shown next to the resolution and kept separate from it. Every `test:` result of `resolveAtlasAnchors(root, index, { reports?, runTests? })` (and of `daq get <ID> --root <checkout> --resolve-anchors [--report <path>] [--run-tests]`) carries:
+
+```ts
+execution: {
+  status: "passed" | "failed" | "not-run";
+  revision?: string; // the revision the result was recorded at
+  current: boolean; // true only when revision equals the anchor's resolved revision
+  source?: "report" | "run";
+  reportPath?: string; // root-relative declared report, or the --report argument as given
+}
+```
+
+`src:` and `proof:` results carry no `execution`. A test with no evidence is exactly `{ status: "not-run", current: false }`. The text output prints `execution: <status>` on its own line under each `test:` anchor. A result from an older revision prints `execution: <status> at <sha12>`. `renderAtlasPreview(index, { resolutions })` prints the same text per `test:` anchor; without `resolutions` the preview is unchanged.
+
+**Report format.** Evidence comes from the existing per-case [`TestCaseEvidenceArtifact`](http-case-evidence.md) (schema version 1, `src/test-case-evidence.ts`). Only `revision` (a string) and `cases[]` are read. `runId`, `capability` and `component` are ignored, because matching is by test name and revision only (4.3.7). Only `passed` and `failed` cases count. `skipped`, `todo` and unknown outcomes are treated as absent. A `coding-tooling run --report` envelope is **not** per-case evidence, since it records only aggregate counts and no revision.
+
+**Where reports are found.** Two sources, used together:
+
+- Every `*.json` file directly in `<root>/.artifacts/coding-tooling/test-case-evidence/` in the working tree. This is the directory where coding-tooling already places these artifacts. No configuration is needed.
+- At most one more file given with `--report <path>` (function option `reports: string[]`), resolved against `--root`. A CI artifact downloaded locally is passed this way. Nothing is ever downloaded.
+
+A malformed report is ignored, and a diagnostic naming its path is written to stderr. This covers invalid JSON, a non-object, a `schemaVersion` other than 1, a non-string `revision`, a non-array `cases` and a missing `--report` file. `daq` still exits 0 with valid stdout, and the other reports still count.
+
+**Matching and selection.** A case matches a `test:` anchor when its `id` equals the anchor target as authored without its pin, `<path>::<symbol>`. Examples are `tests/math.test.ts::Math > multiplies` and `tests/smoke.rs::passes`. A cross-repository anchor keeps its `<owner>/<repo>:` prefix. When several results match one anchor:
+
+1. A result at the anchor's resolved revision wins, and `current` is `true`.
+2. Otherwise the result at the nearest git ancestor of that revision wins, with `current: false`. Ancestry comes from the checkout the anchor was read from; file names and modification times play no part. Revisions that are not ancestors, or are not commits there, are ignored.
+3. When several results share a revision, `failed` beats `passed`. Any remaining tie goes to the first in report order: declared files sorted by name, then `--report`.
+
+**Running on request.** Only with `--run-tests` (function `runTests: true`), and only for a resolved, unpinned same-repository `test:` anchor with **no current report result**, coding-tooling runs that one test in the checkout:
+
+- **TypeScript:** `bun test ./<file> -t '^<describe> <name>$'`. This runs only when the file imports `bun:test` or the repository has `bun.lock`, `bun.lockb` or `bunfig.toml`. Other runners are not guessed.
+- **Rust:** `cargo test --test <name> <symbol> -- --exact` for `tests/<name>.rs`, or `cargo test --lib <module path>::<symbol> -- --exact` for a `src/` file. It runs in the nearest directory with a `Cargo.toml`.
+
+A run gives `{ status, revision: <HEAD>, current: true, source: "run" }`. The tracked working tree must be clean, so the result really is at `HEAD`. If it is not, or the runner output does not show exactly that one case passing (or any failing), the report-based result (often `not-run`) is kept. Without the flag, nothing is ever executed.
+
+**Report-only (4.3.5).** Execution evidence never toggles `[x]` / `[ ]` and never changes `completed/total`, `implementation.verification` (`unverified`) or `provenance.implementation` (`not-verified`). A pass is evidence that one case passed at one revision. It does not verify the Decision.
+
+**Making per-case evidence match anchors.** coding-tooling does not ship a general per-case producer. Today, `TestCaseEvidenceArtifact` files are written only by a repository's own runner adapter or test harness. That happens through the [exact-run protocol](http-case-evidence.md#exact-run-protocol) when `coding-tooling run` executes an HTTP verification that declares a case. Those case ids are **repository-declared manifest ids** (for example `posts-create-success`), not `<path>::<symbol>`, so they never match an anchor. To make execution evidence appear, a repository (or its CI) writes a schema version 1 artifact whose case ids are the anchor targets:
+
+```json
+{
+  "schemaVersion": 1,
+  "runId": "ci-1234",
+  "revision": "<40-hex commit the tests ran at>",
+  "capability": "test:unit",
+  "component": ".",
+  "cases": [{ "id": "tests/math.test.ts::Math > multiplies", "outcome": "passed" }]
+}
+```
+
+The file goes into `.artifacts/coding-tooling/test-case-evidence/` (git-ignored), or is passed with `--report`. For TypeScript the id is `<path from repo root>::<describe names and test name joined by " > ">`. For Rust it is `<path>::<item path within the file>`. Gaps: no built-in reporter converts Bun or cargo output into this form, `--run-tests` does not cover cross-repository or pinned anchors, and CI artifacts are not downloaded.
 
 Index synchronization across repositories ([Atlas 4.2.1](decisions/atlas.md)) is still an open question; resolving an anchor does not synchronize indexes.
 
