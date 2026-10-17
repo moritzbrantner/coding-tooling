@@ -19,3 +19,10 @@ This choice selects the evidence _source_, not a runner that already exists. No 
 ## Consequences
 
 This avoids a required external benchmarking account/secret but adds owner-owned hardware, setup, security and maintenance obligations. The runner decision **unblocks planning** of #158's comparison contract; it does **not** unblock strict wall-clock pass claims or authorize provisioning/security assumptions. Until real, approved controlled hardware is operational, leave that evidence unavailable and continue work on independent deterministic checks.
+
+## Owner decisions — comparison boundary and history storage (2026-10-17)
+
+- **Comparability (A):** coding-tooling delegates measurement comparison to `runtime-profiler score` (its strict bundle comparability). coding-tooling adds only runner attestation, trusted-trigger provenance, the sample/noise policy declared in `.performance/contract.json`, and the final `comparable | incomparable | unavailable` classification. It does not maintain a second comparator over raw bundle facts.
+- **History persistence (A):** controlled history is stored on a data-only orphan branch following the [`score-history`](../score-history.md) pattern, written only by the trusted controlled-runner workflow.
+
+Recorded from [#158](https://github.com/moritzbrantner/coding-tooling/issues/158).

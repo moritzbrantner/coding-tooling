@@ -37,5 +37,11 @@ Owner-approved product rules (2026-10-11). Only **Decisions** and **Questions**;
     - **4.1.3** [decision] `daq` retrieves bounded, relevant Decisions and Questions by ID, topic, and words; no implicit discovery.
   - **4.2** Publication
     - **4.2.1** [question] How should indexes synchronize across repositories? Decide when publication needs it.
+  - **4.3** Implementation evidence anchors
+    - **4.3.1** [decision] **A** — Anchors are inline trailing tokens on the evidence checkbox line (`src:`, `test:`, `proof:`); no sidecar file or sub-bullets. [#323](https://github.com/moritzbrantner/coding-tooling/issues/323)
+    - **4.3.2** [decision] **A** — Resolve symbols with real parsers (TypeScript compiler API, a proper Rust item parser); a small parsing dependency or WASM tree-sitter grammar is acceptable. [#323](https://github.com/moritzbrantner/coding-tooling/issues/323)
+    - **4.3.3** [decision] **A** — Check anchors against the Atlas repository's committed HEAD via git object reads by default; an anchor may pin `@<sha>`. [#323](https://github.com/moritzbrantner/coding-tooling/issues/323)
+    - **4.3.4** [decision] **A** — First scope is same-repository Rust and TypeScript anchors reporting resolved, stale, ambiguous or unresolved with derived line links; cross-repository anchors and running tests are successors. [#323](https://github.com/moritzbrantner/coding-tooling/issues/323)
+    - **4.3.5** [decision] **A** — Anchor status is reported only; it never changes an evidence checkbox or the derived progress count. [#323](https://github.com/moritzbrantner/coding-tooling/issues/323)
 
 Agents follow current Decisions and ask relevant unanswered Questions. A struck-only decision is inactive; inline replacement is current. Missing implementation evidence stays unverified.
