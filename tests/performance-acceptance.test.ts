@@ -181,7 +181,7 @@ function timingScenario(
         blocking: false,
       },
     ],
-    ...(controlled === undefined ? {} : { controlled }),
+    ...(controlled === null ? {} : { controlled }),
   };
 }
 
@@ -576,7 +576,7 @@ describe("contract: optional operations[].latency block", () => {
     });
 
   test("fails closed when the bound scenario has no controlled block", () => {
-    const declared = contract([op({ latency: latency() })], [timingScenario(SCENARIO, undefined)]);
+    const declared = contract([op({ latency: latency() })], [timingScenario(SCENARIO, null)]);
     const error = performanceContractValidationError(declared);
     expect(error).toBeString();
     expect(error).toContain("operations[0].latency");
