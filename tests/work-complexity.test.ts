@@ -633,3 +633,39 @@ describe("work-complexity applicability family", () => {
     expect(row?.state).toBe("unsupported-environment");
   });
 });
+
+describe("latency-only operations (#302)", () => {
+  function withLatencyOnly(extra: unknown[] = [operation()]) {
+    const declared = contract([
+      ...extra,
+      {
+        id: "pan-latency",
+        description: "Pan latency only.",
+        dimensions: { features: {} },
+        scalePoints: [{ features: 1 }],
+        latency: { scenario: "common-work", metric: "wall", statistic: "p95", maxMs: 5 },
+      },
+    ]) as ReturnType<typeof contract> & { scenarios: Record<string, unknown>[] };
+    declared.scenarios[0]!.controlled = { history: { branch: "score-history", path: "h.json" } };
+    return fixture(declared);
+  }
+
+  test("are not part of the work contract or its evidence", () => {
+    const root = withLatencyOnly();
+    evidence(root, [{ id: "camera-pan", samples: samples(stable) }]);
+    const report = workComplexityEvidence(root);
+    expect(report.status).toBe("passed");
+    expect(report.data.operations.map((value) => value.id)).toEqual(["camera-pan"]);
+  });
+
+  test("a contract with only latency-only operations has no work contract", () => {
+    const root = withLatencyOnly([]);
+    const report = workComplexityEvidence(root);
+    expect(report.status).toBe("unavailable");
+    expect(report.diagnostics[0]?.code).toBe("work-operations-missing");
+    const row = performanceApplicability(root, {
+      available: () => true,
+    }).data.components[0]?.families.find((value) => value.family === "work-complexity");
+    expect(row?.state).toBe("not-applicable");
+  });
+});

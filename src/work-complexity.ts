@@ -419,9 +419,11 @@ export function workComplexityEvidence(
     }
     data.contract.schemaVersion = contract.schemaVersion;
     data.suite = contract.suite;
-    if (contract.operations.length === 0)
+    // Latency-only operations (#302) carry no work metrics and are not part of the work contract.
+    const operations = contract.operations.filter((operation) => operation.metrics.length > 0);
+    if (operations.length === 0)
       throw new Unavailable(
-        "The performance contract declares no operations; there is no work contract to verify.",
+        "The performance contract declares no operations with work metrics; there is no work contract to verify.",
         "work-operations-missing",
         performanceContractPath,
       );
@@ -430,8 +432,8 @@ export function workComplexityEvidence(
         ? collect(resolvedRoot, data)
         : readEvidenceFile(resolvedRoot, options.evidence, data);
     data.evidence.sha256 = hash(text);
-    const evidence = parseEvidence(text, contract.suite, data.contractSha256, contract.operations);
-    data.operations = contract.operations.map((operation) =>
+    const evidence = parseEvidence(text, contract.suite, data.contractSha256, operations);
+    data.operations = operations.map((operation) =>
       evaluate(operation, evidence.get(operation.id)!),
     );
   } catch (error) {

@@ -5,6 +5,8 @@
  * operation-level work contracts (`operations`). A v1 contract is read as a v2 contract without
  * operations; it must not carry `operations`, so a v2 field cannot be silently ignored. Either
  * version may give a scenario an optional `controlled.history` block (docs/performance-history.md).
+ * A v2 operation may carry an optional `latency` deadline bound to such a scenario and may then
+ * omit work `metrics` (docs/performance-acceptance.md).
  */
 
 export const performanceContractPath = ".performance/contract.json";
@@ -48,7 +50,24 @@ export type WorkOperation = {
   publicContract: string | null;
   dimensions: string[];
   scalePoints: Record<string, number>[];
+  /** Empty for a latency-only operation. */
   metrics: WorkMetric[];
+  latency: LatencyDeadline | null;
+};
+export const latencyRatchets = ["informational", "blocking"] as const;
+/**
+ * Optional per-operation wall-clock deadline (#302): the bound scenario's recorded runtime-profiler
+ * `statistic` of `metric` must be at most `maxMs`.
+ */
+export type LatencyDeadline = {
+  /** Contract scenario id; the scenario declares `controlled.history`. */
+  scenario: string;
+  /** runtime-profiler metric id, e.g. `process.wall_time`. */
+  metric: string;
+  /** runtime-profiler statistic, e.g. `median`, `p95`, `mean`. */
+  statistic: string;
+  maxMs: number;
+  ratchet: (typeof latencyRatchets)[number];
 };
 /**
  * Optional per-scenario pointer to controlled performance history: a runtime-profiler
@@ -214,12 +233,45 @@ function parseMetric(raw: unknown, prefix: string, dimensions: string[]): WorkMe
   return { name: metric.name, unit: metric.unit, signal: String(metric.signal), budget, growth };
 }
 
-function parseOperation(raw: unknown, prefix: string): WorkOperation {
+function parseLatency(
+  raw: unknown,
+  prefix: string,
+  controlled: ControlledHistory[],
+): LatencyDeadline {
+  const latency = record(raw);
+  if (!latency) throw new ContractError(`${prefix} must be an object`);
+  only(latency, ["scenario", "metric", "statistic", "maxMs", "ratchet"], prefix);
+  for (const field of ["scenario", "metric", "statistic"] as const)
+    if (!nonEmptyString(latency[field]))
+      throw new ContractError(`${prefix}.${field} must be a non-empty string`);
+  const scenario = latency.scenario as string;
+  if (!controlled.some((value) => value.id === scenario))
+    throw new ContractError(
+      `${prefix}.scenario ${scenario} must name a contract scenario that declares controlled.history`,
+    );
+  if (typeof latency.maxMs !== "number" || !Number.isFinite(latency.maxMs) || latency.maxMs <= 0)
+    throw new ContractError(`${prefix}.maxMs must be a finite number greater than 0`);
+  if (latency.ratchet !== undefined && !latencyRatchets.some((value) => value === latency.ratchet))
+    throw new ContractError(`${prefix}.ratchet must be one of ${latencyRatchets.join(", ")}`);
+  return {
+    scenario,
+    metric: latency.metric as string,
+    statistic: latency.statistic as string,
+    maxMs: latency.maxMs,
+    ratchet: latency.ratchet === "blocking" ? "blocking" : "informational",
+  };
+}
+
+function parseOperation(
+  raw: unknown,
+  prefix: string,
+  controlled: ControlledHistory[],
+): WorkOperation {
   const operation = record(raw);
   if (!operation) throw new ContractError(`${prefix} must be an object`);
   only(
     operation,
-    ["id", "description", "publicContract", "dimensions", "scalePoints", "metrics"],
+    ["id", "description", "publicContract", "dimensions", "scalePoints", "metrics", "latency"],
     prefix,
   );
   if (!nonEmptyString(operation.id) || !kebab.test(operation.id))
@@ -261,9 +313,18 @@ function parseOperation(raw: unknown, prefix: string): WorkOperation {
   const keys = scalePoints.map((point) => scaleKey(point, dimensions));
   if (new Set(keys).size !== keys.length)
     throw new ContractError(`${prefix}.scalePoints contains a duplicate scale point`);
-  if (!Array.isArray(operation.metrics) || operation.metrics.length === 0)
-    throw new ContractError(`${prefix}.metrics must be a non-empty array`);
-  const metrics = operation.metrics.map((entry: unknown, index) =>
+  const latency =
+    operation.latency === undefined
+      ? null
+      : parseLatency(operation.latency, `${prefix}.latency`, controlled);
+  // A latency-only operation may omit work metrics; declared metrics are still non-empty.
+  let rawMetrics: unknown[] = [];
+  if (operation.metrics !== undefined || latency === null) {
+    if (!Array.isArray(operation.metrics) || operation.metrics.length === 0)
+      throw new ContractError(`${prefix}.metrics must be a non-empty array`);
+    rawMetrics = operation.metrics;
+  }
+  const metrics = rawMetrics.map((entry: unknown, index) =>
     parseMetric(entry, `${prefix}.metrics[${index}]`, dimensions),
   );
   if (new Set(metrics.map((metric) => metric.name)).size !== metrics.length)
@@ -289,6 +350,7 @@ function parseOperation(raw: unknown, prefix: string): WorkOperation {
     dimensions,
     scalePoints,
     metrics,
+    latency,
   };
 }
 
@@ -307,7 +369,7 @@ export function parsePerformanceContract(value: unknown): PerformanceContract {
   if (contract.schemaVersion === 2 && contract.operations !== undefined) {
     if (!Array.isArray(contract.operations)) throw new ContractError("operations must be an array");
     operations = contract.operations.map((entry: unknown, index) =>
-      parseOperation(entry, `operations[${index}]`),
+      parseOperation(entry, `operations[${index}]`, controlled),
     );
     if (new Set(operations.map((operation) => operation.id)).size !== operations.length)
       throw new ContractError("operations ids must be unique");

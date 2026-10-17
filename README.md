@@ -56,6 +56,7 @@ coding-tooling performance size [--root <path>] [--baseline <path>] [--json]
 coding-tooling performance applicability [--root <path>] [--json]
 coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
 coding-tooling performance bindings [--root <path>] [--json]
+coding-tooling performance acceptance [--root <path>] [--evidence <path>] [--score <path>] [--json]
 ```
 
 `--report` keeps the requested file as the latest result and retains immutable

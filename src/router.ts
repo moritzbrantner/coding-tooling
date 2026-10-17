@@ -17,6 +17,7 @@ import {
   fleetPerformanceApplicability,
 } from "./performance-applicability.ts";
 import { nextSliceCommand } from "./next-slice.ts";
+import { performanceAcceptance } from "./performance-acceptance.ts";
 import { performanceHistory } from "./performance-history.ts";
 import { pullRequestIntegrationReceipt } from "./pr-integration-receipt.ts";
 import {
@@ -72,6 +73,7 @@ function usage(): number {
   coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
   coding-tooling performance bindings [--root <path>] [--json]
   coding-tooling performance history [--root <path>] [--json]
+  coding-tooling performance acceptance [--root <path>] [--evidence <path>] [--score <path>] [--json]
   coding-tooling fleet performance [--root <path>] [--json]
   coding-tooling fleet contracts [--root <path>] [--execute] [--json]
   coding-tooling fleet source-deps reconcile [--apply] [--root <path>] [--json]`);
@@ -219,6 +221,19 @@ export function routerMain(argv = process.argv.slice(2)): number {
   if (argv[0] === "performance" && argv[1] === "history") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
     return print(performanceHistory(root), compact);
+  }
+  if (argv[0] === "performance" && argv[1] === "acceptance") {
+    if (!validFlags(argv, 2, new Set(["--root", "--evidence", "--score"]), new Set(), true))
+      return usage();
+    const evidence = option(argv, "evidence");
+    const score = option(argv, "score");
+    return print(
+      performanceAcceptance(root, {
+        ...(evidence === undefined ? {} : { evidence: resolve(evidence) }),
+        ...(score === undefined ? {} : { score: resolve(score) }),
+      }),
+      compact,
+    );
   }
   if (argv[0] === "performance" && argv[1] === "applicability") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();

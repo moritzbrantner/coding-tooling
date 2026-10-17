@@ -46,8 +46,10 @@ export type PerformanceHistoryData = {
   limitations: string[];
 };
 
-type Entry = Record<string, unknown>;
-type Document = { ref: string; entries: Entry[] } | { ref?: string; reason: string };
+export type HistoryEntry = Record<string, unknown>;
+export type HistoryDocument =
+  | { ref: string; entries: HistoryEntry[] }
+  | { ref?: string; reason: string };
 
 function git(root: string, args: string[]) {
   return spawnSync("git", ["--no-replace-objects", "-C", root, ...args], {
@@ -57,7 +59,7 @@ function git(root: string, args: string[]) {
 }
 
 /** Read a history document from git objects only: origin's branch first, then the local branch. */
-function readDocument(root: string, branch: string, path: string): Document {
+export function readHistoryDocument(root: string, branch: string, path: string): HistoryDocument {
   const refs = [`refs/remotes/origin/${branch}`, `refs/heads/${branch}`];
   const ref = refs.find(
     (candidate) =>
@@ -90,7 +92,7 @@ function readDocument(root: string, branch: string, path: string): Document {
   return {
     ref,
     entries: value.entries.filter(
-      (entry): entry is Entry =>
+      (entry): entry is HistoryEntry =>
         typeof entry === "object" && entry !== null && !Array.isArray(entry),
     ),
   };
@@ -99,13 +101,13 @@ function readDocument(root: string, branch: string, path: string): Document {
 const text = (value: unknown) => (typeof value === "string" ? value : null);
 const number = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : null;
-const time = (entry: Entry) => {
+const time = (entry: HistoryEntry) => {
   const parsed = Date.parse(String(entry.timestamp));
   return Number.isNaN(parsed) ? Number.NEGATIVE_INFINITY : parsed;
 };
 
 /** Classify an entry only by its own `status`; runtime-profiler score already decided comparability. */
-function latestOf(entry: Entry): HistoryLatest {
+function latestOf(entry: HistoryEntry): HistoryLatest {
   const comparable = entry.status === "scored";
   return {
     commit: text(entry.commit),
@@ -119,7 +121,27 @@ function latestOf(entry: Entry): HistoryLatest {
   };
 }
 
-function scenarioHistory(declared: ControlledHistory, document: Document): HistoryScenario {
+/**
+ * Entries that belong to the declared scenario filter. `scenario_id: null` is what runtime-profiler
+ * records when scoring was unavailable, so such an entry belongs to every filter on this history
+ * and a failed run still surfaces as the newest entry.
+ */
+export function matchingEntries(
+  declared: ControlledHistory,
+  entries: HistoryEntry[],
+): HistoryEntry[] {
+  return entries.filter(
+    (entry) => entry.scenario_id === declared.scenario || entry.scenario_id === null,
+  );
+}
+
+/** Newest by timestamp; on a tie the later-appended entry wins. */
+export function newestEntry(entries: HistoryEntry[]): HistoryEntry | undefined {
+  if (entries.length === 0) return undefined;
+  return entries.reduce((best, entry) => (time(entry) >= time(best) ? entry : best));
+}
+
+function scenarioHistory(declared: ControlledHistory, document: HistoryDocument): HistoryScenario {
   const base = {
     id: declared.id,
     branch: declared.branch,
@@ -129,11 +151,7 @@ function scenarioHistory(declared: ControlledHistory, document: Document): Histo
   };
   if ("reason" in document)
     return { ...base, status: "unavailable", reason: document.reason, entries: 0 };
-  // `scenario_id: null` is what runtime-profiler records when scoring was unavailable, so such an
-  // entry belongs to every filter on this history and a failed run still surfaces as incomparable.
-  const matching = document.entries.filter(
-    (entry) => entry.scenario_id === declared.scenario || entry.scenario_id === null,
-  );
+  const matching = matchingEntries(declared, document.entries);
   if (matching.length === 0)
     return {
       ...base,
@@ -141,8 +159,7 @@ function scenarioHistory(declared: ControlledHistory, document: Document): Histo
       reason: `no history entry has scenario_id ${declared.scenario}`,
       entries: 0,
     };
-  // Newest by timestamp; on a tie the later-appended entry wins.
-  const newest = matching.reduce((best, entry) => (time(entry) >= time(best) ? entry : best));
+  const newest = newestEntry(matching)!;
   return { ...base, status: "available", entries: matching.length, latest: latestOf(newest) };
 }
 
@@ -198,12 +215,12 @@ export function performanceHistory(root: string): ResultEnvelope<PerformanceHist
     return result("failed");
   }
 
-  const documents = new Map<string, Document>();
+  const documents = new Map<string, HistoryDocument>();
   for (const declared of controlled) {
     const key = JSON.stringify([declared.branch, declared.path]);
     let document = documents.get(key);
     if (!document) {
-      document = readDocument(resolvedRoot, declared.branch, declared.path);
+      document = readHistoryDocument(resolvedRoot, declared.branch, declared.path);
       documents.set(key, document);
     }
     const scenario = scenarioHistory(declared, document);
