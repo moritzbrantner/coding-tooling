@@ -25,6 +25,7 @@ import {
 import { repositoryRoot } from "./shared.ts";
 import { sizeEvidence } from "./size-evidence.ts";
 import { workComplexityEvidence } from "./work-complexity.ts";
+import { workContractBindings } from "./work-contract-bindings.ts";
 import { sourceDependencies } from "./source-deps.ts";
 import { verifySourceDependencyGraph } from "./source-graph.ts";
 
@@ -68,6 +69,7 @@ function usage(): number {
   coding-tooling performance size [--root <path>] [--baseline <path>] [--report <path>] [--json]
   coding-tooling performance applicability [--root <path>] [--json]
   coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
+  coding-tooling performance bindings [--root <path>] [--json]
   coding-tooling fleet performance [--root <path>] [--json]
   coding-tooling fleet contracts [--root <path>] [--execute] [--json]
   coding-tooling fleet source-deps reconcile [--apply] [--root <path>] [--json]`);
@@ -100,7 +102,10 @@ function validFlags(
 
 export function routerMain(argv = process.argv.slice(2)): number {
   const compact = argv.includes("--json");
-  const root = resolve(option(argv, "root") ?? repositoryRoot());
+  const root = resolve(
+    option(argv, "root") ??
+      (argv[0] === "performance" && argv[1] === "bindings" ? process.cwd() : repositoryRoot()),
+  );
 
   if (argv[0] === "decision-atlas") return decisionAtlasCommand(argv.slice(1));
   if (argv[0] === "daq") return daqCommand(argv.slice(1));
@@ -204,6 +209,10 @@ export function routerMain(argv = process.argv.slice(2)): number {
       workComplexityEvidence(root, evidence === undefined ? {} : { evidence: resolve(evidence) }),
       compact,
     );
+  }
+  if (argv[0] === "performance" && argv[1] === "bindings") {
+    if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
+    return print(workContractBindings(root), compact);
   }
   if (argv[0] === "performance" && argv[1] === "applicability") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
