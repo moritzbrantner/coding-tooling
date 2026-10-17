@@ -35,3 +35,5 @@ These replace any contrary text above. Owner: _"I don't want a workflow to spend
 - **Per repository first:** the runner and controlled policy are declared in the repository's own configuration; no fleet-wide profile until it has proven itself in one repository.
 - **Policy location:** an optional `controlled` block in `.performance/contract.json`; contract schema v2 unchanged.
 - **Scope:** ship it active — comparison via `runtime-profiler score`, orphan-branch history and a workflow enabled on one pilot repository (runtime-profiler's `example-command` scenario unless something simpler exists). No inactive template.
+
+Implemented as the optional `controlled.history` contract block and `coding-tooling performance history`; see [controlled performance history](../performance-history.md).

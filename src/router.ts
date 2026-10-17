@@ -17,6 +17,7 @@ import {
   fleetPerformanceApplicability,
 } from "./performance-applicability.ts";
 import { nextSliceCommand } from "./next-slice.ts";
+import { performanceHistory } from "./performance-history.ts";
 import { pullRequestIntegrationReceipt } from "./pr-integration-receipt.ts";
 import {
   fleetRepositoryContracts,
@@ -70,6 +71,7 @@ function usage(): number {
   coding-tooling performance applicability [--root <path>] [--json]
   coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
   coding-tooling performance bindings [--root <path>] [--json]
+  coding-tooling performance history [--root <path>] [--json]
   coding-tooling fleet performance [--root <path>] [--json]
   coding-tooling fleet contracts [--root <path>] [--execute] [--json]
   coding-tooling fleet source-deps reconcile [--apply] [--root <path>] [--json]`);
@@ -213,6 +215,10 @@ export function routerMain(argv = process.argv.slice(2)): number {
   if (argv[0] === "performance" && argv[1] === "bindings") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
     return print(workContractBindings(root), compact);
+  }
+  if (argv[0] === "performance" && argv[1] === "history") {
+    if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
+    return print(performanceHistory(root), compact);
   }
   if (argv[0] === "performance" && argv[1] === "applicability") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
