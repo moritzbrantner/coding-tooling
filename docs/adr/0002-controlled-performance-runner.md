@@ -1,0 +1,21 @@
+# Controlled performance measurements on a dedicated runner
+
+Status: **owner-approved 2026-10-15 (choice B)**; infrastructure, security authorization and measured acceptance **pending**. Implementation: [#158](https://github.com/moritzbrantner/coding-tooling/issues/158). Consumer latency/deadline contracts: [#302](https://github.com/moritzbrantner/coding-tooling/issues/302).
+
+## Decision
+
+Use an **owner-provisioned, fixed/dedicated self-hosted benchmark runner** as the source of **comparable wall-clock performance history**. This is preferred over a CodSpeed service/account/token integration for the initial controlled-history rollout. The ordinary GitHub-hosted/shared runners are still permitted for correctness and advisory timing, **not** authoritative historical regression or latency-budget verdicts.
+
+This choice selects the evidence _source_, not a runner that already exists. No specific processor, operating system, physical/virtual setup, capacity, repository access or trigger policy is approved by this choice. The owner must provision the controlled host and approve its security/trust boundary before the implementation relies on it.
+
+## Boundaries and acceptance
+
+- The repository under test owns representative operations, fixtures, input/revision identities, timing ceilings and sample policy. **Runtime Profiler** (or the existing repository-declared native collector) owns measurement capture. Coding Tooling owns discovery, invocation, identity checks, comparability and explicit result classification. Do not create another profiler or profiler-side scheduler.
+- Record the actual CPU/machine class, OS/kernel, toolchain/runtime, workload/fixture revisions, process isolation/load, timing mode, cold/warm conditions, repetition/sample count, collector version and environment/config fingerprints with each result. Compare history **only when the required identity and environmental equivalence are established**. A hash of declarations alone is not evidence that machines or measurements are equivalent.
+- Missing runner, unavailable capability, changing hardware/OS/workload, noisy/insufficient samples or unverified collector yields **unavailable/incomparable**, never a passing time budget. Preserve unchanged deterministic work-complexity checks and ordinary smoke benchmarks; existing noisy shared-runner time deltas remain informational.
+- **Security gate before connecting a public repository to any self-hosted runner:** define and approve trusted execution triggers and repository/workflow access, explicitly exclude untrusted pull-request/fork code, run jobs in isolated disposable environments with minimal permissions, do not expose secrets or internal systems, and establish runner update, logging, cleanup and compromise-recovery procedures. A dedicated hardware host **must not** become a general-purpose public-PR runner. GitHub's [secure-use guidance](https://docs.github.com/en/actions/reference/security/secure-use) warns against self-hosted runners for public repositories; its [runner documentation](https://docs.github.com/en/actions/reference/runners/self-hosted-runners) recommends ephemeral job runners. Owner authorization of this trust model and actual isolation remains pending.
+- Deliver a single real repository-owned benchmark on the approved controlled runner, plus the same workload under an intentionally noncomparable environment to prove the comparison refuses it. Capture exact commands, artifacts, provenance, history and failure/unavailable handling before claiming controlled-history availability. Do not impose historical ratchets as extra unconditional PR gates; explicit operation latency contracts under #302 may block only with valid, controlled evidence.
+
+## Consequences
+
+This avoids a required external benchmarking account/secret but adds owner-owned hardware, setup, security and maintenance obligations. The runner decision **unblocks planning** of #158's comparison contract; it does **not** unblock strict wall-clock pass claims or authorize provisioning/security assumptions. Until real, approved controlled hardware is operational, leave that evidence unavailable and continue work on independent deterministic checks.
