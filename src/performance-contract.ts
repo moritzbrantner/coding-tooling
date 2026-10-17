@@ -3,7 +3,8 @@
  *
  * schemaVersion 1 declares benchmark scenarios. schemaVersion 2 is schemaVersion 1 plus optional
  * operation-level work contracts (`operations`). A v1 contract is read as a v2 contract without
- * operations; it must not carry `operations`, so a v2 field cannot be silently ignored.
+ * operations; it must not carry `operations`, so a v2 field cannot be silently ignored. Either
+ * version may give a scenario an optional `controlled.history` block (docs/performance-history.md).
  */
 
 export const performanceContractPath = ".performance/contract.json";
@@ -49,10 +50,25 @@ export type WorkOperation = {
   scalePoints: Record<string, number>[];
   metrics: WorkMetric[];
 };
+/**
+ * Optional per-scenario pointer to controlled performance history: a runtime-profiler
+ * score-history document stored on a data-only branch of the same repository.
+ */
+export type ControlledHistory = {
+  /** Contract scenario id that declares the block. */
+  id: string;
+  branch: string;
+  /** Repository-relative POSIX path of the history document on `branch`. */
+  path: string;
+  /** runtime-profiler `scenario_id` filter; defaults to the contract scenario id. */
+  scenario: string;
+};
 export type PerformanceContract = {
   schemaVersion: 1 | 2;
   suite: string;
   operations: WorkOperation[];
+  /** Scenarios that declare `controlled.history`, in contract order. */
+  controlled: ControlledHistory[];
 };
 
 class ContractError extends Error {}
@@ -82,7 +98,34 @@ export function scaleKey(point: Record<string, number>, dimensions: readonly str
   return JSON.stringify(dimensions.map((dimension) => point[dimension]));
 }
 
-function validateScenarios(contract: Record<string, unknown>): void {
+function parseControlled(raw: unknown, id: string, prefix: string): ControlledHistory {
+  const controlled = record(raw);
+  if (!controlled) throw new ContractError(`${prefix} must be an object`);
+  only(controlled, ["history"], prefix);
+  const history = record(controlled.history);
+  if (!history) throw new ContractError(`${prefix}.history must be an object`);
+  only(history, ["branch", "path", "scenario"], `${prefix}.history`);
+  if (!nonEmptyString(history.branch))
+    throw new ContractError(`${prefix}.history.branch must be a non-empty string`);
+  if (!nonEmptyString(history.path))
+    throw new ContractError(`${prefix}.history.path must be a non-empty string`);
+  const segments = history.path.split(/[\\/]/);
+  if (/^([\\/]|[A-Za-z]:)/.test(history.path) || segments.includes(".."))
+    throw new ContractError(
+      `${prefix}.history.path must be a repository-relative path without .. segments`,
+    );
+  if (history.scenario !== undefined && !nonEmptyString(history.scenario))
+    throw new ContractError(`${prefix}.history.scenario must be a non-empty string`);
+  return {
+    id,
+    branch: history.branch,
+    path: history.path,
+    scenario: nonEmptyString(history.scenario) ? history.scenario : id,
+  };
+}
+
+function validateScenarios(contract: Record<string, unknown>): ControlledHistory[] {
+  const controlled: ControlledHistory[] = [];
   if (!Array.isArray(contract.scenarios) || contract.scenarios.length === 0)
     throw new ContractError("scenarios must be a non-empty array");
   for (const [scenarioIndex, rawScenario] of contract.scenarios.entries()) {
@@ -122,7 +165,10 @@ function validateScenarios(contract: Record<string, unknown>): void {
           `${metricPrefix} uses blocking wall-clock evidence without documenting the controlled execution boundary`,
         );
     }
+    if (scenario.controlled !== undefined)
+      controlled.push(parseControlled(scenario.controlled, scenario.id, `${prefix}.controlled`));
   }
+  return controlled;
 }
 
 function parseMetric(raw: unknown, prefix: string, dimensions: string[]): WorkMetric {
@@ -256,7 +302,7 @@ export function parsePerformanceContract(value: unknown): PerformanceContract {
   if (contract.schemaVersion === 1 && contract.operations !== undefined)
     throw new ContractError("operations requires schemaVersion 2");
   if (!nonEmptyString(contract.suite)) throw new ContractError("suite must be a non-empty string");
-  validateScenarios(contract);
+  const controlled = validateScenarios(contract);
   let operations: WorkOperation[] = [];
   if (contract.schemaVersion === 2 && contract.operations !== undefined) {
     if (!Array.isArray(contract.operations)) throw new ContractError("operations must be an array");
@@ -266,7 +312,7 @@ export function parsePerformanceContract(value: unknown): PerformanceContract {
     if (new Set(operations.map((operation) => operation.id)).size !== operations.length)
       throw new ContractError("operations ids must be unique");
   }
-  return { schemaVersion: contract.schemaVersion, suite: contract.suite, operations };
+  return { schemaVersion: contract.schemaVersion, suite: contract.suite, operations, controlled };
 }
 
 export function performanceContractValidationError(value: unknown): string | undefined {
