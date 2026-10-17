@@ -37,3 +37,11 @@ These replace any contrary text above. Owner: _"I don't want a workflow to spend
 - **Scope:** ship it active — comparison via `runtime-profiler score`, orphan-branch history and a workflow enabled on one pilot repository (runtime-profiler's `example-command` scenario unless something simpler exists). No inactive template.
 
 Implemented as the optional `controlled.history` contract block and `coding-tooling performance history`; see [controlled performance history](../performance-history.md).
+
+## Owner decisions — latency/deadline acceptance (#302, 2026-10-17)
+
+- Declare an optional `latency` block on an existing v2 `operation` in `.performance/contract.json`; schema version unchanged.
+- Timing comes from the latest runtime-profiler bundle/score for the bound scenario; coding-tooling reads the recorded statistic and does not judge the environment.
+- A declared `maxMs` miss fails `latency_deadline` everywhere, including GitHub-hosted runs. Historical ratchets stay informational unless a repository opts in.
+- First slice: the `latency_deadline` verdict plus the combined five-verdict report (`functional`, `work_growth`, `absolute_work`, `latency_deadline`, `historical_ratchet`); frame pacing waits for a real fixture.
+- Pilot: runtime-profiler `runtime-profiler-history-self-score-v1`, with `maxMs` derived from current history (e.g. current p95 × 1.5, rounded) and stated on #302.
