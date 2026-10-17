@@ -45,3 +45,5 @@ Implemented as the optional `controlled.history` contract block and `coding-tool
 - A declared `maxMs` miss fails `latency_deadline` everywhere, including GitHub-hosted runs. Historical ratchets stay informational unless a repository opts in.
 - First slice: the `latency_deadline` verdict plus the combined five-verdict report (`functional`, `work_growth`, `absolute_work`, `latency_deadline`, `historical_ratchet`); frame pacing waits for a real fixture.
 - Pilot: runtime-profiler `runtime-profiler-history-self-score-v1`, with `maxMs` derived from current history (e.g. current p95 × 1.5, rounded) and stated on #302.
+
+Implemented as the optional `operations[].latency` contract block and `coding-tooling performance acceptance`; see [performance acceptance](../performance-acceptance.md). The pilot ceiling is `statistic: p95`, `maxMs: 8` (score-history entry `e7829dd`, candidate p95 5.200 ms × 1.5 = 7.80 ms, rounded).

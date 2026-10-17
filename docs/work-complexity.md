@@ -122,4 +122,4 @@ The result is `unavailable`, with diagnostics, when any of these holds:
 
 ## Ownership
 
-coding-tooling owns the schemas, discovery, invocation and mechanical validation. The repository owns operation semantics, fixtures, counters and budgets. runtime-profiler owns runtime capture, and evaluators own cross-candidate comparison. User-facing latency and frame-deadline acceptance is separate (issue #302). Controlled wall-clock history is read by `performance history`; see [controlled performance history](./performance-history.md).
+coding-tooling owns the schemas, discovery, invocation and mechanical validation. The repository owns operation semantics, fixtures, counters and budgets. runtime-profiler owns runtime capture, and evaluators own cross-candidate comparison. User-facing latency deadlines are declared as an optional `latency` block on an operation and verified with the work checks by `performance acceptance`; see [performance acceptance](./performance-acceptance.md) (issue #302). Frame pacing is not covered yet. Controlled wall-clock history is read by `performance history`; see [controlled performance history](./performance-history.md).

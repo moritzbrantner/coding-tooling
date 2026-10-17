@@ -184,7 +184,15 @@
       "minItems": 0,
       "items": {
         "type": "object",
-        "required": ["id", "description", "dimensions", "scalePoints", "metrics"],
+        "required": ["id", "description", "dimensions", "scalePoints"],
+        "anyOf": [
+          {
+            "required": ["metrics"]
+          },
+          {
+            "required": ["latency"]
+          }
+        ],
         "properties": {
           "id": {
             "type": "string",
@@ -313,6 +321,36 @@
               ],
               "additionalProperties": false
             }
+          },
+          "latency": {
+            "description": "Optional wall-clock deadline verified by `coding-tooling performance acceptance`: the newest recorded runtime-profiler statistic of the bound scenario must be at most maxMs. `scenario` must name a contract scenario that declares controlled.history. An operation with latency may omit metrics.",
+            "type": "object",
+            "required": ["scenario", "metric", "statistic", "maxMs"],
+            "properties": {
+              "scenario": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "metric": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "statistic": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "maxMs": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "ratchet": {
+                "enum": ["informational", "blocking"]
+              }
+            },
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -337,5 +375,5 @@
       }
     }
   ],
-  "$comment": "schemaVersion 1 contracts that the parser accepts remain valid unchanged. schemaVersion 2 adds optional operations. Cross-field rules (growth dimensions are declared, scale points name exactly the declared dimensions and vary each bounded dimension) are enforced by src/performance-contract.ts. Every string the parser checks as non-empty (suite, scenario and operation descriptions, metric names and units, notes, publicContract, dimension descriptions) must contain a non-space character (pattern \\S), matching the parser's trim-based check; whitespace-only values were never accepted by the parser."
+  "$comment": "schemaVersion 1 contracts that the parser accepts remain valid unchanged. schemaVersion 2 adds optional operations. Cross-field rules (growth dimensions are declared, a latency scenario declares controlled.history, scale points name exactly the declared dimensions and vary each bounded dimension) are enforced by src/performance-contract.ts. Every string the parser checks as non-empty (suite, scenario and operation descriptions, metric names and units, notes, publicContract, dimension descriptions) must contain a non-space character (pattern \\S), matching the parser's trim-based check; whitespace-only values were never accepted by the parser."
 }

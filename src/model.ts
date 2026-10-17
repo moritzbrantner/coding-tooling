@@ -48,6 +48,7 @@ export type ResultOperation =
   | "work-complexity"
   | "work-contract-bindings"
   | "performance-history"
+  | "performance-acceptance"
   | "performance-applicability"
   | "fleet-performance-applicability"
   | "fleet-authority-graph"

@@ -251,7 +251,9 @@ function declaresWorkOperations(root: string, diagnostics: Diagnostic[]): boolea
   if (!existsSync(file)) return false;
   try {
     // Validate every existing contract (any version) before reading its operations.
-    return parsePerformanceContract(JSON.parse(readFileSync(file, "utf8"))).operations.length > 0;
+    return parsePerformanceContract(JSON.parse(readFileSync(file, "utf8"))).operations.some(
+      (operation) => operation.metrics.length > 0,
+    );
   } catch (error: unknown) {
     diagnostics.push({
       code: "performance-contract-invalid",
