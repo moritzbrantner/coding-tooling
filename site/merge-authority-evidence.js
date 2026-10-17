@@ -68,18 +68,21 @@ export function mergeAuthorityConsistency(declaration, defaultBranchProtection) 
       enforcedRequiredChecks: observedCheckNames(defaultBranchProtection),
       missingDeclaredChecks: declaration.requiredChecks,
     });
-  if (defaultBranchProtection.requiredStatusChecks?.status !== "observed")
-    return consistency("unavailable", declaration, defaultBranchProtection, {
-      reason:
-        defaultBranchProtection.requiredStatusChecks?.reason ??
-        "required-status-checks-unavailable",
-    });
+  const requiredStatus = defaultBranchProtection.requiredStatusChecks?.status;
+  const unavailable = consistency("unavailable", declaration, defaultBranchProtection, {
+    reason:
+      defaultBranchProtection.requiredStatusChecks?.reason ?? "required-status-checks-unavailable",
+  });
+  if (requiredStatus !== "observed" && requiredStatus !== "partial") return unavailable;
 
   const declared = declaration.requiredChecks;
   const enforced = observedCheckNames(defaultBranchProtection);
   const enforcedSet = new Set(enforced);
   const declaredSet = new Set(declared);
   const missingDeclaredChecks = declared.filter((check) => !enforcedSet.has(check));
+  // Partial evidence (an unreadable source such as branch rulesets) can still prove
+  // alignment, but a missing check might be enforced by the unreadable source.
+  if (requiredStatus === "partial" && missingDeclaredChecks.length) return unavailable;
   const additionalEnforcedChecks = enforced.filter((check) => !declaredSet.has(check));
   return consistency(
     missingDeclaredChecks.length ? "mismatch" : "aligned",
@@ -123,7 +126,8 @@ function invalidDeclaration(reason) {
 }
 
 function observedCheckNames(defaultBranchProtection) {
-  return defaultBranchProtection.requiredStatusChecks?.status === "observed"
+  const status = defaultBranchProtection.requiredStatusChecks?.status;
+  return status === "observed" || status === "partial"
     ? [...new Set(defaultBranchProtection.requiredStatusChecks.names ?? [])].toSorted()
     : [];
 }

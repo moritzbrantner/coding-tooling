@@ -70,6 +70,14 @@ export async function loadSnapshot(reference, options = {}) {
         status: "unavailable",
         reason: "repository-governance-metadata-unavailable",
       };
+  const defaultBranchRules =
+    defaultBranch.status === "observed"
+      ? await githubOptionalJson(
+          `/repos/${reference.owner}/${reference.name}/rules/branches/${encodeURIComponent(repository.default_branch)}`,
+          fetchImpl,
+          signal,
+        )
+      : undefined;
   const requestedRef = normalizeRequestedRef(options.ref);
   const defaultRevision = defaultBranchRevision(defaultBranch);
   const resolvedRevision = requestedRef
@@ -170,7 +178,7 @@ export async function loadSnapshot(reference, options = {}) {
       fork: repository.fork,
       stars: repository.stargazers_count,
       openIssues: repository.open_issues_count,
-      governance: repositoryGovernanceEvidence(repository, defaultBranch),
+      governance: repositoryGovernanceEvidence(repository, defaultBranch, defaultBranchRules),
     },
     tree: entries,
     files,
@@ -343,7 +351,7 @@ function deduplicateEntries(entries) {
   return [...new Map(entries.map((entry) => [entry.path, entry])).values()];
 }
 
-export function repositoryGovernanceEvidence(repository, defaultBranch = {}) {
+export function repositoryGovernanceEvidence(repository, defaultBranch = {}, defaultBranchRules) {
   return {
     schemaVersion: 1,
     provenance: {
@@ -359,7 +367,7 @@ export function repositoryGovernanceEvidence(repository, defaultBranch = {}) {
       autoMerge: booleanMetadataEvidence(repository, "allow_auto_merge"),
     },
     pages: booleanMetadataEvidence(repository, "has_pages"),
-    defaultBranchProtection: defaultBranchProtectionEvidence(defaultBranch),
+    defaultBranchProtection: defaultBranchProtectionEvidence(defaultBranch, defaultBranchRules),
   };
 }
 
@@ -428,7 +436,7 @@ function defaultBranchRevision(observation) {
   return /^[0-9a-f]{40}$/i.test(revision ?? "") ? revision : null;
 }
 
-function defaultBranchProtectionEvidence(observation) {
+function defaultBranchProtectionEvidence(observation, rulesObservation) {
   if (observation?.status !== "observed")
     return unavailableBranchProtectionEvidence(
       observation?.reason ?? "branch-metadata-not-inspected",
@@ -442,15 +450,35 @@ function defaultBranchProtectionEvidence(observation) {
     status: "observed",
     protected: branch.protected,
     provenance: { source: "default-branch-metadata" },
-    requiredStatusChecks: requiredStatusChecksEvidence(branch),
+    requiredStatusChecks: requiredStatusChecksEvidence(branch, rulesObservation),
   };
 }
 
-function requiredStatusChecksEvidence(branch) {
+// Observed required checks are the union of two independent sources: legacy branch
+// protection (`branches/{branch}`) and active branch rulesets (`rules/branches/{branch}`).
+// Each source keeps its own provenance entry. The union is `observed` only when every
+// source was readable; otherwise it is `partial` (some names observed) or `unavailable`.
+function requiredStatusChecksEvidence(branch, rulesObservation) {
+  const sources = [
+    legacyRequiredStatusChecksSource(branch),
+    ...rulesetRequiredStatusChecksSources(rulesObservation),
+  ];
+  const observed = sources.filter((source) => source.status === "observed");
+  const unavailable = sources.find((source) => source.status !== "observed");
+  const names = [...new Set(observed.flatMap((source) => source.names))].toSorted();
+  if (!unavailable) return { status: "observed", names, sources };
+  if (!observed.length)
+    return { status: "unavailable", names: null, reason: unavailable.reason, sources };
+  return { status: "partial", names, reason: unavailable.reason, sources };
+}
+
+function legacyRequiredStatusChecksSource(branch) {
+  const source = "branch-protection";
   const required = branch.protection?.required_status_checks;
   if (!required) {
-    if (!branch.protected) return { status: "observed", names: [] };
+    if (!branch.protected) return { source, status: "observed", names: [] };
     return {
+      source,
       status: "unavailable",
       names: null,
       reason: "required-status-checks-not-exposed",
@@ -465,7 +493,54 @@ function requiredStatusChecksEvidence(branch) {
         .map((check) => check?.context)
         .filter((context) => typeof context === "string")
     : [];
-  return { status: "observed", names: [...new Set([...contexts, ...checks])].toSorted() };
+  return { source, status: "observed", names: [...new Set([...contexts, ...checks])].toSorted() };
+}
+
+function rulesetRequiredStatusChecksSources(observation) {
+  if (observation?.status !== "observed")
+    return [
+      {
+        source: "ruleset",
+        status: "unavailable",
+        rulesetId: null,
+        names: null,
+        reason: `branch-rules-${observation?.reason ?? "not-inspected"}`,
+      },
+    ];
+  if (!Array.isArray(observation.value))
+    return [
+      {
+        source: "ruleset",
+        status: "unavailable",
+        rulesetId: null,
+        names: null,
+        reason: "branch-rules-invalid-shape",
+      },
+    ];
+
+  const byRuleset = new Map();
+  for (const rule of observation.value) {
+    if (rule?.type !== "required_status_checks") continue;
+    const rulesetId = Number.isSafeInteger(rule.ruleset_id) ? rule.ruleset_id : null;
+    const entry = byRuleset.get(rulesetId) ?? {
+      source: "ruleset",
+      status: "observed",
+      rulesetId,
+      rulesetSourceType:
+        typeof rule.ruleset_source_type === "string" ? rule.ruleset_source_type : null,
+      rulesetSource: typeof rule.ruleset_source === "string" ? rule.ruleset_source : null,
+      names: [],
+    };
+    const checks = rule.parameters?.required_status_checks;
+    if (Array.isArray(checks))
+      for (const check of checks)
+        if (typeof check?.context === "string") entry.names.push(check.context);
+    byRuleset.set(rulesetId, entry);
+  }
+  return [...byRuleset.values()].map((entry) => ({
+    ...entry,
+    names: [...new Set(entry.names)].toSorted(),
+  }));
 }
 
 function unavailableBranchProtectionEvidence(reason) {

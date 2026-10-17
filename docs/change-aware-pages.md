@@ -81,7 +81,7 @@ For every affected component the result includes:
 
 ## Declared merge authority
 
-When `.coding-tooling.json` declares `merge.authority`, the change-aware result includes `declaredMergeAuthority`. Hosted authority exposes the sorted declared `requiredChecks`; local authority exposes its reason. `observedEnforcement` is always `not-evaluated` on this Pages surface: the declaration is agent guidance, not proof of branch protection or current check conclusions. Invalid hosted/local declarations fail closed instead of being serialized as usable acceptance evidence.
+When `.coding-tooling.json` declares `merge.authority`, the change-aware result includes `declaredMergeAuthority`. Hosted authority exposes the sorted declared `requiredChecks`; local authority exposes its reason. `observedEnforcement` is always `not-evaluated` on this Pages surface: the declaration is agent guidance, not proof of branch protection or current check conclusions. Observed branch-protection and active-ruleset enforcement is reported separately (see `docs/github-pages-analysis.md`, "Hosted merge-authority evidence"). Invalid hosted/local declarations fail closed instead of being serialized as usable acceptance evidence.
 
 ## Why capability pruning stays conservative
 
