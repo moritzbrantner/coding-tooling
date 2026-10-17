@@ -12,8 +12,11 @@ import { type CommandResult, runCommand } from "./shared.ts";
 
 export const FLEET_RENOVATE_VERSION = "coding-tooling/fleet-renovate/v1" as const;
 export const CENTRAL_PRESET = "github>moritzbrantner/coding-agent-conventions";
-/** Left out of fleet enumeration by default. Another session owns the mmorpg checkout. */
-export const DEFAULT_EXCLUDED_REPOSITORIES = ["moritzbrantner/mmorpg"] as const;
+/** Inactive repositories the owner left out of fleet enumeration (#330). */
+export const DEFAULT_EXCLUDED_REPOSITORIES = [
+  "moritzbrantner/camunda-workflows",
+  "moritzbrantner/motion-map",
+] as const;
 /** Probed in Renovate's own lookup order; the first file found is the configuration. */
 export const RENOVATE_CONFIG_PATHS = [
   "renovate.json",
