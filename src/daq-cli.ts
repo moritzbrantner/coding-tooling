@@ -6,7 +6,12 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { indexRepository } from "./decision-atlas-cli.ts";
-import { validateAtlasIndex, type AtlasFormat, type AtlasIndex } from "./decision-atlas.ts";
+import {
+  supportedAtlasIndexSchemaVersions,
+  validateAtlasIndex,
+  type AtlasFormat,
+  type AtlasIndex,
+} from "./decision-atlas.ts";
 import { queryDecisionAtlas, type DaqAction, type DaqKind, type DaqResult } from "./daq.ts";
 
 const usage = [
@@ -62,7 +67,8 @@ function indexFromFile(path: string): AtlasIndex {
   if (!parsed || typeof parsed !== "object") throw new Error("daq: invalid index");
   const index = parsed as AtlasIndex;
   if (
-    index.schemaVersion !== 1 ||
+    // schemaVersion 1 (pre-evidence) indexes stay queryable and report "not-audited".
+    !supportedAtlasIndexSchemaVersions.includes(index.schemaVersion) ||
     !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(index.repository ?? "") ||
     !/^[a-f0-9]{40}$/u.test(index.sourceRevision ?? "") ||
     !Array.isArray(index.decisions) ||
@@ -94,6 +100,21 @@ function formatText(result: DaqResult): string {
         ":" +
         String(entry.source.line),
     );
+    if (entry.progress.status === "audited") {
+      lines.push(
+        "  Implementation evidence: " +
+          String(entry.progress.completed) +
+          "/" +
+          String(entry.progress.total) +
+          " child items checked (" +
+          String(entry.progress.percent) +
+          "%) · each [x] covers only its own item; parent not verified",
+      );
+      for (const item of entry.evidence)
+        lines.push("    " + (item.checked ? "[x] " : "[ ] ") + item.text);
+    } else if (entry.progress.status === "not-audited") {
+      lines.push("  Implementation evidence: not audited");
+    }
   }
   return lines.join("\n") + "\n";
 }

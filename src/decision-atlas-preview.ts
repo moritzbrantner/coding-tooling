@@ -1,4 +1,4 @@
-import type { AtlasDecision, AtlasIndex } from "./decision-atlas.ts";
+import { evidenceProgress, type AtlasDecision, type AtlasIndex } from "./decision-atlas.ts";
 
 function html(value: string): string {
   return value.replace(
@@ -43,7 +43,12 @@ function navigation(branch: Branch): string {
   const decisions = branch.decisions
     .map((decision) => {
       const label = activeLabel(decision);
-      return `<a class="node" data-search="${html([decision.kind, decision.id, ...decision.aliases, label, ...decision.tags].join(" ").toLowerCase())}" href="#${anchor(decision.id)}"><code>${html(decision.id)}</code> ${html(label)}</a>`;
+      const progress = evidenceProgress(decision);
+      const count =
+        progress.status === "audited"
+          ? ` <span class="progress" title="Checked evidence items (not verification)">${progress.completed}/${progress.total}</span>`
+          : "";
+      return `<a class="node" data-search="${html([decision.kind, decision.id, ...decision.aliases, label, ...decision.tags].join(" ").toLowerCase())}" href="#${anchor(decision.id)}"><code>${html(decision.id)}</code> ${html(label)}${count}</a>`;
     })
     .join("");
   return children + decisions;
@@ -82,12 +87,27 @@ export function renderAtlasPreview(index: AtlasIndex): string {
         decision.kind === "question"
           ? "Question: unresolved · No owner-selected choice"
           : `Decision: ${html(decision.decisionStatus ?? "")}${decision.choice === null ? "" : ` · Choice: ${html(decision.choice)}`} · Source implementation claim: ${html(decision.implementation.sourceLabel)}`;
+      const progress = evidenceProgress(decision);
+      const evidence =
+        progress.status === "audited"
+          ? `<h3>Implementation evidence: ${progress.completed}/${progress.total} checked (${progress.percent}%)</h3>
+      <p class="meta">Each checked item covers only its own stated behavior; it does not verify this Decision.</p>
+      <ul class="evidence">${(decision.evidence ?? [])
+        .map(
+          (item) =>
+            `<li><label><input type="checkbox" disabled${item.checked ? " checked" : ""}> ${html(item.text)}</label></li>`,
+        )
+        .join("")}</ul>`
+          : progress.status === "not-audited"
+            ? `<p class="meta">Implementation evidence: not audited</p>`
+            : "";
       return `<article id="${anchor(decision.id)}">
       <h2><code>${html(decision.id)}</code> · ${html(decision.kind)}</h2>
       <p class="meta">${detail} · <strong>Implementation not independently verified</strong></p>
       <p>${statementHtml(decision.statement)}</p>
       <p>${tags} ${aliases}</p>
       <p class="meta"><a href="${html(sourceUrl)}">Owning source at committed revision, line ${decision.source.line}</a></p>
+      ${evidence}
       ${edges ? `<h3>Relationships</h3><ul>${edges}</ul>` : ""}
       <h3>Declared sources (not independently verified)</h3><ul class="sources">${references}</ul>
     </article>`;
@@ -109,7 +129,8 @@ nav { padding: 1rem; border-right: 1px solid #8885; max-height: calc(100vh - 7re
 nav details { margin-left: .6rem; } nav summary { cursor: pointer; font-weight: 650; padding: .25rem; }
 .node { display: block; padding: .3rem .4rem; margin-left: .8rem; text-decoration: none; border-radius: .3rem; }
 .node:hover, .node:focus-visible { background: #8883; }
-input { width: 100%; padding: .5rem; margin: .6rem 0; font: inherit; }
+input[type="search"] { width: 100%; padding: .5rem; margin: .6rem 0; font: inherit; }
+.evidence { list-style: none; padding-left: .2rem; } .progress { font-size: .8rem; color: #777; }
 section { padding: .5rem 1.5rem; min-width: 0; }
 article { border-bottom: 1px solid #8885; padding: .8rem 0 1.2rem; scroll-margin-top: 1rem; }
 h2 { font-size: 1.1rem; overflow-wrap: anywhere; } h3 { font-size: .9rem; margin-bottom: .1rem; }

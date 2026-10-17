@@ -11,6 +11,22 @@ export interface AtlasRelation {
   target: string;
 }
 
+/**
+ * One binary implementation-evidence child authored as `- [x] text` / `- [ ] text`
+ * under a Decision. `checked` applies only to this narrowly stated child behavior;
+ * it never verifies the parent Decision.
+ */
+export interface AtlasEvidence {
+  text: string;
+  checked: boolean;
+}
+
+/** Derived, display-only progress; never stored in the index. */
+export type AtlasEvidenceProgress =
+  | { status: "audited"; completed: number; total: number; percent: number }
+  | { status: "not-audited" }
+  | { status: "not-applicable" };
+
 export interface AtlasDecision {
   kind: AtlasEntryKind;
   id: string;
@@ -25,6 +41,8 @@ export interface AtlasDecision {
   relations: AtlasRelation[];
   links: string[];
   source: { path: string; line: number };
+  /** Always present in schemaVersion 2 indexes; absent from legacy schemaVersion 1 indexes. */
+  evidence?: AtlasEvidence[];
 }
 
 export interface AtlasGroup {
@@ -33,8 +51,13 @@ export interface AtlasGroup {
   title: string;
 }
 
+/** Current emitted index schema. Version 2 adds per-entry `evidence`. */
+export const atlasIndexSchemaVersion = 2;
+/** Index schema versions accepted as inputs (`--index`, `--previous-index`). */
+export const supportedAtlasIndexSchemaVersions: readonly number[] = [1, 2];
+
 export interface AtlasIndex {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   repository: string;
   sourceRevision: string;
   sources: { path: string; format: AtlasFormat; sha256: string }[];
@@ -155,6 +178,7 @@ function fromFarm(source: AtlasSource): { groups: AtlasGroup[]; decisions: Atlas
           relations: [],
           links: markdownLinks(body),
           source: { path: source.path, line: i + 1 },
+          evidence: [],
         });
       } else {
         while (categories.length && categories[categories.length - 1]!.indent >= indent)
@@ -299,6 +323,8 @@ function fromApprovalChecklist(
         ),
       ),
       source: { path: source.path, line: sourceLine },
+      // Approval checkboxes record owner approval; this variant carries no evidence children.
+      evidence: [],
     };
     decisions.push(entry);
     approvals.set(id, checked);
@@ -320,24 +346,121 @@ function fromApprovalChecklist(
   return { groups, decisions };
 }
 
+/** A list item enclosing later lines: a numbered entry, a branch, or prose. */
+interface AtlasListOwner {
+  indent: number;
+  id: string;
+  entry: AtlasDecision | null;
+  prose?: boolean;
+}
+
+/**
+ * Records one binary evidence child under its nearest owning Decision, failing
+ * closed on anything other than exactly `[x]` or `[ ]` followed by text.
+ */
+function addEvidence(
+  source: AtlasSource,
+  line: number,
+  checkbox: { indent: number; marker: string; rest: string },
+  owners: AtlasListOwner[],
+): void {
+  const at = `${source.path}:${line}`;
+  while (owners.length && owners[owners.length - 1]!.indent >= checkbox.indent) owners.pop();
+  const owner = owners[owners.length - 1];
+  if (!owner?.entry)
+    fail(
+      `${at} evidence checkbox is not nested under a Decision` +
+        (owner
+          ? ` (${owner.id} is ${owner.prose ? "a non-entry list item" : "a navigation branch"})`
+          : ""),
+    );
+  if (owner.entry.kind === "question")
+    fail(
+      `${at} Question ${owner.id} cannot own implementation evidence checkboxes; evidence is not applicable to a question`,
+    );
+  const text = checkbox.rest.trim();
+  if (
+    (checkbox.marker !== "x" && checkbox.marker !== " ") ||
+    !/^\s+\S/u.test(checkbox.rest) ||
+    !text
+  )
+    fail(
+      `${at} malformed implementation evidence checkbox under ${owner.id}; use exactly "- [x] <text>" or "- [ ] <text>"`,
+    );
+  const evidence = owner.entry.evidence!;
+  if (evidence.some((item) => item.text === text))
+    fail(`${at} duplicate implementation evidence under ${owner.id}: ${text}`);
+  evidence.push({ text, checked: checkbox.marker === "x" });
+}
+
+/**
+ * File-level discriminator for the owner approval-checklist variant (Video-to-3D):
+ * its entries are top-level `- [x] **1.2** ...` approval items and the file has
+ * no plain numbered `- **1.2** ...` entries. In an ordinary numbered Atlas,
+ * checkbox lines (even ones whose text starts with bold numbers) are nested
+ * implementation evidence and never switch the parser.
+ */
+function isApprovalChecklist(lines: string[], references: ReadonlySet<string>): boolean {
+  if (lines.some((line) => /^\s*- \*\*\d+(?:\.\d+)*\*\*\s/u.test(line))) return false;
+  return lines.some(
+    (line) =>
+      isApprovalEntryStart(line, references) &&
+      /^-\s+\[[^\]\r\n]*\]\s*\*\*[1-9]\d*(?:\.\d+)*\*\*/u.test(line),
+  );
+}
+
+/**
+ * A list item whose bracketed lead looks like a task-list marker. Markdown links
+ * (`[text](url)`), full references (`[text][ref]`), definitions (`[ref]:`) and
+ * defined shortcut references are prose, not checkboxes.
+ */
+function evidenceCheckbox(
+  line: string,
+  references: ReadonlySet<string>,
+): { indent: number; marker: string; rest: string } | null {
+  const match = line.match(/^(\s*)-\s+\[([^\]\r\n]*)\](?![([:])(.*)$/u);
+  if (!match) return null;
+  const marker = match[2]!;
+  if (marker !== "x" && marker !== " " && references.has(referenceLabel(marker))) return null;
+  return { indent: match[1]!.length, marker, rest: match[3]! };
+}
+
 function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: AtlasDecision[] } {
-  const references = approvalReferenceLabels(source.text);
-  if (source.text.split(/\r?\n/u).some((line) => isApprovalEntryStart(line, references))) {
-    return fromApprovalChecklist(source, references);
+  const referenceLabels = approvalReferenceLabels(source.text);
+  if (isApprovalChecklist(source.text.split(/\r?\n/u), referenceLabels)) {
+    return fromApprovalChecklist(source, referenceLabels);
   }
   const groups: AtlasGroup[] = [];
   const decisions: AtlasDecision[] = [];
   const headings = new Map<string, string>();
   const lines = source.text.split(/\r?\n/);
   let crossReferences = false;
+  // Numbered list items that enclose the current line, by indentation, so an
+  // evidence checkbox belongs to its nearest owning entry. Cleared outside the list.
+  const owners: AtlasListOwner[] = [];
+  let withinEntries = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
+    if (
+      /^#{1,6}(?:\s|$)/u.test(line) ||
+      (line.trim() && !/^\s/u.test(line) && !line.startsWith("-"))
+    ) {
+      // A heading or unindented prose paragraph ends the entries list.
+      owners.length = 0;
+      withinEntries = false;
+    }
     if (line.startsWith("- **Cross-decision references")) {
       crossReferences = true;
+      owners.length = 0;
+      withinEntries = false;
       continue;
     }
     if (crossReferences && line.startsWith("- **")) crossReferences = false;
     if (crossReferences) {
+      if (evidenceCheckbox(line, referenceLabels))
+        fail(
+          `${source.path}:${i + 1} evidence checkbox inside the Cross-decision references block is not nested under a Decision`,
+        );
       const ids = [...line.matchAll(/`([1-9]\d*(?:\.[1-9]\d*){2,})`/g)].map((match) => match[1]!);
       if (ids.length > 1) {
         const origin = decisions.find((item) => item.id === ids[0]);
@@ -347,17 +470,35 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       }
       continue;
     }
+    const checkbox = withinEntries ? evidenceCheckbox(line, referenceLabels) : null;
+    if (checkbox) {
+      addEvidence(source, i + 1, checkbox, owners);
+      continue;
+    }
     const match = line.match(/^(\s*)- \*\*(\d+(?:\.\d+)*)\*\*\s+(.+)$/u);
-    if (!match) continue;
+    if (!match) {
+      // Any other list item (e.g. "- Notes") ends ownership at its indentation, so
+      // checkboxes nested under it are not attributed to a preceding Decision.
+      const item = withinEntries ? line.match(/^(\s*)(?:[-*+]|\d+[.)])(?:\s|$)/u) : null;
+      if (item) {
+        const indent = item[1]!.length;
+        while (owners.length && owners[owners.length - 1]!.indent >= indent) owners.pop();
+        owners.push({ indent, id: `line ${i + 1}`, entry: null, prose: true });
+      }
+      continue;
+    }
     const id = match[2]!;
     const depth = id.split(".").length;
-    if (match[1]!.length !== (depth - 1) * 2)
-      fail(`${source.path}:${i + 1} ID ${id} has incorrect nesting`);
+    const indent = match[1]!.length;
+    if (indent !== (depth - 1) * 2) fail(`${source.path}:${i + 1} ID ${id} has incorrect nesting`);
     const parentId = id.includes(".") ? id.slice(0, id.lastIndexOf(".")) : null;
     const body = match[3]!;
+    while (owners.length && owners[owners.length - 1]!.indent >= indent) owners.pop();
+    withinEntries = true;
     if (depth < 3) {
       groups.push({ id, parentId, title: body.trim() });
       headings.set(id, body.trim());
+      owners.push({ indent, id, entry: null });
       continue;
     }
     const tagged = body.match(/^\[([^\]]+)\]\s+(.+)$/u);
@@ -443,7 +584,9 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       ),
       links: markdownLinks(tagged[2]!),
       source: { path: source.path, line: i + 1 },
+      evidence: [],
     });
+    owners.push({ indent, id, entry: decisions[decisions.length - 1]! });
   }
   if (decisions.length === 0) fail(`${source.path}: no numbered decisions found`);
   return { groups, decisions };
@@ -467,7 +610,55 @@ function validateLinks(links: string[], id: string): void {
   }
 }
 
+function validateEvidence(index: AtlasIndex, decision: AtlasDecision): void {
+  const evidence: unknown = decision.evidence;
+  if (index.schemaVersion === 1) {
+    if (evidence !== undefined)
+      fail(`${decision.id}: schemaVersion 1 indexes predate implementation evidence`);
+    return;
+  }
+  if (!Array.isArray(evidence)) fail(`${decision.id}: implementation evidence must be an array`);
+  if (decision.kind === "question" && evidence.length > 0)
+    fail(`${decision.id}: implementation evidence is not applicable to a question`);
+  const seen = new Set<string>();
+  for (const item of evidence as unknown[]) {
+    if (
+      !item ||
+      typeof item !== "object" ||
+      Object.keys(item).length !== 2 ||
+      typeof (item as AtlasEvidence).checked !== "boolean" ||
+      typeof (item as AtlasEvidence).text !== "string" ||
+      !(item as AtlasEvidence).text.trim() ||
+      (item as AtlasEvidence).text !== (item as AtlasEvidence).text.trim()
+    )
+      fail(`${decision.id}: malformed implementation evidence item`);
+    const text = (item as AtlasEvidence).text;
+    if (seen.has(text)) fail(`${decision.id}: duplicate implementation evidence ${text}`);
+    seen.add(text);
+  }
+}
+
+/**
+ * Derived evidence progress. A Decision without audited children is unknown
+ * (`not-audited`), never 0%; a Question is `not-applicable`. Completion never
+ * implies the parent Decision is implemented or verified.
+ */
+export function evidenceProgress(decision: AtlasDecision): AtlasEvidenceProgress {
+  if (decision.kind === "question") return { status: "not-applicable" };
+  const evidence = decision.evidence ?? [];
+  if (evidence.length === 0) return { status: "not-audited" };
+  const completed = evidence.filter((item) => item.checked).length;
+  return {
+    status: "audited",
+    completed,
+    total: evidence.length,
+    percent: Math.round((completed / evidence.length) * 100),
+  };
+}
+
 export function validateAtlasIndex(index: AtlasIndex): void {
+  if (!supportedAtlasIndexSchemaVersions.includes(index.schemaVersion))
+    fail(`unsupported index schemaVersion ${String(index.schemaVersion)}`);
   const ids = new Set<string>();
   const aliases = new Set<string>();
   const parents = new Map<string, string | null>();
@@ -503,6 +694,7 @@ export function validateAtlasIndex(index: AtlasIndex): void {
     if (decision.choice !== null && !/^[ABC](?:\b|$)/.test(decision.choice))
       fail(`${decision.id}: invalid choice`);
     validateLinks(decision.links, decision.id);
+    validateEvidence(index, decision);
     ids.add(decision.id);
     for (const alias of decision.aliases) {
       if (!idPattern.test(alias) || aliases.has(alias) || ids.has(alias) || alias === decision.id)
@@ -538,8 +730,15 @@ export function validateAtlasIndex(index: AtlasIndex): void {
 }
 
 export function assertPreservedDecisions(previous: AtlasIndex, current: AtlasIndex): void {
-  if (previous.schemaVersion !== 1 || previous.repository !== current.repository)
+  // Evidence children are not part of Decision history; a schemaVersion-1 baseline
+  // (without evidence) therefore remains a complete stable-ID baseline.
+  if (
+    !supportedAtlasIndexSchemaVersions.includes(previous.schemaVersion) ||
+    previous.repository !== current.repository
+  )
     fail("previous index has a different schema or repository");
+  // A baseline must satisfy the same contract as any other index, including v2 evidence.
+  validateAtlasIndex(previous);
   const old = new Map(
     previous.decisions.flatMap((decision) =>
       [decision.id, ...decision.aliases].map((id) => [id, decision] as const),
@@ -604,7 +803,7 @@ export function buildAtlasIndex(
     });
   }
   const index: AtlasIndex = {
-    schemaVersion: 1,
+    schemaVersion: atlasIndexSchemaVersion,
     repository,
     sourceRevision,
     sources: indexedSources,
@@ -619,6 +818,7 @@ export function buildAtlasIndex(
         relations: [...decision.relations].sort((a, b) =>
           a.type === b.type ? compareId(a.target, b.target) : a.type < b.type ? -1 : 1,
         ),
+        evidence: (decision.evidence ?? []).map((item) => ({ ...item })),
       })),
     provenance: {
       source: "committed-revision",
