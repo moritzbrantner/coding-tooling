@@ -58,8 +58,8 @@
  * non-entry heading) are ignored.
  *
  * Out of scope here (stated gap): evidence children inside the Video-to-3D
- * owner approval-checklist variant, whose own `- [x] **ID**` boxes mean owner
- * approval. That variant must keep indexing unchanged with no evidence.
+ * retired owner approval-checklist variant (`- [x] **ID**` boxes as approval),
+ * which now fails with a migration message (#348).
  */
 import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
@@ -627,7 +627,7 @@ test("JSON output schemas document evidence and accept the emitted schema versio
 /** A checkbox-free numbered Atlas (no evidence, no prose checklist). */
 const plainAtlas = stripped.slice(0, stripped.indexOf("## Notes"));
 
-test("regression: numbered-list, My Farm tree, approval checklist and legacy aliases still index", () => {
+test("regression: numbered-list, My Farm tree and legacy aliases still index; approval checklists are retired", () => {
   const plain = build(plainAtlas);
   expect(plain.decisions.map((decision) => decision.id)).toEqual([
     "1.1.1",
@@ -661,11 +661,11 @@ test("regression: numbered-list, My Farm tree, approval checklist and legacy ali
     ["show", "HEAD:fixtures/decision-atlas/video-to-3d/DECISION-ATLAS.md"],
     { cwd: new URL("../", import.meta.url), encoding: "utf8" },
   );
-  expect(
+  expect(() =>
     buildAtlasIndex("moritzbrantner/video-to-3d", "9e66e206362d74bc855bc66064bef6e4287f6e1b", [
       { path: "docs/DECISION-ATLAS.md", format: "numbered-list", text: approvalSource },
-    ]).decisions,
-  ).toHaveLength(45);
+    ]),
+  ).toThrow("approval checkboxes are retired");
 });
 
 test("compatibility adapters and legacy aliases keep working with no evidence", () => {
@@ -695,22 +695,4 @@ test("compatibility adapters and legacy aliases keep working with no evidence", 
   expect(get(index, "shop/checkout/guest").id).toBe("1.1.1");
   expect(get(index, "shop/checkout/guest").progress).toEqual(get(index, "1.1.1").progress);
   expect(get(index, "evidence-fixture:1.1.1").evidence).toEqual(get(index, "1.1.1").evidence!);
-
-  const approvalSource = execFileSync(
-    "git",
-    ["show", "HEAD:fixtures/decision-atlas/video-to-3d/DECISION-ATLAS.md"],
-    { cwd: new URL("../", import.meta.url), encoding: "utf8" },
-  );
-  const approval = buildAtlasIndex(
-    "moritzbrantner/video-to-3d",
-    "9e66e206362d74bc855bc66064bef6e4287f6e1b",
-    [{ path: "docs/DECISION-ATLAS.md", format: "numbered-list", text: approvalSource }],
-  );
-  expect(approval.decisions).toHaveLength(45);
-  for (const decision of approval.decisions) {
-    expect(evidenceOf(approval, decision.id)).toEqual([]);
-    expect(get(approval, decision.id).progress).toEqual(
-      decision.kind === "question" ? { status: "not-applicable" } : { status: "not-audited" },
-    );
-  }
 });

@@ -1,4 +1,6 @@
-# Owner approval checklist fixture
+# Retired owner approval checklist fixture
+
+Since coding-tooling #348 (Atlas 1.1.4) approval checkboxes are retired: every written Decision is approved and `[x]`/`[ ]` mean built/not built evidence only. This file is kept as a negative fixture — indexing it must fail with the migration message (`tests/atlas-approval.test.ts`).
 
 `DECISION-ATLAS.md` is the exact source from `moritzbrantner/video-to-3d`, `docs/DECISION-ATLAS.md`, PR #180 head `9e66e206362d74bc855bc66064bef6e4287f6e1b`. Retrieved through GitHub's contents API for that immutable revision on 2026-10-13. It has 45 semantic entries, six authored capability headings and six historical/unresolved Questions. The opening Question link is navigation.
 

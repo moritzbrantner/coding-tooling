@@ -57,7 +57,7 @@ afterEach(() => {
   for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-test("evidence text starting with a bold numeric token does not select approval mode", () => {
+test("evidence text starting with a bold numeric token stays evidence, not a retired approval entry", () => {
   const index = build(base);
   expect(index.decisions.map((decision) => decision.id)).toEqual(["1.1.1", "1.1.2"]);
   expect(index.decisions[0]!.evidence).toEqual([
