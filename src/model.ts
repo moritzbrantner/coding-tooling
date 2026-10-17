@@ -52,6 +52,7 @@ export type ResultOperation =
   | "performance-applicability"
   | "fleet-performance-applicability"
   | "fleet-authority-graph"
+  | "fleet-renovate"
   | "foundation"
   | "workflow-profile"
   | "bootstrap"
