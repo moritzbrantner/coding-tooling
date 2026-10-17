@@ -7,6 +7,14 @@ import {
   type AtlasAnchor,
   type AtlasIndex,
 } from "./decision-atlas.ts";
+import {
+  loadCaseReports,
+  runAnchoredTest,
+  selectReportExecution,
+  type AnchorExecution,
+  type CaseReports,
+  type RevisionHistory,
+} from "./decision-atlas-execution.ts";
 import { rustDeclarations, type RustItemsResult } from "./rust-items.ts";
 import {
   matchTypeScriptSymbol,
@@ -38,11 +46,28 @@ export interface AnchorResolution {
   source?: string;
   line?: number;
   link?: string;
+  /**
+   * `test:` anchors only: report-only execution evidence from test-case
+   * evidence reports or, on request, from running the one anchored test.
+   */
+  execution?: AnchorExecution;
 }
 
 export interface ResolveAnchorsOptions {
   /** Resolve only anchors of these Decision IDs (in index order). */
   decisionIds?: ReadonlySet<string>;
+  /**
+   * Extra `TestCaseEvidenceArtifact` report files (resolved against `root`), in
+   * addition to every `*.json` in `.artifacts/coding-tooling/test-case-evidence/`.
+   */
+  reports?: readonly string[];
+  /**
+   * Run the single anchored test for a resolved, unpinned same-repository
+   * `test:` anchor that has no current report result. Nothing runs without it.
+   */
+  runTests?: boolean;
+  /** Receives one line per ignored report; defaults to stderr. */
+  diagnostic?: (message: string) => void;
 }
 
 const maxSourceBytes = 2 * 1024 * 1024;
@@ -66,6 +91,25 @@ class GitObjects {
   private readonly parsed = new Map<string, Parsed>();
 
   constructor(private readonly root: string) {}
+
+  private readonly distances = new Map<string, number | undefined>();
+
+  /** Commits reachable from `of` but not from `revision`; undefined unless `revision` is an ancestor. */
+  distance(revision: string, of: string): number | undefined {
+    if (!/^[0-9a-f]{7,40}$/iu.test(revision)) return undefined;
+    const key = revision + ".." + of;
+    if (!this.distances.has(key)) {
+      let distance: number | undefined;
+      try {
+        this.git(["merge-base", "--is-ancestor", revision + "^{commit}", of]);
+        distance = Number(this.git(["rev-list", "--count", revision + ".." + of]).trim());
+      } catch {
+        distance = undefined;
+      }
+      this.distances.set(key, distance);
+    }
+    return this.distances.get(key);
+  }
 
   git(args: string[], maxBuffer = 1024 * 1024): string {
     return execFileSync("git", ["--no-replace-objects", "-C", this.root, ...args], {
@@ -279,10 +323,29 @@ function matchLines(anchor: AtlasAnchor, parsed: Parsed): number[] | { reason: s
 
 type ResolutionFields = Omit<AnchorResolution, "decisionId" | "evidence" | "anchor">;
 
+/** The resolution plus the checkout it was read from (absent when no checkout was read). */
+interface Resolved {
+  fields: ResolutionFields;
+  target?: AnchorTarget;
+}
+
 function resolveAnchor(
   local: AnchorTarget,
   sibling: (repository: string) => SiblingTarget,
   anchor: AtlasAnchor,
+): Resolved {
+  let target: AnchorTarget | undefined;
+  const fields = resolveFields(local, sibling, anchor, (used) => {
+    target = used;
+  });
+  return { fields, target };
+}
+
+function resolveFields(
+  local: AnchorTarget,
+  sibling: (repository: string) => SiblingTarget,
+  anchor: AtlasAnchor,
+  used: (target: AnchorTarget) => void,
 ): ResolutionFields {
   if (anchor.kind === "proof")
     return {
@@ -305,6 +368,7 @@ function resolveAnchor(
     if (!opened.ok) return { status: "unresolved", reason: opened.reason };
     target = opened.target;
   }
+  used(target);
   const { objects, repository } = target;
   if (anchor.revision && !objects.isCommit(anchor.revision))
     return {
@@ -358,8 +422,10 @@ function resolveAnchor(
  * into another repository `<owner>/<repo>` is read from the sibling checkout
  * `<dirname(root)>/<repo>` at its `origin/<default>` (else HEAD) or the pin, and
  * is `unresolved` with a reason when that checkout is unusable. One result
- * per anchor in decision, evidence and anchor order. Report-only: the index,
- * its checkboxes, progress and verification state are never changed.
+ * per anchor in decision, evidence and anchor order. Each `test:` result also
+ * carries `execution` from test-case evidence reports (and, with `runTests`,
+ * from running that one test). Report-only: the index, its checkboxes,
+ * progress and verification state are never changed.
  */
 export function resolveAtlasAnchors(
   root: string,
@@ -383,17 +449,56 @@ export function resolveAtlasAnchors(
     }
     return opened;
   };
+  let reports: CaseReports | undefined;
+  const caseReports = (): CaseReports =>
+    (reports ??= loadCaseReports(
+      resolve(root),
+      options.reports ?? [],
+      options.diagnostic ?? ((message) => process.stderr.write(message + "\n")),
+    ));
   const results: AnchorResolution[] = [];
   for (const decision of index.decisions) {
     if (options.decisionIds && !options.decisionIds.has(decision.id)) continue;
     for (const evidence of decision.evidence ?? [])
-      for (const anchor of evidence.anchors ?? [])
-        results.push({
+      for (const anchor of evidence.anchors ?? []) {
+        const { fields, target } = resolveAnchor(local, sibling, anchor);
+        const result: AnchorResolution = {
           decisionId: decision.id,
           evidence: evidence.text,
           anchor: { ...anchor },
-          ...resolveAnchor(local, sibling, anchor),
-        });
+          ...fields,
+        };
+        if (anchor.kind === "test")
+          result.execution = execution(root, local, anchor, result, target, caseReports(), options);
+        results.push(result);
+      }
   }
   return results;
+}
+
+const noHistory: RevisionHistory = { distance: () => undefined };
+
+/**
+ * Execution evidence of one `test:` anchor: the case id is the anchor target as
+ * authored without its pin (`<path>::<symbol>`), matched by id and revision only.
+ */
+function execution(
+  root: string,
+  local: AnchorTarget,
+  anchor: AtlasAnchor,
+  result: AnchorResolution,
+  target: AnchorTarget | undefined,
+  reports: CaseReports,
+  options: ResolveAnchorsOptions,
+): AnchorExecution {
+  const id = anchor.path! + "::" + anchor.symbol!;
+  const history = target?.objects ?? noHistory;
+  const reported = selectReportExecution(reports.get(id), result.revision, history);
+  if (reported.current || !options.runTests) return reported;
+  // Running covers only resolved, unpinned anchors in this checkout (cross-repository
+  // and pinned test anchors are out of scope).
+  if (result.status !== "resolved" || anchor.revision || target !== local) return reported;
+  const path = anchor.path!.replace(crossRepositoryAnchorPrefix, "");
+  const ran = runAnchoredTest(resolve(root), local.head, path, anchor.symbol!);
+  return ran.status === "not-run" ? reported : ran;
 }
