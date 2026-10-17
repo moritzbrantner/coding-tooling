@@ -84,10 +84,10 @@ implementation_status: not-verified
   expect(index.decisions[0]?.path).toEqual(["residents", "control"]);
 });
 
-test("the Atlas indexes its own 22 Decisions and 1 Question", () => {
+test("the Atlas indexes its own 23 Decisions and 1 Question", () => {
   const markdown = readFileSync(new URL("../docs/decisions/atlas.md", import.meta.url), "utf8");
   const index = buildAtlasIndex("moritzbrantner/coding-tooling", revision, source(markdown));
-  expect(index.decisions.filter((entry) => entry.kind === "decision")).toHaveLength(22);
+  expect(index.decisions.filter((entry) => entry.kind === "decision")).toHaveLength(23);
   expect(index.decisions.filter((entry) => entry.kind === "question")).toHaveLength(1);
   expect(index.decisions.find((entry) => entry.id === "4.2.1")?.decisionStatus).toBeNull();
   expect(index.decisions.find((entry) => entry.id === "1.1.1")?.decisionStatus).toBe("accepted");
