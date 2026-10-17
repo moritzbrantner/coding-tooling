@@ -10,6 +10,7 @@ import { agentHandoffCommand, agentVerificationCommand, taskPacketCommand } from
 import { writeReport } from "./core.ts";
 import { entryMain } from "./entry.ts";
 import { fleetAuthorityGraph } from "./fleet-authority-graph.ts";
+import { fleetRenovateReport } from "./fleet-renovate.ts";
 import { reconcileFleetSourceDependencies } from "./fleet-source-deps.ts";
 import type { ResultEnvelope } from "./model.ts";
 import {
@@ -67,6 +68,7 @@ function usage(): number {
   coding-tooling source-deps <prepare|activate|status|smoke|restore|deactivate> [--config <path>] [--root <path>] [--json]
   coding-tooling source-deps verify-graph [--config <path>] [--root <path>] [--json]
   coding-tooling fleet authority-graph [--root <path>] [--json]
+  coding-tooling fleet renovate [--root <path>] [--repo owner/name ...] [--json]
   coding-tooling repository contract [--root <path>] [--execute] [--json]
   coding-tooling performance size [--root <path>] [--baseline <path>] [--report <path>] [--json]
   coding-tooling performance applicability [--root <path>] [--json]
@@ -190,6 +192,18 @@ export function routerMain(argv = process.argv.slice(2)): number {
   if (argv[0] === "fleet" && argv[1] === "authority-graph") {
     if (!validFlags(argv, 2, new Set(["--root"]))) return usage();
     return print(fleetAuthorityGraph(root), compact);
+  }
+
+  if (argv[0] === "fleet" && argv[1] === "renovate") {
+    if (!validFlags(argv, 2, new Set(["--root", "--repo"]), new Set(), true)) return usage();
+    const repositories = argv.flatMap((value, index) =>
+      value === "--repo" && index >= 2 ? [argv[index + 1]!] : [],
+    );
+    if (repositories.some((value) => !/^[\w.-]+\/[\w.-]+$/.test(value))) return usage();
+    return print(
+      fleetRenovateReport(root, repositories.length > 0 ? { repositories } : {}),
+      compact,
+    );
   }
 
   if (argv[0] === "repository" && argv[1] === "contract") {

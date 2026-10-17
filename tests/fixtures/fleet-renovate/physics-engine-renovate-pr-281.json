@@ -1,0 +1,39 @@
+{
+  "source": "gh pr list -R moritzbrantner/physics-engine --author app/renovate --json number,title,createdAt,headRefName,statusCheckRollup (PR #281, captured 2026-10-17 after merge; field shape is identical for open PRs)",
+  "pullRequest": {
+    "createdAt": "2026-10-16T02:58:55Z",
+    "headRefName": "renovate/rust-1.x",
+    "number": 281,
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-16T03:02:52Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/moritzbrantner/physics-engine/actions/runs/38843194956/job/116787736357",
+        "name": "validate",
+        "startedAt": "2026-10-16T02:59:02Z",
+        "status": "COMPLETED",
+        "workflowName": "Validate"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-10-16T03:01:36Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/moritzbrantner/physics-engine/actions/runs/38843194956/job/116787736531",
+        "name": "Build or reuse validated Pages artifact / Build Artifact",
+        "startedAt": "2026-10-16T02:59:03Z",
+        "status": "COMPLETED",
+        "workflowName": "Validate"
+      }
+    ],
+    "title": "chore(deps): update rust to v1.99.1"
+  },
+  "statusContextSource": "moritzbrantner/coding-tooling Renovate PR #335 statusCheckRollup[1]",
+  "statusContext": {
+    "__typename": "StatusContext",
+    "context": "renovate/stability-days",
+    "startedAt": "2026-10-17T07:49:08Z",
+    "state": "SUCCESS",
+    "targetUrl": "https://docs.renovatebot.com/key-concepts/minimum-release-age/"
+  }
+}
