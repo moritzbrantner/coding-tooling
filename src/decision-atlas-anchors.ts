@@ -60,7 +60,7 @@ class GitObjects {
   constructor(private readonly root: string) {}
 
   git(args: string[], maxBuffer = 1024 * 1024): string {
-    return execFileSync("git", ["-C", this.root, ...args], {
+    return execFileSync("git", ["--no-replace-objects", "-C", this.root, ...args], {
       encoding: "utf8",
       timeout: 10_000,
       maxBuffer,

@@ -198,7 +198,7 @@ function parseAnchor(segment: string): AtlasAnchor | string {
  * list. Any other em dash is prose. Fails closed on any malformed segment.
  */
 function splitEvidenceAnchors(text: string, at: string): { text: string; anchors: AtlasAnchor[] } {
-  const start = text.search(/ \u2014 (?:src|test|proof):/u);
+  const start = anchorTailStart(text);
   if (start === -1) return { text, anchors: [] };
   const anchors = text
     .slice(start + 3)
@@ -971,4 +971,13 @@ export function buildAtlasIndex(
   validateAtlasIndex(index);
   if (previous) assertPreservedDecisions(previous, index);
   return index;
+}
+
+/** First anchor marker outside inline code spans; a literal `` ` — src: ..` `` stays prose. */
+function anchorTailStart(text: string): number {
+  for (const match of text.matchAll(/ \u2014 (?:src|test|proof):/gu)) {
+    const before = text.slice(0, match.index);
+    if ((before.match(/`/g)?.length ?? 0) % 2 === 0) return match.index;
+  }
+  return -1;
 }

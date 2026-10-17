@@ -80,7 +80,9 @@ export function typeScriptSymbols(path: string, source: string): TypeScriptSymbo
         ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member)
           ? "accessor"
           : ts.isMethodDeclaration(member) || ts.isMethodSignature(member)
-            ? "method"
+            ? isStaticMember(ts, member)
+              ? "static-method"
+              : "method"
             : String(member.kind);
       add(prefix, name, member.name, merge);
     }
@@ -153,9 +155,26 @@ export function matchTypeScriptSymbol(
   name: string,
 ): TypeScriptSymbol[] {
   const matches = symbols.filter((symbol) => symbol.name === name);
-  const mergeable = new Set(["function", "method", "accessor", "interface", "namespace"]);
+  const mergeable = new Set([
+    "function",
+    "method",
+    "static-method",
+    "accessor",
+    "interface",
+    "namespace",
+  ]);
   const first = matches[0];
   if (first && mergeable.has(first.merge) && matches.every((match) => match.merge === first.merge))
     return [first];
   return matches;
+}
+
+/** Static and instance members of one class are distinct declarations, never one overload set. */
+function isStaticMember(ts: typeof Ts, member: Ts.ClassElement | Ts.TypeElement): boolean {
+  return (
+    ts.canHaveModifiers(member) &&
+    (ts.getModifiers(member) ?? []).some(
+      (modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword,
+    )
+  );
 }

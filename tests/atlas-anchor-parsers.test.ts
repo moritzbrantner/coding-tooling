@@ -113,3 +113,30 @@ test.each([1])("templated %d", () => {});
   expect(matchTypeScriptSymbol(symbols.declarations, "twice").length).toBe(2);
   expect(symbols.tests.map((t) => t.name)).toEqual(["Box > size > reads"]);
 });
+
+// Regressions for PR #339 review findings.
+test("const-generic braces in an impl header do not end the impl before its body", () => {
+  const items = rust(`pub struct Foo<const N: usize>;
+impl Foo<{ 1 }> {
+    pub fn bar() {}
+}
+impl<const N: usize> Foo<{ N + 1 }> where [(); N]: Sized { fn baz() {} }
+`);
+  expect(items.get("Foo::bar")).toEqual([{ line: 3, test: false }]);
+  expect(items.has("Foo::baz")).toBe(true);
+});
+
+test("static and instance methods of the same name stay ambiguous; static overloads merge", () => {
+  const symbols = typeScriptSymbols(
+    "src/run.ts",
+    `export class Job {
+  static run(): void;
+  static run(x?: number): void {}
+  run(): void {}
+  static only(): void {}
+}
+`,
+  );
+  expect(matchTypeScriptSymbol(symbols.declarations, "Job.run").length).toBeGreaterThan(1);
+  expect(matchTypeScriptSymbol(symbols.declarations, "Job.only").length).toBe(1);
+});

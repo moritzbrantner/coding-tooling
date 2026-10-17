@@ -104,12 +104,20 @@ function itemEnd(
 ): { end: number; bodyOpen?: number; bodyClose?: number } {
   let parens = 0;
   let brackets = 0;
+  // Generic argument depth in item headers, so `impl Foo<{ 1 }> { .. }` skips the
+  // const-generic block. Only tracked for items that can have a body.
+  let angles = 0;
   for (let cursor = start; cursor < limit; cursor += 1) {
     const text = tokens[cursor]!.text;
-    if (text === "(") parens += 1;
+    if (bodyAllowed && parens === 0 && brackets === 0 && text === "<") angles += 1;
+    else if (bodyAllowed && parens === 0 && brackets === 0 && text === ">")
+      angles = Math.max(0, angles - 1);
+    else if (text === "(") parens += 1;
     else if (text === ")") parens -= 1;
     else if (text === "[") brackets += 1;
     else if (text === "]") brackets -= 1;
+    else if (text === "{" && parens === 0 && brackets === 0 && angles > 0)
+      cursor = braces.get(cursor)!;
     else if (text === "{" && parens === 0 && brackets === 0) {
       const close = braces.get(cursor)!;
       if (!bodyAllowed) {
