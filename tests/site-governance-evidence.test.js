@@ -62,6 +62,7 @@ describe("GitHub Pages repository governance evidence", () => {
           },
         },
       },
+      { status: "observed", value: [] },
     );
 
     expect(governance.defaultBranchProtection).toEqual({
@@ -71,6 +72,13 @@ describe("GitHub Pages repository governance evidence", () => {
       requiredStatusChecks: {
         status: "observed",
         names: ["Cross-platform / macos-latest", "Cross-platform / windows-latest", "Validate"],
+        sources: [
+          {
+            source: "branch-protection",
+            status: "observed",
+            names: ["Cross-platform / macos-latest", "Cross-platform / windows-latest", "Validate"],
+          },
+        ],
       },
     });
   });
@@ -93,11 +101,13 @@ describe("GitHub Pages repository governance evidence", () => {
               required_status_checks: { enforcement_level: "off", contexts: [], checks: [] },
             },
           });
+        if (url === "https://api.github.com/repos/example/repo/rules/branches/main")
+          return jsonResponse([]);
         throw new Error(`Unexpected request: ${url}`);
       },
     });
 
-    expect(requests).toHaveLength(7);
+    expect(requests).toHaveLength(8);
     expect(analysis.repository.governance.license).toEqual({
       status: "observed",
       present: true,
@@ -108,7 +118,11 @@ describe("GitHub Pages repository governance evidence", () => {
       status: "observed",
       protected: false,
       provenance: { source: "default-branch-metadata" },
-      requiredStatusChecks: { status: "observed", names: [] },
+      requiredStatusChecks: {
+        status: "observed",
+        names: [],
+        sources: [{ source: "branch-protection", status: "observed", names: [] }],
+      },
     });
   });
 
