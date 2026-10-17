@@ -5,6 +5,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   buildAtlasIndex,
   supportedAtlasIndexSchemaVersions,
+  validateAtlasIndex,
   type AtlasFormat,
   type AtlasIndex,
   type AtlasSource,
@@ -80,6 +81,7 @@ export function indexRepository(options: AtlasCommandOptions): AtlasIndex {
       !Array.isArray(previous.decisions)
     )
       throw new Error("previous index has an unsupported schema");
+    validateAtlasIndex(previous);
   }
   const index = buildAtlasIndex(options.repository, actual, sources, previous);
   if (options.minDecisions !== undefined && index.decisions.length < options.minDecisions)

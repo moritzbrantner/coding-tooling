@@ -346,6 +346,14 @@ function fromApprovalChecklist(
   return { groups, decisions };
 }
 
+/** A list item enclosing later lines: a numbered entry, a branch, or prose. */
+interface AtlasListOwner {
+  indent: number;
+  id: string;
+  entry: AtlasDecision | null;
+  prose?: boolean;
+}
+
 /**
  * Records one binary evidence child under its nearest owning Decision, failing
  * closed on anything other than exactly `[x]` or `[ ]` followed by text.
@@ -354,7 +362,7 @@ function addEvidence(
   source: AtlasSource,
   line: number,
   checkbox: { indent: number; marker: string; rest: string },
-  owners: { indent: number; id: string; entry: AtlasDecision | null }[],
+  owners: AtlasListOwner[],
 ): void {
   const at = `${source.path}:${line}`;
   while (owners.length && owners[owners.length - 1]!.indent >= checkbox.indent) owners.pop();
@@ -362,7 +370,9 @@ function addEvidence(
   if (!owner?.entry)
     fail(
       `${at} evidence checkbox is not nested under a Decision` +
-        (owner ? ` (${owner.id} is a navigation branch)` : ""),
+        (owner
+          ? ` (${owner.id} is ${owner.prose ? "a non-entry list item" : "a navigation branch"})`
+          : ""),
     );
   if (owner.entry.kind === "question")
     fail(
@@ -384,14 +394,18 @@ function addEvidence(
 }
 
 /**
- * The owner approval-checklist variant is selected only by an approval line that
- * carries a bold ID (`- [x] **1.2** ...`). Plain `- [x] text` children are
- * implementation evidence inside an ordinary numbered Atlas instead.
+ * File-level discriminator for the owner approval-checklist variant (Video-to-3D):
+ * its entries are top-level `- [x] **1.2** ...` approval items and the file has
+ * no plain numbered `- **1.2** ...` entries. In an ordinary numbered Atlas,
+ * checkbox lines (even ones whose text starts with bold numbers) are nested
+ * implementation evidence and never switch the parser.
  */
-function isApprovalChecklistLine(line: string, references: ReadonlySet<string>): boolean {
-  return (
-    isApprovalEntryStart(line, references) &&
-    /^\s*-\s+\[[^\]\r\n]*\]\s*\*\*[1-9]\d*(?:\.\d+)*\*\*/u.test(line)
+function isApprovalChecklist(lines: string[], references: ReadonlySet<string>): boolean {
+  if (lines.some((line) => /^\s*- \*\*\d+(?:\.\d+)*\*\*\s/u.test(line))) return false;
+  return lines.some(
+    (line) =>
+      isApprovalEntryStart(line, references) &&
+      /^-\s+\[[^\]\r\n]*\]\s*\*\*[1-9]\d*(?:\.\d+)*\*\*/u.test(line),
   );
 }
 
@@ -413,7 +427,7 @@ function evidenceCheckbox(
 
 function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: AtlasDecision[] } {
   const referenceLabels = approvalReferenceLabels(source.text);
-  if (source.text.split(/\r?\n/u).some((line) => isApprovalChecklistLine(line, referenceLabels))) {
+  if (isApprovalChecklist(source.text.split(/\r?\n/u), referenceLabels)) {
     return fromApprovalChecklist(source, referenceLabels);
   }
   const groups: AtlasGroup[] = [];
@@ -423,7 +437,7 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
   let crossReferences = false;
   // Numbered list items that enclose the current line, by indentation, so an
   // evidence checkbox belongs to its nearest owning entry. Cleared outside the list.
-  const owners: { indent: number; id: string; entry: AtlasDecision | null }[] = [];
+  const owners: AtlasListOwner[] = [];
   let withinEntries = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
@@ -443,6 +457,10 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
     }
     if (crossReferences && line.startsWith("- **")) crossReferences = false;
     if (crossReferences) {
+      if (evidenceCheckbox(line, referenceLabels))
+        fail(
+          `${source.path}:${i + 1} evidence checkbox inside the Cross-decision references block is not nested under a Decision`,
+        );
       const ids = [...line.matchAll(/`([1-9]\d*(?:\.[1-9]\d*){2,})`/g)].map((match) => match[1]!);
       if (ids.length > 1) {
         const origin = decisions.find((item) => item.id === ids[0]);
@@ -458,7 +476,17 @@ function fromNumbered(source: AtlasSource): { groups: AtlasGroup[]; decisions: A
       continue;
     }
     const match = line.match(/^(\s*)- \*\*(\d+(?:\.\d+)*)\*\*\s+(.+)$/u);
-    if (!match) continue;
+    if (!match) {
+      // Any other list item (e.g. "- Notes") ends ownership at its indentation, so
+      // checkboxes nested under it are not attributed to a preceding Decision.
+      const item = withinEntries ? line.match(/^(\s*)(?:[-*+]|\d+[.)])(?:\s|$)/u) : null;
+      if (item) {
+        const indent = item[1]!.length;
+        while (owners.length && owners[owners.length - 1]!.indent >= indent) owners.pop();
+        owners.push({ indent, id: `line ${i + 1}`, entry: null, prose: true });
+      }
+      continue;
+    }
     const id = match[2]!;
     const depth = id.split(".").length;
     const indent = match[1]!.length;
@@ -709,6 +737,8 @@ export function assertPreservedDecisions(previous: AtlasIndex, current: AtlasInd
     previous.repository !== current.repository
   )
     fail("previous index has a different schema or repository");
+  // A baseline must satisfy the same contract as any other index, including v2 evidence.
+  validateAtlasIndex(previous);
   const old = new Map(
     previous.decisions.flatMap((decision) =>
       [decision.id, ...decision.aliases].map((id) => [id, decision] as const),
