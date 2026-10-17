@@ -13,7 +13,7 @@ It only reads GitHub through `gh`. It never merges, approves, rebases, labels or
 
 With no `--repo`, the report covers the Git repositories directly under `--root`, as enumerated by the [fleet authority graph](./authority-graph.md). Each repository's id comes from the `.repository.toml` `id`. When that is missing, it comes from the `owner/name` in `git config --get remote.origin.url`. Ids are deduplicated, so several worktree checkouts of one repository produce one entry.
 
-`moritzbrantner/mmorpg` is excluded by default and listed in `data.excluded`. GitHub is never queried for it. An explicit `--repo` list replaces fleet enumeration and is taken as given.
+The owner-named inactive repositories `moritzbrantner/camunda-workflows` and `moritzbrantner/motion-map` are excluded by default and listed in `data.excluded`; mmorpg is included. GitHub is never queried for it. An explicit `--repo` list replaces fleet enumeration and is taken as given.
 
 ## Per-repository entry
 

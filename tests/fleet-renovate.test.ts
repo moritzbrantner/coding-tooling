@@ -4,7 +4,8 @@
 // read-only report that never merges or bumps anything; majors keep Dependency Dashboard
 // approval and pending ones are shown; missing config => add a minimal renovate.json that extends
 // `github>moritzbrantner/coding-agent-conventions` through a normal PR; a missing Renovate app is an
-// owner action; the four named repositories come first; mmorpg is excluded.
+// owner action; the four named repositories come first; inactive repositories
+// (camunda-workflows, motion-map) are excluded; mmorpg is included (owner, #330).
 //
 // PINNED SEAM
 // - Module `src/fleet-renovate.ts` exports
@@ -22,7 +23,7 @@
 // - Fleet enumeration with no `--repo`: the existing fleet seam, i.e. the direct child Git
 //   repositories of `--root` as listed by fleetAuthorityGraph. The id is `.repository.toml` `id`;
 //   when there is none, it is the `owner/name` of `git config --get remote.origin.url`. Ids are
-//   deduplicated (worktree checkouts share their origin). `moritzbrantner/mmorpg` is excluded
+//   deduplicated (worktree checkouts share their origin). `moritzbrantner/camunda-workflows` and `moritzbrantner/motion-map` are excluded
 //   by an explicit default exclusion and listed in data.excluded; it is never queried.
 // - GitHub is read only through the injected runner calling `gh` (and, in the CLI, the `gh`
 //   on PATH). Supported read calls, answered by tests/fixtures/fleet-renovate/mock-github.ts:
@@ -234,7 +235,7 @@ function fleetState(): MockState {
       // No config, no activity.
       "moritzbrantner/zoo": {},
       // Must never be queried.
-      "moritzbrantner/mmorpg": { files: { "renovate.json": config([PRESET]) } },
+      "moritzbrantner/motion-map": { files: { "renovate.json": config([PRESET]) } },
     },
   };
 }
@@ -282,8 +283,10 @@ function fleetRoot(): string {
   checkout(root, "my-farm", { id: "moritzbrantner/my-farm" });
   checkout(root, "ui", { id: "moritzbrantner/ui" });
   checkout(root, "zoo", { origin: "https://github.com/moritzbrantner/zoo" });
-  checkout(root, "mmorpg", { id: "moritzbrantner/mmorpg" });
-  checkout(root, "mmorpg-click-153", { origin: "git@github.com:moritzbrantner/mmorpg.git" });
+  checkout(root, "motion-map", { id: "moritzbrantner/motion-map" });
+  checkout(root, "motion-map-click-153", {
+    origin: "git@github.com:moritzbrantner/motion-map.git",
+  });
   return root;
 }
 
@@ -472,11 +475,16 @@ test("open bot PRs report age and checks; failing and stale PRs become actions",
   ]);
 });
 
-test("mmorpg is excluded by default, listed as excluded and never queried", async () => {
+test("inactive repositories are excluded by default, listed as excluded and never queried", async () => {
   const { result, github } = await runFleet();
-  expect(result.data.excluded).toEqual(["moritzbrantner/mmorpg"]);
-  expect(entries(result).some((value) => value.repository.includes("mmorpg"))).toBe(false);
-  expect(github.calls.filter((call) => call.join(" ").includes("mmorpg"))).toEqual([]);
+  expect(result.data.excluded).toEqual(["moritzbrantner/motion-map"]);
+  expect(entries(result).some((value) => value.repository.includes("motion-map"))).toBe(false);
+  expect(github.calls.filter((call) => call.join(" ").includes("motion-map"))).toEqual([]);
+});
+
+test("mmorpg is part of the fleet rollout, not a default exclusion", async () => {
+  const { DEFAULT_EXCLUDED_REPOSITORIES } = await import("../src/fleet-renovate.ts");
+  expect(DEFAULT_EXCLUDED_REPOSITORIES).not.toContain("moritzbrantner/mmorpg");
 });
 
 test("--repo restricts the report to the named subset without enumerating the fleet", async () => {
