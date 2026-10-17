@@ -133,10 +133,74 @@
           "text": {
             "type": "string",
             "minLength": 1,
-            "description": "Trimmed authored Markdown after the checkbox marker; unique within its Decision."
+            "description": "Trimmed authored Markdown after the checkbox marker, excluding any trailing anchor tail; unique within its Decision."
           },
           "checked": {
             "type": "boolean"
+          },
+          "anchors": {
+            "type": "array",
+            "description": "Author-declared evidence anchors parsed from the checkbox line's trailing ` — src: <path>::<symbol>[@<sha>]; test: <path>::<case>[@<sha>]; proof: <immutable blob URL>` tail, in authored order. Absent when the line has none. Anchors are identity only (path + symbol, optional pinned revision); line numbers and links are derived by `daq --resolve-anchors` and never stored. An anchor never checks a box or verifies behavior.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind"],
+              "properties": {
+                "kind": {
+                  "enum": ["src", "test", "proof"]
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Repository-relative file path (no leading `/`, `.` or `..` segments). An `<owner>/<repo>:` prefix names another repository; such anchors are reported unresolved."
+                },
+                "symbol": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Rust `::` item path (`Enum::Variant`, `Type::method`, `module::item`), TypeScript `.` path (`Class.method`, `Namespace.member`), or a test case: a Rust `#[test]` fn item path or a TypeScript `describe > test` name."
+                },
+                "revision": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{40}$",
+                  "description": "Pinned commit for `src`/`test` (`@<sha>`); for `proof`, the commit of the immutable URL. Absent means the checkout's committed HEAD."
+                },
+                "url": {
+                  "type": "string",
+                  "pattern": "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/blob/[a-f0-9]{40}/",
+                  "description": "Immutable GitHub blob URL; only on `proof` anchors. Recorded, never fetched."
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "kind": {
+                        "const": "proof"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": ["url", "revision"],
+                    "not": {
+                      "anyOf": [
+                        {
+                          "required": ["path"]
+                        },
+                        {
+                          "required": ["symbol"]
+                        }
+                      ]
+                    }
+                  },
+                  "else": {
+                    "required": ["path", "symbol"],
+                    "not": {
+                      "required": ["url"]
+                    }
+                  }
+                }
+              ]
+            }
           }
         }
       }

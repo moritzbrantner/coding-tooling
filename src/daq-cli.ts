@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { resolveAtlasAnchors, type AnchorResolution } from "./decision-atlas-anchors.ts";
 import { indexRepository } from "./decision-atlas-cli.ts";
 import {
   supportedAtlasIndexSchemaVersions,
@@ -21,6 +22,7 @@ const usage = [
   "       daq questions [--topic <name-or-ID>]",
   "Options: --root <checkout> --source <path> --format numbered-list|my-farm-tree",
   "         --index <index.json|-> --limit <1..100> --include-inactive --json",
+  "         --resolve-anchors (report evidence anchors at the checkout's committed HEAD)",
   "Default: query the committed docs/decisions/atlas.md in the current repository;",
   "         results are deterministic, read-only, and limited to 12 entries.",
 ].join("\n");
@@ -79,6 +81,46 @@ function indexFromFile(path: string): AtlasIndex {
   return index;
 }
 
+type ResolvedAnchor = NonNullable<
+  DaqResult["entries"][number]["evidence"][number]["anchors"]
+>[number] & {
+  resolution?: Omit<AnchorResolution, "decisionId" | "evidence" | "anchor">;
+};
+
+function anchorText(anchor: ResolvedAnchor): string {
+  const target =
+    anchor.kind === "proof"
+      ? anchor.url!
+      : anchor.path! + "::" + anchor.symbol! + (anchor.revision ? "@" + anchor.revision : "");
+  const resolution = anchor.resolution;
+  if (!resolution) return anchor.kind + ": " + target;
+  return (
+    anchor.kind +
+    ": " +
+    target +
+    " · " +
+    resolution.status +
+    (resolution.link
+      ? " " + resolution.link
+      : resolution.reason
+        ? " (" + resolution.reason + ")"
+        : "")
+  );
+}
+
+/** Attaches report-only resolutions to the shown entries' anchors; boxes and progress are untouched. */
+function attachResolutions(result: DaqResult, resolutions: AnchorResolution[]): void {
+  for (const entry of result.entries) {
+    const queue = resolutions.filter((resolution) => resolution.decisionId === entry.id);
+    let next = 0;
+    for (const item of entry.evidence)
+      for (const anchor of (item.anchors ?? []) as ResolvedAnchor[]) {
+        const { decisionId: _id, evidence: _text, anchor: _anchor, ...resolution } = queue[next++]!;
+        anchor.resolution = resolution;
+      }
+  }
+}
+
 function formatText(result: DaqResult): string {
   if (result.shown === 0) return "No matching Atlas entries.\n";
   const lines = [
@@ -110,8 +152,10 @@ function formatText(result: DaqResult): string {
           String(entry.progress.percent) +
           "%) · each [x] covers only its own item; parent not verified",
       );
-      for (const item of entry.evidence)
+      for (const item of entry.evidence) {
         lines.push("    " + (item.checked ? "[x] " : "[ ] ") + item.text);
+        for (const anchor of item.anchors ?? []) lines.push("      " + anchorText(anchor));
+      }
     } else if (entry.progress.status === "not-audited") {
       lines.push("  Implementation evidence: not audited");
     }
@@ -142,7 +186,7 @@ export function daqCommand(argv: string[], io: DaqIo = stdio): number {
       "--kind",
       "--limit",
     ]);
-    const flags = new Set(["--json", "--include-inactive"]);
+    const flags = new Set(["--json", "--include-inactive", "--resolve-anchors"]);
     for (let i = needsValue ? 2 : 1; i < argv.length; i++) {
       const arg = argv[i]!;
       if (flags.has(arg)) {
@@ -163,13 +207,14 @@ export function daqCommand(argv: string[], io: DaqIo = stdio): number {
     if (format !== "numbered-list" && format !== "my-farm-tree")
       throw new Error("daq: unsupported source format " + format);
 
+    if (options.has("--resolve-anchors") && options.has("--index"))
+      throw new Error(
+        "daq: --resolve-anchors reads committed git objects and needs --root, not --index",
+      );
+    const root = options.get("--root") ?? process.cwd();
     const index = options.has("--index")
       ? indexFromFile(options.get("--index")!)
-      : indexFromCheckout(
-          options.get("--root") ?? process.cwd(),
-          options.get("--source") ?? "docs/decisions/atlas.md",
-          format,
-        );
+      : indexFromCheckout(root, options.get("--source") ?? "docs/decisions/atlas.md", format);
     const result = queryDecisionAtlas(index, {
       action,
       value,
@@ -178,6 +223,13 @@ export function daqCommand(argv: string[], io: DaqIo = stdio): number {
       limit,
       includeInactive: options.has("--include-inactive"),
     });
+    if (options.has("--resolve-anchors"))
+      attachResolutions(
+        result,
+        resolveAtlasAnchors(root, index, {
+          decisionIds: new Set(result.entries.map((entry) => entry.id)),
+        }),
+      );
     io.write(options.has("--json") ? JSON.stringify(result, null, 2) + "\n" : formatText(result));
     return 0;
   } catch (error) {

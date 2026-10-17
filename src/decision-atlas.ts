@@ -19,6 +19,30 @@ export interface AtlasRelation {
 export interface AtlasEvidence {
   text: string;
   checked: boolean;
+  /**
+   * Author-declared anchors from the checkbox line's trailing
+   * ` — src: …; test: …; proof: …` tail, in authored order. Absent when the line
+   * has none. Anchors are identity only (path + symbol, optional pinned
+   * revision); line numbers are derived at resolution time and never stored.
+   */
+  anchors?: AtlasAnchor[];
+}
+
+export type AtlasAnchorKind = "src" | "test" | "proof";
+
+/**
+ * One evidence anchor. `src` / `test` name a repository-relative `path` and a
+ * language `symbol` (Rust `::` item path, TypeScript `.` path, or a test case),
+ * with `revision` only when pinned by `@<sha>`. A `path` prefixed with
+ * `<owner>/<repo>:` names another repository. `proof` keeps an immutable GitHub
+ * blob `url` and its commit as `revision`. No anchor verifies behavior.
+ */
+export interface AtlasAnchor {
+  kind: AtlasAnchorKind;
+  path?: string;
+  symbol?: string;
+  revision?: string;
+  url?: string;
 }
 
 /** Derived, display-only progress; never stored in the index. */
@@ -87,6 +111,107 @@ referenceParser.validateLink = () => true;
 
 function fail(message: string): never {
   throw new Error(`Decision Atlas: ${message}`);
+}
+
+const anchorKinds = new Set<string>(["src", "test", "proof"]);
+const anchorKeys = new Set(["kind", "path", "symbol", "revision", "url"]);
+/** `<owner>/<repo>:` prefix of a cross-repository anchor path. */
+export const crossRepositoryAnchorPrefix = /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+):/u;
+const proofUrlPattern =
+  /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/blob\/([a-f0-9]{40})\/[^\s?#]+(?:#[^\s]*)?$/u;
+
+function anchorPathProblem(path: unknown): string | undefined {
+  if (typeof path !== "string" || !path) return "empty path";
+  const local = path.replace(crossRepositoryAnchorPrefix, "");
+  if (!local || local !== local.trim() || /\s/u.test(local)) return "empty or space-padded path";
+  if (local.startsWith("/") || local.includes("\\") || /^[A-Za-z]:/u.test(local))
+    return "path must be repository-relative";
+  if (local.split("/").some((piece) => piece === "" || piece === "." || piece === ".."))
+    return "path must not contain empty, '.' or '..' segments";
+  return undefined;
+}
+
+/** Single shape rule for evidence anchors, shared by the Markdown parser and index validation. */
+function anchorProblem(anchor: unknown): string | undefined {
+  if (!anchor || typeof anchor !== "object" || Array.isArray(anchor)) return "not an object";
+  const value = anchor as Record<string, unknown>;
+  if (Object.keys(value).some((key) => !anchorKeys.has(key))) return "unknown anchor field";
+  if (typeof value.kind !== "string" || !anchorKinds.has(value.kind))
+    return `unknown anchor kind ${String(value.kind)}; use src:, test: or proof:`;
+  if (value.kind === "proof") {
+    if (value.path !== undefined || value.symbol !== undefined)
+      return "a proof anchor has only a URL";
+    const match = typeof value.url === "string" ? value.url.match(proofUrlPattern) : null;
+    if (!match)
+      return "proof must be an immutable https://github.com/<owner>/<repo>/blob/<40-hex sha>/<path> URL";
+    if (value.revision !== match[1]) return "proof revision must equal the URL's commit";
+    return undefined;
+  }
+  if (value.url !== undefined) return "only proof anchors carry a URL";
+  const pathProblem = anchorPathProblem(value.path);
+  if (pathProblem) return pathProblem;
+  if (
+    typeof value.symbol !== "string" ||
+    !value.symbol.trim() ||
+    value.symbol !== value.symbol.trim()
+  )
+    return value.kind === "test" ? "missing test case after ::" : "missing symbol after ::";
+  if (
+    value.revision !== undefined &&
+    (typeof value.revision !== "string" || !shaPattern.test(value.revision))
+  )
+    return "a pinned revision must be a complete lowercase 40-hex commit SHA";
+  return undefined;
+}
+
+function parseAnchor(segment: string): AtlasAnchor | string {
+  const match = segment.match(/^([A-Za-z]+):\s+(\S.*)$/u);
+  if (!match) return "expected <kind>: <value>";
+  const kind = match[1]!;
+  const value = match[2]!.trim();
+  if (!anchorKinds.has(kind)) return `unknown anchor kind ${kind}:; use src:, test: or proof:`;
+  if (kind === "proof") {
+    const sha = value.match(proofUrlPattern)?.[1];
+    return sha
+      ? { kind, url: value, revision: sha }
+      : (anchorProblem({ kind, url: value }) ?? "invalid proof");
+  }
+  const separator = value.indexOf("::");
+  if (separator === -1)
+    return kind === "test" ? "expected <path>::<test case>" : "expected <path>::<symbol>";
+  const path = value.slice(0, separator);
+  let symbol = value.slice(separator + 2);
+  // `Symbol@<sha>` pins a revision; `name @word` (space before @) stays part of a test name.
+  const pin = symbol.match(/^(.*\S)@([^\s@]+)$/u);
+  const anchor: AtlasAnchor = { kind: kind as AtlasAnchorKind, path, symbol };
+  if (pin) {
+    symbol = pin[1]!;
+    anchor.symbol = symbol;
+    anchor.revision = pin[2]!;
+  }
+  return anchorProblem(anchor) ?? anchor;
+}
+
+/**
+ * Splits a checkbox line's trailing anchor tail: the first ` — ` (U+2014)
+ * immediately followed by `src:`, `test:` or `proof:` starts a `; `-separated
+ * list. Any other em dash is prose. Fails closed on any malformed segment.
+ */
+function splitEvidenceAnchors(text: string, at: string): { text: string; anchors: AtlasAnchor[] } {
+  const start = text.search(/ \u2014 (?:src|test|proof):/u);
+  if (start === -1) return { text, anchors: [] };
+  const anchors = text
+    .slice(start + 3)
+    .split("; ")
+    .map((segment) => {
+      const parsed = parseAnchor(segment.trim());
+      if (typeof parsed === "string")
+        fail(`${at} malformed evidence anchor "${segment.trim()}": ${parsed}`);
+      return parsed;
+    });
+  const body = text.slice(0, start).trim();
+  if (!body) fail(`${at} evidence anchor without evidence text`);
+  return { text: body, anchors };
 }
 
 function unique(values: string[]): string[] {
@@ -387,10 +512,15 @@ function addEvidence(
     fail(
       `${at} malformed implementation evidence checkbox under ${owner.id}; use exactly "- [x] <text>" or "- [ ] <text>"`,
     );
+  const anchored = splitEvidenceAnchors(text, at);
   const evidence = owner.entry.evidence!;
-  if (evidence.some((item) => item.text === text))
-    fail(`${at} duplicate implementation evidence under ${owner.id}: ${text}`);
-  evidence.push({ text, checked: checkbox.marker === "x" });
+  if (evidence.some((item) => item.text === anchored.text))
+    fail(`${at} duplicate implementation evidence under ${owner.id}: ${anchored.text}`);
+  evidence.push({
+    text: anchored.text,
+    checked: checkbox.marker === "x",
+    ...(anchored.anchors.length ? { anchors: anchored.anchors } : {}),
+  });
 }
 
 /**
@@ -625,13 +755,21 @@ function validateEvidence(index: AtlasIndex, decision: AtlasDecision): void {
     if (
       !item ||
       typeof item !== "object" ||
-      Object.keys(item).length !== 2 ||
+      Object.keys(item).some((key) => key !== "text" && key !== "checked" && key !== "anchors") ||
       typeof (item as AtlasEvidence).checked !== "boolean" ||
       typeof (item as AtlasEvidence).text !== "string" ||
       !(item as AtlasEvidence).text.trim() ||
       (item as AtlasEvidence).text !== (item as AtlasEvidence).text.trim()
     )
       fail(`${decision.id}: malformed implementation evidence item`);
+    const anchors: unknown = (item as AtlasEvidence).anchors;
+    if (anchors !== undefined) {
+      if (!Array.isArray(anchors)) fail(`${decision.id}: evidence anchors must be an array`);
+      for (const anchor of anchors as unknown[]) {
+        const problem = anchorProblem(anchor);
+        if (problem) fail(`${decision.id}: malformed evidence anchor: ${problem}`);
+      }
+    }
     const text = (item as AtlasEvidence).text;
     if (seen.has(text)) fail(`${decision.id}: duplicate implementation evidence ${text}`);
     seen.add(text);
@@ -818,7 +956,11 @@ export function buildAtlasIndex(
         relations: [...decision.relations].sort((a, b) =>
           a.type === b.type ? compareId(a.target, b.target) : a.type < b.type ? -1 : 1,
         ),
-        evidence: (decision.evidence ?? []).map((item) => ({ ...item })),
+        evidence: (decision.evidence ?? []).map((item) =>
+          item.anchors
+            ? { ...item, anchors: item.anchors.map((anchor) => ({ ...anchor })) }
+            : { ...item },
+        ),
       })),
     provenance: {
       source: "committed-revision",
