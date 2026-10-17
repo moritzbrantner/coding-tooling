@@ -44,7 +44,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 
@@ -666,7 +675,7 @@ describe("CLI", () => {
       const bin = join(root, "bin");
       mkdirSync(bin);
       const git = join(bin, "git");
-      writeFileSync(git, '#!/bin/sh\nprintf invoked > git-was-invoked\nexit 77\n');
+      writeFileSync(git, "#!/bin/sh\nprintf invoked > git-was-invoked\nexit 77\n");
       chmodSync(git, 0o755);
       env.PATH = `${bin}${delimiter}${env.PATH ?? ""}`;
     }

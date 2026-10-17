@@ -89,7 +89,7 @@ function isCommentOrAnnotation(line: string): boolean {
  */
 function commentMarkerLines(lines: string[], rust: boolean): boolean[] {
   let blockDepth = 0;
-  let quote: "\"" | "'" | "`" | null = null;
+  let quote: '"' | "'" | "`" | null = null;
   let rawEnd: string | null = null;
   return lines.map((line) => {
     const prefix = line.trimStart();
@@ -101,7 +101,7 @@ function commentMarkerLines(lines: string[], rust: boolean): boolean[] {
       (prefix.startsWith("//") || prefix.startsWith("/*"));
     const isComment = startsBlockLine || startsComment;
 
-    for (let index = 0; index < line.length; ) {
+    for (let index = 0; index < line.length;) {
       if (rawEnd !== null) {
         const end = line.indexOf(rawEnd, index);
         if (end < 0) break;
@@ -139,7 +139,7 @@ function commentMarkerLines(lines: string[], rust: boolean): boolean[] {
       if (rust) {
         const raw = /^(?:br|r)(#*)"/.exec(line.slice(index));
         if (raw && (index === 0 || !/[A-Za-z0-9_]/.test(line[index - 1]!))) {
-          rawEnd = `\"${raw[1]}`;
+          rawEnd = `"${raw[1]}`;
           index += raw[0].length;
           continue;
         }
@@ -150,7 +150,7 @@ function commentMarkerLines(lines: string[], rust: boolean): boolean[] {
         }
       }
       const character = line[index];
-      if (character === "\"" || character === "'" || character === "`") quote = character;
+      if (character === '"' || character === "'" || character === "`") quote = character;
       index += 1;
     }
     return isComment;
