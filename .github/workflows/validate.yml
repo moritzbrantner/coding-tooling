@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   dogfood-private-action:
+    name: merge-ready
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

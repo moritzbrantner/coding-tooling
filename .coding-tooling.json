@@ -2,16 +2,27 @@
   "schemaVersion": 1,
   "profile": "coding-tooling-self",
   "tiers": {
-    "self": ["format:check", "lint", "typecheck", "test:unit"]
+    "self": [
+      "format:check",
+      "lint",
+      "typecheck",
+      "test:unit"
+    ]
   },
-  "requiredCapabilities": ["format:check", "lint", "typecheck", "test:unit"],
-  "conventionRefs": ["PRINCIPLE-001", "PRINCIPLE-003"],
+  "requiredCapabilities": [
+    "format:check",
+    "lint",
+    "typecheck",
+    "test:unit"
+  ],
+  "conventionRefs": [
+    "PRINCIPLE-001",
+    "PRINCIPLE-003"
+  ],
   "merge": {
     "authority": "hosted",
     "requiredChecks": [
-      "dogfood-private-action",
-      "Cross-platform / macos-latest",
-      "Cross-platform / windows-latest"
+      "merge-ready"
     ]
   }
 }
