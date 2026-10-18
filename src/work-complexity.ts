@@ -7,6 +7,9 @@ import { declaredComponents, loadConfig } from "./core.ts";
 import type { Diagnostic, ResultEnvelope } from "./model.ts";
 import {
   type GrowthBound,
+  type GrowthSpec,
+  type GrowthTerm,
+  growthModel,
   parsePerformanceContract,
   performanceContractPath,
   scaleKey,
@@ -32,12 +35,26 @@ type Violation = {
    */
   previous?: Point;
   previousValue?: number;
+  /**
+   * For the tolerant rate test (three or more points): the least-squares work per model unit over
+   * the lower and upper halves of the group, and the largest upper rate the bound allows.
+   */
+  lowerRate?: number;
+  upperRate?: number;
+  allowedRate?: number;
 };
 export type WorkCheck = {
   metric: string;
   kind: "growth" | "budget";
+  /** A single-dimension bound. */
   dimension?: string;
   bound?: GrowthBound;
+  degree?: number;
+  logDegree?: number;
+  /** A joint product bound over several dimensions, e.g. O(m · log n). */
+  product?: GrowthTerm[];
+  /** Relative slack of the tolerant rate test; absent for the exact classes. */
+  tolerance?: number;
   max?: number;
   state: "passed" | "failed";
   violations: Violation[];
@@ -267,43 +284,72 @@ function parseEvidence(
   return result;
 }
 
+/** Least-squares slope of v against g; 0 when the g values do not vary. */
+function slope(g: number[], v: number[]): number {
+  const n = g.length;
+  const gm = g.reduce((sum, value) => sum + value, 0) / n;
+  const vm = v.reduce((sum, value) => sum + value, 0) / n;
+  let numerator = 0;
+  let denominator = 0;
+  for (let index = 0; index < n; index++) {
+    numerator += (g[index]! - gm) * (v[index]! - vm);
+    denominator += (g[index]! - gm) ** 2;
+  }
+  return denominator > 0 ? numerator / denominator : 0;
+}
+
 /**
- * Within every group of samples that agree on all other dimensions, order the group by the bounded
- * dimension x0 < x1 < … < xk and let v(x) be the counter (a non-negative integer). All comparisons
- * use exact BigInt arithmetic.
+ * Within every group of samples that agree on all dimensions outside the bound, v is the counter
+ * (a non-negative integer). See docs/work-complexity.md for the full semantics.
  *
+ * Exact classes, ordering the group by the bounded dimension x0 < x1 < … < xk (BigInt arithmetic):
  * - constant: v(xi) <= v(x0) for every i.
  * - linear, two points: v(x1) * x0 <= v(x0) * x1 (the ratio test).
  * - linear, three or more points: the per-unit marginal work of every later interval must not
  *   exceed the first interval's, i.e. for every i >= 1
  *   (v(x[i+1]) - v(x[i])) * (x1 - x0) <= max(v(x1) - v(x0), 0) * (x[i+1] - x[i]).
- *   This accepts every affine a*x + b with a >= 0, whatever the sign of b, and concave growth,
- *   and rejects growth whose marginal work increases (N log N, N²).
+ *
+ * Every other class (and every product bound) maps each point to its model work
+ * g = Π x^degree · (1 + log2 x)^logDegree and orders the group by g:
+ * - two points: v1 <= (1 + t) · v0 · g1 / g0 + 1.
+ * - three or more points: the least-squares rate dv/dg of the upper half of the group must not
+ *   exceed (1 + t) times the lower half's (floored at 0) plus one counter unit over the upper
+ *   half's g span. Affine work a·g + b of either sign of b passes; a faster class fails once the
+ *   points span enough of it, and single integer steps (a tree level, a rounding) are absorbed.
  */
 function growthCheck(
   operation: WorkOperation,
   samples: Sample[],
   metric: string,
-  dimension: string,
-  bound: GrowthBound,
+  spec: GrowthSpec,
 ): WorkCheck {
-  const others = operation.dimensions.filter((value) => value !== dimension);
+  const bounded = spec.terms.map((term) => term.dimension);
+  const others = operation.dimensions.filter((value) => !bounded.includes(value));
   const groups = new Map<string, Sample[]>();
   for (const sample of samples) {
     const key = scaleKey(sample.dimensions, others);
     groups.set(key, [...(groups.get(key) ?? []), sample]);
   }
+  const single = spec.terms.length === 1 && !spec.product ? spec.terms[0]! : null;
+  const model = (sample: Sample) =>
+    spec.terms.reduce(
+      (work, term) => work * growthModel(term, sample.dimensions[term.dimension]!),
+      1,
+    );
   const violations: Violation[] = [];
   for (const group of groups.values()) {
     if (group.length < 2) continue;
-    // Points within a group differ only in the bounded dimension, so its values are distinct.
-    const ordered = [...group].sort(
-      (left, right) => left.dimensions[dimension]! - right.dimensions[dimension]!,
-    );
-    const x = ordered.map((sample) => BigInt(sample.dimensions[dimension]!));
-    const v = ordered.map((sample) => BigInt(sample.metrics[metric]!));
+    const ordered = single
+      ? group.toSorted(
+          (left, right) => left.dimensions[single.dimension]! - right.dimensions[single.dimension]!,
+        )
+      : group.toSorted((left, right) => model(left) - model(right));
     const first = ordered[0]!;
-    const violation = (index: number, previous?: Sample): Violation => ({
+    const violation = (
+      index: number,
+      previous?: Sample,
+      rates?: Partial<Violation>,
+    ): Violation => ({
       point: ordered[index]!.dimensions,
       value: ordered[index]!.metrics[metric]!,
       baseline: first.dimensions,
@@ -311,30 +357,69 @@ function growthCheck(
       ...(previous === undefined
         ? {}
         : { previous: previous.dimensions, previousValue: previous.metrics[metric]! }),
+      ...rates,
     });
-    if (bound === "constant") {
+    if (single && single.bound === "constant") {
+      const v = ordered.map((sample) => sample.metrics[metric]!);
       for (let index = 1; index < ordered.length; index++)
         if (v[index]! > v[0]!) violations.push(violation(index));
-    } else if (ordered.length === 2) {
-      if (v[1]! * x[0]! > v[0]! * x[1]!) violations.push(violation(1));
+    } else if (single && single.bound === "linear") {
+      // Points within a group differ only in the bounded dimension, so its values are distinct.
+      const x = ordered.map((sample) => BigInt(sample.dimensions[single.dimension]!));
+      const v = ordered.map((sample) => BigInt(sample.metrics[metric]!));
+      if (ordered.length === 2) {
+        if (v[1]! * x[0]! > v[0]! * x[1]!) violations.push(violation(1));
+      } else {
+        // A decreasing first interval would make every later flat interval fail; a non-negative
+        // reference rate keeps "drops, then stays flat" within the bound.
+        const firstWork = v[1]! > v[0]! ? v[1]! - v[0]! : 0n;
+        const firstSpan = x[1]! - x[0]!;
+        for (let index = 1; index + 1 < ordered.length; index++) {
+          const work = v[index + 1]! - v[index]!;
+          const span = x[index + 1]! - x[index]!;
+          if (work * firstSpan > firstWork * span)
+            violations.push(violation(index + 1, ordered[index]!));
+        }
+      }
     } else {
-      // A decreasing first interval would make every later flat interval fail; a non-negative
-      // reference rate keeps "drops, then stays flat" within the bound (it is still bounded by v(x1)).
-      const firstWork = v[1]! > v[0]! ? v[1]! - v[0]! : 0n;
-      const firstSpan = x[1]! - x[0]!;
-      for (let index = 1; index + 1 < ordered.length; index++) {
-        const work = v[index + 1]! - v[index]!;
-        const span = x[index + 1]! - x[index]!;
-        if (work * firstSpan > firstWork * span)
-          violations.push(violation(index + 1, ordered[index]!));
+      const t = spec.tolerance!;
+      const g = ordered.map(model);
+      const v = ordered.map((sample) => sample.metrics[metric]!);
+      const n = ordered.length;
+      if (n === 2) {
+        if (v[1]! > (1 + t) * v[0]! * (g[1]! / g[0]!) + 1 + 1e-9) violations.push(violation(1));
+      } else {
+        const half = Math.ceil(n / 2);
+        const lower = slope(g.slice(0, half), v.slice(0, half));
+        const upperG = g.slice(n - half);
+        const upper = slope(upperG, v.slice(n - half));
+        const span = upperG[upperG.length - 1]! - upperG[0]!;
+        const allowed = (1 + t) * Math.max(lower, 0) + (span > 0 ? 1 / span : 0);
+        if (upper > allowed * (1 + 1e-9))
+          violations.push(
+            violation(n - 1, ordered[n - half]!, {
+              lowerRate: lower,
+              upperRate: upper,
+              allowedRate: allowed,
+            }),
+          );
       }
     }
   }
+  const shape: Partial<WorkCheck> = single
+    ? {
+        dimension: single.dimension,
+        bound: single.bound,
+        ...(single.bound === "polynomial"
+          ? { degree: single.degree, logDegree: single.logDegree }
+          : {}),
+      }
+    : { product: spec.terms };
   return {
     metric,
     kind: "growth",
-    dimension,
-    bound,
+    ...shape,
+    ...(spec.tolerance === null ? {} : { tolerance: spec.tolerance }),
     state: violations.length ? "failed" : "passed",
     violations,
   };
@@ -360,8 +445,8 @@ function evaluate(operation: WorkOperation, byPoint: Map<string, Sample>): Opera
         violations,
       });
     }
-    for (const { dimension, bound } of metric.growth)
-      checks.push(growthCheck(operation, samples, metric.name, dimension, bound));
+    for (const spec of metric.growth)
+      checks.push(growthCheck(operation, samples, metric.name, spec));
   }
   return {
     id: operation.id,
