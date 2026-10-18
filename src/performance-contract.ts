@@ -34,15 +34,59 @@ const workSignals = new Set([
   "size",
   "custom",
 ]);
-export const growthBounds = ["constant", "linear"] as const;
+export const growthBounds = [
+  "constant",
+  "logarithmic",
+  "linear",
+  "linearithmic",
+  "quadratic",
+  "cubic",
+  "polynomial",
+] as const;
 export type GrowthBound = (typeof growthBounds)[number];
+/** `constant` and `linear` are checked exactly; every other class with the tolerant rate test. */
+export const exactGrowthBounds: readonly GrowthBound[] = ["constant", "linear"];
+/** Default relative slack of the tolerant rate test (see docs/work-complexity.md). */
+export const defaultGrowthTolerance = 0.25;
+const maxGrowthTolerance = 4;
+const maxPolynomialDegree = 8;
+/** The class x^degree · log(x)^logDegree that one dimension's bound names. */
+export type GrowthTerm = {
+  dimension: string;
+  bound: GrowthBound;
+  degree: number;
+  logDegree: number;
+};
+/**
+ * One growth bound: a single dimension (`terms` has one entry and `product` is false) or a joint
+ * `product` bound over several dimensions, e.g. O(m · log n). `tolerance` is null for the exact
+ * classes.
+ */
+export type GrowthSpec = {
+  product: boolean;
+  terms: GrowthTerm[];
+  tolerance: number | null;
+};
+const classDegrees: Record<Exclude<GrowthBound, "polynomial">, [number, number]> = {
+  constant: [0, 0],
+  logarithmic: [0, 1],
+  linear: [1, 0],
+  linearithmic: [1, 1],
+  quadratic: [2, 0],
+  cubic: [3, 0],
+};
+
+/** Model work of one term at scale x >= 1: x^degree · (1 + log2 x)^logDegree, always >= 1. */
+export function growthModel(term: GrowthTerm, x: number): number {
+  return x ** term.degree * (1 + Math.log2(x)) ** term.logDegree;
+}
 
 export type WorkMetric = {
   name: string;
   unit: string;
   signal: string;
   budget: { max: number } | null;
-  growth: { dimension: string; bound: GrowthBound }[];
+  growth: GrowthSpec[];
 };
 export type WorkOperation = {
   id: string;
@@ -215,22 +259,105 @@ function parseMetric(raw: unknown, prefix: string, dimensions: string[]): WorkMe
   }
   const rawGrowth: unknown = metric.growth ?? [];
   if (!Array.isArray(rawGrowth)) throw new ContractError(`${prefix}.growth must be an array`);
-  const growth = rawGrowth.map((entry: unknown, index) => {
-    const value = record(entry);
-    const growthPrefix = `${prefix}.growth[${index}]`;
-    if (!value) throw new ContractError(`${growthPrefix} must be an object`);
-    only(value, ["dimension", "bound"], growthPrefix);
-    if (typeof value.dimension !== "string" || !dimensions.includes(value.dimension))
-      throw new ContractError(`${growthPrefix}.dimension must name a declared dimension`);
-    if (!growthBounds.some((bound) => bound === value.bound))
-      throw new ContractError(`${growthPrefix}.bound must be one of ${growthBounds.join(", ")}`);
-    return { dimension: value.dimension, bound: value.bound as GrowthBound };
-  });
-  if (new Set(growth.map((value) => value.dimension)).size !== growth.length)
+  const growth = rawGrowth.map((entry: unknown, index) =>
+    parseGrowth(entry, `${prefix}.growth[${index}]`, dimensions),
+  );
+  const singles = growth
+    .filter((value) => !value.product)
+    .map((value) => value.terms[0]!.dimension);
+  if (new Set(singles).size !== singles.length)
     throw new ContractError(`${prefix}.growth declares a dimension more than once`);
+  const products = growth
+    .filter((value) => value.product)
+    .map((value) => JSON.stringify(value.terms.map((term) => term.dimension).toSorted()));
+  if (new Set(products).size !== products.length)
+    throw new ContractError(`${prefix}.growth declares a product over the same dimensions twice`);
   if (budget === null && growth.length === 0)
     throw new ContractError(`${prefix} declares neither a budget nor a growth bound`);
   return { name: metric.name, unit: metric.unit, signal: String(metric.signal), budget, growth };
+}
+
+function parseTerm(
+  value: Record<string, unknown>,
+  prefix: string,
+  dimensions: string[],
+  extra: string[],
+): GrowthTerm {
+  only(value, ["dimension", "bound", "degree", "logDegree", ...extra], prefix);
+  if (typeof value.dimension !== "string" || !dimensions.includes(value.dimension))
+    throw new ContractError(`${prefix}.dimension must name a declared dimension`);
+  if (!growthBounds.some((bound) => bound === value.bound))
+    throw new ContractError(`${prefix}.bound must be one of ${growthBounds.join(", ")}`);
+  const bound = value.bound as GrowthBound;
+  if (bound !== "polynomial") {
+    if (value.degree !== undefined || value.logDegree !== undefined)
+      throw new ContractError(`${prefix}: degree and logDegree are only valid for polynomial`);
+    const [degree, logDegree] = classDegrees[bound];
+    return { dimension: value.dimension, bound, degree, logDegree };
+  }
+  const degree = value.degree;
+  if (
+    typeof degree !== "number" ||
+    !Number.isInteger(degree) ||
+    degree < 1 ||
+    degree > maxPolynomialDegree
+  )
+    throw new ContractError(
+      `${prefix}.degree must be an integer from 1 to ${maxPolynomialDegree} for polynomial`,
+    );
+  const logDegree = value.logDegree ?? 0;
+  if (
+    typeof logDegree !== "number" ||
+    !Number.isInteger(logDegree) ||
+    logDegree < 0 ||
+    logDegree > maxPolynomialDegree
+  )
+    throw new ContractError(
+      `${prefix}.logDegree must be an integer from 0 to ${maxPolynomialDegree}`,
+    );
+  return { dimension: value.dimension, bound, degree, logDegree };
+}
+
+function parseGrowth(entry: unknown, prefix: string, dimensions: string[]): GrowthSpec {
+  const value = record(entry);
+  if (!value) throw new ContractError(`${prefix} must be an object`);
+  let terms: GrowthTerm[];
+  const product = value.product !== undefined;
+  if (product) {
+    only(value, ["product", "tolerance"], prefix);
+    if (!Array.isArray(value.product) || value.product.length < 2)
+      throw new ContractError(`${prefix}.product must list at least two dimensions`);
+    terms = value.product.map((raw: unknown, index) => {
+      const term = record(raw);
+      const termPrefix = `${prefix}.product[${index}]`;
+      if (!term) throw new ContractError(`${termPrefix} must be an object`);
+      const parsed = parseTerm(term, termPrefix, dimensions, []);
+      if (parsed.bound === "constant")
+        throw new ContractError(`${termPrefix}: a constant term adds nothing to a product`);
+      return parsed;
+    });
+    if (new Set(terms.map((term) => term.dimension)).size !== terms.length)
+      throw new ContractError(`${prefix}.product names a dimension more than once`);
+  } else terms = [parseTerm(value, prefix, dimensions, ["tolerance"])];
+  const exact = !product && exactGrowthBounds.includes(terms[0]!.bound);
+  let tolerance: number | null = exact ? null : defaultGrowthTolerance;
+  if (value.tolerance !== undefined) {
+    if (exact)
+      throw new ContractError(
+        `${prefix}.tolerance is not valid for ${terms[0]!.bound}, which is checked exactly`,
+      );
+    if (
+      typeof value.tolerance !== "number" ||
+      !Number.isFinite(value.tolerance) ||
+      value.tolerance < 0 ||
+      value.tolerance > maxGrowthTolerance
+    )
+      throw new ContractError(
+        `${prefix}.tolerance must be a number from 0 to ${maxGrowthTolerance}`,
+      );
+    tolerance = value.tolerance;
+  }
+  return { product, terms, tolerance };
 }
 
 function parseLatency(
@@ -331,16 +458,17 @@ function parseOperation(
     throw new ContractError(`${prefix}.metrics names must be unique`);
   // A growth bound is only executable when some group of scale points varies its dimension.
   for (const metric of metrics)
-    for (const { dimension } of metric.growth) {
-      const others = dimensions.filter((value) => value !== dimension);
-      const groups = new Map<string, Set<number>>();
+    for (const { terms } of metric.growth) {
+      const bounded = terms.map((term) => term.dimension);
+      const others = dimensions.filter((value) => !bounded.includes(value));
+      const groups = new Map<string, Set<string>>();
       for (const point of scalePoints) {
         const key = scaleKey(point, others);
-        groups.set(key, (groups.get(key) ?? new Set()).add(point[dimension]!));
+        groups.set(key, (groups.get(key) ?? new Set()).add(scaleKey(point, bounded)));
       }
       if (![...groups.values()].some((values) => values.size >= 2))
         throw new ContractError(
-          `${prefix}.metrics ${metric.name}: no scale points vary ${dimension} while holding the other dimensions fixed`,
+          `${prefix}.metrics ${metric.name}: no scale points vary ${bounded.join(", ")} while holding the other dimensions fixed`,
         );
     }
   return {

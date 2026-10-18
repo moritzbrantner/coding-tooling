@@ -351,7 +351,7 @@ describe("work complexity contracts", () => {
   test("a growth bound naming an undeclared dimension or an unknown growth class is refused", () => {
     for (const growth of [
       [{ dimension: "pixels", bound: "constant" }],
-      [{ dimension: "features", bound: "quadratic" }],
+      [{ dimension: "features", bound: "exponential" }],
     ]) {
       const declared = contract([
         operation({

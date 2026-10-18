@@ -286,18 +286,67 @@
                 "growth": {
                   "type": "array",
                   "items": {
-                    "type": "object",
-                    "required": ["dimension", "bound"],
-                    "properties": {
-                      "dimension": {
-                        "type": "string",
-                        "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+                    "$comment": "A single-dimension bound or a joint product bound. degree/logDegree are required/allowed only for polynomial; tolerance is refused for the exact classes constant and linear (enforced by src/performance-contract.ts).",
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "required": ["dimension", "bound"],
+                        "properties": {
+                          "dimension": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$" },
+                          "bound": {
+                            "enum": [
+                              "constant",
+                              "logarithmic",
+                              "linear",
+                              "linearithmic",
+                              "quadratic",
+                              "cubic",
+                              "polynomial"
+                            ]
+                          },
+                          "degree": { "type": "integer", "minimum": 1, "maximum": 8 },
+                          "logDegree": { "type": "integer", "minimum": 0, "maximum": 8 },
+                          "tolerance": { "type": "number", "minimum": 0, "maximum": 4 }
+                        },
+                        "additionalProperties": false
                       },
-                      "bound": {
-                        "enum": ["constant", "linear"]
+                      {
+                        "type": "object",
+                        "required": ["product"],
+                        "properties": {
+                          "product": {
+                            "type": "array",
+                            "minItems": 2,
+                            "items": {
+                              "type": "object",
+                              "required": ["dimension", "bound"],
+                              "properties": {
+                                "dimension": {
+                                  "type": "string",
+                                  "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+                                },
+                                "bound": {
+                                  "enum": [
+                                    "constant",
+                                    "logarithmic",
+                                    "linear",
+                                    "linearithmic",
+                                    "quadratic",
+                                    "cubic",
+                                    "polynomial"
+                                  ]
+                                },
+                                "degree": { "type": "integer", "minimum": 1, "maximum": 8 },
+                                "logDegree": { "type": "integer", "minimum": 0, "maximum": 8 }
+                              },
+                              "additionalProperties": false
+                            }
+                          },
+                          "tolerance": { "type": "number", "minimum": 0, "maximum": 4 }
+                        },
+                        "additionalProperties": false
                       }
-                    },
-                    "additionalProperties": false
+                    ]
                   }
                 },
                 "notes": {
