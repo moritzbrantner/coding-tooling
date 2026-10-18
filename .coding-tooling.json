@@ -8,10 +8,6 @@
   "conventionRefs": ["PRINCIPLE-001", "PRINCIPLE-003"],
   "merge": {
     "authority": "hosted",
-    "requiredChecks": [
-      "dogfood-private-action",
-      "Cross-platform / macos-latest",
-      "Cross-platform / windows-latest"
-    ]
+    "requiredChecks": ["merge-ready"]
   }
 }

@@ -6,5 +6,6 @@
     "**/bower_components/**",
     "fixtures/**",
     "calibration/fixtures/**"
-  ]
+  ],
+  "platformAutomerge": true
 }
