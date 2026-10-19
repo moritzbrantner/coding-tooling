@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { realpathSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 import {
@@ -255,10 +255,12 @@ function openSibling(root: string, repository: string): SiblingTarget {
     topLevel = undefined;
   }
   // A plain directory inside some other repository must not borrow that repository.
-  if (!topLevel || realpathSync(topLevel) !== realpathSync(directory))
+  const expected = statSync(directory);
+  const actual = topLevel ? statSync(topLevel) : undefined;
+  if (!actual || actual.dev !== expected.dev || actual.ino !== expected.ino)
     return {
       ok: false,
-      reason: `cross-repository sibling checkout ${label} for ${repository} is not a git repository`,
+      reason: `cross-repository sibling checkout ${label} for ${repository} is not a git repository (reported root: ${topLevel ?? "unavailable"})`,
     };
   let originUrl = "";
   try {

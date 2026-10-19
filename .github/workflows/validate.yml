@@ -34,23 +34,27 @@ jobs:
       - name: Validate through the local Action
         uses: ./
         with:
+          bun-version: 1.4.3
           tier: self
           install-mode: none
           strict: true
       - name: Inspect deterministic repository findings
         uses: ./
         with:
+          bun-version: 1.4.3
           operation: findings
           report-path: .artifacts/coding-tooling/findings.json
       - name: Inspect repository foundation
         uses: ./
         with:
+          bun-version: 1.4.3
           operation: foundation
           install-mode: none
           report-path: .artifacts/coding-tooling/foundation.json
       - name: Plan repository foundation
         uses: ./
         with:
+          bun-version: 1.4.3
           operation: bootstrap-plan
           install-mode: none
           report-path: .artifacts/coding-tooling/bootstrap-plan.json
@@ -58,6 +62,7 @@ jobs:
         if: always()
         uses: ./
         with:
+          bun-version: 1.4.3
           operation: score
           validation-report: .artifacts/coding-tooling/report.json
           report-path: .artifacts/coding-tooling/score.json

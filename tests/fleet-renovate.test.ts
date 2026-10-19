@@ -64,7 +64,7 @@ import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 
 import {
   mockGithub,
@@ -553,10 +553,12 @@ function cli(state: MockState, args: string[]) {
   const logPath = join(work, "calls.log");
   writeFileSync(statePath, JSON.stringify(state));
   writeFileSync(logPath, "");
-  const gh = join(bin, "gh");
+  const gh = join(bin, process.platform === "win32" ? "gh.cmd" : "gh");
   writeFileSync(
     gh,
-    `#!/bin/sh\nexec "${process.execPath}" "${join(fixtures, "fake-gh.ts")}" "$@"\n`,
+    process.platform === "win32"
+      ? `@echo off\r\n"${process.execPath}" "${join(fixtures, "fake-gh.ts")}" %*\r\n`
+      : `#!/bin/sh\nexec "${process.execPath}" "${join(fixtures, "fake-gh.ts")}" "$@"\n`,
   );
   chmodSync(gh, 0o755);
   const result = spawnSync(
@@ -567,7 +569,7 @@ function cli(state: MockState, args: string[]) {
       encoding: "utf8",
       env: {
         ...process.env,
-        PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH ?? ""}`,
+        PATH: [bin, dirname(process.execPath), process.env.PATH ?? ""].join(delimiter),
         FLEET_RENOVATE_MOCK_STATE: statePath,
         FLEET_RENOVATE_MOCK_LOG: logPath,
       },
