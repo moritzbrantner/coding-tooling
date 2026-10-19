@@ -7,7 +7,7 @@ import { afterEach, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import { indexRepository } from "../src/decision-atlas-cli.ts";
 import { buildAtlasIndex, type AtlasIndex } from "../src/decision-atlas.ts";
@@ -124,7 +124,7 @@ test("--previous-index runs full index validation, including v2 evidence", () =>
   git("remote", "add", "origin", "https://github.com/" + repository + ".git");
   git("add", ".");
   git("commit", "-qm", "fixture");
-  const previous = join(root, "..", `${root.split("/").pop()}-previous.json`);
+  const previous = join(root, "..", `${basename(root)}-previous.json`);
   directories.push(previous);
   const run = () =>
     indexRepository({

@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { realpathSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 import {
   crossRepositoryAnchorPrefix,
@@ -255,7 +255,7 @@ function openSibling(root: string, repository: string): SiblingTarget {
     topLevel = undefined;
   }
   // A plain directory inside some other repository must not borrow that repository.
-  if (!topLevel || realpathSync(topLevel) !== realpathSync(directory))
+  if (!topLevel || relative(realpathSync(topLevel), realpathSync(directory)) !== "")
     return {
       ok: false,
       reason: `cross-repository sibling checkout ${label} for ${repository} is not a git repository`,
