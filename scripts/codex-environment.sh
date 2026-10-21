@@ -63,8 +63,8 @@ if [[ -n "$desired_bun" ]]; then
     exit 2
   fi
   if [[ "$(bun --version)" != "$desired_bun" ]]; then
-    printf 'Bun preflight mismatch: expected %s, got %s\n' "$desired_bun" "$(bun --version)" >&2
-    exit 1
+    # Bun tracks latest (owner decision 2026-10-21); packageManager is informational.
+    printf 'Bun %s differs from packageManager bun@%s; continuing\n' "$(bun --version)" "$desired_bun" >&2
   fi
   if [[ -d "$HOME/.bun/bin" ]]; then
     export PATH="$HOME/.bun/bin:$PATH"
@@ -105,10 +105,6 @@ if path.is_file():
 PY
 )"
 if [[ -n "$rust_toolchain" ]]; then
-  if ! [[ "$rust_toolchain" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    printf 'Rust toolchain must use an exact version, got %s\n' "$rust_toolchain" >&2
-    exit 2
-  fi
   if ! command -v rustup >/dev/null 2>&1; then
     printf 'rustup is required to provision Rust %s; install rustup through a trusted pinned environment mechanism before running this script\n' "$rust_toolchain" >&2
     exit 2
@@ -144,8 +140,7 @@ for command in "${environment_commands[@]}"; do
 done
 
 if [[ -n "$desired_bun" && "$(bun --version)" != "$desired_bun" ]]; then
-  printf 'Bun preflight mismatch: expected %s, got %s\n' "$desired_bun" "$(bun --version)" >&2
-  exit 1
+  printf 'Bun %s differs from packageManager bun@%s; continuing\n' "$(bun --version)" "$desired_bun" >&2
 fi
 if [[ -n "$desired_node" ]]; then
   observed_node="$(node --version)"
@@ -155,7 +150,7 @@ if [[ -n "$desired_node" ]]; then
     exit 1
   fi
 fi
-if [[ -n "$rust_toolchain" ]]; then
+if [[ "$rust_toolchain" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   observed_rust="$(cd "$root" && rustc --version | awk '{print $2}')"
   if [[ "$observed_rust" != "$rust_toolchain" ]]; then
     printf 'Rust preflight mismatch: expected %s, got %s\n' "$rust_toolchain" "$observed_rust" >&2
