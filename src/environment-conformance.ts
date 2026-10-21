@@ -33,6 +33,10 @@ function exactVersion(value: string): boolean {
   return /^\d+\.\d+\.\d+$/.test(value);
 }
 
+function rustReleaseChannel(value: string): boolean {
+  return value === "stable" || value === "beta" || value === "nightly";
+}
+
 function commandVersion(
   command: string,
   args: string[],
@@ -117,6 +121,19 @@ function rustToolchain(root: string): EnvironmentToolchain | null {
   const source = text(path);
   const match = source.match(/channel\s*=\s*"([^"]+)"/);
   const declaredVersion = match?.[1] ?? null;
+  if (declaredVersion && rustReleaseChannel(declaredVersion)) {
+    const observedVersion = commandVersion("rustc", ["--version"], root, (value) => {
+      const version = value.match(/^rustc\s+(\d+\.\d+\.\d+)/)?.[1];
+      return version ?? null;
+    });
+    return {
+      tool: "rust",
+      path: "rust-toolchain.toml",
+      declaredVersion,
+      observedVersion,
+      status: observedVersion === null ? "unavailable" : "passed",
+    };
+  }
   if (!declaredVersion || !exactVersion(declaredVersion)) {
     return {
       tool: "rust",
@@ -343,6 +360,17 @@ export function repositoryEnvironmentConformance(root: string): {
     .sort((left, right) => left.tool.localeCompare(right.tool));
 
   for (const toolchain of toolchains) {
+    // Bun and Rust track latest (owner decision 2026-10-21): a Rust release channel is a valid
+    // declaration, and a runner whose Bun or Rust differs from the declared version is drift
+    // worth reporting, not a blocking failure.
+    const tracksLatest = toolchain.tool === "bun" || toolchain.tool === "rust";
+    if (
+      toolchain.tool === "rust" &&
+      toolchain.declaredVersion !== null &&
+      rustReleaseChannel(toolchain.declaredVersion)
+    ) {
+      continue;
+    }
     if (!toolchain.declaredVersion || !exactVersion(toolchain.declaredVersion)) {
       findings.push({
         code: "environment-toolchain-pin-floating",
@@ -365,7 +393,7 @@ export function repositoryEnvironmentConformance(root: string): {
       findings.push({
         code: "environment-toolchain-mismatch",
         status: "failed",
-        severity: "error",
+        severity: tracksLatest ? "advisory" : "error",
         message: `${toolchain.tool} declares ${toolchain.declaredVersion} but observed ${toolchain.observedVersion ?? "unknown"}`,
         path: toolchain.path,
       });

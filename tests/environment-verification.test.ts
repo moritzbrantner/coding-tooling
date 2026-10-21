@@ -48,15 +48,14 @@ describe("environment verification receipt", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  test("does not certify an exact but mismatched toolchain", () => {
+  test("does not block on Bun drift from the declared version", () => {
     const root = repository("bun@0.0.1");
 
     const result = verifyEnvironmentFingerprint(root);
 
-    expect(result.status).toBe("failed");
-    expect(result.data.verifiedFingerprint).toBeNull();
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({ code: "environment-toolchain-mismatch", path: "package.json" }),
+    expect(result.status).toBe("passed");
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "environment-toolchain-mismatch" }),
     );
   });
 

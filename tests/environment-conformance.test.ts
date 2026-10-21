@@ -202,7 +202,7 @@ describe("repository environment conformance", () => {
     );
   });
 
-  test("distinguishes an installed-version mismatch", () => {
+  test("reports Bun drift from the declared version as advisory", () => {
     const root = repository("bun@0.0.1");
     adoptEnvironment(root);
     const result = repositoryEnvironmentConformance(root);
@@ -211,9 +211,18 @@ describe("repository environment conformance", () => {
       expect.objectContaining({
         code: "environment-toolchain-mismatch",
         status: "failed",
-        severity: "error",
+        severity: "advisory",
       }),
     );
+  });
+
+  test("accepts a Rust release channel", () => {
+    const root = repository(`bun@${Bun.version}`);
+    adoptEnvironment(root);
+    writeFileSync(join(root, "rust-toolchain.toml"), '[toolchain]\nchannel = "stable"\n');
+    const result = repositoryEnvironmentConformance(root);
+
+    expect(result.findings.filter((finding) => finding.path === "rust-toolchain.toml")).toEqual([]);
   });
 
   test("reports compatibility holds separately without making the repository fail", () => {
