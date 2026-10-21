@@ -94,6 +94,16 @@ function isNotFound(result: CommandResult): boolean {
   return result.status !== 0 && /HTTP 404|Not Found/.test(result.stderr);
 }
 
+/** `gh issue list` on a repository with issues turned off: there can be no dashboard. */
+function issuesDisabled(result: CommandResult): boolean {
+  return result.status !== 0 && /repository has disabled issues/.test(result.stderr);
+}
+
+/** GitHub answers ref reads on a repository without commits with HTTP 409: no branches exist. */
+function emptyRepository(result: CommandResult): boolean {
+  return result.status !== 0 && /HTTP 409/.test(result.stderr) && /empty/i.test(result.stderr);
+}
+
 function readJson<T>(repository: string, what: string, result: CommandResult): T {
   if (result.status !== 0) throw new ReadFailure(failureMessage(repository, what, result));
   try {
@@ -263,28 +273,27 @@ function reportRepository(
   const config = readConfig(repository, run, cwd);
 
   // Real gh quirk: `--author app/renovate` matches no issues; `renovate[bot]` does.
-  const issues = readJson<IssueInfo[]>(
-    repository,
-    "Dependency Dashboard issues",
-    run(
-      "gh",
-      [
-        "issue",
-        "list",
-        "--repo",
-        repository,
-        "--state",
-        "open",
-        "--author",
-        "renovate[bot]",
-        "--limit",
-        "50",
-        "--json",
-        "number,title,body,author",
-      ],
-      cwd,
-    ),
+  const issueList = run(
+    "gh",
+    [
+      "issue",
+      "list",
+      "--repo",
+      repository,
+      "--state",
+      "open",
+      "--author",
+      "renovate[bot]",
+      "--limit",
+      "50",
+      "--json",
+      "number,title,body,author",
+    ],
+    cwd,
   );
+  const issues = issuesDisabled(issueList)
+    ? []
+    : readJson<IssueInfo[]>(repository, "Dependency Dashboard issues", issueList);
   const dashboardIssue = (Array.isArray(issues) ? issues : [])
     .filter(
       (issue) =>
@@ -335,7 +344,7 @@ function reportRepository(
   let installed = dashboardIssue !== undefined || openPrs.length > 0;
   if (!installed) {
     const refs = run("gh", ["api", `repos/${repository}/git/matching-refs/heads/renovate`], cwd);
-    if (!isNotFound(refs)) {
+    if (!isNotFound(refs) && !emptyRepository(refs)) {
       const listed = readJson<Array<{ ref?: unknown }>>(repository, "renovate/* branches", refs);
       installed = (Array.isArray(listed) ? listed : []).some(
         (ref) => typeof ref.ref === "string" && ref.ref.startsWith("refs/heads/renovate/"),

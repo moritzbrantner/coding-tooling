@@ -531,6 +531,30 @@ test("a non-404 contents failure is unavailable, not a missing config", async ()
   expect(zoo?.actions.some((action) => action.kind === "add-config") ?? false).toBe(false);
 });
 
+test("disabled issues mean no dashboard, not an unreadable repository", async () => {
+  const state = fleetState();
+  state.repositories["moritzbrantner/zoo"]!.fail = {
+    on: ["issues"],
+    stderr: "the 'moritzbrantner/zoo' repository has disabled issues\n",
+  };
+  const { result } = await runFleet(state, ["moritzbrantner/zoo"]);
+  expect(result.status).toBe("passed");
+  const zoo = entry(result, "moritzbrantner/zoo");
+  expect(zoo.dashboard.issue).toBeNull();
+  expect(zoo.app).toBe("needs-config");
+});
+
+test("an empty repository (HTTP 409 on refs) has no Renovate branches, not a read failure", async () => {
+  const state = fleetState();
+  state.repositories["moritzbrantner/zoo"]!.fail = {
+    on: ["branches"],
+    stderr: "gh: Git Repository is empty. (HTTP 409)\n",
+  };
+  const { result } = await runFleet(state, ["moritzbrantner/zoo"]);
+  expect(result.status).toBe("passed");
+  expect(entry(result, "moritzbrantner/zoo").app).toBe("needs-config");
+});
+
 test("the report is deterministic for the same GitHub state and clock", async () => {
   const report = await loadReport();
   const root = fleetRoot();
