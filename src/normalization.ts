@@ -9,6 +9,12 @@ import {
   type ConvergenceRuleMode,
 } from "./convergence-rule-policy.ts";
 import { discoverComponents, loadConfig } from "./core.ts";
+import {
+  restageNormalizedFiles,
+  scopeNormalizers,
+  selectNormalizationFiles,
+  type NormalizationSelectionRequest,
+} from "./normalization-selection.ts";
 import type { Capability, Component, ResultEnvelope, ResultStatus } from "./model.ts";
 import { readJson, relativePosix, runCommand, walkFiles, type CommandResult } from "./shared.ts";
 
@@ -358,17 +364,40 @@ function runPass(
   return { pass, status, results };
 }
 
+/**
+ * Normalize the repository, or only the files chosen by `request` (explicit paths,
+ * the git index, or changes against a git base). A staged selection is re-staged
+ * after a successful run.
+ */
 export function normalizeRepository(
   root: string,
   dependencies: NormalizationDependencies = {},
+  request?: NormalizationSelectionRequest,
 ): ResultEnvelope<Record<string, unknown>> {
   const started = Date.now();
   try {
     const plan = planNormalization(root);
-    const appliedNormalizers = plan.normalizers.filter((normalizer) => normalizer.mode === "apply");
+    let appliedNormalizers = plan.normalizers.filter((normalizer) => normalizer.mode === "apply");
     const withheldNormalizers = plan.normalizers.filter(
       (normalizer) => normalizer.mode !== "apply",
     );
+    let scope: Record<string, unknown> = {};
+    let touchedFiles: string[] = [];
+    if (request) {
+      const selection = selectNormalizationFiles(root, request);
+      const { scoped, unscopable } = scopeNormalizers(root, appliedNormalizers, selection.files);
+      appliedNormalizers = scoped;
+      touchedFiles = [
+        ...new Set(
+          scoped.flatMap((normalizer) =>
+            normalizer.files.map((file) =>
+              normalizer.path === "." ? file : `${normalizer.path}/${file}`,
+            ),
+          ),
+        ),
+      ].sort();
+      scope = { selection, unscopable };
+    }
     const execute = dependencies.execute ?? defaultExecute;
     const fingerprint = dependencies.fingerprint ?? repositoryContentFingerprint;
     const coverage =
@@ -396,6 +425,7 @@ export function normalizeRepository(
           appliedNormalizers,
           withheldNormalizers,
           unsupported: plan.unsupported,
+          ...scope,
           passes: [],
         },
         diagnostics: [],
@@ -421,6 +451,7 @@ export function normalizeRepository(
           appliedNormalizers,
           withheldNormalizers,
           unsupported: plan.unsupported,
+          ...scope,
           passes: [first],
           beforeFingerprint,
           currentFingerprint,
@@ -453,6 +484,7 @@ export function normalizeRepository(
           appliedNormalizers,
           withheldNormalizers,
           unsupported: plan.unsupported,
+          ...scope,
           passes: [first, second],
           beforeFingerprint,
           normalizedFingerprint,
@@ -484,6 +516,7 @@ export function normalizeRepository(
           appliedNormalizers,
           withheldNormalizers,
           unsupported: plan.unsupported,
+          ...scope,
           passes: [first, second],
           beforeFingerprint,
           normalizedFingerprint,
@@ -498,6 +531,8 @@ export function normalizeRepository(
       };
     }
 
+    if (request?.mode === "staged") restageNormalizedFiles(root, touchedFiles);
+
     return {
       schemaVersion: 1,
       operation: "normalize",
@@ -511,6 +546,8 @@ export function normalizeRepository(
         idempotent: true,
         normalizers: plan.normalizers,
         unsupported: plan.unsupported,
+        ...scope,
+        ...(request?.mode === "staged" ? { restaged: touchedFiles } : {}),
         passes: [first, second],
         beforeFingerprint,
         normalizedFingerprint,

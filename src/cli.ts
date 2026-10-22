@@ -177,7 +177,7 @@ function usage(): never {
   coding-tooling convergence rules describe <id> [--json]
   coding-tooling convergence rules set <id> <disabled|suggest|apply> [--json]
   coding-tooling convergence rules <enable|disable|suggest> <id> [--json]
-  coding-tooling normalize [--json]
+  coding-tooling normalize [<path>... | --staged | --changed [--base <git-ref>]] [--json]
   coding-tooling converge [--include-baseline] [--max-rounds <n>] [--verify-tier <name>|--no-verify] [--json]
   coding-tooling generate list [--json]
   coding-tooling generate describe <id> [--json]
@@ -386,8 +386,33 @@ export function main(argv = process.argv.slice(2)): number {
       result = convergenceRulesCommand(root, "set", id, mode);
     } else return usage();
   } else if (command === "normalize") {
-    if (positional.length > 0 || Object.keys(options).some((key) => key !== "json")) return usage();
-    result = normalizeRepository(root);
+    // Boolean flags may have swallowed a following path; give it back.
+    const paths = [...positional];
+    for (const flag of ["json", "staged", "changed"]) {
+      if (typeof options[flag] === "string") {
+        paths.push(options[flag] as string);
+        options[flag] = true;
+      }
+    }
+    const base = stringOption(options, "base");
+    const modes = [paths.length > 0, Boolean(options.staged), Boolean(options.changed)];
+    if (
+      Object.keys(options).some((key) => !["json", "staged", "changed", "base"].includes(key)) ||
+      modes.filter(Boolean).length > 1 ||
+      (options.base !== undefined && (!options.changed || !base))
+    )
+      return usage();
+    result = normalizeRepository(
+      root,
+      {},
+      paths.length
+        ? { mode: "paths", paths }
+        : options.staged
+          ? { mode: "staged" }
+          : options.changed
+            ? { mode: "changed", base }
+            : undefined,
+    );
   } else if (command === "converge") {
     if (positional.length > 0) return usage();
     const maxRoundsOption = stringOption(options, "max-rounds");

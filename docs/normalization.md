@@ -6,6 +6,25 @@
 coding-tooling normalize --json
 ```
 
+## Selecting files
+
+By default every adapter runs over its whole component. A selection restricts the run to chosen files:
+
+```bash
+coding-tooling normalize src/a.ts src/b.rs   # explicit paths (relative to the current directory)
+coding-tooling normalize --staged            # files in the git index; re-staged afterwards
+coding-tooling normalize --changed           # working-tree changes against HEAD plus untracked files
+coding-tooling normalize --changed --base origin/main
+```
+
+Each adapter receives only the selected files inside its component that its tool understands (Oxfmt: JS/TS/JSON/Markdown/CSS/YAML/TOML/…; Oxlint: JS/TS and framework files; Rust: `.rs`; .NET: `.cs`/`.vb`/`.fs`). Adapters with no matching file do not run.
+
+- Oxfmt/Oxlint run the package-local binary with the committed script's flags (and any composed convention config) and the selected files in place of its path targets.
+- Rust runs `rustfmt --edition <manifest edition>` on the files, because `cargo fmt` cannot target files. rustfmt still follows out-of-line `mod` declarations of a selected file.
+- .NET appends `--include <files>` to the `dotnet format` command.
+
+`--staged` excludes files that also have unstaged edits (reported as `partiallyStaged`) so normalization never stages unrelated work; after a successful run it `git add`s exactly the normalized files (`restaged`), which makes it suitable for a pre-commit hook. An adapter that cannot be scoped (for example a missing package binary) is reported in `unscopable` instead of falling back to a whole-repository run. The fixed-point proof below still applies to selected runs.
+
 Normalization is a mutation phase, not a validation phase and not an agent. It does not decide business behavior, remove TODO work markers, invent lint fixes, run arbitrary package scripts, or weaken checks.
 
 ## Current adapters
