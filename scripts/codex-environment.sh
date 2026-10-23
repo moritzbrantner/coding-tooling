@@ -38,12 +38,12 @@ for package in data.get('system', {}).get('apt', []):
     print(package)
 PY
   )
-  # Skip what the image already provides (dpkg-installed, or a same-named command such as a
-  # runner's /usr/local/bin/cmake) so apt, and its mirror, is only contacted for real gaps.
+  # Skip packages that are already dpkg-installed so apt, and its mirror, is only contacted for
+  # real gaps. Environment verification checks dpkg state, so a same-named binary outside dpkg
+  # (such as a runner's /usr/local/bin/cmake) does not count.
   missing_apt_packages=()
   for package in "${apt_packages[@]}"; do
-    if [[ "$(dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null || true)" != ii* ]] &&
-      ! command -v "$package" >/dev/null 2>&1; then
+    if [[ "$(dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null || true)" != ii* ]]; then
       missing_apt_packages+=("$package")
     fi
   done
