@@ -51,18 +51,18 @@ function setup(apt: string[]) {
 
 describe("codex-environment.sh system packages", () => {
   test("does not contact apt when the image already provides every package", () => {
-    const result = setup(["xvfb", "cmake"]);
+    const result = setup(["xvfb"]);
     expect(result.status).toBe(0);
     expect(result.aptLog).toBe("");
   });
 
-  test("installs only missing packages with bounded retries", () => {
+  test("installs packages missing from dpkg, even with a same-named binary, with bounded retries", () => {
     const result = setup(["xvfb", "cmake", "ffmpeg"]);
     expect(result.status).toBe(0);
     const calls = result.aptLog.trim().split("\n");
     expect(calls).toHaveLength(2);
     expect(calls[0]).toContain("Acquire::Retries=3");
     expect(calls[0]).toEndWith("update");
-    expect(calls[1]).toEndWith("install -y --no-install-recommends ffmpeg");
+    expect(calls[1]).toEndWith("install -y --no-install-recommends cmake ffmpeg");
   });
 });
