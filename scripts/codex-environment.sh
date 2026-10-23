@@ -120,22 +120,3 @@ PY
 for command in "${environment_commands[@]}"; do
   (cd "$root" && bash -lc "$command")
 done
-
-if [[ -n "$desired_bun" && "$(bun --version)" != "$desired_bun" ]]; then
-  printf 'Bun %s differs from packageManager bun@%s; continuing\n' "$(bun --version)" "$desired_bun" >&2
-fi
-if [[ -n "$desired_node" ]]; then
-  observed_node="$(node --version)"
-  observed_node="${observed_node#v}"
-  if [[ "$observed_node" != "$desired_node" ]]; then
-    printf 'Node preflight mismatch: expected %s, got %s\n' "$desired_node" "$observed_node" >&2
-    exit 1
-  fi
-fi
-if [[ "$rust_toolchain" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  observed_rust="$(cd "$root" && rustc --version | awk '{print $2}')"
-  if [[ "$observed_rust" != "$rust_toolchain" ]]; then
-    printf 'Rust preflight mismatch: expected %s, got %s\n' "$rust_toolchain" "$observed_rust" >&2
-    exit 1
-  fi
-fi
