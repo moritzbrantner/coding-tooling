@@ -162,7 +162,8 @@ const builtinChecks = new Set([
   "todo-format",
   "vitest-kinds",
 ]);
-const exactBunPackageManager = /^bun@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+// BUN-001: `packageManager` names Bun with a minimum version; CI runs the latest stable Bun.
+const bunPackageManager = /^bun@\S+$/;
 const ambientEnvironmentKeys = new Set([
   "CI",
   "HOME",
@@ -456,20 +457,20 @@ function bunDefault(root: string, components: Component[], ruleId: string): Conv
     const rootManifest = readJson<{ packageManager?: string }>(join(root, "package.json"));
     const rootManager = rootManifest?.packageManager;
     if (!rootManager) {
+      failures.push("repository: package.json must declare packageManager as bun@<version>");
+    } else if (!bunPackageManager.test(rootManager)) {
       failures.push(
-        "repository: package.json must declare an exact packageManager such as bun@1.4.0",
+        `repository: packageManager must name Bun as bun@<version>, got ${rootManager}`,
       );
-    } else if (!exactBunPackageManager.test(rootManager)) {
-      failures.push(`repository: packageManager must be an exact Bun version, got ${rootManager}`);
     }
   }
 
   for (const component of packages) {
     const componentRoot = component.path === "." ? root : join(root, component.path);
     const manifest = readJson<{ packageManager?: string }>(join(componentRoot, "package.json"));
-    if (manifest?.packageManager && !exactBunPackageManager.test(manifest.packageManager)) {
+    if (manifest?.packageManager && !bunPackageManager.test(manifest.packageManager)) {
       failures.push(
-        `${component.name}: packageManager must be an exact Bun version, got ${manifest.packageManager}`,
+        `${component.name}: packageManager must name Bun as bun@<version>, got ${manifest.packageManager}`,
       );
     }
 

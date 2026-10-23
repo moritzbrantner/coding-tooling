@@ -11,8 +11,8 @@ The report has `operation: "conformance"` and `data.reportVersion: 1`. It includ
 - discovered components and technologies;
 - repository-environment adoption state in `data.environment`;
 - expected/verified semantic environment fingerprint evidence in `data.environmentFingerprint`;
-- exact native Bun/Rust pins when those toolchains are declared;
-- observed local Bun/Rust versions and declared-versus-observed mismatch diagnostics;
+- declared Bun/Node/Rust versions or channels (any form; declarations are minimums because toolchains track the latest stable release);
+- observed local Bun/Node/Rust versions and an advisory `environment-toolchain-behind` diagnostic when an installed release is older than the declared minimum;
 - environment-v1 config/script presence and structural validity;
 - durable compatibility holds from `.repository-environment.toml`;
 - whether `.coding-tooling.json` exists and is valid;
@@ -23,9 +23,9 @@ The report has `operation: "conformance"` and `data.reportVersion: 1`. It includ
 - results from installed deterministic convention enforcement when the snapshot is valid;
 - normalized findings with stable codes, status, severity, and convention ID where known.
 
-Repositories that have not yet adopted environment-v1 receive an advisory `environment-v1-not-adopted` finding; this does not make an otherwise clean repository fail. A partial or malformed adoption, floating native toolchain pin, missing declared toolchain, installed-version mismatch, native requirement mismatch, or selected source-profile mismatch is reported separately with a blocking finding.
+Repositories that have not yet adopted environment-v1 receive an advisory `environment-v1-not-adopted` finding; this does not make an otherwise clean repository fail. A partial or malformed adoption, missing declared toolchain, conflicting Bun declarations, native requirement mismatch, or selected source-profile mismatch is reported separately with a blocking finding. A declared-versus-installed version difference and a loose declaration (`bun@1`, `bun@latest`, `24`, `lts/*`, `stable`) never block: every toolchain tracks the latest stable release.
 
-Compatibility holds are advisory state rather than failures: they mean a newer exact candidate was intentionally rejected after compatibility verification while the repository continues to use its accepted exact pin.
+Compatibility holds are advisory state rather than failures: they record that a specific newer candidate was intentionally rejected after compatibility verification.
 
 ## Status semantics
 

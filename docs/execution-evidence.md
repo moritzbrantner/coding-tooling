@@ -8,13 +8,9 @@ The implementation lives in `site/execution-evidence.js` and is applied by the n
 
 The evidence basis is `structural`. Only explicit literal workflow values and commands can produce findings. Expressions, opaque wrappers, unsupported layouts, and shell behavior outside the bounded rules below remain unknown or unsupported rather than being guessed.
 
-### Toolchain consistency
+### Toolchains
 
-When the repository exposes an exact root Node, Bun, or Rust toolchain, inspected workflow declarations can be compared with it.
-
-Supported observations include literal `node_version` / `node-version`, `bun_version` / `bun-version`, `rust_version` / `rust-version`, and literal `dtolnay/rust-toolchain@...` versions. An explicit broad or different version is contradictory evidence. A matrix expression or SHA-only action reference is not interpreted as a runtime version.
-
-This proves only that an inspected literal declaration agrees or disagrees with the repository-owned exact pin. It does not prove which runtime a hosted runner eventually executes when the declaration is indirect.
+Hosted workflow toolchain declarations are not compared with repository declarations. Every toolchain tracks the latest stable release, so a workflow installing `latest` or `stable` while the repository declares `bun@1.4.3` is expected, not contradictory.
 
 ### Lockfile consumption
 

@@ -1,7 +1,6 @@
 import { NORMALIZED_EVIDENCE_SCHEMA_VERSION } from "./evidence-model.js";
 
 const declarations = { rust: ["rust-toolchain", "rust-toolchain.toml"], dotnet: ["global.json"] };
-const exactVersion = /^\d+\.\d+\.\d+$/;
 
 export function projectToolchainPaths(path, kind) {
   if (!Object.hasOwn(declarations, kind)) throw new Error(`Unsupported project kind: ${kind}`);
@@ -149,13 +148,12 @@ export function projectToolchainOutcome(evidence) {
     if (!parsed || parsed.path || typeof parsed.channel !== "string")
       return outcome("unsupported", "rust-toolchain-shape-unsupported");
     const version = parsed.channel;
-    if (exactVersion.test(version))
-      return outcome("satisfied", "project-toolchain-exact", { version });
+    // Toolchains track the latest stable release: a channel or a version is a valid declaration.
     if (
       /^(?:stable|beta|nightly)(?:-\d{4}-\d{2}-\d{2})?$/.test(version) ||
       /^\d+\.\d+(?:\..+)?$/.test(version)
     ) {
-      return outcome("finding", "project-toolchain-not-exact", { version });
+      return outcome("satisfied", "project-toolchain-declared", { version });
     }
     return outcome("unsupported", "rust-custom-toolchain-unsupported", { version });
   }
@@ -168,13 +166,8 @@ export function projectToolchainOutcome(evidence) {
   const sdk = parsed?.sdk;
   if (!sdk || typeof sdk !== "object" || typeof sdk.version !== "string")
     return outcome("unsupported", "dotnet-sdk-declaration-unsupported");
-  const version = sdk.version;
-  if (!exactVersion.test(version))
-    return outcome("finding", "project-toolchain-not-exact", { version });
-  if (sdk.rollForward !== "disable")
-    return outcome("finding", "dotnet-sdk-roll-forward-enabled", {
-      version,
-      rollForward: sdk.rollForward ?? "patch",
-    });
-  return outcome("satisfied", "project-toolchain-exact", { version, rollForward: "disable" });
+  return outcome("satisfied", "project-toolchain-declared", {
+    version: sdk.version,
+    ...(typeof sdk.rollForward === "string" ? { rollForward: sdk.rollForward } : {}),
+  });
 }

@@ -14,9 +14,11 @@
       "expectedCodes": ["environment-script-missing"]
     },
     {
-      "name": "floating-bun-pin",
+      "name": "loose-bun-declaration",
       "packageManager": "bun@latest",
-      "expectedCodes": ["environment-v1-not-adopted", "environment-toolchain-pin-floating"]
+      "adopt": true,
+      "expectedCodes": [],
+      "exactCodes": true
     },
     {
       "name": "valid-compatibility-hold",

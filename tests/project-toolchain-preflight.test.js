@@ -84,7 +84,7 @@ describe("component-scoped native toolchain declarations", () => {
       path: "services/rust/Cargo.toml",
     });
   });
-  test("a nested override cannot be hidden by a repository root pin", () => {
+  test("a nested release-channel override is its own satisfied declaration", () => {
     const analysis = analyzeSnapshot(
       nativeSnapshot({ "services/rust/rust-toolchain.toml": '[toolchain]\nchannel="stable"\n' }),
     );
@@ -93,12 +93,13 @@ describe("component-scoped native toolchain declarations", () => {
     );
     expect(
       analysis.components.find((item) => item.path === "services/rust").toolchain,
-    ).toMatchObject({ status: "finding", reason: "project-toolchain-not-exact" });
-    expect(
-      analysis.findings.some(
-        (item) => item.id.startsWith("REMOTE-ENV-004-") && item.title.startsWith("rust:"),
-      ),
-    ).toBeTrue();
+    ).toMatchObject({
+      status: "satisfied",
+      reason: "project-toolchain-declared",
+      version: "stable",
+      declaration: "services/rust/rust-toolchain.toml",
+    });
+    expect(analysis.findings.some((item) => item.title.startsWith("rust:"))).toBeFalse();
   });
   test("unreadable nearer files and truncated trees stay incomplete", () => {
     for (const source of [
@@ -133,7 +134,7 @@ describe("component-scoped native toolchain declarations", () => {
       "unsupported",
     );
   });
-  test("unsupported TOML shapes and .NET roll-forward never become exact pins", () => {
+  test("unsupported TOML shapes stay unsupported and .NET roll-forward is accepted", () => {
     const analysis = analyzeSnapshot(
       nativeSnapshot({
         "rust-toolchain.toml": 'toolchain={channel="1.98.1"}\n',
@@ -144,8 +145,9 @@ describe("component-scoped native toolchain declarations", () => {
       "unsupported",
     );
     expect(analysis.components.find((item) => item.kind === "dotnet").toolchain).toMatchObject({
-      status: "finding",
-      reason: "dotnet-sdk-roll-forward-enabled",
+      status: "satisfied",
+      reason: "project-toolchain-declared",
+      rollForward: "latestPatch",
     });
   });
   test("selects nested native declarations and does not use sibling pins", () => {

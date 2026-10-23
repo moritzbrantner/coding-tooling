@@ -206,7 +206,7 @@ pub fn tick() {}
     expect(analysis.findings).toEqual([]);
   });
 
-  test("reports a non-exact Bun toolchain pin", () => {
+  test("accepts a loose Bun packageManager declaration", () => {
     const analysis = analyzeSnapshot(
       repository({
         tree: [
@@ -227,7 +227,7 @@ pub fn tick() {}
         },
       }),
     );
-    expect(analysis.findings.map((finding) => finding.id)).toEqual(["REMOTE-ENV-005"]);
+    expect(analysis.findings.map((finding) => finding.id)).toEqual([]);
   });
 
   test("does not treat deployment-only automation as validation", () => {

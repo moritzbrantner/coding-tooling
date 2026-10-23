@@ -51,32 +51,13 @@ describe("composite action contract", () => {
     expect(source).not.toContain("restore-keys:");
   });
 
-  test("uses the environment-v1 Bun pin before falling back to the action runtime", () => {
+  test("always installs the latest stable Bun without a version input", () => {
     const source = actionSource();
 
-    expect(source).toContain('bun_version="${package_bun:-$version_file_bun}"');
-    expect(source).toContain("CONSUMER_BUN_VERSION:");
-    expect(source).toContain("consumer-environment.outputs.bun-version");
-    expect(source).toContain('effective_version="$INPUT_BUN_VERSION"');
-    expect(source).toContain('effective_version="$CONSUMER_BUN_VERSION"');
-    expect(source).toContain('authority="environment-v1"');
-    expect(source).toContain("bun-version: ${{ steps.tooling-bun.outputs.version }}");
-  });
-
-  test("preserves internal whitespace when reading the environment-v1 Bun pin", () => {
-    const source = actionSource();
-
-    expect(source).toContain('pathlib.Path(".bun-version")');
-    expect(source).toContain('.read_text(encoding="utf-8").strip()');
-    expect(source).not.toContain("tr -d '[:space:]'");
-  });
-
-  test("skips setup-bun when the effective Bun is already installed", () => {
-    const source = actionSource();
-
-    expect(source).toContain("Detect coding-tooling Bun");
-    expect(source).toContain('[[ "$(bun --version)" == "$effective_version" ]]');
-    expect(source).toContain("if: steps.tooling-bun.outputs.ready != 'true'");
+    expect(source).toContain("bun-version: latest");
+    expect(source).not.toMatch(/^  bun-version:/m);
+    expect(source).not.toContain("exact x.y.z");
+    expect(source).not.toContain("CONSUMER_BUN_VERSION");
   });
 
   test("prepares environment-v1 without happy-path environment verification", () => {

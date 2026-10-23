@@ -155,65 +155,50 @@ describe("repository environment conformance", () => {
     );
   });
 
-  test("blocks floating Bun packageManager pins", () => {
-    const root = repository("bun@latest");
-    const result = repositoryEnvironmentConformance(root);
+  test("accepts loose Bun, .bun-version and Node declarations", () => {
+    for (const [file, content] of [
+      ["package.json", JSON.stringify({ name: "fixture", packageManager: "bun@latest" })],
+      [".bun-version", "1\n"],
+      [".node-version", "lts/*\n"],
+    ] as const) {
+      const root = repository();
+      adoptEnvironment(root);
+      writeFileSync(join(root, file), content);
 
-    expect(result.findings).toContainEqual(
-      expect.objectContaining({
-        code: "environment-toolchain-pin-floating",
-        status: "failed",
-        severity: "error",
-        path: "package.json",
-      }),
-    );
+      const result = repositoryEnvironmentConformance(root);
+
+      expect(
+        result.findings.filter((finding) => finding.severity === "error"),
+        file,
+      ).toEqual([]);
+    }
   });
 
-  test("blocks floating .bun-version pins", () => {
-    const root = repository();
-    writeFileSync(join(root, ".bun-version"), "latest\n");
-
-    const result = repositoryEnvironmentConformance(root);
-
-    expect(result.findings).toContainEqual(
-      expect.objectContaining({
-        code: "environment-toolchain-pin-floating",
-        status: "failed",
-        severity: "error",
-        path: ".bun-version",
-      }),
-    );
-  });
-
-  test("blocks floating Node pins", () => {
-    const root = repository();
-    adoptEnvironment(root);
-    writeFileSync(join(root, ".node-version"), "24\n");
-
-    const result = repositoryEnvironmentConformance(root);
-
-    expect(result.findings).toContainEqual(
-      expect.objectContaining({
-        code: "environment-toolchain-pin-floating",
-        status: "failed",
-        severity: "error",
-        path: ".node-version",
-      }),
-    );
-  });
-
-  test("reports Bun drift from the declared version as advisory", () => {
+  test("accepts a newer observed Bun than the declared minimum without findings", () => {
     const root = repository("bun@0.0.1");
     adoptEnvironment(root);
     const result = repositoryEnvironmentConformance(root);
 
-    expect(result.findings).toContainEqual(
+    expect(result.findings).toEqual([]);
+    expect(result.data.toolchains).toEqual([
+      expect.objectContaining({ tool: "bun", declaredVersion: "0.0.1", status: "passed" }),
+    ]);
+  });
+
+  test("reports an observed Bun older than the declared minimum as advisory only", () => {
+    const root = repository("bun@99.0.0");
+    adoptEnvironment(root);
+    const result = repositoryEnvironmentConformance(root);
+
+    expect(result.findings).toEqual([
       expect.objectContaining({
-        code: "environment-toolchain-mismatch",
-        status: "failed",
+        code: "environment-toolchain-behind",
+        status: "unavailable",
         severity: "advisory",
+        path: "package.json",
       }),
-    );
+    ]);
+    expect(result.data.toolchains).toEqual([expect.objectContaining({ status: "passed" })]);
   });
 
   test("accepts a Rust release channel", () => {

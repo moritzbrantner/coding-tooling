@@ -27,7 +27,7 @@ function enforce(root: string, name: string, enforcement: Record<string, unknown
 }
 
 describe("installed convention enforcement", () => {
-  test("accepts exact Bun repositories and rejects conflicting package-manager locks", () => {
+  test("accepts Bun repositories and rejects conflicting package-manager locks", () => {
     const root = repository({ packageManager: "bun@1.4.0" });
     writeFileSync(join(root, "bun.lock"), "");
     enforce(root, "BUN-001", { kind: "builtin", check: "bun-default" });
@@ -40,20 +40,25 @@ describe("installed convention enforcement", () => {
     expect(failed.diagnostics[0]?.message).toContain("conflicting lockfile");
   });
 
-  test("requires an exact root Bun packageManager declaration", () => {
+  test("requires a root Bun packageManager declaration and accepts loose versions", () => {
     const missing = repository();
     writeFileSync(join(missing, "bun.lock"), "");
     enforce(missing, "BUN-001", { kind: "builtin", check: "bun-default" });
     expect(
       runConventionChecks(missing, discoverComponents(missing)).diagnostics[0]?.message,
-    ).toContain("must declare an exact packageManager");
+    ).toContain("must declare packageManager as bun@<version>");
 
-    const floating = repository({ packageManager: "bun@^1.4.0" });
-    writeFileSync(join(floating, "bun.lock"), "");
-    enforce(floating, "BUN-001", { kind: "builtin", check: "bun-default" });
-    expect(
-      runConventionChecks(floating, discoverComponents(floating)).diagnostics[0]?.message,
-    ).toContain("must be an exact Bun version");
+    const loose = repository({ packageManager: "bun@1" });
+    writeFileSync(join(loose, "bun.lock"), "");
+    enforce(loose, "BUN-001", { kind: "builtin", check: "bun-default" });
+    expect(runConventionChecks(loose, discoverComponents(loose)).status).toBe("passed");
+
+    const other = repository({ packageManager: "npm@10.0.0" });
+    writeFileSync(join(other, "bun.lock"), "");
+    enforce(other, "BUN-001", { kind: "builtin", check: "bun-default" });
+    expect(runConventionChecks(other, discoverComponents(other)).diagnostics[0]?.message).toContain(
+      "must name Bun as bun@<version>",
+    );
   });
 
   test("requires used environment variables in the nearest .env.example", () => {

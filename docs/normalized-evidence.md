@@ -33,8 +33,7 @@ Canonical capability outcomes are explicit:
 
 Package toolchain outcomes add the fourth state required for environment boundaries:
 
-- `satisfied` — the component has an exact supported Bun or Node version fact;
-- `finding` — supported version evidence exists but is not exact;
+- `satisfied` — the component declares a supported Bun or Node version fact in any form (`bun-version-declared` / `node-version-declared`); toolchains track the latest stable release, so declarations need not be exact;
 - `unsupported` — the component explicitly declares a package manager the current remote adapter does not model;
 - `incomplete` — no component-local supported version fact is available.
 
@@ -59,9 +58,9 @@ The .NET CLI starts from the invocation directory; MSBuild solution/project
 resolution may have a different starting point. Custom invocation directories,
 ambient overrides and active installed toolchains require local verification.
 
-- `satisfied`: an exact stable version declaration is supported; .NET additionally declares `rollForward: disable`.
-- `finding`: a complete inventory proves absence, a supported version is not exact, or .NET permits roll-forward (including its default patch policy).
-- `unsupported`: custom Rust toolchains, unmodeled TOML constructs or unmodeled SDK declarations cannot establish an exact pin.
+- `satisfied` (`project-toolchain-declared`): a Rust release channel (`stable`, `beta`, `nightly`, optionally dated) or version, or any .NET SDK version with any `rollForward` policy.
+- `finding`: a complete inventory proves the declaration is absent.
+- `unsupported`: custom Rust toolchains, unmodeled TOML constructs or unmodeled SDK declarations.
 - `incomplete`: a truncated tree could hide a closer declaration, or the selected declaration was not acquired/readable. A readable root file cannot hide this gap.
 
 Rust parsing is bounded to the ordinary `[toolchain]` table with literal strings

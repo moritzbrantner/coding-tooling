@@ -246,55 +246,21 @@ reason = "a human explanation that is not environment identity"
     expect(moved.fingerprint).toBe(source.fingerprint);
   });
 
-  test("refuses floating packageManager toolchain declarations", () => {
-    const root = repository();
-    writeFileSync(
-      join(root, "package.json"),
-      `${JSON.stringify({ name: "fixture", packageManager: "bun@latest" }, null, 2)}\n`,
-    );
+  test("fingerprints loose toolchain declarations", () => {
+    for (const [file, content] of [
+      ["package.json", JSON.stringify({ name: "fixture", packageManager: "bun@latest" })],
+      [".bun-version", "latest\n"],
+      [".node-version", "24\n"],
+      ["rust-toolchain.toml", '[toolchain]\nchannel = "stable"\n'],
+    ] as const) {
+      const root = repository();
+      writeFileSync(join(root, "package.json"), '{"name":"fixture"}\n');
+      writeFileSync(join(root, file), content);
 
-    const result = expectedEnvironmentFingerprint(root);
+      const result = expectedEnvironmentFingerprint(root);
 
-    expect(result.status).toBe("failed");
-    expect(result.data.fingerprint).toBeNull();
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: "environment-fingerprint-toolchain-floating",
-        path: "package.json",
-      }),
-    );
-  });
-
-  test("refuses floating .bun-version declarations", () => {
-    const root = repository();
-    writeFileSync(join(root, "package.json"), '{"name":"fixture"}\n');
-    writeFileSync(join(root, ".bun-version"), "latest\n");
-
-    const result = expectedEnvironmentFingerprint(root);
-
-    expect(result.status).toBe("failed");
-    expect(result.data.fingerprint).toBeNull();
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: "environment-fingerprint-toolchain-floating",
-        path: ".bun-version",
-      }),
-    );
-  });
-
-  test("refuses floating Node declarations", () => {
-    const root = repository();
-    writeFileSync(join(root, ".node-version"), "24\n");
-
-    const result = expectedEnvironmentFingerprint(root);
-
-    expect(result.status).toBe("failed");
-    expect(result.data.fingerprint).toBeNull();
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: "environment-fingerprint-toolchain-floating",
-        path: ".node-version",
-      }),
-    );
+      expect(result.status, file).toBe("passed");
+      expect(result.data.fingerprint, file).toEqual(expect.any(String));
+    }
   });
 });

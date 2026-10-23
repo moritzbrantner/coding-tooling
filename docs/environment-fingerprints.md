@@ -6,7 +6,7 @@
 
 The v1 fingerprint contains independent digests for:
 
-- `toolchain`: exact repository-native Bun and Rust pins plus declared Rust components;
+- `toolchain`: repository-native Bun, Node and Rust declarations (any version or channel) plus declared Rust components;
 - `native`: declared environment-v1 native package requirements;
 - `dependencies`: content digests of supported root lockfiles;
 - `sources`: the default registry profile or an explicit exact source-development profile;
@@ -40,7 +40,7 @@ The source-development fingerprint includes normalized package/Git/revision iden
 
 `coding-tooling environment verify --json` computes the expected identity, observes the current environment, and emits a receipt. The machine never gets a separate filesystem-derived identity: `verifiedFingerprint` is populated only when the observed environment satisfies the expected contract.
 
-Verification composes the existing environment-v1 conformance checks for exact Bun/Rust observations, verifies every Rust component declared in `rust-toolchain.toml` against the selected exact toolchain, checks declared apt packages through `dpkg-query` when native requirements exist, and enforces the selected source profile. The default profile rejects an active managed source override; `source-development` requires the generated source configuration to match the exact declared package/Git/revision graph and any local exact revision checks.
+Verification composes the existing environment-v1 conformance checks (declared toolchains must be installed; any installed release satisfies them), verifies every Rust component declared in `rust-toolchain.toml` against the declared toolchain or channel, checks declared apt packages through `dpkg-query` when native requirements exist, and enforces the selected source profile. The default profile rejects an active managed source override; `source-development` requires the generated source configuration to match the exact declared package/Git/revision graph and any local exact revision checks.
 
 If a required verifier is unavailable, the receipt is `unavailable` rather than claiming equivalence without evidence. A future Nix or non-Debian backend can add a semantic native-capability verifier without changing the fingerprint contract.
 
@@ -58,8 +58,6 @@ The same receipt is embedded in `coding-tooling conformance --json`, so explicit
 
 Ordinary `operation: run` execution does not spend a separate semantic environment-verification step on successful validation. It performs only the setup required to execute the repository's declared commands and assumes that environment remains valid on the happy path.
 
-Provisioning follows repository authority before verification. For an adopted environment-v1 repository, an exact Bun declaration in `package.json#packageManager` or `.bun-version` takes precedence over the composite Action's fallback Bun runtime. The Action first selects and provisions that declared version, then runs the repository setup. The fallback exists only for repositories that do not declare an environment-v1 Bun runtime. Conflicting or floating repository declarations still fail because they are ambiguous environment contracts, not because the currently installed runner version differs.
-
-This distinction keeps verification strict as a postcondition without turning a legitimate dependency upgrade into a bootstrap failure. A Renovate change to the authoritative repository Bun pin therefore causes validation to execute on the proposed Bun version; the checks then determine whether that upgrade is compatible.
+Every toolchain tracks the latest stable release (owner decision 2026-10-23). The composite Action always provisions the latest stable Bun and has no Bun version input; `package.json#packageManager` and `.bun-version` declare a minimum, not the version CI installs. Rust declarations may name a release channel such as `stable`, and `.node-version` may be loose (`24`, `lts/*`). A difference between a declaration and the installed release is at most the advisory `environment-toolchain-behind` diagnostic; only conflicting Bun declarations remain a blocking ambiguity.
 
 When a `run` fails and environment-v1 is declared, the composite Action performs `environment verify` as failure-only diagnostic escalation and reports whether setup also changed tracked repository state. Those diagnostics explain whether the environment plausibly caused the observed failure; they do not replace or erase the original failed command. Scheduled or manually requested environment canaries can still verify environment integrity independently without sitting on the normal PR critical path.

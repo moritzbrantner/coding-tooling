@@ -33,8 +33,23 @@ function exactVersion(value: string): boolean {
   return /^\d+\.\d+\.\d+$/.test(value);
 }
 
-function rustReleaseChannel(value: string): boolean {
-  return value === "stable" || value === "beta" || value === "nightly";
+/** Numeric prefix of a loose declaration such as `1.4.3`, `^1.4`, `>=24` or `v24.1`. */
+function minimumVersion(value: string): number[] | null {
+  const match = value.match(/^(?:[~^]|>=|v)?\s*(\d+)(?:\.(\d+))?(?:\.(\d+))?/);
+  if (!match) return null;
+  return [match[1], match[2], match[3]].filter((part) => part !== undefined).map(Number);
+}
+
+/** True when an observed x.y.z release is older than the declared minimum. */
+function olderThanDeclared(observed: string, declared: string): boolean {
+  const minimum = minimumVersion(declared);
+  const actual = minimumVersion(observed);
+  if (!minimum || !actual) return false;
+  for (let index = 0; index < minimum.length; index += 1) {
+    const left = actual[index] ?? 0;
+    if (left !== minimum[index]) return left < minimum[index];
+  }
+  return false;
 }
 
 function commandVersion(
@@ -74,117 +89,56 @@ function bunDeclarations(root: string): {
   };
 }
 
+// Every toolchain tracks the latest stable release (owner decision 2026-10-23). A declaration
+// is a minimum, not a pin: any installed release satisfies it, and only an installed release
+// older than the declared minimum yields an advisory diagnostic.
+function toolchain(
+  tool: EnvironmentToolchain["tool"],
+  path: string,
+  declaredVersion: string | null,
+  observedVersion: string | null,
+): EnvironmentToolchain {
+  return {
+    tool,
+    path,
+    declaredVersion,
+    observedVersion,
+    status: observedVersion === null ? "unavailable" : "passed",
+  };
+}
+
 function bunToolchain(root: string): EnvironmentToolchain | null {
   const { packageManagerVersion, versionFileVersion } = bunDeclarations(root);
   const declaredVersion = packageManagerVersion ?? versionFileVersion;
   if (declaredVersion === null) return null;
   const observedVersion = commandVersion("bun", ["--version"], root, (value) => value || null);
-  return {
-    tool: "bun",
-    path: packageManagerVersion !== null ? "package.json" : ".bun-version",
+  return toolchain(
+    "bun",
+    packageManagerVersion !== null ? "package.json" : ".bun-version",
     declaredVersion,
     observedVersion,
-    status:
-      observedVersion === null
-        ? "unavailable"
-        : exactVersion(declaredVersion) && observedVersion === declaredVersion
-          ? "passed"
-          : "failed",
-  };
+  );
 }
 
 function nodeToolchain(root: string): EnvironmentToolchain | null {
   const path = join(root, ".node-version");
   if (!existsSync(path)) return null;
-  const declaredVersion = text(path).trim();
   const observedVersion = commandVersion("node", ["--version"], root, (value) => {
     const version = value.match(/^v?(\d+\.\d+\.\d+)$/)?.[1];
     return version ?? null;
   });
-  return {
-    tool: "node",
-    path: ".node-version",
-    declaredVersion,
-    observedVersion,
-    status:
-      observedVersion === null
-        ? "unavailable"
-        : exactVersion(declaredVersion) && observedVersion === declaredVersion
-          ? "passed"
-          : "failed",
-  };
+  return toolchain("node", ".node-version", text(path).trim() || null, observedVersion);
 }
 
 function rustToolchain(root: string): EnvironmentToolchain | null {
   const path = join(root, "rust-toolchain.toml");
   if (!existsSync(path)) return null;
-  const source = text(path);
-  const match = source.match(/channel\s*=\s*"([^"]+)"/);
-  const declaredVersion = match?.[1] ?? null;
-  if (declaredVersion && rustReleaseChannel(declaredVersion)) {
-    const observedVersion = commandVersion("rustc", ["--version"], root, (value) => {
-      const version = value.match(/^rustc\s+(\d+\.\d+\.\d+)/)?.[1];
-      return version ?? null;
-    });
-    return {
-      tool: "rust",
-      path: "rust-toolchain.toml",
-      declaredVersion,
-      observedVersion,
-      status: observedVersion === null ? "unavailable" : "passed",
-    };
-  }
-  if (!declaredVersion || !exactVersion(declaredVersion)) {
-    return {
-      tool: "rust",
-      path: "rust-toolchain.toml",
-      declaredVersion,
-      observedVersion: null,
-      status: "failed",
-    };
-  }
-
-  const installedToolchains = commandVersion(
-    "rustup",
-    ["toolchain", "list"],
-    root,
-    (value) => value,
-  );
-  let observedVersion: string | null = null;
-  if (installedToolchains !== null) {
-    const installed = installedToolchains
-      .split("\n")
-      .some((line) => line.trim().startsWith(declaredVersion));
-    if (installed) {
-      observedVersion = commandVersion(
-        "rustc",
-        [`+${declaredVersion}`, "--version"],
-        root,
-        (value) => {
-          const version = value.match(/^rustc\s+(\d+\.\d+\.\d+)/)?.[1];
-          return version ?? null;
-        },
-      );
-    }
-  } else {
-    observedVersion = commandVersion("rustc", ["--version"], root, (value) => {
-      const version = value.match(/^rustc\s+(\d+\.\d+\.\d+)/)?.[1];
-      return version ?? null;
-    });
-  }
-
-  return {
-    tool: "rust",
-    path: "rust-toolchain.toml",
-    declaredVersion,
-    observedVersion,
-    status:
-      observedVersion === null
-        ? "unavailable"
-        : observedVersion === declaredVersion
-          ? "passed"
-          : "failed",
-  };
+  const declaredVersion = text(path).match(/channel\s*=\s*"([^"]+)"/)?.[1] ?? null;
+  const observedVersion = commandVersion("rustc", ["--version"], root, (value) => {
+    const version = value.match(/^rustc\s+(\d+\.\d+\.\d+)/)?.[1];
+    return version ?? null;
+  });
+  return toolchain("rust", "rust-toolchain.toml", declaredVersion, observedVersion);
 }
 
 function unescapeTomlString(value: string): string {
@@ -360,41 +314,25 @@ export function repositoryEnvironmentConformance(root: string): {
     .sort((left, right) => left.tool.localeCompare(right.tool));
 
   for (const toolchain of toolchains) {
-    // Bun and Rust track latest (owner decision 2026-10-21): a Rust release channel is a valid
-    // declaration, and a runner whose Bun or Rust differs from the declared version is drift
-    // worth reporting, not a blocking failure.
-    const tracksLatest = toolchain.tool === "bun" || toolchain.tool === "rust";
-    if (
-      toolchain.tool === "rust" &&
-      toolchain.declaredVersion !== null &&
-      rustReleaseChannel(toolchain.declaredVersion)
-    ) {
-      continue;
-    }
-    if (!toolchain.declaredVersion || !exactVersion(toolchain.declaredVersion)) {
-      findings.push({
-        code: "environment-toolchain-pin-floating",
-        status: "failed",
-        severity: "error",
-        message: `${toolchain.tool} must use an exact x.y.z repository pin`,
-        path: toolchain.path,
-      });
-      continue;
-    }
+    const declared = toolchain.declaredVersion ?? "latest stable";
     if (toolchain.status === "unavailable") {
       findings.push({
         code: "environment-toolchain-unavailable",
         status: "unavailable",
         severity: "error",
-        message: `${toolchain.tool} ${toolchain.declaredVersion} is declared but not available locally`,
+        message: `${toolchain.tool} (${declared}) is declared but not available locally`,
         path: toolchain.path,
       });
-    } else if (toolchain.status === "failed") {
+    } else if (
+      toolchain.observedVersion !== null &&
+      toolchain.declaredVersion !== null &&
+      olderThanDeclared(toolchain.observedVersion, toolchain.declaredVersion)
+    ) {
       findings.push({
-        code: "environment-toolchain-mismatch",
-        status: "failed",
-        severity: tracksLatest ? "advisory" : "error",
-        message: `${toolchain.tool} declares ${toolchain.declaredVersion} but observed ${toolchain.observedVersion ?? "unknown"}`,
+        code: "environment-toolchain-behind",
+        status: "unavailable",
+        severity: "advisory",
+        message: `${toolchain.tool} ${toolchain.observedVersion} is older than the declared ${toolchain.declaredVersion}; environments track the latest stable release`,
         path: toolchain.path,
       });
     }
