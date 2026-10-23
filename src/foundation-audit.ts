@@ -288,22 +288,8 @@ function environmentAudit(root: string): FoundationComponent {
   const rustPath = join(root, "rust-toolchain.toml");
   if (existsSync(rustPath)) {
     const version = text(rustPath).match(/channel\s*=\s*"([^"]+)"/)?.[1];
-    if (version) declarations.push({ tool: "rust", path: "rust-toolchain.toml", version });
-    else {
-      diagnostics.push({
-        code: "foundation-environment-rust-pin-missing",
-        message: "rust-toolchain.toml must declare an exact channel",
-        path: "rust-toolchain.toml",
-      });
-    }
-  }
-  for (const declaration of declarations) {
-    if (exactVersion(declaration.version)) continue;
-    diagnostics.push({
-      code: "foundation-environment-toolchain-pin-floating",
-      message: `${declaration.tool} must use an exact x.y.z repository pin`,
-      path: declaration.path,
-    });
+    // Toolchains track the latest stable release; any channel, version or none is accepted.
+    declarations.push({ tool: "rust", path: "rust-toolchain.toml", version: version ?? "stable" });
   }
 
   return component(diagnostics.length > 0 ? "invalid" : "adopted", diagnostics, {

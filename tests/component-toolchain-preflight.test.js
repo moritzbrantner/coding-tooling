@@ -131,7 +131,7 @@ describe("remote component toolchain evidence", () => {
     expect(finding).toEqual(
       expect.objectContaining({
         severity: "medium",
-        title: "app: Node toolchain pin is missing",
+        title: "app: Node toolchain declaration is missing",
       }),
     );
   });

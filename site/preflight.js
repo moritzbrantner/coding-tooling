@@ -665,25 +665,6 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
     if (outcome.status === "satisfied") continue;
     const suffix = component.path === "." ? "" : `-${stableId(component.path)}`;
     const nestedPrefix = component.path === "." ? "" : `${component.name}: `;
-    if (outcome.status === "finding") {
-      if (outcome.runtime === "bun")
-        add(
-          `REMOTE-ENV-005${suffix}`,
-          "high",
-          `${nestedPrefix}Bun toolchain pin is not exact`,
-          `${component.evidence.facts.packageManager.provenance.path} does not contain an exact bun@x.y.z version.`,
-          "Use an exact Bun packageManager version for deterministic environment identity.",
-        );
-      else
-        add(
-          `REMOTE-ENV-003${suffix}`,
-          "high",
-          `${nestedPrefix}Node toolchain pin is not exact`,
-          `${component.evidence.facts.nodeVersion.provenance.path} does not contain an exact x.y.z version.`,
-          "Use an exact Node version for deterministic environment identity.",
-        );
-      continue;
-    }
     if (outcome.status === "unsupported") {
       add(
         `REMOTE-ENV-007${suffix}`,
@@ -697,10 +678,10 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
     add(
       component.path === "." ? "REMOTE-ENV-001" : `REMOTE-ENV-006${suffix}`,
       "medium",
-      `${nestedPrefix}${outcome.runtime === "bun" ? "Bun" : "Node"} toolchain pin is missing`,
-      `${component.name} has no component-local exact ${outcome.runtime === "bun" ? "Bun" : "Node"} version evidence.`,
+      `${nestedPrefix}${outcome.runtime === "bun" ? "Bun" : "Node"} toolchain declaration is missing`,
+      `${component.name} has no component-local ${outcome.runtime === "bun" ? "Bun" : "Node"} version declaration.`,
       component.path === "."
-        ? `Use an exact x.y.z ${outcome.runtime === "bun" ? "Bun packageManager" : "Node .node-version"} pin when this runtime participates in validation.`
+        ? `Declare ${outcome.runtime === "bun" ? "Bun in packageManager" : "Node in .node-version"} when this runtime participates in validation; any version or channel is accepted because toolchains track the latest stable release.`
         : "Declare the nested component toolchain explicitly; remote preflight does not inherit unrelated root pins without a proven workspace relationship.",
     );
   }
@@ -714,21 +695,11 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
     const prefix = component.path === "." ? "" : `${component.name}: `;
     const runtime = component.kind === "rust" ? "Rust" : ".NET SDK";
     const missing = outcome.reason === "project-toolchain-missing";
-    const exact = outcome.reason === "project-toolchain-not-exact";
-    const id =
-      component.kind === "rust" && (missing || exact)
-        ? missing
-          ? "REMOTE-ENV-002"
-          : "REMOTE-ENV-004"
-        : "REMOTE-ENV-009";
+    const id = component.kind === "rust" && missing ? "REMOTE-ENV-002" : "REMOTE-ENV-009";
     add(
       `${id}${suffix}`,
-      component.kind === "rust" && exact
-        ? "high"
-        : outcome.status === "incomplete" || outcome.status === "unsupported"
-          ? "low"
-          : "medium",
-      `${prefix}${runtime} toolchain ${missing ? "declaration is missing" : exact ? "pin is not exact" : `evidence is ${outcome.status}`}`,
+      outcome.status === "incomplete" || outcome.status === "unsupported" ? "low" : "medium",
+      `${prefix}${runtime} toolchain ${missing ? "declaration is missing" : `evidence is ${outcome.status}`}`,
       `${outcome.declaration ?? component.path}: ${outcome.reason}.`,
       "Inspect the component-scoped declaration and run local environment verification; remote evidence does not establish the active installed toolchain.",
     );

@@ -225,7 +225,7 @@ describe("normalized package evidence", () => {
       manager: "npm",
       runtime: "node",
       version: "24.20.0",
-      reason: "exact-node-version",
+      reason: "node-version-declared",
       provenance: [{ collector: "filesystem", path: "packages/nested/.node-version" }],
     });
     expect(remoteNested.toolchain).toEqual({
@@ -233,7 +233,7 @@ describe("normalized package evidence", () => {
       manager: "npm",
       runtime: "node",
       version: "24.20.0",
-      reason: "exact-node-version",
+      reason: "node-version-declared",
       provenance: [{ collector: "github", path: "packages/nested/.node-version" }],
     });
   });

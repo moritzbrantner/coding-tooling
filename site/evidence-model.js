@@ -33,7 +33,6 @@ const TECHNOLOGY_DEPENDENCIES = Object.freeze([
   ["vite", "vite"],
   ["vitest", "vitest"],
 ]);
-const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
 
 function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -218,11 +217,11 @@ export function packageToolchainOutcome(evidence) {
     const version = match[2];
     if (manager === "bun") {
       return {
-        status: EXACT_VERSION.test(version) ? "satisfied" : "finding",
+        status: "satisfied",
         manager: "bun",
         runtime: "bun",
         version,
-        reason: EXACT_VERSION.test(version) ? "exact-bun-version" : "bun-version-not-exact",
+        reason: "bun-version-declared",
         provenance: [evidence.facts.packageManager.provenance],
       };
     }
@@ -241,11 +240,11 @@ export function packageToolchainOutcome(evidence) {
   const nodeVersion = evidence.facts.nodeVersion.value;
   if (typeof nodeVersion === "string") {
     return {
-      status: EXACT_VERSION.test(nodeVersion) ? "satisfied" : "finding",
+      status: "satisfied",
       manager: packageCommandManager(evidence),
       runtime: "node",
       version: nodeVersion,
-      reason: EXACT_VERSION.test(nodeVersion) ? "exact-node-version" : "node-version-not-exact",
+      reason: "node-version-declared",
       provenance: [evidence.facts.nodeVersion.provenance],
     };
   }

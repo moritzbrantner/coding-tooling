@@ -9,7 +9,7 @@ For a proven workspace member:
 - an absent member-local toolchain pin may inherit a satisfied root toolchain identity;
 - inherited command capabilities use the workspace owner's package command manager;
 - an explicit satisfied member identity that differs from the root identity is a workspace conflict;
-- explicit non-exact, unsupported, or independently evidenced toolchains are not hidden by inheritance.
+- explicit unsupported or independently evidenced toolchains are not hidden by inheritance.
 
 Validation evidence remains component-scoped. A root-level `bun run lint` does not prove the same script for a nested workspace member. Remote preflight requires a literal matching working directory, or an equivalent explicit directory change, before using a member command as hosted validation evidence.
 

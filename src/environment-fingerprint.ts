@@ -28,10 +28,6 @@ function text(path: string): string {
   return readFileSync(path, "utf8");
 }
 
-function exactVersion(value: string): boolean {
-  return /^\d+\.\d+\.\d+$/.test(value);
-}
-
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === "object") {
@@ -99,25 +95,11 @@ function toolchainInputs(root: string, diagnostics: Diagnostic[]): unknown {
       packageJson.packageManager.startsWith("bun@")
     ) {
       packageBunVersion = packageJson.packageManager.slice("bun@".length);
-      if (!exactVersion(packageBunVersion)) {
-        diagnostics.push({
-          code: "environment-fingerprint-toolchain-floating",
-          message: "Bun must use an exact x.y.z repository pin before it can be fingerprinted",
-          path: "package.json",
-        });
-      }
     }
   }
 
   const bunVersionPath = join(root, ".bun-version");
   const versionFileBunVersion = existsSync(bunVersionPath) ? text(bunVersionPath).trim() : null;
-  if (versionFileBunVersion !== null && !exactVersion(versionFileBunVersion)) {
-    diagnostics.push({
-      code: "environment-fingerprint-toolchain-floating",
-      message: "Bun must use an exact x.y.z repository pin before it can be fingerprinted",
-      path: ".bun-version",
-    });
-  }
   if (
     packageBunVersion !== null &&
     versionFileBunVersion !== null &&
@@ -143,13 +125,6 @@ function toolchainInputs(root: string, diagnostics: Diagnostic[]): unknown {
   if (existsSync(nodePath)) {
     const version = text(nodePath).trim();
     toolchains.node = { version };
-    if (!exactVersion(version)) {
-      diagnostics.push({
-        code: "environment-fingerprint-toolchain-floating",
-        message: "Node must use an exact x.y.z repository pin before it can be fingerprinted",
-        path: ".node-version",
-      });
-    }
   }
 
   const rustPath = join(root, "rust-toolchain.toml");
@@ -159,13 +134,6 @@ function toolchainInputs(root: string, diagnostics: Diagnostic[]): unknown {
     const version = stringField(toolchain, "channel");
     const components = stringArrayField(toolchain, "components").sort();
     toolchains.rust = { version, components };
-    if (!version || !exactVersion(version)) {
-      diagnostics.push({
-        code: "environment-fingerprint-toolchain-floating",
-        message: "Rust must use an exact x.y.z repository pin before it can be fingerprinted",
-        path: "rust-toolchain.toml",
-      });
-    }
   }
 
   return toolchains;

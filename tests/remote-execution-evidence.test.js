@@ -4,45 +4,17 @@ import { remoteValidationOutcome } from "../site/evidence-model.js";
 import { remoteExecutionEvidence } from "../site/execution-evidence.js";
 
 describe("remote execution evidence", () => {
-  test("finds explicit hosted Node drift from the repository exact pin", () => {
+  test("does not compare hosted workflow toolchains with repository declarations", () => {
     const evidence = remoteExecutionEvidence({
-      expectedToolchains: { node: "24.20.0" },
-      workflows: [
-        {
-          path: ".github/workflows/performance.yml",
-          content: `jobs:\n  performance:\n    uses: owner/workflows/.github/workflows/performance.yml@v1\n    with:\n      node_version: "20"\n`,
-        },
-      ],
-    });
-
-    expect(evidence.toolchains).toEqual(
-      expect.objectContaining({
-        status: "finding",
-        mismatches: [
-          expect.objectContaining({
-            workflow: ".github/workflows/performance.yml",
-            runtime: "node",
-            expected: "24.20.0",
-            observed: "20",
-          }),
-        ],
-      }),
-    );
-  });
-
-  test("accepts matching exact workflow toolchains and ignores expressions", () => {
-    const evidence = remoteExecutionEvidence({
-      expectedToolchains: { node: "24.20.0", rust: "1.98.1" },
       workflows: [
         {
           path: ".github/workflows/validate.yml",
-          content: `jobs:\n  js:\n    uses: owner/workflows/.github/workflows/validate.yml@v1\n    with:\n      node_version: "24.20.0"\n  rust:\n    steps:\n      - uses: dtolnay/rust-toolchain@1.98.1\n      - uses: actions/setup-node@v6\n        with:\n          node-version: \${{ matrix.node }}\n`,
+          content: `jobs:\n  js:\n    uses: owner/workflows/.github/workflows/validate.yml@v1\n    with:\n      bun_version: latest\n`,
         },
       ],
     });
 
-    expect(evidence.toolchains.status).toBe("satisfied");
-    expect(evidence.toolchains.mismatches).toEqual([]);
+    expect(evidence).not.toHaveProperty("toolchains");
   });
 
   test("finds committed Cargo resolution consumed without --locked", () => {

@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { remoteCommandFromSnapshot } from "../site/remote-command.js";
 
 describe("Pages command execution evidence", () => {
-  test("findings exposes the same execution-linked toolchain contradiction as analysis.json", () => {
+  test("findings does not treat hosted workflow toolchain drift as a contradiction", () => {
     const snapshot = {
       repository: {
         owner: "example",
@@ -48,12 +48,8 @@ describe("Pages command execution evidence", () => {
 
     const result = remoteCommandFromSnapshot(snapshot, ["findings", "--json"]);
 
-    expect(result.status).toBe("failed");
-    expect(result.data.findings).toContainEqual(
-      expect.objectContaining({
-        id: "REMOTE-EXECUTION-TOOLCHAIN",
-        severity: "high",
-      }),
+    expect(result.data.findings.map((finding) => finding.id)).not.toContain(
+      "REMOTE-EXECUTION-TOOLCHAIN",
     );
   });
 });

@@ -1,11 +1,8 @@
-const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
 const BLOCK_MARKERS = new Set(["|", ">", "|-", ">-", "|+", ">+"]);
 const FINDING_RANK = { high: 0, medium: 1, low: 2, info: 3 };
 
 export function applyExecutionEvidence(analysis, snapshot) {
   const workflows = workflowContents(snapshot);
-  const expectedToolchains = expectedRepositoryToolchains(analysis, snapshot);
-  const toolchains = toolchainConsistency(expectedToolchains, workflows);
   const dependencyResolution = dependencyResolutionEvidence(snapshot, workflows);
   const failClosed = failClosedValidationEvidence(analysis.validationEvidence, workflows);
   const validationEvidence = strengthenValidationEvidence(analysis.validationEvidence, failClosed);
@@ -13,7 +10,6 @@ export function applyExecutionEvidence(analysis, snapshot) {
     schemaVersion: 1,
     basis: "structural",
     source: "github-workflow-text",
-    toolchains,
     dependencyResolution,
     failClosed,
     limitations: [
@@ -57,7 +53,6 @@ export function remoteExecutionEvidence(input) {
     schemaVersion: 1,
     basis: "structural",
     source: "github-workflow-text",
-    toolchains: toolchainConsistency(input.expectedToolchains ?? {}, workflows),
     dependencyResolution: dependencyResolutionEvidence(
       { tree: (input.lockfiles ?? []).map((path) => ({ type: "blob", path })) },
       workflows,
@@ -68,21 +63,6 @@ export function remoteExecutionEvidence(input) {
 
 function executionFindings(evidence) {
   const findings = [];
-  if (evidence.toolchains.status === "finding") {
-    findings.push({
-      id: "REMOTE-EXECUTION-TOOLCHAIN",
-      severity: "high",
-      title: "Hosted execution contradicts the repository toolchain",
-      evidence: evidence.toolchains.mismatches
-        .map(
-          (item) =>
-            `${item.workflow}: ${item.runtime} expects ${item.expected}, observed ${item.observed}`,
-        )
-        .join("; "),
-      recommendation:
-        "Align explicit hosted workflow runtime declarations with the repository-owned exact toolchain pin.",
-    });
-  }
   if (evidence.dependencyResolution.status === "finding") {
     findings.push({
       id: "REMOTE-EXECUTION-LOCK",
@@ -119,91 +99,6 @@ function workflowContents(snapshot) {
       )
       .toSorted(([left], [right]) => left.localeCompare(right)),
   );
-}
-
-function expectedRepositoryToolchains(analysis, snapshot) {
-  const result = {};
-  const rootPackage = analysis.components?.find(
-    (component) => component.kind === "package" && component.path === ".",
-  );
-  if (
-    rootPackage?.toolchain?.status === "satisfied" &&
-    EXACT_VERSION.test(rootPackage.toolchain.version ?? "")
-  ) {
-    const runtime = rootPackage.toolchain.runtime;
-    if (runtime === "node" || runtime === "bun") result[runtime] = rootPackage.toolchain.version;
-  }
-  const rustSource = snapshot.files?.["rust-toolchain.toml"];
-  if (typeof rustSource === "string") {
-    const version = rustSource.match(/^\s*channel\s*=\s*["']([^"']+)["']\s*$/m)?.[1];
-    if (EXACT_VERSION.test(version ?? "")) result.rust = version;
-  }
-  return result;
-}
-
-function toolchainConsistency(expected, workflows) {
-  const observations = [];
-  for (const [workflow, content] of workflows) {
-    for (const observation of workflowToolchainObservations(content)) {
-      observations.push({ workflow, ...observation });
-    }
-  }
-  observations.sort(observationOrder);
-  const relevant = observations.filter((item) => typeof expected[item.runtime] === "string");
-  const mismatches = relevant
-    .filter(
-      (item) => !EXACT_VERSION.test(item.observed) || item.observed !== expected[item.runtime],
-    )
-    .map((item) => ({ ...item, expected: expected[item.runtime] }));
-  if (mismatches.length > 0) {
-    return { status: "finding", expected, observations, mismatches };
-  }
-  if (Object.keys(expected).length === 0 || relevant.length === 0) {
-    return {
-      status: "unsupported",
-      expected,
-      observations,
-      mismatches: [],
-      reason:
-        Object.keys(expected).length === 0
-          ? "no-exact-repository-toolchain"
-          : "no-literal-workflow-toolchain",
-    };
-  }
-  return { status: "satisfied", expected, observations, mismatches: [] };
-}
-
-function workflowToolchainObservations(content) {
-  const observations = [];
-  const lines = String(content).split(/\r?\n/);
-  for (const raw of lines) {
-    const line = stripYamlComment(raw).trim();
-    if (!line) continue;
-    const field = line.match(/^(node[-_]version|bun[-_]version|rust[-_]version)\s*:\s*(.+)$/i);
-    if (field) {
-      const runtime = field[1].toLowerCase().startsWith("node")
-        ? "node"
-        : field[1].toLowerCase().startsWith("bun")
-          ? "bun"
-          : "rust";
-      const observed = literalScalar(field[2]);
-      if (observed) observations.push({ runtime, observed, source: field[1] });
-      continue;
-    }
-    const rustAction =
-      line.match(/^uses\s*:\s*dtolnay\/rust-toolchain@([^\s]+)$/i) ??
-      line.match(/^-\s*uses\s*:\s*dtolnay\/rust-toolchain@([^\s]+)$/i);
-    if (rustAction) {
-      const observed = literalScalar(rustAction[1]);
-      if (
-        observed &&
-        (EXACT_VERSION.test(observed) || /^(?:stable|beta|nightly)$/i.test(observed))
-      ) {
-        observations.push({ runtime: "rust", observed, source: "dtolnay/rust-toolchain" });
-      }
-    }
-  }
-  return observations;
 }
 
 function dependencyResolutionEvidence(snapshot, workflows) {
@@ -545,15 +440,6 @@ function normalizeCommand(value) {
   return String(value ?? "")
     .trim()
     .replace(/\s+/g, " ");
-}
-
-function observationOrder(left, right) {
-  return (
-    left.workflow.localeCompare(right.workflow) ||
-    left.runtime.localeCompare(right.runtime) ||
-    left.source.localeCompare(right.source) ||
-    left.observed.localeCompare(right.observed)
-  );
 }
 
 function commandObservationOrder(left, right) {

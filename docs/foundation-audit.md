@@ -13,7 +13,7 @@ The first report version covers:
 
 - `.coding-tooling.json` schema and required capability declarations;
 - repository-owned capability commands that can be resolved from supported components and explicit overrides;
-- environment-v1 config/script shape and exact declared toolchain pins;
+- environment-v1 config/script shape and declared toolchains (any version or channel is accepted because toolchains track the latest stable release);
 - installed convention manifest/lock/snapshot integrity and exact repository-owned executables required by direct convention enforcement;
 - Renovate JSON consumer configuration and the shared `coding-agent-conventions` preset.
 

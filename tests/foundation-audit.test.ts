@@ -166,7 +166,7 @@ describe("foundation audit", () => {
     );
   });
 
-  test("rejects floating .bun-version declarations", () => {
+  test("accepts loose .bun-version declarations", () => {
     const root = repository();
     writeJson(join(root, "package.json"), {
       name: "fixture",
@@ -177,12 +177,8 @@ describe("foundation audit", () => {
 
     const result = foundationAudit(root);
 
-    expect(statuses(result).environment).toBe("invalid");
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: "foundation-environment-toolchain-pin-floating",
-        path: ".bun-version",
-      }),
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.path === ".bun-version")).toEqual(
+      [],
     );
   });
 
