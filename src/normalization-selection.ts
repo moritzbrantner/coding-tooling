@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { basename, extname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, statSync } from "node:fs";
+import { basename, extname, isAbsolute, join, matchesGlob, relative, resolve } from "node:path";
 
 import { readJson, runCommand } from "./shared.ts";
 
@@ -156,15 +156,34 @@ function componentFiles(normalizer: Normalizer, files: string[]): string[] {
   return files.filter((path) => path.startsWith(prefix)).map((path) => path.slice(prefix.length));
 }
 
-function oxcArguments(tokens: string[]): string[] {
-  const kept: string[] = [];
+/** Split an Oxc argument list into its flags (with their values) and its path targets. */
+function oxcArguments(tokens: string[]): { flags: string[]; targets: string[] } {
+  const flags: string[] = [];
+  const targets: string[] = [];
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]!;
-    if (!token.startsWith("-")) continue; // a path target; replaced by the selection
-    kept.push(token);
-    if (oxcValueFlags.has(token) && index + 1 < tokens.length) kept.push(tokens[(index += 1)]!);
+    if (!token.startsWith("-")) {
+      targets.push(token);
+      continue;
+    }
+    flags.push(token);
+    if (oxcValueFlags.has(token) && index + 1 < tokens.length) flags.push(tokens[(index += 1)]!);
   }
-  return kept;
+  return { flags, targets };
+}
+
+/**
+ * Whether a component-relative file is covered by the tool's own path targets. A
+ * normalizer must never format or fix a file the repository's own check does not cover.
+ */
+function coveredByTargets(path: string, targets: string[]): boolean {
+  if (!targets.length) return true;
+  return targets.some((raw) => {
+    const target = toPosix(raw).replace(/^\.\//, "").replace(/\/+$/, "");
+    if (target === "" || target === ".") return true;
+    if (/[*?[{]/.test(target)) return matchesGlob(path, target);
+    return path === target || path.startsWith(`${target}/`);
+  });
 }
 
 function packageBinary(root: string, cwd: string, tool: string): string | undefined {
@@ -180,10 +199,10 @@ function oxcInvocation(
   root: string,
   cwd: string,
   normalizer: Normalizer,
-): { executable: string; args: string[] } | string {
+): { executable: string; flags: string[]; targets: string[] } | string {
   const { command, tool } = normalizer;
   if (!packageManagers.has(basename(command[0] ?? ""))) {
-    return { executable: command[0]!, args: oxcArguments(command.slice(1)) };
+    return { executable: command[0]!, ...oxcArguments(command.slice(1)) };
   }
   const runIndex = command.indexOf("run");
   const script = command[runIndex + 1];
@@ -195,16 +214,7 @@ function oxcInvocation(
   const extra = command.slice(runIndex + 2).filter((token, index) => index > 0 || token !== "--");
   const executable = packageBinary(root, cwd, tool);
   if (!executable) return `${tool} is not installed in node_modules/.bin`;
-  return { executable, args: oxcArguments([...source.trim().split(/\s+/).slice(1), ...extra]) };
-}
-
-function rustEdition(root: string, cwd: string): string {
-  for (const manifest of [join(cwd, "Cargo.toml"), join(root, "Cargo.toml")]) {
-    if (!existsSync(manifest)) continue;
-    const edition = /^\s*edition\s*=\s*"(\d{4})"/m.exec(readFileSync(manifest, "utf8"))?.[1];
-    if (edition) return edition;
-  }
-  return "2021";
+  return { executable, ...oxcArguments([...source.trim().split(/\s+/).slice(1), ...extra]) };
 }
 
 export function scopeNormalizers(
@@ -231,8 +241,12 @@ export function scopeNormalizers(
     if (!selected.length) continue;
 
     let command: string[];
+    let covered = selected;
     if (normalizer.tool === "cargo-fmt") {
-      command = ["rustfmt", "--edition", rustEdition(root, cwd), ...selected];
+      // Bare rustfmt on single files ignores each package's edition (and so its style
+      // edition) and formats `.rs` files cargo never compiles. Run the repository's own
+      // `cargo fmt`, exactly what its `cargo fmt --check` verifies.
+      command = [...normalizer.command];
     } else if (normalizer.tool === "dotnet-format") {
       command = [...normalizer.command, "--include", ...selected];
     } else {
@@ -241,9 +255,11 @@ export function scopeNormalizers(
         unscopable.push({ id: normalizer.id, files: selected, reason: invocation });
         continue;
       }
-      command = [invocation.executable, ...invocation.args, ...selected];
+      covered = selected.filter((path) => coveredByTargets(path, invocation.targets));
+      if (!covered.length) continue;
+      command = [invocation.executable, ...invocation.flags, ...covered];
     }
-    scoped.push({ ...normalizer, command, files: selected });
+    scoped.push({ ...normalizer, command, files: covered });
   }
 
   return { scoped, unscopable };
