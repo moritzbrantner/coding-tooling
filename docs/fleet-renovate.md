@@ -4,7 +4,7 @@
 
 ```sh
 coding-tooling fleet renovate --root .. --json
-coding-tooling fleet renovate --root .. --repo moritzbrantner/arpg --repo moritzbrantner/scrabble --json
+coding-tooling fleet renovate --root .. --repo moenarch-games/arpg --repo moritzbrantner/scrabble --json
 ```
 
 It only reads GitHub through `gh`. It never merges, approves, rebases, labels or pushes anything. The result is informational: pending updates, failing Renovate PRs and missing config are reported as `actions`, never as a `failed` status.

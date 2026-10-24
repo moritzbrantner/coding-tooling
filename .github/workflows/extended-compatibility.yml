@@ -49,14 +49,14 @@ jobs:
       - name: Check out the authoritative My Farm Atlas revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          repository: moritzbrantner/my-farm
+          repository: moenarch-games/my-farm
           ref: e66ab2b327334fe5ba9b0941cdfbcaf6be8627b3
           path: .artifacts/my-farm-decision-source
       - name: Validate and preview 25 source decisions without write-back
         run: |
           bun src/router.ts decision-atlas index \
             --root .artifacts/my-farm-decision-source \
-            --repository moritzbrantner/my-farm \
+            --repository moenarch-games/my-farm \
             --source docs/decisions/atlas.md \
             --format numbered-list \
             --revision e66ab2b327334fe5ba9b0941cdfbcaf6be8627b3 \
@@ -80,14 +80,14 @@ jobs:
       - name: Check out the open MMORPG PR's pinned authoring format
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          repository: moritzbrantner/mmorpg
+          repository: moenarch-games/mmorpg
           ref: 404f17552fe677d64a8aa638a1f5afa5f3570a94
           path: .artifacts/mmorpg-decision-source
       - name: Validate MMORPG numbered IDs and unresolved Questions
         run: |
           bun src/router.ts decision-atlas index \
             --root .artifacts/mmorpg-decision-source \
-            --repository moritzbrantner/mmorpg \
+            --repository moenarch-games/mmorpg \
             --source docs/decisions/atlas.md \
             --format numbered-list \
             --revision 404f17552fe677d64a8aa638a1f5afa5f3570a94 \
