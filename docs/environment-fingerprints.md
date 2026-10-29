@@ -1,5 +1,18 @@
 # Environment fingerprints
 
+## Canonical setup script
+
+`scripts/codex-environment.sh` is not written by hand. coding-tooling owns the single implementation in [`templates/codex-environment.sh`](../templates/codex-environment.sh), and each environment-v1 repository commits a generated, byte-identical copy so setup stays offline and reproducible. Everything repository-specific (apt packages, setup and maintenance commands, cache paths) belongs in `.repository-environment.toml`; Bun, Node and Rust come from `package.json`/`.bun-version`, `.node-version` and `rust-toolchain.toml`.
+
+```bash
+coding-tooling environment generate          # write or refresh the copy
+coding-tooling environment generate --check  # exit 1 when the copy is missing or has drifted
+```
+
+`coding-tooling conformance` and the foundation audit report a drifted copy as `environment-script-drift`. To change setup behaviour, change the template here and regenerate the consumers.
+
+## Fingerprints
+
 `coding-tooling environment fingerprint --json` derives a deterministic semantic identity from repository-owned environment inputs. It is read-only and offline; it does not inspect the current machine or discover newer upstream versions.
 
 ## Layers

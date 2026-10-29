@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import { canonicalEnvironmentScript } from "../src/environment-script.ts";
 import { renderSourceDependencies } from "../src/source-deps.ts";
 import {
   missingRustComponents,
@@ -29,10 +30,7 @@ apt = []
 `,
   );
   mkdirSync(join(root, "scripts"), { recursive: true });
-  writeFileSync(
-    join(root, "scripts", "codex-environment.sh"),
-    '#!/usr/bin/env bash\nmode="${1:-setup}"\n[[ "$mode" == "setup" || "$mode" == "maintenance" ]]\n',
-  );
+  writeFileSync(join(root, "scripts", "codex-environment.sh"), canonicalEnvironmentScript());
   return root;
 }
 

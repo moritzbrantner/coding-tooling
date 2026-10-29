@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import { canonicalEnvironmentScript } from "../src/environment-script.ts";
 import { foundationAudit } from "../src/foundation-audit.ts";
 
 function writeJson(path: string, value: unknown): void {
@@ -31,10 +32,7 @@ function installEnvironment(root: string, track = "latest-stable"): void {
     `schema_version = 1\ntrack = "${track}"\n`,
   );
   mkdirSync(join(root, "scripts"), { recursive: true });
-  writeFileSync(
-    join(root, "scripts", "codex-environment.sh"),
-    '#!/usr/bin/env bash\ncase "${1:-}" in\n  "setup") ;;\n  "maintenance") ;;\nesac\n',
-  );
+  writeFileSync(join(root, "scripts", "codex-environment.sh"), canonicalEnvironmentScript());
 }
 
 function installTooling(root: string, requiredCapabilities = ["lint"]): void {
