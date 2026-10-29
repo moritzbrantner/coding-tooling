@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { environmentScriptState } from "./environment-script.ts";
+
 export type EnvironmentFinding = {
   code: string;
   status: "failed" | "unavailable";
@@ -276,22 +278,16 @@ export function repositoryEnvironmentConformance(root: string): {
     }
   }
 
-  if (scriptPresent) {
-    const source = text(scriptPath);
-    if (
-      !source.startsWith("#!/usr/bin/env bash\n") ||
-      !source.includes('"setup"') ||
-      !source.includes('"maintenance"')
-    ) {
-      findings.push({
-        code: "environment-script-invalid",
-        status: "failed",
-        severity: "error",
-        message:
-          "scripts/codex-environment.sh does not expose the environment-v1 setup/maintenance contract",
-        path: "scripts/codex-environment.sh",
-      });
-    }
+  const scriptCurrent = scriptPresent && environmentScriptState(root) === "current";
+  if (scriptPresent && !scriptCurrent) {
+    findings.push({
+      code: "environment-script-drift",
+      status: "failed",
+      severity: "error",
+      message:
+        "scripts/codex-environment.sh differs from the canonical coding-tooling script; run `coding-tooling environment generate`",
+      path: "scripts/codex-environment.sh",
+    });
   }
 
   const { packageManagerVersion, versionFileVersion } = bunDeclarations(root);
@@ -345,6 +341,7 @@ export function repositoryEnvironmentConformance(root: string): {
       configPresent,
       scriptPath: "scripts/codex-environment.sh",
       scriptPresent,
+      scriptCurrent,
       track: configPresent ? "latest-stable" : null,
       toolchains,
       compatibilityHolds: holds,

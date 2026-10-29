@@ -8,6 +8,7 @@ import {
 import { conventionEnforcementExecutableRequirements } from "./convention-enforcement.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
 import { discoverComponents, loadConfig } from "./core.ts";
+import { environmentScriptState } from "./environment-script.ts";
 import type {
   Capability,
   Component,
@@ -239,20 +240,13 @@ function environmentAudit(root: string): FoundationComponent {
     }
   }
 
-  if (scriptPresent) {
-    const source = text(scriptPath);
-    if (
-      !source.startsWith("#!/usr/bin/env bash\n") ||
-      !source.includes('"setup"') ||
-      !source.includes('"maintenance"')
-    ) {
-      diagnostics.push({
-        code: "foundation-environment-script-invalid",
-        message:
-          "scripts/codex-environment.sh does not expose the environment-v1 setup/maintenance contract",
-        path: "scripts/codex-environment.sh",
-      });
-    }
+  if (scriptPresent && environmentScriptState(root) !== "current") {
+    diagnostics.push({
+      code: "foundation-environment-script-drift",
+      message:
+        "scripts/codex-environment.sh differs from the canonical coding-tooling script; run `coding-tooling environment generate`",
+      path: "scripts/codex-environment.sh",
+    });
   }
 
   const declarations: Array<{ tool: string; path: string; version: string }> = [];

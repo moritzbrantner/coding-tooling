@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
 
+import { canonicalEnvironmentScript } from "../src/environment-script.ts";
 import { fleetMergeReadiness } from "../src/merge-readiness.ts";
 import type { CommandResult } from "../src/shared.ts";
 
@@ -42,10 +43,7 @@ replaced_by = []
     'schema_version = 1\ntrack = "latest-stable"\n',
   );
   mkdirSync(join(root, "scripts"), { recursive: true });
-  writeFileSync(
-    join(root, "scripts", "codex-environment.sh"),
-    '#!/usr/bin/env bash\ncase "${1:-}" in\n  "setup") ;;\n  "maintenance") ;;\nesac\n',
-  );
+  writeFileSync(join(root, "scripts", "codex-environment.sh"), canonicalEnvironmentScript());
   writeJson(join(root, ".coding-tooling.json"), {
     schemaVersion: 1,
     profile: "repository-foundation-v1",

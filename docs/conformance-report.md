@@ -13,7 +13,7 @@ The report has `operation: "conformance"` and `data.reportVersion: 1`. It includ
 - expected/verified semantic environment fingerprint evidence in `data.environmentFingerprint`;
 - declared Bun/Node/Rust versions or channels (any form; declarations are minimums because toolchains track the latest stable release);
 - observed local Bun/Node/Rust versions and an advisory `environment-toolchain-behind` diagnostic when an installed release is older than the declared minimum;
-- environment-v1 config/script presence and structural validity;
+- environment-v1 config presence and validity, and whether `scripts/codex-environment.sh` is byte-identical to the canonical script (`environment-script-drift` otherwise; see [environment fingerprints](environment-fingerprints.md#canonical-setup-script));
 - durable compatibility holds from `.repository-environment.toml`;
 - whether `.coding-tooling.json` exists and is valid;
 - configured/default tier plans, including required and optional missing capabilities;

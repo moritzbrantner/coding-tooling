@@ -11,14 +11,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, test } from "bun:test";
 
-const script = resolve(import.meta.dir, "../scripts/codex-environment.sh");
+const script = resolve(import.meta.dir, "../templates/codex-environment.sh");
 
-function setup(apt: string[]) {
+function setup(apt: string[], tools = ["bash", "python3", "git"]) {
   const root = mkdtempSync(join(tmpdir(), "coding-tooling-codex-environment-"));
   const bin = join(root, ".bin");
   mkdirSync(bin);
   // Only these host tools are visible, so host-installed packages cannot leak into results.
-  for (const tool of ["bash", "python3", "git"]) {
+  for (const tool of tools) {
     const found = spawnSync("bash", ["-c", `command -v ${tool}`], {
       encoding: "utf8",
     }).stdout.trim();
@@ -64,5 +64,13 @@ describe("codex-environment.sh system packages", () => {
     expect(calls[0]).toContain("Acquire::Retries=3");
     expect(calls[0]).toEndWith("update");
     expect(calls[1]).toEndWith("install -y --no-install-recommends cmake ffmpeg");
+  });
+
+  test("reads the config with Bun when Python's tomllib is unavailable", () => {
+    const result = setup(["xvfb", "ffmpeg"], ["bash", "bun", "git"]);
+    expect(result.status).toBe(0);
+    expect(result.aptLog.trim().split("\n")[1]).toEndWith(
+      "install -y --no-install-recommends ffmpeg",
+    );
   });
 });

@@ -19,6 +19,7 @@ import {
   expectedEnvironmentFingerprint,
   type EnvironmentFingerprintProfile,
 } from "./environment-fingerprint.ts";
+import { generateEnvironmentScript } from "./environment-script.ts";
 import { verifyEnvironmentFingerprint } from "./environment-verification.ts";
 import { executeGeneratorCommand } from "./generator-execution.ts";
 import { generatorCommand } from "./generators.ts";
@@ -158,6 +159,7 @@ function usage(): never {
   coding-tooling conformance [--config <path>] [--json]
   coding-tooling bootstrap <plan|apply> [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling environment <fingerprint|verify> [--profile <default|source-development>] [--json]
+  coding-tooling environment generate [--check] [--json]
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
   coding-tooling run --tier <name> [--component <name>] [--config <path>] [--report <path>] [--strict] [--json]
   coding-tooling install <plan|prepare> --tier <name> [--component <name>] [--config <path>] [--json]
@@ -240,15 +242,23 @@ export function main(argv = process.argv.slice(2)): number {
   } else if (command === "environment") {
     const action = positional[0];
     const profile = stringOption(options, "profile") ?? "default";
-    if (
+    if (action === "generate") {
+      if (
+        positional.length > 1 ||
+        Object.keys(options).some((key) => key !== "json" && key !== "check")
+      )
+        return usage();
+      result = generateEnvironmentScript(root, { check: Boolean(options.check) });
+    } else if (
       (action !== "fingerprint" && action !== "verify") ||
       (profile !== "default" && profile !== "source-development")
     )
       return usage();
-    result =
-      action === "fingerprint"
-        ? expectedEnvironmentFingerprint(root, profile as EnvironmentFingerprintProfile)
-        : verifyEnvironmentFingerprint(root, profile as EnvironmentFingerprintProfile);
+    else
+      result =
+        action === "fingerprint"
+          ? expectedEnvironmentFingerprint(root, profile as EnvironmentFingerprintProfile)
+          : verifyEnvironmentFingerprint(root, profile as EnvironmentFingerprintProfile);
   } else if (command === "affected")
     result = affected(root, stringOption(options, "base") ?? "HEAD");
   else if (command === "check") {
