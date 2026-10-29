@@ -52,6 +52,9 @@ coding-tooling conventions check [--json]
 coding-tooling conventions diff [--json]
 coding-tooling conventions update [--json]
 coding-tooling workflow-profile audit [--root <path>] [--json]
+coding-tooling findings [--new|--baseline] [--all] [--json]
+coding-tooling remediation plan [--include-baseline] [--json]
+coding-tooling hotspots [--root <path>] [--days 21] [--min-commits 5] [--min-lines 800] [--json]
 coding-tooling performance size [--root <path>] [--baseline <path>] [--json]
 coding-tooling performance applicability [--root <path>] [--json]
 coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
@@ -71,8 +74,21 @@ discard the previous report. Keep this evidence under ignored artifact storage.
 Run directly during development with Bun:
 
 ```bash
-bun src/cli.ts inspect --json
+bun src/router.ts inspect --json
 ```
+
+### Global install
+
+`src/router.ts` is the single entrypoint (`package.json` `bin`). Link the global
+bin straight at the checkout so it always runs the current `main`:
+
+```bash
+ln -sfn "$PWD/src/router.ts" ~/.bun/bin/coding-tooling
+```
+
+`bun link` / `bun add -g` snapshot the `bin` path at install time. An older
+link that still points at `src/cli.ts` keeps working because running `cli.ts`
+directly forwards to the router.
 
 ## Installed conventions
 

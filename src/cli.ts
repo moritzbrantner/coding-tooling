@@ -448,5 +448,10 @@ export function main(argv = process.argv.slice(2)): number {
   return exitCode(result.status);
 }
 
+// Running this file directly (stale global links, `action.yml`) forwards to the
+// router so every entrypoint exposes the full command surface.
 const entry = process.argv[1] ? pathToFileURL(resolve(process.argv[1])).href : "";
-if (import.meta.url === entry) process.exitCode = main();
+if (import.meta.url === entry) {
+  const { routerMain } = await import("./router.ts");
+  process.exitCode = routerMain();
+}

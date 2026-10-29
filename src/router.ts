@@ -26,6 +26,7 @@ import {
   repositoryContractCommand,
 } from "./repository-contract-verification.ts";
 import { repositoryRoot } from "./shared.ts";
+import { formatHotspots, hotspotEvidence } from "./hotspots.ts";
 import { sizeEvidence } from "./size-evidence.ts";
 import { workComplexityEvidence } from "./work-complexity.ts";
 import { workContractBindings } from "./work-contract-bindings.ts";
@@ -70,6 +71,7 @@ function usage(): number {
   coding-tooling fleet authority-graph [--root <path>] [--json]
   coding-tooling fleet renovate [--root <path>] [--repo owner/name ...] [--json]
   coding-tooling repository contract [--root <path>] [--execute] [--json]
+  coding-tooling hotspots [--root <path>] [--days <n>] [--min-commits <n>] [--min-lines <n>] [--json]
   coding-tooling performance size [--root <path>] [--baseline <path>] [--report <path>] [--json]
   coding-tooling performance applicability [--root <path>] [--json]
   coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
@@ -209,6 +211,34 @@ export function routerMain(argv = process.argv.slice(2)): number {
   if (argv[0] === "repository" && argv[1] === "contract") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(["--execute"]), true)) return usage();
     return print(repositoryContractCommand(root, { execute: argv.includes("--execute") }), compact);
+  }
+
+  if (argv[0] === "hotspots") {
+    const numbers = ["days", "min-commits", "min-lines"] as const;
+    if (
+      !validFlags(
+        argv,
+        1,
+        new Set(["--root", ...numbers.map((name) => `--${name}`)]),
+        new Set(),
+        true,
+      )
+    )
+      return usage();
+    const values = numbers.map((name) => option(argv, name));
+    if (values.some((value) => value !== undefined && !/^[1-9]\d*$/.test(value))) return usage();
+    const [days, minCommits, minLines] = values.map((value) =>
+      value === undefined ? undefined : Number(value),
+    );
+    const result = hotspotEvidence(root, {
+      ...(days === undefined ? {} : { days }),
+      ...(minCommits === undefined ? {} : { minCommits }),
+      ...(minLines === undefined ? {} : { minLines }),
+    });
+    if (compact) return print(result, compact);
+    console.log(formatHotspots(result.data));
+    for (const diagnostic of result.diagnostics) console.error(diagnostic.message);
+    return exitCode(result.status);
   }
 
   if (argv[0] === "performance" && argv[1] === "size") {

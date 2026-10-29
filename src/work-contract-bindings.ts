@@ -4,6 +4,7 @@ import { basename, extname, resolve } from "node:path";
 import type { Diagnostic, ResultEnvelope } from "./model.ts";
 import { parsePerformanceContract, performanceContractPath } from "./performance-contract.ts";
 import { discoverPublicContract } from "./public-contract.ts";
+import { rustPublicItemResolver } from "./rust-public-items.ts";
 import { readJson, relativePosix, walkFiles } from "./shared.ts";
 
 export const workContractBindingsSchemaVersion = "coding-tooling/work-contract-bindings/v1";
@@ -34,7 +35,10 @@ export type WorkBinding = {
   surface?: string;
   /** Repository-relative declaration that provides the surface (e.g. an OpenAPI document). */
   declaration?: string;
-  /** Repository-relative POSIX path and 1-based line of a source marker. */
+  /**
+   * Repository-relative POSIX path and 1-based line of a source marker; `line` also locates the
+   * `pub` declaration of a Rust item-path `publicContract` (e.g. `crate::module::Type::method`).
+   */
   path?: string;
   line?: number;
 };
@@ -291,6 +295,7 @@ export function workContractBindings(root: string): ResultEnvelope<WorkContractB
     const surfaces = new Map(
       discoverPublicContract(resolvedRoot).map((surface) => [surface.id, surface]),
     );
+    const resolveRustItem = rustPublicItemResolver(resolvedRoot);
 
     const markers = sourceMarkers(resolvedRoot, diagnostics);
     for (const marker of markers.filter((value) => !declared.has(value.id)))
@@ -315,12 +320,20 @@ export function workContractBindings(root: string): ResultEnvelope<WorkContractB
 
       if (operation.publicContract !== null) {
         const discovered = surfaces.get(operation.publicContract);
+        const rustItem = discovered ? null : resolveRustItem(operation.publicContract);
         surface = operation.publicContract;
         if (discovered) {
           bindings.push({
             source: "public-contract",
             surface: discovered.id,
             ...(discovered.declaration ? { declaration: discovered.declaration } : {}),
+          });
+        } else if (rustItem) {
+          bindings.push({
+            source: "public-contract",
+            surface: operation.publicContract,
+            declaration: rustItem.path,
+            line: rustItem.line,
           });
         } else {
           state = "stale";

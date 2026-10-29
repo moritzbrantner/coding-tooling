@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -29,6 +29,38 @@ describe("CLI boundary", () => {
 
     expect(result.status).toBe("passed");
     expect(result.data).toBeDefined();
+  });
+
+  test("running src/cli.ts directly forwards router-only commands", async () => {
+    const root = mkdtempSync(join(tmpdir(), "coding-tooling-cli-forward-"));
+    try {
+      writeFileSync(join(root, "package.json"), '{"name":"forward-fixture"}\n');
+      const child = Bun.spawn(
+        [
+          process.execPath,
+          join(repositoryRoot, "src", "cli.ts"),
+          "performance",
+          "applicability",
+          "--root",
+          root,
+          "--json",
+        ],
+        { cwd: root, stdout: "pipe", stderr: "pipe" },
+      );
+      const [stdout] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+      expect(JSON.parse(stdout)).toMatchObject({ operation: "performance-applicability" });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("package bin entrypoints are executable", () => {
+    const pkg = JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8")) as {
+      bin: Record<string, string>;
+    };
+    for (const path of Object.values(pkg.bin)) {
+      expect(statSync(join(repositoryRoot, path)).mode & 0o111).not.toBe(0);
+    }
   });
 
   test("convergence rules list is reachable through the installed entrypoint", async () => {

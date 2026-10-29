@@ -492,6 +492,53 @@ describe("exact binding diagnostics", () => {
     expect(stale[0]!.message).toContain(USERS_GET_SURFACE);
   });
 
+  test("Rust item-path publicContract follows pub mod files and impl blocks in child modules", async () => {
+    const world = "pub struct World {\n    bodies: usize,\n}\n\nmod query;\n";
+    const query =
+      "mod ray;\n\nuse super::World;\n\nimpl World {\n    pub fn overlap_shape(&self) {}\n    pub(crate) fn internal(&self) {}\n}\n";
+    const ray =
+      "use super::super::World;\n\nimpl World {\n    pub fn cast_ray_first(&self) {}\n}\n";
+    const root = repo(
+      {
+        "Cargo.toml": '[package]\nname = "physics-engine"\nversion = "0.1.0"\n',
+        "src/lib.rs": "pub mod approximate;\nmod hidden;\n",
+        "src/hidden.rs": "pub struct Secret;\n",
+        "src/approximate/mod.rs": world,
+        "src/approximate/query.rs": query,
+        "src/approximate/query/ray.rs": ray,
+      },
+      contract([
+        operation("world", { publicContract: "physics_engine::approximate::World" }),
+        operation("ray-first", {
+          publicContract: "physics_engine::approximate::World::cast_ray_first",
+        }),
+        operation("overlap", {
+          publicContract: "physics_engine::approximate::World::overlap_shape",
+        }),
+        operation("internal", { publicContract: "physics_engine::approximate::World::internal" }),
+        operation("hidden", { publicContract: "physics_engine::hidden::Secret" }),
+      ]),
+    );
+
+    const report = await bindings(root);
+
+    expect(op(report, "world")).toMatchObject({
+      state: "bound",
+      bindings: [{ source: "public-contract", declaration: "src/approximate/mod.rs", line: 1 }],
+    });
+    expect(op(report, "ray-first").bindings).toEqual([
+      {
+        source: "public-contract",
+        surface: "physics_engine::approximate::World::cast_ray_first",
+        declaration: "src/approximate/query/ray.rs",
+        line: lineOf(ray, "cast_ray_first"),
+      },
+    ]);
+    expect(op(report, "overlap").state).toBe("bound");
+    expect(op(report, "internal").state).toBe("stale");
+    expect(op(report, "hidden").state).toBe("stale");
+  });
+
   test("an operationId on a different surface than the declared publicContract is a mismatch, not a silent rebind", async () => {
     const root = repo(
       {
