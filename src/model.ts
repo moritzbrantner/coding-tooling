@@ -45,6 +45,7 @@ export type ResultOperation =
   | "repository-evidence"
   | "fleet"
   | "size-evidence"
+  | "hotspots"
   | "work-complexity"
   | "work-contract-bindings"
   | "performance-history"

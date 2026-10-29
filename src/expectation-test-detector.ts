@@ -76,6 +76,49 @@ function sourceCandidates(
   ];
 }
 
+const playwrightConfigNames = ["ts", "mts", "cts", "js", "mjs", "cjs"].map(
+  (extension) => `playwright.config.${extension}`,
+);
+
+/**
+ * Scripts a Playwright `webServer.command` runs (e.g. `bun scripts/build-pages.ts && ...`). Specs
+ * exercise what those scripts build, so the scripts are test roots alongside the spec files.
+ */
+function playwrightServerScripts(packageInfo: PackageInfo): string[] {
+  if (!packageInfo.testFiles.some((path) => /\.spec\.[cm]?[jt]sx?$/.test(path))) return [];
+  const scripts: string[] = [];
+  for (const name of playwrightConfigNames) {
+    let content: string;
+    try {
+      content = readFileSync(join(packageInfo.directory, name), "utf8");
+    } catch {
+      continue;
+    }
+    for (const command of content.matchAll(/\bcommand\s*:\s*(["'`])((?:(?!\1).)*)\1/g)) {
+      for (const script of command[2]!.matchAll(
+        /(?:^|[\s;&|])(?:bun|node|tsx|deno\s+run)\s+(?:run\s+)?(?:-\S+\s+)*([\w./-]+\.[cm]?[jt]sx?)\b/g,
+      ))
+        scripts.push(resolve(packageInfo.directory, script[1]!));
+    }
+  }
+  return scripts;
+}
+
+/**
+ * Package-relative source paths a build script names as literals, such as Bun.build entrypoints
+ * written `"src/app.ts"` or `path.join(root, "src", "app.ts")`.
+ */
+function sourcePathLiterals(content: string, packageInfo: PackageInfo): string[] {
+  const paths: string[] = [];
+  for (const match of content.matchAll(/["'`](\.?\/?src\/[\w./-]+\.[cm]?[jt]sx?)["'`]/g))
+    paths.push(resolve(packageInfo.directory, match[1]!));
+  for (const match of content.matchAll(/\bjoin\(\s*[\w.]+((?:\s*,\s*["'][\w.-]+["'])+)\s*\)/g)) {
+    const segments = [...match[1]!.matchAll(/["']([\w.-]+)["']/g)].map((value) => value[1]!);
+    if (segments[0] === "src") paths.push(resolve(packageInfo.directory, ...segments));
+  }
+  return paths;
+}
+
 function reachableSources(
   packageInfo: PackageInfo,
   sourceFiles: readonly string[],
@@ -84,7 +127,11 @@ function reachableSources(
 ): Set<string> {
   const sources = new Set(sourceFiles.map((path) => resolve(path)));
   const reachable = new Set<string>();
-  const queued = new Set<string>(packageInfo.testFiles.map((path) => resolve(path)));
+  const serverScripts = new Set(playwrightServerScripts(packageInfo));
+  const queued = new Set<string>([
+    ...packageInfo.testFiles.map((path) => resolve(path)),
+    ...serverScripts,
+  ]);
   const queue = [...queued];
 
   while (queue.length > 0) {
@@ -95,10 +142,13 @@ function reachableSources(
     } catch {
       continue;
     }
-    for (const specifier of moduleSpecifiers(content)) {
-      const target = sourceCandidates(importer, specifier, sourceExtensions, emittedAliases).find(
-        (candidate) => sources.has(resolve(candidate)),
-      );
+    const candidates = moduleSpecifiers(content).map((specifier) =>
+      sourceCandidates(importer, specifier, sourceExtensions, emittedAliases),
+    );
+    if (serverScripts.has(importer))
+      for (const path of sourcePathLiterals(content, packageInfo)) candidates.push([path]);
+    for (const options of candidates) {
+      const target = options.find((candidate) => sources.has(resolve(candidate)));
       if (!target) continue;
       const resolvedTarget = resolve(target);
       if (reachable.has(resolvedTarget)) continue;

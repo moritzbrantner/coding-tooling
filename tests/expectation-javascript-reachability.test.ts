@@ -63,6 +63,43 @@ describe("JavaScript structural test reachability", () => {
     expect(javascriptFindings(root)).toEqual([]);
   });
 
+  test("Playwright webServer build entrypoints are reachable from browser specs", () => {
+    const root = fixture({ test: "bun test", "test:browser": "playwright test" });
+    mkdirSync(join(root, "src", "browser"), { recursive: true });
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    mkdirSync(join(root, "test", "browser"), { recursive: true });
+    writeFileSync(join(root, "src", "browser", "shared.ts"), "export const shared = 1;\n");
+    writeFileSync(
+      join(root, "src", "browser", "viewer.ts"),
+      'import { shared } from "./shared.ts";\nvoid shared;\n',
+    );
+    writeFileSync(join(root, "src", "browser", "studio.ts"), "export const studio = 1;\n");
+    writeFileSync(join(root, "src", "page.ts"), "export const page = 1;\n");
+    writeFileSync(join(root, "src", "orphan.ts"), "export const orphan = 1;\n");
+    writeFileSync(
+      join(root, "scripts", "build-pages.ts"),
+      [
+        'import path from "node:path";',
+        'import { page } from "../src/page.js";',
+        "void page;",
+        'await Bun.build({ entrypoints: [path.join(root, "src", "browser", "viewer.ts")] });',
+        'await Bun.build({ entrypoints: ["src/browser/studio.ts"] });',
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(root, "playwright.config.ts"),
+      'export default { testDir: "./test/browser", webServer: { command: "bun scripts/build-pages.ts && bun scripts/serve.ts" } };\n',
+    );
+    writeFileSync(join(root, "test", "browser", "viewer.spec.ts"), 'test("loads", () => {});\n');
+
+    const findings = analyzeExpectations(root).findings.filter(
+      (finding) => finding.expectationId === "typescript-source-test",
+    );
+
+    expect(findings.map((finding) => finding.subject.key)).toEqual(["src/orphan.ts"]);
+  });
+
   test("excludes stories fixtures and test-support roots", () => {
     const root = fixture();
     mkdirSync(join(root, "src", "tests"), { recursive: true });
