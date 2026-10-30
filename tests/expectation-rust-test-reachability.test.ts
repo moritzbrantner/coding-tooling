@@ -77,7 +77,7 @@ describe("Rust structural test reachability", () => {
     expect(
       coverage(root).detectors.find((detector) => detector.id === "rust-source-test"),
     ).toMatchObject({ status: "applied", subjects: 2 });
-    expect(coverage(root).unsupportedTechnologies).toEqual(["rust"]);
+    expect(coverage(root).unsupportedTechnologies).toEqual([]);
   });
 
   test("follows explicit path test-support modules before recognizing crate evidence", () => {
@@ -118,6 +118,62 @@ describe("Rust structural test reachability", () => {
     expect(finding?.scaffold).toBeUndefined();
   });
 
+  test("a binary that a CI workflow runs counts as exercised, with the library it uses", () => {
+    const root = fixture("oracle");
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(root, "src", "lib.rs"), "pub mod scene;\n");
+    writeFileSync(join(root, "src", "scene.rs"), "pub fn run() {}\n");
+    writeFileSync(
+      join(root, "src", "main.rs"),
+      "mod cli;\nfn main() { cli::go(); oracle::scene::run(); }\n",
+    );
+    writeFileSync(join(root, "src", "cli.rs"), "pub fn go() {}\n");
+
+    expect(
+      rustFindings(root)
+        .map((finding) => finding.subject.key)
+        .sort(),
+    ).toEqual(["src/cli.rs", "src/lib.rs", "src/main.rs", "src/scene.rs"]);
+
+    writeFileSync(
+      join(root, ".github", "workflows", "ci.yml"),
+      "jobs:\n  oracle:\n    steps:\n      - run: cargo run --release -p oracle -- --check\n",
+    );
+    expect(rustFindings(root)).toEqual([]);
+  });
+
+  test("a CI script that runs a src/bin binary counts as exercised", () => {
+    const root = fixture("tools");
+    mkdirSync(join(root, "src", "bin"), { recursive: true });
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    writeFileSync(join(root, "src", "bin", "gate.rs"), "fn main() {}\n");
+    writeFileSync(join(root, "src", "bin", "other.rs"), "fn main() {}\n");
+    writeFileSync(join(root, "scripts", "gate.sh"), "#!/bin/sh\ncargo run --bin gate\n");
+    writeFileSync(join(root, "package.json"), '{"scripts":{"ci":"sh scripts/gate.sh"}}\n');
+
+    expect(rustFindings(root).map((finding) => finding.subject.key)).toEqual(["src/bin/other.rs"]);
+  });
+
+  test("scans every workspace member crate", () => {
+    const root = mkdtempSync(join(tmpdir(), "coding-tooling-rust-tests-"));
+    roots.push(root);
+    writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = ["engine", "oracle"]\n');
+    for (const member of ["engine", "oracle"]) {
+      mkdirSync(join(root, member, "src"), { recursive: true });
+      writeFileSync(
+        join(root, member, "Cargo.toml"),
+        `[package]\nname = "${member}"\nversion = "0.1.0"\n`,
+      );
+      writeFileSync(join(root, member, "src", "lib.rs"), "pub fn value() -> u8 { 1 }\n");
+    }
+
+    expect(
+      rustFindings(root)
+        .map((finding) => finding.subject.key)
+        .sort(),
+    ).toEqual(["engine/src/lib.rs", "oracle/src/lib.rs"]);
+  });
+
   test("conditional module relationships remain outside the proven surface", () => {
     const root = fixture();
     writeFileSync(
@@ -128,7 +184,7 @@ describe("Rust structural test reachability", () => {
     writeFileSync(join(root, "src", "service.rs"), "pub fn value() -> u8 { 1 }\n");
 
     expect(rustTestSurfaces(root)).toEqual(["src/lib.rs", "src/service.rs"]);
-    expect(coverage(root).unsupportedTechnologies).toEqual(["rust"]);
+    expect(coverage(root).unsupportedTechnologies).toEqual([]);
   });
 
   test("inline tests in the crate root structurally reach unconditional child modules", () => {

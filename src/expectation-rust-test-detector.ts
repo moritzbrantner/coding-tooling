@@ -1,10 +1,14 @@
-import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, dirname, extname, isAbsolute, join, posix, relative, resolve } from "node:path";
 
-import { discoverComponents } from "./core.ts";
+import { cargoComponentManifestPaths, discoverComponents } from "./core.ts";
 import type { DetectorContext } from "./expectation-package-context.ts";
 import type { RawFinding } from "./expectation-detector-types.ts";
-import { cargoPackageName, explicitCargoTargets } from "./expectation-rust-detector.ts";
+import {
+  cargoPackageName,
+  cargoPackageString,
+  explicitCargoTargets,
+} from "./expectation-rust-detector.ts";
 import { relativePosix, walkFiles } from "./shared.ts";
 
 type RustComponentTestContext = {
@@ -48,16 +52,22 @@ function isWithin(directory: string, path: string): boolean {
 }
 
 function rustComponentContexts(root: string): RustComponentTestContext[] {
-  const components = discoverComponents(root)
-    .filter((component) => component.kind === "rust")
-    .map((component) => ({
-      path: component.path,
-      directory: resolve(root, component.path),
-    }));
+  // A workspace component owns its member crates; each member is its own crate graph.
+  const crateDirectories = new Set(
+    discoverComponents(root)
+      .filter((component) => component.kind === "rust")
+      .flatMap((component) => cargoComponentManifestPaths(root, component.path))
+      .map((manifest) => dirname(resolve(manifest))),
+  );
+  const components = [...crateDirectories].map((directory) => ({
+    path: relativePosix(root, directory),
+    directory,
+  }));
   const directories = components
     .map((component) => component.directory)
     .sort((left, right) => right.length - left.length);
-  const rustFiles = walkFiles(root, 10)
+  // Cargo's `src/bin/` binaries are sources, not build output.
+  const rustFiles = walkFiles(root, 10, { includeIgnoredDirectories: ["bin"] })
     .filter((path) => extname(path) === ".rs")
     .sort();
   const targets = explicitCargoTargets(root);
@@ -204,17 +214,28 @@ function integrationTestSources(component: RustComponentTestContext): Set<string
   return graphReachability([...roots], known, roots);
 }
 
-function externalSeeds(component: RustComponentTestContext): string[] {
+function libraryPattern(component: RustComponentTestContext): RegExp | undefined {
+  if (!component.crateName) return undefined;
+  const identifier = escapeRegex(rustCrateIdentifier(component.crateName));
+  return new RegExp(`\\b(?:extern\\s+crate\\s+${identifier}\\b|${identifier}\\s*::)`);
+}
+
+/** A binary that runs is exercised, and so is the crate library its module graph uses. */
+function binarySeeds(component: RustComponentTestContext, binary: string): string[] {
+  const seeds = [resolve(binary)];
+  const pattern = libraryPattern(component);
+  if (!pattern || !component.libRoot) return seeds;
+  const known = new Set(component.sourceFiles.map((path) => resolve(path)));
+  const usesLibrary = [...graphReachability(seeds, known, new Set(seeds))].some((source) =>
+    pattern.test(readSource(source) ?? ""),
+  );
+  return usesLibrary ? [...seeds, resolve(component.libRoot)] : seeds;
+}
+
+function externalSeeds(component: RustComponentTestContext, ciRuns: readonly CargoRun[]): string[] {
   const tests = integrationTestSources(component);
   const seeds = new Set<string>();
-  const crateIdentifier = component.crateName
-    ? rustCrateIdentifier(component.crateName)
-    : undefined;
-  const cratePattern = crateIdentifier
-    ? new RegExp(
-        `\\b(?:extern\\s+crate\\s+${escapeRegex(crateIdentifier)}\\b|${escapeRegex(crateIdentifier)}\\s*::)`,
-      )
-    : undefined;
+  const cratePattern = libraryPattern(component);
   let referencesLibrary = false;
 
   for (const testFile of tests) {
@@ -222,11 +243,93 @@ function externalSeeds(component: RustComponentTestContext): string[] {
     if (content === undefined) continue;
     if (cratePattern?.test(content)) referencesLibrary = true;
     for (const [name, source] of component.binaryRoots) {
-      if (content.includes(`CARGO_BIN_EXE_${name}`)) seeds.add(resolve(source));
+      if (content.includes(`CARGO_BIN_EXE_${name}`)) {
+        for (const seed of binarySeeds(component, source)) seeds.add(seed);
+      }
     }
+  }
+  for (const run of ciRuns) {
+    const binary = ciRunBinary(component, run);
+    if (binary) for (const seed of binarySeeds(component, binary)) seeds.add(seed);
   }
   if (referencesLibrary && component.libRoot) seeds.add(resolve(component.libRoot));
   return [...seeds].sort();
+}
+
+type CargoRun = { package?: string; bin?: string; manifestPath?: string };
+
+const cargoRunPattern = /\bcargo\s+(?:\+[\w.-]+\s+)?run\b([^\n;&|`)]*)/g;
+const referencedScriptPattern =
+  /(?:^|[\s"'=])((?:\.\/)?[\w./-]+\.(?:sh|bash|mjs|cjs|js|ts|py))\b/gm;
+
+function cargoRuns(text: string): CargoRun[] {
+  const runs: CargoRun[] = [];
+  for (const match of text.matchAll(cargoRunPattern)) {
+    const tokens = (match[1] ?? "").trim().split(/\s+/).filter(Boolean);
+    const run: CargoRun = {};
+    for (let index = 0; index < tokens.length; index += 1) {
+      const token = tokens[index]!.replace(/^["']|["']$/g, "");
+      if (token === "--") break;
+      const [flag, inline] = token.includes("=") ? token.split("=", 2) : [token, undefined];
+      const value = () => inline ?? tokens[++index]?.replace(/^["']|["']$/g, "");
+      if (flag === "-p" || flag === "--package") run.package = value();
+      else if (flag === "--bin") run.bin = value();
+      else if (flag === "--manifest-path") run.manifestPath = value();
+    }
+    runs.push(run);
+  }
+  return runs;
+}
+
+function readJsonScripts(path: string): string[] {
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as { scripts?: unknown };
+    if (!parsed.scripts || typeof parsed.scripts !== "object") return [];
+    return Object.values(parsed.scripts).filter(
+      (value): value is string => typeof value === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * `cargo run` invocations that CI executes: workflow steps, root package scripts, and repository
+ * scripts those reference by path. A CI-run binary is an executed gate, so it counts as exercised.
+ */
+function ciCargoRuns(root: string): CargoRun[] {
+  const workflowDirectory = join(root, ".github", "workflows");
+  let workflowNames: string[] = [];
+  try {
+    workflowNames = readdirSync(workflowDirectory).filter((name) => /\.ya?ml$/.test(name));
+  } catch {
+    workflowNames = [];
+  }
+  const texts = [
+    ...workflowNames.map((name) => readSource(join(workflowDirectory, name)) ?? ""),
+    ...readJsonScripts(join(root, "package.json")),
+  ];
+  const referenced = new Set<string>();
+  for (const text of texts) {
+    for (const match of text.matchAll(referencedScriptPattern)) {
+      const path = resolve(root, match[1]!);
+      if (isWithin(root, path) && existsSync(path)) referenced.add(path);
+    }
+  }
+  return [...texts, ...[...referenced].map((path) => readSource(path) ?? "")].flatMap(cargoRuns);
+}
+
+function ciRunBinary(component: RustComponentTestContext, run: CargoRun): string | undefined {
+  const selected = run.package
+    ? run.package === component.crateName
+    : run.manifestPath
+      ? posix.normalize(run.manifestPath) === component.manifestRelative
+      : component.manifestRelative === "Cargo.toml";
+  if (!selected) return undefined;
+  if (run.bin) return component.binaryRoots.get(run.bin);
+  const defaultRun = cargoPackageString(component.manifestPath, "default-run");
+  if (defaultRun) return component.binaryRoots.get(defaultRun);
+  return component.binaryRoots.size === 1 ? [...component.binaryRoots.values()][0] : undefined;
 }
 
 function inlineTestSeeds(component: RustComponentTestContext): string[] {
@@ -255,11 +358,12 @@ function verification(component: RustComponentTestContext): string[][] {
 
 export function missingRustTestFindings({ root }: DetectorContext): RawFinding[] {
   const findings: RawFinding[] = [];
+  const ciRuns = ciCargoRuns(root);
   for (const component of rustComponentContexts(root)) {
     const known = new Set(component.sourceFiles.map((path) => resolve(path)));
     const roots = new Set(component.sourceRoots.map((path) => resolve(path)));
     const surfaces = graphReachability([...roots], known, roots);
-    const seeds = [...inlineTestSeeds(component), ...externalSeeds(component)];
+    const seeds = [...inlineTestSeeds(component), ...externalSeeds(component, ciRuns)];
     const tested = graphReachability(seeds, known, roots);
 
     for (const source of [...surfaces].sort()) {
