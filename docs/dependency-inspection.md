@@ -7,7 +7,7 @@ coding-tooling dependencies inspect --component backend --json
 
 The command collects declarations from the local checkout without executing package scripts, Cargo, MSBuild, Docker, network probes or dependency installation. It reuses normal component discovery and fixture exclusions. `--component` selects dependency and command declarations by component name or path; repository-wide Compose, OpenAPI and native-target declarations remain visible separately.
 
-The normal result envelope contains `data.reportVersion: 1`, `components`, `boundaries` and `coverage`. The data contract is described by [the inspection schema](../schemas/dependency-inspection.schema.json). Without `--json`, output follows the existing CLI's readable, indented JSON presentation. Ordering is stable across manifest key enumeration.
+The normal result envelope contains `data.reportVersion: 1`, `components`, `boundaries`, `unusedCandidates` and `coverage`. The data contract is described by [the inspection schema](../schemas/dependency-inspection.schema.json). Without `--json`, output follows the existing CLI's readable, indented JSON presentation. Ordering is stable across manifest key enumeration.
 
 Each component has a stable `kind:path` identity and an explicit collection status:
 
@@ -26,7 +26,16 @@ Rust components report package, development and build dependencies, including me
 
 .NET dependency inspection is explicitly unsupported: existing discovery identifies assemblies but does not provide a static project/package-reference parser. Python and generic repository components likewise retain their identities with unsupported dependency evidence. This initial version does not invoke a tool to invent missing facts.
 
-Transitive dependencies and source-reference extraction are explicitly unsupported. Lockfile presence is not a dependency-use or completeness claim. No output recommends replacement, labels a package unused, or attributes performance.
+Transitive dependencies are explicitly unsupported. Lockfile presence is not a dependency-use or completeness claim. No output recommends replacement or attributes performance.
+
+## Unused-dependency candidates
+
+`unusedCandidates` lists declared dependencies that nothing in the declaring package references. The scope is the directory of the declaring manifest, nested packages included. The `source-references` coverage entry is `partial` whenever a JavaScript or Rust component was scanned.
+
+- JavaScript: `import`/`export … from`, dynamic `import()`, `require()`, CSS `@import` and `/// <reference types>` specifiers count as uses. So does a package name, or its installed CLI binary name, that appears in the manifest's non-dependency fields (scripts, tool config), in `*.config.*`, `.*rc`, `tsconfig*.json`, YAML or shell files. When `node_modules` is installed, a package that another declared dependency lists in `peerDependencies` counts as used, and `typescript` counts as used when a `tsconfig*.json` exists. Without an install, peer-only packages show up as candidates. Peer and `@types/*` dependencies are not evaluated.
+- Rust: `name::` paths, `use name` and `extern crate name` in any `.rs` file under the manifest's directory count as uses, with `-` normalized to `_`.
+
+A candidate is evidence, not proof: plugins resolved by naming convention, dynamic loading and generated code can hide a real use.
 
 ## Declared boundaries
 
