@@ -110,6 +110,26 @@ export function loadConfig(root: string, configuredPath = ".coding-tooling.json"
   return value;
 }
 
+/**
+ * The repository's own name for a root component: the `origin` remote's repository name, so a
+ * scratch clone at `coding-tooling-374` still reports `coding-tooling`. Falls back to the directory.
+ */
+export function repositoryName(root: string): string {
+  let config = "";
+  try {
+    config = readFileSync(join(root, ".git", "config"), "utf8");
+  } catch {
+    return basename(root);
+  }
+  const origin = /\[remote "origin"\][^[]*?\burl\s*=\s*(\S+)/.exec(config)?.[1];
+  const name = origin
+    ?.replace(/\/+$/, "")
+    .split(/[/:]/)
+    .at(-1)
+    ?.replace(/\.git$/, "");
+  return name || basename(root);
+}
+
 function validateCapabilities(values: readonly string[]): void {
   for (const value of values) {
     if (!capabilities.includes(value as Capability))
@@ -142,7 +162,7 @@ export function discoverComponents(root = repositoryRoot(), config?: ToolingConf
       technologies.push("storybook");
     if ("lighthouse" in deps || "@lhci/cli" in deps) technologies.push("lighthouse");
     components.push({
-      name: manifest.name ?? (path === "." ? basename(root) : basename(directory)),
+      name: manifest.name ?? (path === "." ? repositoryName(root) : basename(directory)),
       path,
       kind: "package",
       technologies,
@@ -155,7 +175,7 @@ export function discoverComponents(root = repositoryRoot(), config?: ToolingConf
     const path = relativePosix(root, directory);
     if (components.some((component) => component.path === path)) continue;
     components.push({
-      name: path === "." ? basename(root) : basename(directory),
+      name: path === "." ? repositoryName(root) : basename(directory),
       path,
       kind: "python",
       technologies: ["python"],
@@ -178,7 +198,7 @@ export function discoverComponents(root = repositoryRoot(), config?: ToolingConf
     if (!manifest.workspace && workspaceMembers.has(manifest.path)) continue;
     const { path } = manifest;
     components.push({
-      name: path === "." ? basename(root) : basename(path),
+      name: path === "." ? repositoryName(root) : basename(path),
       path,
       kind: "rust",
       technologies: ["rust"],
@@ -195,7 +215,7 @@ export function discoverComponents(root = repositoryRoot(), config?: ToolingConf
       continue;
     const target = basename(file);
     components.push({
-      name: path === "." ? basename(root) : basename(directory),
+      name: path === "." ? repositoryName(root) : basename(directory),
       path,
       kind: "dotnet",
       technologies: ["dotnet"],
@@ -212,7 +232,7 @@ export function discoverComponents(root = repositoryRoot(), config?: ToolingConf
     const commands = (config ?? loadConfig(root)).capabilityCommands?.["."];
     if (commands && Object.keys(commands).length > 0) {
       components.push({
-        name: basename(root),
+        name: repositoryName(root),
         path: ".",
         kind: "repository",
         technologies: [],

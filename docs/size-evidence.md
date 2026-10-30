@@ -36,6 +36,14 @@ Each selector names a regular file or a directory with explicit extensions. Dire
 
 The collector fingerprints target, profile, features, minification, entrypoint, selection boundary, observed tool versions and the contents of declared build inputs. Run the repository's normal build immediately before collection to prove freshness. This collector cannot prove that arbitrary pre-existing files were built with the declared flags; the producing command owns that contract. Declare every build input or flag that affects comparability, including target/profile settings and packaging boundaries. Source-code changes are deliberately not comparability inputs; candidate artifacts retain their own exact hashes.
 
+### Adopting an existing ad-hoc measurement
+
+A script that already builds and prints sizes, such as physics-engine's `scripts/oracle-wasm.mjs`, adopts this collector without changing what it builds:
+
+1. Have the script copy each variant to its own stable path after building it, for example `target/size/engine.wasm` and `target/size/rapier.wasm`. Variants that overwrite one output path cannot be selected separately.
+2. Declare one `native` target per variant. Each target sets the WASM triple (`wasm32-unknown-unknown`), `profile: "release"`, that variant's `features`, `minification: "not-applicable"`, a `cargo --version` toolchain probe, and the manifest, lockfile and script as `buildInputs`.
+3. Expose `size:budget` as `<the script> && coding-tooling performance size --baseline <committed baseline>`, and drop the script's own size printout.
+
 An explicitly requested `--report <path>` writes the normal result envelope using the existing report command. A reviewed, committed measurement is a versioned baseline; update it through an explicit owner-reviewed change. Compare using `--baseline <path>`. Baselines must use `coding-tooling/size-evidence/v1` and contain complete measurements with consistent identity and byte totals. Target identity or selection differences produce `comparison.state: "incomparable"` and an unavailable exit status. Missing baselines, tools, built entrypoints or empty selections are unavailable; malformed contracts are errors. Neither is a passing comparison.
 
 Without `--baseline`, the report explicitly states `comparison.state: "not-requested"`; only the absolute byte budget is checked. With a compatible baseline, the report retains baseline bytes and signed delta bytes, checks the absolute budget, and checks the optional maximum byte increase. A passing capture without a comparison is not evidence that a regression budget passed. A repository's `size:budget` command must request its committed baseline when it promises regression checking.

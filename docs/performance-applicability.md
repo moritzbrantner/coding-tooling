@@ -24,6 +24,11 @@ The envelope reports successful _analysis_, not passing performance. Missing sce
 | Expo/React Native                                                                            | startup, frame stalls, runtime memory and native bundle size; collector availability remains explicit |
 | Distributable package/native component                                                       | size budget                                                                                           |
 | Repository whose `.performance/contract.json` (schemaVersion 2) declares `operations`        | work complexity (see [operation work complexity](./work-complexity.md))                               |
+| Root component of a repository with `.github/workflows/*.yml` (role `ci-pipeline`)           | build time                                                                                            |
+
+`build-time` has no repository-owned scenario. Its collector is the built-in `coding-tooling ci durations`, which reads GitHub Actions job and step timings. The family is `supported` when `gh` is on `PATH`, and `unsupported-environment` with `missingTools: ["gh"]` otherwise. Declaring a `build-time` scenario is invalid. Repositories can still opt out with a `notApplicable` entry.
+
+Without `--json`, the command prints a per-component summary. It lists every family that is not `not-applicable`, with its state and either its command, its missing tools or its reason. All `not-applicable` families are summarized on one line.
 
 Shape-based results are conservative applicability candidates, not product/domain decisions. Framework dependencies and authored benchmarks are structural signals; installation does not imply collector support. Repository owners declare exceptions where a family does not materially apply. Memory metrics remain collector-specific; RSS, allocations and retained heap are not interchangeable. The audit neither measures them nor compares thresholds.
 
