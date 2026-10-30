@@ -29,6 +29,7 @@ const families = [
   "frame-stall",
   "size-budget",
   "work-complexity",
+  "build-time",
 ] as const;
 type Family = (typeof families)[number];
 const familyCapabilities: Record<Family, readonly string[]> = {
@@ -43,6 +44,8 @@ const familyCapabilities: Record<Family, readonly string[]> = {
   "frame-stall": ["profile:runtime"],
   "size-budget": ["size:budget"],
   "work-complexity": ["performance:work"],
+  // Built in: `coding-tooling ci durations` reads workflow timings; no repository scenario exists.
+  "build-time": [],
 };
 const roles = [
   "rust-kernel",
@@ -52,6 +55,7 @@ const roles = [
   "service",
   "mobile",
   "distributable",
+  "ci-pipeline",
 ] as const;
 type Role = (typeof roles)[number];
 type Scenario = {
@@ -237,6 +241,12 @@ function inferredRoles(root: string, component: Component): Role[] {
         result.add("distributable");
     }
   }
+  // A repository's CI pipeline is a build-time workload owned by its root component.
+  if (
+    component.path === "." &&
+    walkFiles(join(root, ".github", "workflows"), 0).some((file) => /\.ya?ml$/.test(file))
+  )
+    result.add("ci-pipeline");
   if (readRepositoryMetadata(root).metadata?.kind === "service") {
     result.add(component.kind === "dotnet" ? "dotnet-service" : "service");
   }
@@ -271,6 +281,7 @@ const roleFamilies: Record<Role, readonly Family[]> = {
   service: ["runtime", "load-smoke"],
   mobile: ["startup", "frame-stall", "memory", "size-budget"],
   distributable: ["size-budget"],
+  "ci-pipeline": ["build-time"],
 };
 /** PATH existence only: lookup never launches a collector or repository script. */
 function executableAvailable(tool: string, cwd: string): boolean {
@@ -315,6 +326,24 @@ function observeFamily(
       reason:
         "No matching repository shape or declared workload role; this is a structural applicability assessment.",
     };
+  if (selected === "build-time") {
+    const command = ["coding-tooling", "ci", "durations"];
+    if (!available("gh", root))
+      return {
+        ...base,
+        command,
+        missingTools: ["gh"],
+        state: "unsupported-environment",
+        reason: "The built-in `ci durations` collector reads workflow timings through gh.",
+      };
+    return {
+      ...base,
+      command,
+      state: "supported",
+      reason:
+        "The built-in `ci durations` collector reads GitHub Actions job and step timings; measurement has not run.",
+    };
+  }
   if (!scenario)
     return {
       ...base,
@@ -499,6 +528,32 @@ export function performanceApplicability(
     data,
     diagnostics,
   };
+}
+
+/** Every component's families with their state; not-applicable families are summarized. */
+export function formatPerformanceApplicability(data: AuditData): string {
+  const lines = [`Performance applicability in ${data.root}${data.dirty ? " (dirty)" : ""}:`];
+  for (const component of data.components) {
+    lines.push(
+      "",
+      `${component.name} (${component.path}) roles: ${component.roles.join(", ") || "none"}`,
+    );
+    const relevant = component.families.filter((result) => result.state !== "not-applicable");
+    const width = Math.max(0, ...relevant.map((result) => result.family.length));
+    for (const result of relevant) {
+      const detail = result.missingTools.length
+        ? `missing ${result.missingTools.join(", ")}`
+        : result.command
+          ? result.command.join(" ")
+          : result.reason;
+      lines.push(`  ${result.family.padEnd(width)}  ${result.state.padEnd(23)}  ${detail}`);
+    }
+    const skipped = component.families
+      .filter((result) => result.state === "not-applicable")
+      .map((result) => result.family);
+    if (skipped.length) lines.push(`  not-applicable: ${skipped.join(", ")}`);
+  }
+  return lines.join("\n");
 }
 export function fleetPerformanceApplicability(root: string): ResultEnvelope<{
   schemaVersion: "coding-tooling/fleet-performance-applicability/v1";

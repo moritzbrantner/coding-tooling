@@ -14,6 +14,7 @@ import { fleetRenovateReport } from "./fleet-renovate.ts";
 import { reconcileFleetSourceDependencies } from "./fleet-source-deps.ts";
 import type { ResultEnvelope } from "./model.ts";
 import {
+  formatPerformanceApplicability,
   performanceApplicability,
   fleetPerformanceApplicability,
 } from "./performance-applicability.ts";
@@ -29,7 +30,7 @@ import { repositoryRoot } from "./shared.ts";
 import { formatHotspots, hotspotEvidence } from "./hotspots.ts";
 import { ciDurations, formatCiDurations } from "./ci-durations.ts";
 import { sizeEvidence } from "./size-evidence.ts";
-import { workComplexityEvidence } from "./work-complexity.ts";
+import { formatWorkComplexity, workComplexityEvidence } from "./work-complexity.ts";
 import { workContractBindings } from "./work-contract-bindings.ts";
 import { sourceDependencies } from "./source-deps.ts";
 import { verifySourceDependencyGraph } from "./source-graph.ts";
@@ -289,10 +290,14 @@ export function routerMain(argv = process.argv.slice(2)): number {
   if (argv[0] === "performance" && argv[1] === "work") {
     if (!validFlags(argv, 2, new Set(["--root", "--evidence"]), new Set(), true)) return usage();
     const evidence = option(argv, "evidence");
-    return print(
-      workComplexityEvidence(root, evidence === undefined ? {} : { evidence: resolve(evidence) }),
-      compact,
+    const result = workComplexityEvidence(
+      root,
+      evidence === undefined ? {} : { evidence: resolve(evidence) },
     );
+    if (compact) return print(result, compact);
+    console.log(formatWorkComplexity(result.data));
+    for (const diagnostic of result.diagnostics) console.error(diagnostic.message);
+    return exitCode(result.status);
   }
   if (argv[0] === "performance" && argv[1] === "bindings") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
@@ -317,7 +322,11 @@ export function routerMain(argv = process.argv.slice(2)): number {
   }
   if (argv[0] === "performance" && argv[1] === "applicability") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();
-    return print(performanceApplicability(root), compact);
+    const result = performanceApplicability(root);
+    if (compact) return print(result, compact);
+    console.log(formatPerformanceApplicability(result.data));
+    for (const diagnostic of result.diagnostics) console.error(diagnostic.message);
+    return exitCode(result.status);
   }
   if (argv[0] === "fleet" && argv[1] === "performance") {
     if (!validFlags(argv, 2, new Set(["--root"]), new Set(), true)) return usage();

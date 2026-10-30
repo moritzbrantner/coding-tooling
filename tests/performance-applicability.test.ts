@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { analyzeExpectations } from "../src/expectations.ts";
 import {
+  formatPerformanceApplicability,
   performanceApplicability,
   fleetPerformanceApplicability,
 } from "../src/performance-applicability.ts";
@@ -249,6 +250,30 @@ describe("performance applicability", () => {
       ],
     });
     expect(performanceApplicability(root).status).toBe("unavailable");
+  });
+  test("a CI workflow makes build time applicable through the built-in ci durations collector", () => {
+    const root = fixture();
+    expect(row(performanceApplicability(root), "build-time")?.state).toBe("not-applicable");
+
+    mkdirSync(join(root, ".github", "workflows"), { recursive: true });
+    writeFileSync(join(root, ".github", "workflows", "ci.yml"), "on: push\n");
+    const report = performanceApplicability(root, { available: (tool) => tool === "gh" });
+    expect(report.data.components[0]?.roles).toContain("ci-pipeline");
+    expect(row(report, "build-time")).toMatchObject({
+      state: "supported",
+      command: ["coding-tooling", "ci", "durations"],
+    });
+    expect(
+      row(performanceApplicability(root, { available: () => false }), "build-time"),
+    ).toMatchObject({ state: "unsupported-environment", missingTools: ["gh"] });
+
+    const text = formatPerformanceApplicability(report.data);
+    expect(text).toContain("fixture (.) roles: ci-pipeline");
+    expect(text).toMatch(/build-time\s+supported\s+coding-tooling ci durations/);
+    expect(text).toMatch(/not-applicable: .*work-complexity/);
+
+    declare(root, { notApplicable: [{ family: "build-time", reason: "trivial CI" }] });
+    expect(row(performanceApplicability(root), "build-time")?.state).toBe("not-applicable");
   });
   test("explicit capability override is honored without running its command", () => {
     const root = fixture({ dependencies: { react: "19.2.6" } });
