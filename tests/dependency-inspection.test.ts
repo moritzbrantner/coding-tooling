@@ -207,6 +207,76 @@ describe("dependency inspection", () => {
     expect(inspectDependencies(root).status).toBe("error");
   });
 
+  test("reports JavaScript dependencies without source, script or config references", () => {
+    const root = repository();
+    write(
+      root,
+      "package.json",
+      JSON.stringify({
+        name: "web",
+        scripts: { check: "tsc --noEmit && oxlint ." },
+        prettier: "@acme/prettier-config",
+        dependencies: {
+          "@scope/ui": "1",
+          lodash: "4",
+          dynamic: "1",
+          unused: "1",
+          "@scope/unused": "1",
+          "react-dom": "19",
+        },
+        devDependencies: {
+          typescript: "5",
+          oxlint: "1",
+          "@acme/prettier-config": "1",
+          "vite-plugin-x": "1",
+          "@types/node": "22",
+          stale: "1",
+        },
+        peerDependencies: { react: "19" },
+      }),
+    );
+    write(root, "node_modules/typescript/package.json", '{"bin":{"tsc":"bin/tsc"}}');
+    // Hoisted install: a declared dependency's peer counts as consumed.
+    write(root, "node_modules/@scope/ui/package.json", '{"peerDependencies":{"react-dom":"*"}}');
+    write(
+      root,
+      "src/index.ts",
+      'import { Button } from "@scope/ui/button";\nimport get from "lodash/get";\nconst x = await import("dynamic");\n',
+    );
+    write(root, "vite.config.ts", 'import x from "vite-plugin-x";\nexport default {};\n');
+
+    const result = inspectDependencies(root);
+    expect(result.data.unusedCandidates).toEqual([
+      {
+        component: "package:.",
+        name: "@scope/unused",
+        kind: "direct",
+        declaration: "package.json",
+      },
+      { component: "package:.", name: "stale", kind: "dev", declaration: "package.json" },
+      { component: "package:.", name: "unused", kind: "direct", declaration: "package.json" },
+    ]);
+    expect(result.data.coverage).toContainEqual(
+      expect.objectContaining({ feature: "source-references", status: "partial" }),
+    );
+  });
+
+  test("reports Rust dependencies without a crate path, use or extern crate reference", () => {
+    const root = repository();
+    write(
+      root,
+      "Cargo.toml",
+      '[package]\nname = "engine"\nversion = "0.1.0"\n\n[dependencies]\nserde = "1"\nglam = "0.29"\nthis-error = "1"\nunused-crate = "1"\n\n[build-dependencies]\ncc = "1"\n',
+    );
+    write(root, "src/lib.rs", "use glam::Vec3;\n#[derive(serde::Serialize)]\npub struct S;\n");
+    write(root, "src/bin/tool.rs", "extern crate this_error;\nfn main() {}\n");
+    write(root, "build.rs", 'fn main() { cc::Build::new().file("x.c").compile("x"); }\n');
+
+    expect(inspectDependencies(root).data.unusedCandidates).toEqual([
+      { component: "rust:.", name: "unused-crate", kind: "direct", declaration: "Cargo.toml" },
+    ]);
+  });
+
   test("respects component selection and fixture boundaries", () => {
     const root = repository();
     write(root, "a/package.json", '{"name":"a","dependencies":{"one":"1"}}');

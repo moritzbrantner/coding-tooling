@@ -3,6 +3,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { TOML } from "bun";
 
 import { discoverComponents, loadConfig } from "./core.ts";
+import { unusedDependencyCandidates } from "./dependency-references.ts";
 import type { Component, Diagnostic, ResultEnvelope } from "./model.ts";
 import { relativePosix, repositoryRoot, walkFiles } from "./shared.ts";
 
@@ -473,14 +474,33 @@ export function inspectDependencies(
           evidence: [options.configPath ?? ".coding-tooling.json"],
         });
     }
+    const referenceScanned = evidence.filter(
+      ({ ecosystem }) => ecosystem === "javascript" || ecosystem === "rust",
+    );
+    const unusedCandidates = referenceScanned.flatMap((component) =>
+      unusedDependencyCandidates(root, component),
+    );
     const coverage: Coverage[] = [
       composeEvidence(root, files, boundaries),
       ...declaredBoundaryEvidence(root, files, manifests, boundaries),
-      ...["transitive-dependencies", "source-references"].map((feature): Coverage => ({
-        feature,
+      {
+        feature: "transitive-dependencies",
         status: "unsupported",
         reason: "This static inspection version does not collect this evidence",
-      })),
+      },
+      referenceScanned.length
+        ? {
+            feature: "source-references",
+            status: "partial",
+            evidence: referenceScanned.map(({ id }) => id),
+            reason:
+              "JavaScript import/require specifiers, scripts, CLI binaries and config mentions; Rust `crate::`/`use`/`extern crate` paths. Dynamic loading and naming conventions can hide a use, and peer and @types packages are not evaluated",
+          }
+        : {
+            feature: "source-references",
+            status: "unsupported",
+            reason: "No JavaScript or Rust component was inspected",
+          },
     ];
     const orderedBoundaries = sorted(
       boundaries,
@@ -504,6 +524,13 @@ export function inspectDependencies(
         reportVersion: 1,
         components: evidence,
         boundaries: orderedBoundaries,
+        unusedCandidates: sorted(
+          unusedCandidates,
+          (left, right) =>
+            left.component.localeCompare(right.component) ||
+            left.name.localeCompare(right.name) ||
+            left.declaration.localeCompare(right.declaration),
+        ),
         coverage: sorted(coverage, (left, right) => left.feature.localeCompare(right.feature)),
       },
       diagnostics: sorted(

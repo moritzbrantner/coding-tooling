@@ -3,7 +3,7 @@
   "$id": "https://coding-tooling.local/schemas/dependency-inspection.schema.json",
   "title": "coding-tooling dependency inspection data v1",
   "type": "object",
-  "required": ["root", "reportVersion", "components", "boundaries", "coverage"],
+  "required": ["root", "reportVersion", "components", "boundaries", "unusedCandidates", "coverage"],
   "properties": {
     "root": { "type": "string" },
     "reportVersion": { "const": 1 },
@@ -37,6 +37,20 @@
           "command": { "oneOf": [{ "type": "string" }, { "$ref": "#/$defs/strings" }] },
           "image": { "type": "string" },
           "dependsOn": { "$ref": "#/$defs/strings" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "unusedCandidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["component", "name", "kind", "declaration"],
+        "properties": {
+          "component": { "type": "string" },
+          "name": { "type": "string" },
+          "kind": { "enum": ["direct", "dev", "build", "optional", "peer"] },
+          "declaration": { "type": "string" }
         },
         "additionalProperties": false
       }
