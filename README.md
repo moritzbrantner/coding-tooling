@@ -55,12 +55,24 @@ coding-tooling workflow-profile audit [--root <path>] [--json]
 coding-tooling findings [--new|--baseline] [--all] [--json]
 coding-tooling remediation plan [--include-baseline] [--json]
 coding-tooling hotspots [--root <path>] [--days 21] [--min-commits 5] [--min-lines 800] [--json]
+coding-tooling ci durations [--repo owner/name] [--workflow <name|file>] [--runs 10] [--branch <name> | --any-branch] [--event <name>] [--json]
 coding-tooling performance size [--root <path>] [--baseline <path>] [--json]
 coding-tooling performance applicability [--root <path>] [--json]
 coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
 coding-tooling performance bindings [--root <path>] [--json]
 coding-tooling performance acceptance [--root <path>] [--evidence <path>] [--score <path>] [--json]
 ```
+
+`hotspots` and `ci durations` are read-only refactor evidence, not gates.
+`ci durations` reads the last N successful runs of each active workflow
+(default branch unless `--branch`/`--any-branch`; `--event pull_request
+--any-branch` covers PR runs) through `gh api` job and step timestamps, without
+log scraping. Per workflow it reports median, p90 and max wall time (first job
+created to last job completed), summed queue time (job created to runner start)
+against summed runner time, the most common critical path (inferred from
+timestamps, since the API does not expose `needs`), and the slowest jobs and
+steps. `--repo` defaults to the repository `gh` resolves from `--root`; without
+`--json` it prints a table.
 
 `--report` keeps the requested file as the latest result and retains immutable
 copies in its sibling `<filename>.history/` directory. Retrying a failed run at

@@ -27,6 +27,7 @@ import {
 } from "./repository-contract-verification.ts";
 import { repositoryRoot } from "./shared.ts";
 import { formatHotspots, hotspotEvidence } from "./hotspots.ts";
+import { ciDurations, formatCiDurations } from "./ci-durations.ts";
 import { sizeEvidence } from "./size-evidence.ts";
 import { workComplexityEvidence } from "./work-complexity.ts";
 import { workContractBindings } from "./work-contract-bindings.ts";
@@ -72,6 +73,7 @@ function usage(): number {
   coding-tooling fleet renovate [--root <path>] [--repo owner/name ...] [--json]
   coding-tooling repository contract [--root <path>] [--execute] [--json]
   coding-tooling hotspots [--root <path>] [--days <n>] [--min-commits <n>] [--min-lines <n>] [--json]
+  coding-tooling ci durations [--repo owner/name] [--workflow <name>] [--runs <n>] [--branch <name> | --any-branch] [--event <name>] [--json]
   coding-tooling performance size [--root <path>] [--baseline <path>] [--report <path>] [--json]
   coding-tooling performance applicability [--root <path>] [--json]
   coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
@@ -237,6 +239,40 @@ export function routerMain(argv = process.argv.slice(2)): number {
     });
     if (compact) return print(result, compact);
     console.log(formatHotspots(result.data));
+    for (const diagnostic of result.diagnostics) console.error(diagnostic.message);
+    return exitCode(result.status);
+  }
+
+  if (argv[0] === "ci" && argv[1] === "durations") {
+    if (
+      !validFlags(
+        argv,
+        2,
+        new Set(["--root", "--repo", "--workflow", "--runs", "--branch", "--event"]),
+        new Set(["--any-branch"]),
+        true,
+      )
+    )
+      return usage();
+    const repo = option(argv, "repo");
+    const runs = option(argv, "runs");
+    const workflow = option(argv, "workflow");
+    const branch = option(argv, "branch");
+    const event = option(argv, "event");
+    const anyBranch = argv.includes("--any-branch");
+    if (repo !== undefined && !/^[\w.-]+\/[\w.-]+$/.test(repo)) return usage();
+    if (runs !== undefined && !(/^[1-9]\d*$/.test(runs) && Number(runs) <= 100)) return usage();
+    if (anyBranch && branch !== undefined) return usage();
+    const result = ciDurations(root, {
+      ...(repo === undefined ? {} : { repo }),
+      ...(runs === undefined ? {} : { runs: Number(runs) }),
+      ...(workflow === undefined ? {} : { workflow }),
+      ...(branch === undefined ? {} : { branch }),
+      ...(event === undefined ? {} : { event }),
+      ...(anyBranch ? { anyBranch } : {}),
+    });
+    if (compact) return print(result, compact);
+    console.log(formatCiDurations(result.data));
     for (const diagnostic of result.diagnostics) console.error(diagnostic.message);
     return exitCode(result.status);
   }

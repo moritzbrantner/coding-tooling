@@ -46,6 +46,7 @@ export type ResultOperation =
   | "fleet"
   | "size-evidence"
   | "hotspots"
+  | "ci-durations"
   | "work-complexity"
   | "work-contract-bindings"
   | "performance-history"
