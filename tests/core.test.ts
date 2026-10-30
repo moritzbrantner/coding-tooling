@@ -69,6 +69,19 @@ describe("coding-tooling plans", () => {
     expect(component.capabilities.lint).toEqual(["npm", "run", "lint"]);
   });
 
+  test("names a root component after the origin remote, not the clone directory", () => {
+    const root = mkdtempSync(join(tmpdir(), "scratch-clone-374-"));
+    writeFileSync(join(root, "Cargo.toml"), '[package]\nname = "engine"\nversion = "0.1.0"\n');
+    expect(discoverComponents(root)[0]?.name).toBe(basename(root));
+
+    mkdirSync(join(root, ".git"));
+    writeFileSync(
+      join(root, ".git", "config"),
+      '[core]\n\tbare = false\n[remote "upstream"]\n\turl = https://github.com/other/fork.git\n[remote "origin"]\n\turl = git@github.com:owner/physics-engine.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n',
+    );
+    expect(discoverComponents(root)[0]?.name).toBe("physics-engine");
+  });
+
   test("does not discover fixture manifests as repository components", () => {
     const root = repository();
     const fixture = join(root, "fixtures", "sample");

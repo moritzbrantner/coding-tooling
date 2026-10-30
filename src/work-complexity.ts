@@ -547,3 +547,40 @@ export function workComplexityEvidence(
     diagnostics,
   };
 }
+
+function boundLabel(check: WorkCheck): string {
+  if (check.kind === "budget") return `<= ${check.max}`;
+  if (check.product?.length)
+    return check.product.map((term) => `${term.bound}(${term.dimension})`).join(" * ");
+  if (check.bound === "polynomial" && check.degree !== undefined)
+    return `polynomial^${check.degree}`;
+  return check.bound ?? "";
+}
+
+/** One row per check: operation, metric, kind, dimension, bound and state. */
+export function formatWorkComplexity(data: WorkComplexityData): string {
+  const rows = data.operations.flatMap((operation) =>
+    operation.checks.map((check) => [
+      operation.id,
+      check.metric,
+      check.kind,
+      check.dimension ?? check.product?.map((term) => term.dimension).join(",") ?? "",
+      boundLabel(check),
+      check.state === "failed" ? `FAILED (${check.violations.length} violations)` : check.state,
+    ]),
+  );
+  const header = ["operation", "metric", "kind", "dimension", "bound", "state"];
+  const widths = header.map((title, column) =>
+    Math.max(title.length, ...rows.map((row) => row[column]!.length)),
+  );
+  const line = (cells: string[]) =>
+    cells
+      .map((cell, column) => cell.padEnd(widths[column]!))
+      .join("  ")
+      .trimEnd();
+  const failed = rows.filter((row) => row[5]!.startsWith("FAILED")).length;
+  return [
+    `Work complexity in ${data.root}${data.suite ? ` (suite ${data.suite})` : ""}: ${data.operations.length} operations, ${rows.length} checks, ${failed} failed.`,
+    ...(rows.length ? [line(header), ...rows.map(line)] : ["  no checks"]),
+  ].join("\n");
+}

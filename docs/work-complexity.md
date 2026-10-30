@@ -2,6 +2,8 @@
 
 `coding-tooling performance work --root <repository> [--evidence <file>] --json` verifies deterministic work counters that a repository emits for its own product operations against the upper bounds the repository declares. It never infers Big-O from timings and never picks a class for the repository: the repository declares the bound, and the tool checks the emitted counters at the declared scale points.
 
+Without `--json` it prints a table with one row per check: operation, metric, kind, dimension, bound and state. A failed check shows its violation count. The exit status is the same as in JSON mode, so CI can run the plain command to get a readable log without post-processing the JSON.
+
 Exit codes follow the shared envelope mapping: `0` passed, `1` failed (a bound or budget is violated), `2` unavailable (the contract or evidence cannot establish a result).
 
 ## Contract: `.performance/contract.json` schemaVersion 2
