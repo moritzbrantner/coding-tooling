@@ -192,6 +192,35 @@ test("baseline debt is opt-in and sorts after equally severe new work", () => {
   expect(candidates.map((candidate) => candidate.priority)).toEqual([0, 50]);
 });
 
+test("groups unscaffolded baseline debt by expectation and verification target", () => {
+  const crate = { verification: [["cargo", "test", "-p", "oracle"]], state: "baseline" as const };
+  const candidates = planRemediationCandidates(
+    [
+      finding("CT-666666666666", "oracle/src/a.rs", {
+        ...crate,
+        expectationId: "rust-source-test",
+      }),
+      finding("CT-777777777777", "oracle/src/b.rs", {
+        ...crate,
+        expectationId: "rust-source-test",
+      }),
+      finding("CT-888888888888", "oracle/src/c.rs", {
+        ...crate,
+        expectationId: "rust-source-test",
+      }),
+      finding("CT-999999999999", "src/new.rs", { expectationId: "rust-source-test" }),
+    ],
+    { includeBaseline: true },
+  );
+
+  expect(candidates).toHaveLength(2);
+  expect(candidates[0]!.subject.key).toBe("src/new.rs");
+  const grouped = candidates[1]!;
+  expect(grouped.findingIds).toEqual(["CT-666666666666", "CT-777777777777", "CT-888888888888"]);
+  expect(grouped.subject.kind).toBe("repository");
+  expect(grouped.subject.description).toBe("3 baseline subjects verified by cargo test -p oracle");
+});
+
 test("candidate identity and ordering are stable across finding input order", () => {
   const first = finding("CT-444444444444", "src/stable.ts", {
     severity: "error",

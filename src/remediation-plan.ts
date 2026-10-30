@@ -335,9 +335,7 @@ export function planRemediationCandidates(
   const baselineGroups = new Map<string, Finding[]>();
   for (const finding of selected) {
     const groups =
-      finding.state === "baseline" && finding.scaffold === undefined
-        ? baselineGroups
-        : bySubject;
+      finding.state === "baseline" && finding.scaffold === undefined ? baselineGroups : bySubject;
     const key =
       groups === baselineGroups
         ? JSON.stringify([finding.expectationId, uniqueCommands(finding.verification)])

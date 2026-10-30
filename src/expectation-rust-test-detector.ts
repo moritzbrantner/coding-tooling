@@ -259,7 +259,8 @@ function externalSeeds(component: RustComponentTestContext, ciRuns: readonly Car
 type CargoRun = { package?: string; bin?: string; manifestPath?: string };
 
 const cargoRunPattern = /\bcargo\s+(?:\+[\w.-]+\s+)?run\b([^\n;&|`)]*)/g;
-const referencedScriptPattern = /(?:^|[\s"'=])((?:\.\/)?[\w./-]+\.(?:sh|bash|mjs|cjs|js|ts|py))\b/gm;
+const referencedScriptPattern =
+  /(?:^|[\s"'=])((?:\.\/)?[\w./-]+\.(?:sh|bash|mjs|cjs|js|ts|py))\b/gm;
 
 function cargoRuns(text: string): CargoRun[] {
   const runs: CargoRun[] = [];

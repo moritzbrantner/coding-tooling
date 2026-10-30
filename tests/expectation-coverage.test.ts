@@ -130,7 +130,7 @@ jobs:
     });
   }, 15000);
 
-  test("reports Rust as unsupported for deeper structural source-test analysis", () => {
+  test("treats Rust as supported once the Rust source-test detector applies", () => {
     const root = fixture();
     mkdirSync(join(root, "src"), { recursive: true });
     writeFileSync(
@@ -142,7 +142,8 @@ jobs:
     const result = coverage(root);
 
     expect(result.technologies).toEqual(["rust"]);
-    expect(result.unsupportedTechnologies).toEqual(["rust"]);
+    expect(result.unsupportedTechnologies).toEqual([]);
+    expect(detector(result, "rust-source-test").status).toBe("applied");
     expect(detector(result, "rust-cargo-target-path")).toMatchObject({
       status: "not-applicable",
       subjects: 0,
@@ -174,7 +175,7 @@ jobs:
     });
   });
 
-  test("keeps mixed covered and unsupported technologies explicit", () => {
+  test("reports mixed technologies with their applied detectors", () => {
     const root = fixture();
     mkdirSync(join(root, "web", "src"), { recursive: true });
     mkdirSync(join(root, "engine", "src"), { recursive: true });
@@ -194,7 +195,7 @@ jobs:
     const result = coverage(root);
 
     expect(result.technologies).toEqual(["javascript", "rust", "typescript"]);
-    expect(result.unsupportedTechnologies).toEqual(["rust"]);
+    expect(result.unsupportedTechnologies).toEqual([]);
     expect(detector(result, "typescript-source-test")).toMatchObject({
       status: "applied",
       subjects: 1,
