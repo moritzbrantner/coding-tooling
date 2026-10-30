@@ -3,9 +3,9 @@
   "kind": "coding-tooling-public-contract-snapshot",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "f067e25356ae9404073b442f3f1e3c4aedeb2760"
+    "revision": "b70da111c89562519eca972f61472151513a26b2"
   },
-  "generatedAt": "2026-10-30T00:44:02.000Z",
+  "generatedAt": "2026-10-30T21:40:37.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1,
@@ -14,7 +14,7 @@
   },
   "report": {
     "schemaVersion": 1,
-    "revision": "f067e25356ae9404073b442f3f1e3c4aedeb2760",
+    "revision": "b70da111c89562519eca972f61472151513a26b2",
     "enforcement": "observe",
     "manifestPath": ".coding-tooling.contracts.json",
     "summary": {
