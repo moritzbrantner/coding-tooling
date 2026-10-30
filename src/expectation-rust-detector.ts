@@ -26,6 +26,8 @@ const targetTablePattern = /^\s*\[lib\]\s*(?:#.*)?$/;
 const targetArrayPattern = /^\s*\[\[(bin|test|example|bench)\]\]\s*(?:#.*)?$/;
 const anyTablePattern = /^\s*\[.*\]\s*(?:#.*)?$/;
 const stringAssignmentPattern = /^\s*(name|path)\s*=\s*("(?:\\.|[^"\\])*"|'[^']*')\s*(?:#.*)?$/;
+const packageStringAssignmentPattern =
+  /^\s*([A-Za-z0-9_-]+)\s*=\s*("(?:\\.|[^"\\])*"|'[^']*')\s*(?:#.*)?$/;
 
 function parseTomlString(value: string): string | undefined {
   if (value.startsWith('"')) {
@@ -49,6 +51,11 @@ function readManifest(path: string): string | undefined {
 }
 
 export function cargoPackageName(manifestPath: string): string | undefined {
+  return cargoPackageString(manifestPath, "name");
+}
+
+/** A plain string value from a manifest's `[package]` table, such as `name` or `default-run`. */
+export function cargoPackageString(manifestPath: string, key: string): string | undefined {
   const content = readManifest(manifestPath);
   if (content === undefined) return undefined;
   let inPackage = false;
@@ -62,8 +69,8 @@ export function cargoPackageName(manifestPath: string): string | undefined {
       continue;
     }
     if (!inPackage) continue;
-    const assignment = stringAssignmentPattern.exec(line);
-    if (assignment?.[1] !== "name" || !assignment[2]) continue;
+    const assignment = packageStringAssignmentPattern.exec(line);
+    if (assignment?.[1] !== key || !assignment[2]) continue;
     return parseTomlString(assignment[2]);
   }
   return undefined;

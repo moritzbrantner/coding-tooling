@@ -145,16 +145,25 @@ function semanticProviderCoverage(
   return { status: "unavailable", subjects };
 }
 
-function unsupportedTechnologies(root: string): string[] {
-  const components = discoverComponents(root);
-  const unsupported = new Set<string>();
+// A technology is unsupported when its source-level detector did not apply.
+const technologySourceDetectors: Record<string, string> = {
+  dotnet: "dotnet-type-assignability",
+  rust: "rust-source-test",
+};
 
-  for (const component of components) {
-    if (component.technologies.includes("rust")) unsupported.add("rust");
-    if (component.technologies.includes("dotnet")) unsupported.add("dotnet");
-  }
-
-  return [...unsupported].sort();
+function unsupportedTechnologies(
+  technologies: readonly string[],
+  detectors: readonly DetectorCoverage[],
+): string[] {
+  return technologies
+    .filter((technology) => {
+      const detectorId = technologySourceDetectors[technology];
+      if (!detectorId) return false;
+      return !detectors.some(
+        (detector) => detector.id === detectorId && detector.status === "applied",
+      );
+    })
+    .sort();
 }
 
 export function analyzeFindingsCoverage(
@@ -203,6 +212,6 @@ export function analyzeFindingsCoverage(
     schemaVersion: 1,
     technologies,
     detectors,
-    unsupportedTechnologies: unsupportedTechnologies(root),
+    unsupportedTechnologies: unsupportedTechnologies(technologies, detectors),
   };
 }

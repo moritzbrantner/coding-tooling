@@ -84,7 +84,11 @@ function uniqueCommands(commands: string[][]): string[][] {
     .map(([, command]) => command);
 }
 
-function candidateFor(findings: Finding[], root?: string): RemediationCandidate {
+function candidateFor(
+  findings: Finding[],
+  root?: string,
+  groupSubject?: Finding["subject"],
+): RemediationCandidate {
   const ordered = [...findings].sort((left, right) => left.id.localeCompare(right.id));
   const ids = ordered.map((finding) => finding.id);
   const id = candidateId(ids);
@@ -180,7 +184,7 @@ function candidateFor(findings: Finding[], root?: string): RemediationCandidate 
         ]
       : [],
   );
-  const subject = ordered[0]!.subject;
+  const subject = groupSubject ?? ordered[0]!.subject;
 
   return {
     id,
@@ -324,15 +328,47 @@ export function planRemediationCandidates(
       finding.disposition === "active" &&
       (options.includeBaseline === true || finding.state === "new"),
   );
+  // New work stays one candidate per subject. Baseline debt without a scaffold is grouped by
+  // expectation and verification target (for example one Rust crate), so a plan lists a few
+  // fixable units of existing debt instead of mirroring every finding.
   const bySubject = new Map<string, Finding[]>();
+  const baselineGroups = new Map<string, Finding[]>();
   for (const finding of selected) {
-    const current = bySubject.get(finding.subject.key) ?? [];
-    current.push(finding);
-    bySubject.set(finding.subject.key, current);
+    const groups =
+      finding.state === "baseline" && finding.scaffold === undefined
+        ? baselineGroups
+        : bySubject;
+    const key =
+      groups === baselineGroups
+        ? JSON.stringify([finding.expectationId, uniqueCommands(finding.verification)])
+        : finding.subject.key;
+    groups.set(key, [...(groups.get(key) ?? []), finding]);
   }
-  const expectationCandidates = [...bySubject.values()].map((grouped) =>
-    candidateFor(grouped, options.root),
-  );
+  const subjectGroups = [...bySubject.values()];
+  const groupedBaseline: Array<[Finding[], Finding["subject"]]> = [];
+  for (const [key, grouped] of baselineGroups) {
+    const subjects = new Set(grouped.map((finding) => finding.subject.key));
+    if (subjects.size === 1) {
+      subjectGroups.push(grouped);
+      continue;
+    }
+    const expectationId = grouped[0]!.expectationId;
+    const verification = uniqueCommands(grouped[0]!.verification)
+      .map((command) => command.join(" "))
+      .join("; ");
+    groupedBaseline.push([
+      grouped,
+      {
+        kind: "repository",
+        key: `baseline:${expectationId}:${createHash("sha256").update(key).digest("hex").slice(0, 8)}`,
+        description: `${subjects.size} baseline subjects${verification ? ` verified by ${verification}` : ""}`,
+      },
+    ]);
+  }
+  const expectationCandidates = [
+    ...subjectGroups.map((grouped) => candidateFor(grouped, options.root)),
+    ...groupedBaseline.map(([grouped, subject]) => candidateFor(grouped, options.root, subject)),
+  ];
   const mobileCandidates = options.root ? mobileAnalysisCandidates(options.root) : [];
   return [...expectationCandidates, ...mobileCandidates].sort(
     (left, right) =>
