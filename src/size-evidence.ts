@@ -21,12 +21,16 @@ type Target = {
 type Artifact = { path: string; bytes: number; sha256: string };
 type Comparison =
   | { state: "not-requested" }
+  | { state: "new" }
   | { state: "incomparable"; reason: string }
-  | { state: "comparable"; baselineBytes: number; deltaBytes: number };
+  | { state: "comparable"; baselineBytes: number; deltaBytes: number; drift: string[] };
 type Measurement = {
   id: string;
   kind: Target["kind"];
+  /** Hash of the declared build shape: id, kind, entrypoint, selection, target, profile, features, minification. */
   identity: string;
+  maxBytes: number;
+  maxIncreaseBytes: number | null;
   inputs: Omit<Target, "maxBytes" | "maxIncreaseBytes"> & {
     toolVersions: string[];
     buildInputHashes: { path: string; sha256: string }[];
@@ -37,7 +41,7 @@ type Measurement = {
   failures: string[];
 };
 type SizeData = {
-  schemaVersion: "coding-tooling/size-evidence/v1";
+  schemaVersion: "coding-tooling/size-evidence/v2";
   metric: "raw-artifact-bytes";
   targets: Measurement[];
 };
@@ -246,7 +250,55 @@ function probe(root: string, command: string[]): string {
   }
   return result.stdout.trim();
 }
-type Baseline = { id: string; identity: string; bytes: number };
+/** Comparability is the declared build shape only; toolchain and input drift is context. */
+function shapeIdentity(target: Target): string {
+  const {
+    id,
+    kind,
+    entrypoint,
+    artifacts,
+    target: triple,
+    profile,
+    features,
+    minification,
+  } = target;
+  return hash(
+    JSON.stringify({
+      id,
+      kind,
+      entrypoint,
+      artifacts,
+      target: triple,
+      profile,
+      features,
+      minification,
+    }),
+  );
+}
+type Inputs = Measurement["inputs"];
+type Baseline = { id: string; identity: string; bytes: number; inputs: Inputs };
+function drift(baseline: Inputs, current: Inputs): string[] {
+  const changes: string[] = [];
+  for (const [index, command] of current.toolchains.entries()) {
+    const key = JSON.stringify(command);
+    const before = baseline.toolchains.findIndex((item) => JSON.stringify(item) === key);
+    const now = current.toolVersions[index]!;
+    if (before < 0) {
+      changes.push(`${command.join(" ")}: not probed in baseline`);
+    } else if (baseline.toolVersions[before] !== now) {
+      changes.push(`${command.join(" ")}: ${baseline.toolVersions[before]} -> ${now}`);
+    }
+  }
+  for (const input of current.buildInputHashes) {
+    const before = baseline.buildInputHashes.find((item) => item.path === input.path);
+    if (!before) {
+      changes.push(`${input.path}: not a baseline build input`);
+    } else if (before.sha256 !== input.sha256) {
+      changes.push(`${input.path}: changed`);
+    }
+  }
+  return changes;
+}
 function readBaseline(root: string, path: string): Baseline[] {
   const absolute = resolve(root, path);
   if (!existsSync(absolute)) {
@@ -259,12 +311,12 @@ function readBaseline(root: string, path: string): Baseline[] {
     value.operation !== "size-evidence" ||
     !["passed", "failed"].includes(String(value.status)) ||
     !record(value.data) ||
-    value.data.schemaVersion !== "coding-tooling/size-evidence/v1" ||
+    value.data.schemaVersion !== "coding-tooling/size-evidence/v2" ||
     value.data.metric !== "raw-artifact-bytes" ||
     !Array.isArray(value.data.targets) ||
     value.data.targets.length === 0
   ) {
-    throw new Error("Baseline must be a completed coding-tooling/size-evidence/v1 measurement.");
+    throw new Error("Baseline must be a completed coding-tooling/size-evidence/v2 measurement.");
   }
   const values = value.data.targets.map((item: unknown): Baseline => {
     if (
@@ -273,7 +325,6 @@ function readBaseline(root: string, path: string): Baseline[] {
       !text(item.identity) ||
       !/^[a-f0-9]{64}$/.test(item.identity) ||
       !record(item.inputs) ||
-      hash(JSON.stringify(item.inputs)) !== item.identity ||
       !bytes(item.bytes) ||
       !Array.isArray(item.artifacts) ||
       item.artifacts.length === 0
@@ -285,6 +336,7 @@ function readBaseline(root: string, path: string): Baseline[] {
     if (
       target.id !== item.id ||
       target.kind !== item.kind ||
+      shapeIdentity(target) !== item.identity ||
       !Array.isArray(toolVersions) ||
       toolVersions.length !== target.toolchains.length ||
       !toolVersions.every(text) ||
@@ -339,7 +391,17 @@ function readBaseline(root: string, path: string): Baseline[] {
     if (total !== item.bytes) {
       throw new Error("Baseline artifact byte total does not match its measurement.");
     }
-    return { id: item.id, identity: item.identity, bytes: item.bytes };
+    const { maxBytes: _maxBytes, maxIncreaseBytes: _maxIncrease, ...shape } = target;
+    return {
+      id: item.id,
+      identity: item.identity,
+      bytes: item.bytes,
+      inputs: {
+        ...shape,
+        toolVersions: toolVersions as string[],
+        buildInputHashes: buildInputHashes as Inputs["buildInputHashes"],
+      },
+    };
   });
   if (new Set(values.map((item) => item.id)).size !== values.length) {
     throw new Error("Duplicate baseline target IDs.");
@@ -354,7 +416,7 @@ export function sizeEvidence(
 ): SizeEvidenceResult {
   const started = Date.now();
   const data: SizeData = {
-    schemaVersion: "coding-tooling/size-evidence/v1",
+    schemaVersion: "coding-tooling/size-evidence/v2",
     metric: "raw-artifact-bytes",
     targets: [],
   };
@@ -380,7 +442,7 @@ export function sizeEvidence(
           return { path, sha256: input.sha256 };
         }),
       };
-      const identity = hash(JSON.stringify(inputs));
+      const identity = shapeIdentity(target);
       const artifacts = select(root, target);
       const total = artifacts.reduce((sum, artifact) => sum + artifact.bytes, 0);
       const failures: string[] = [];
@@ -390,14 +452,22 @@ export function sizeEvidence(
       let comparison: Comparison = { state: "not-requested" };
       if (baseline !== null) {
         const previous = baseline.find((item) => item.id === target.id);
-        if (!previous || previous.identity !== identity) {
+        if (!previous) {
+          comparison = { state: "new" };
+        } else if (previous.identity !== identity) {
           comparison = {
             state: "incomparable",
-            reason: "Baseline target identity or selection differs.",
+            reason:
+              "Declared build shape (target, profile, features, minification or selection) differs.",
           };
         } else {
           const deltaBytes = total - previous.bytes;
-          comparison = { state: "comparable", baselineBytes: previous.bytes, deltaBytes };
+          comparison = {
+            state: "comparable",
+            baselineBytes: previous.bytes,
+            deltaBytes,
+            drift: drift(previous.inputs, inputs),
+          };
           if (maxIncreaseBytes !== null && deltaBytes > maxIncreaseBytes) {
             failures.push(`Size increase ${deltaBytes} exceeds ${maxIncreaseBytes} bytes.`);
           }
@@ -407,6 +477,8 @@ export function sizeEvidence(
         id: target.id,
         kind: target.kind,
         identity,
+        maxBytes,
+        maxIncreaseBytes,
         inputs,
         bytes: total,
         artifacts,
@@ -414,18 +486,12 @@ export function sizeEvidence(
         failures,
       });
     }
-    const incomparable = data.targets.some((target) => target.comparison.state === "incomparable");
+    // A shape change is reviewed in the declaration diff; only budgets decide the status.
     const failed = data.targets.some((target) => target.failures.length > 0);
-    let status: "passed" | "failed" | "unavailable" = "passed";
-    if (incomparable) {
-      status = "unavailable";
-    } else if (failed) {
-      status = "failed";
-    }
     return {
       schemaVersion: 1,
       operation: "size-evidence",
-      status,
+      status: failed ? "failed" : "passed",
       durationMs: Date.now() - started,
       data,
       diagnostics: [],
@@ -440,4 +506,52 @@ export function sizeEvidence(
       diagnostics: [{ message: error instanceof Error ? error.message : String(error) }],
     };
   }
+}
+
+function signed(value: number): string {
+  return value > 0 ? `+${value}` : String(value);
+}
+
+/** One row per target: id, bytes, max, baseline, delta (with max increase) and state. */
+export function formatSizeEvidence(data: SizeData): string {
+  const rows = data.targets.map((target) => {
+    const { comparison } = target;
+    const limit = target.maxIncreaseBytes === null ? "" : ` (<= +${target.maxIncreaseBytes})`;
+    const comparable = comparison.state === "comparable";
+    let state: string = comparison.state;
+    if (target.failures.length > 0) state = "FAILED";
+    else if (comparable) state = "ok";
+    return [
+      target.id,
+      String(target.bytes),
+      String(target.maxBytes),
+      comparable ? String(comparison.baselineBytes) : "-",
+      comparable ? `${signed(comparison.deltaBytes)}${limit}` : "-",
+      state,
+    ];
+  });
+  const header = ["target", "bytes", "max", "baseline", "delta", "state"];
+  const widths = header.map((title, column) =>
+    Math.max(title.length, ...rows.map((row) => row[column]!.length)),
+  );
+  const line = (cells: string[]) =>
+    cells
+      .map((cell, column) => cell.padEnd(widths[column]!))
+      .join("  ")
+      .trimEnd();
+  const notes = data.targets.flatMap((target) => [
+    ...target.failures.map((failure) => `  ${target.id}: ${failure}`),
+    ...(target.comparison.state === "incomparable"
+      ? [`  ${target.id}: ${target.comparison.reason}`]
+      : []),
+    ...(target.comparison.state === "comparable" && target.comparison.drift.length > 0
+      ? [`  ${target.id} drift: ${target.comparison.drift.join("; ")}`]
+      : []),
+  ]);
+  const failed = data.targets.filter((target) => target.failures.length > 0).length;
+  return [
+    `Artifact size: ${data.targets.length} targets, ${failed} failed.`,
+    ...(rows.length ? [line(header), ...rows.map(line)] : []),
+    ...notes,
+  ].join("\n");
 }
