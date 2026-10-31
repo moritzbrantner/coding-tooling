@@ -29,7 +29,7 @@ import {
 import { repositoryRoot } from "./shared.ts";
 import { formatHotspots, hotspotEvidence } from "./hotspots.ts";
 import { ciDurations, formatCiDurations } from "./ci-durations.ts";
-import { sizeEvidence } from "./size-evidence.ts";
+import { formatSizeEvidence, sizeEvidence } from "./size-evidence.ts";
 import { formatWorkComplexity, workComplexityEvidence } from "./work-complexity.ts";
 import { workContractBindings } from "./work-contract-bindings.ts";
 import { sourceDependencies } from "./source-deps.ts";
@@ -285,7 +285,10 @@ export function routerMain(argv = process.argv.slice(2)): number {
     const baseline = option(argv, "baseline");
     const result = sizeEvidence(root, baseline === undefined ? {} : { baseline });
     writeOptionalReport(root, argv, result);
-    return print(result, compact);
+    if (compact) return print(result, compact);
+    console.log(formatSizeEvidence(result.data));
+    for (const diagnostic of result.diagnostics) console.error(diagnostic.message);
+    return exitCode(result.status);
   }
   if (argv[0] === "performance" && argv[1] === "work") {
     if (!validFlags(argv, 2, new Set(["--root", "--evidence"]), new Set(), true)) return usage();

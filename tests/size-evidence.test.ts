@@ -59,7 +59,7 @@ test("selects real built bytes in stable order without changing inputs", () => {
   const before = readFileSync(join(root, ".performance/size.json"), "utf8");
   const report = sizeEvidence(root);
   expect(report.status).toBe("passed");
-  expect(report.data.schemaVersion).toBe("coding-tooling/size-evidence/v1");
+  expect(report.data.schemaVersion).toBe("coding-tooling/size-evidence/v2");
   expect(report.data.targets[0]?.bytes).toBe(8);
   expect(report.data.targets[0]?.artifacts.map((value) => value.path)).toEqual([
     "dist/chunk.js",
@@ -82,7 +82,7 @@ test("compares compatible versions and enforces declared absolute and increase b
   });
   expect(report.data.targets[0]?.failures).toContain("Size increase 4 exceeds 2 bytes.");
 });
-test("changed target, features, mode, selection or toolchain is incomparable", () => {
+test("changed target, features, mode or selection is incomparable but budgets still decide", () => {
   const root = fixture();
   declaration(root);
   const path = baseline(root);
@@ -92,13 +92,39 @@ test("changed target, features, mode, selection or toolchain is incomparable", (
     { profile: "development" },
     { minification: "none" },
     { artifacts: [{ path: "dist/index.js" }] },
-    { toolchains: [[process.execPath, "-e", 'console.log("different compiler")']] },
   ]) {
     declaration(root, overrides);
     const report = sizeEvidence(root, { baseline: path });
-    expect(report.status).toBe("unavailable");
+    expect(report.status).toBe("passed");
     expect(report.data.targets[0]?.comparison.state).toBe("incomparable");
   }
+});
+test("toolchain and build-input drift stays comparable and is reported", () => {
+  const root = fixture();
+  declaration(root);
+  const path = baseline(root);
+  declaration(root, {
+    toolchains: [[process.execPath, "-e", 'console.log("different compiler")']],
+  });
+  writeFileSync(join(root, "build.config.json"), '{"minify":false}');
+  writeFileSync(join(root, "dist/index.js"), "123456789");
+  const report = sizeEvidence(root, { baseline: path });
+  expect(report.status).toBe("failed");
+  const comparison = report.data.targets[0]?.comparison;
+  expect(comparison).toMatchObject({ state: "comparable", baselineBytes: 8, deltaBytes: 4 });
+  expect(comparison?.state === "comparable" && comparison.drift).toEqual([
+    `${process.execPath} -e console.log("different compiler"): not probed in baseline`,
+    "build.config.json: changed",
+  ]);
+});
+test("a target absent from the base measurement is new", () => {
+  const root = fixture();
+  declaration(root);
+  const path = baseline(root);
+  declaration(root, { id: "added-js" });
+  const report = sizeEvidence(root, { baseline: path });
+  expect(report.status).toBe("passed");
+  expect(report.data.targets[0]?.comparison.state).toBe("new");
 });
 test("missing tool, built output or requested baseline cannot pass", () => {
   const root = fixture();
@@ -140,15 +166,6 @@ test("native artifact identity includes exact binary bytes", () => {
   expect(report.data.targets[0]?.artifacts[0]?.sha256).toHaveLength(64);
 });
 
-test("changed build inputs are incomparable even if output bytes match", () => {
-  const root = fixture();
-  declaration(root);
-  const path = baseline(root);
-  writeFileSync(join(root, "build.config.json"), '{"minify":false}');
-  expect(sizeEvidence(root, { baseline: path }).data.targets[0]?.comparison.state).toBe(
-    "incomparable",
-  );
-});
 test("rejects forged baseline identity and inconsistent byte totals", () => {
   const root = fixture();
   declaration(root);
@@ -193,6 +210,31 @@ test("package CLI exposes structured results and nonzero unavailable exit codes"
   });
   expect(missing.status).toBe(2);
   expect(JSON.parse(missing.stdout).status).toBe("unavailable");
+});
+test("CLI without --json prints one table row per target", () => {
+  const root = fixture();
+  declaration(root);
+  const path = baseline(root);
+  writeFileSync(join(root, "dist/index.js"), "123456789");
+  const result = spawnSync(
+    process.execPath,
+    [
+      join(import.meta.dir, "../src/router.ts"),
+      "performance",
+      "size",
+      "--root",
+      root,
+      "--baseline",
+      path,
+    ],
+    { encoding: "utf8", timeout: 10000 },
+  );
+  expect(result.status).toBe(1);
+  const lines = result.stdout.trim().split("\n");
+  expect(lines[0]).toBe("Artifact size: 1 targets, 1 failed.");
+  expect(lines[1]).toMatch(/^target\s+bytes\s+max\s+baseline\s+delta\s+state$/);
+  expect(lines[2]).toMatch(/^public-js\s+12\s+12\s+8\s+\+4 \(<= \+2\)\s+FAILED$/);
+  expect(lines[3]).toBe("  public-js: Size increase 4 exceeds 2 bytes.");
 });
 
 test("equivalent selector order retains baseline comparability", () => {
