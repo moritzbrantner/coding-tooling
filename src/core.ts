@@ -547,7 +547,8 @@ function executePlannedCheck(
     status,
     processStatus,
     exitCode: result.status,
-    durationMs: reusedFromCapability ? 0 : Date.now() - started,
+    // Reused commands still incur per-capability discovery and reconciliation.
+    durationMs: Date.now() - started,
     ...(reusedFromCapability ? { reusedProcessFromCapability: reusedFromCapability } : {}),
     stdout: result.stdout,
     stderr: result.stderr,

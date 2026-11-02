@@ -267,7 +267,6 @@ describe("coding-tooling plans", () => {
       expect.objectContaining({
         capability: "typecheck",
         status: "passed",
-        durationMs: 0,
         reusedProcessFromCapability: "lint",
       }),
     ]);
