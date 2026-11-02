@@ -242,6 +242,65 @@ describe("coding-tooling plans", () => {
     expect(readFileSync(marker, "utf8")).toBe("x");
   });
 
+  test("runs adjacent identical commands once while retaining separate capability results", () => {
+    const root = repository();
+    const marker = join(root, "validation-invocations");
+    const command = [
+      "node",
+      "-e",
+      `require('node:fs').appendFileSync(${JSON.stringify(marker)}, 'x')`,
+    ];
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { repeated: ["lint", "typecheck"] },
+        capabilityCommands: { ".": { lint: command, typecheck: command } },
+      }),
+    );
+
+    const result = runPlan({ root, tier: "repeated", strict: true });
+    expect(result.status).toBe("passed");
+    expect(readFileSync(marker, "utf8")).toBe("x");
+    expect(result.data.results).toEqual([
+      expect.objectContaining({ capability: "lint", status: "passed" }),
+      expect.objectContaining({
+        capability: "typecheck",
+        status: "passed",
+        reusedProcessFromCapability: "lint",
+      }),
+    ]);
+  });
+
+  test("reexecutes identical commands when an intervening check may change their inputs", () => {
+    const root = repository();
+    const marker = join(root, "validation-invocations");
+    const command = (text: string) => [
+      "node",
+      "-e",
+      `require('node:fs').appendFileSync(${JSON.stringify(marker)}, ${JSON.stringify(text)})`,
+    ];
+    writeFileSync(
+      join(root, ".coding-tooling.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        tiers: { repeated: ["lint", "typecheck", "build"] },
+        capabilityCommands: {
+          ".": { lint: command("x"), typecheck: command("y"), build: command("x") },
+        },
+      }),
+    );
+
+    const result = runPlan({ root, tier: "repeated", strict: true });
+    expect(result.status).toBe("passed");
+    expect(readFileSync(marker, "utf8")).toBe("xyx");
+    expect(
+      (result.data.results as { reusedProcessFromCapability?: string }[]).every(
+        (item) => item.reusedProcessFromCapability === undefined,
+      ),
+    ).toBe(true);
+  });
+
   test("never merges checks that differ in working directory, capability or command", () => {
     const root = repository();
     writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = []\nresolver = "2"\n');

@@ -47,6 +47,8 @@ e2e         -> fast, integration, workflow, e2e
 
 A progressive layer with no planned checks and no required missing capability is recorded as `not-applicable` and does not block promotion. A layer that the repository requires but cannot execute still fails closed. Promotion stops at the first applicable non-passing layer. `full` remains a direct aggregate tier for compatibility, and custom tier names also keep exact-tier behavior rather than being guessed into the built-in ladder.
 
+Within a single verification tier, adjacent capabilities that resolve to the **identical working directory and command** share one process execution. Both capabilities retain independent reported results and test-scope reconciliation. A distinct intervening command prevents reuse because it may have changed the inputs. Verification is not cached across tiers, worktree revisions, or separate invocations.
+
 When semantic findings remain after the deterministic fixed point, convergence runs only the cheap first progressive layer and returns the remaining semantic work as a handoff. It does not spend integration or E2E work before source convergence is complete.
 
 Validation remains separate from mutation: unsupported normalization surfaces, non-fixable lint findings, type errors, failing tests, and build failures are still reported by the normal validation path rather than being guessed into edits.
