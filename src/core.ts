@@ -504,10 +504,12 @@ function executePlannedCheck(
   root: string,
   planned: PlannedCheck,
   componentPaths: readonly string[],
+  processResult?: ReturnType<typeof runCommand>,
+  reusedFromCapability?: Capability,
+  started = Date.now(),
 ) {
-  const started = Date.now();
   const cwd = planned.path === "." ? root : join(root, planned.path);
-  const result = runCommand(planned.command[0], planned.command.slice(1), cwd);
+  const result = processResult ?? runCommand(planned.command[0], planned.command.slice(1), cwd);
   let processStatus: ResultStatus = result.error
     ? "error"
     : result.status === 0
@@ -545,7 +547,8 @@ function executePlannedCheck(
     status,
     processStatus,
     exitCode: result.status,
-    durationMs: Date.now() - started,
+    durationMs: reusedFromCapability ? 0 : Date.now() - started,
+    ...(reusedFromCapability ? { reusedProcessFromCapability: reusedFromCapability } : {}),
     stdout: result.stdout,
     stderr: result.stderr,
     error: result.error,
@@ -639,11 +642,34 @@ export function runPlan(options: {
     }
 
     const results: ReturnType<typeof executePlannedCheck>[] = [];
+    let previousInvocation: string | undefined;
+    let previousProcess:
+      | { result: ReturnType<typeof runCommand>; capability: Capability }
+      | undefined;
     for (const planned of plan.checks) {
-      const completed = executePlannedCheck(root, planned, componentPaths);
+      const invocation = JSON.stringify([planned.path, planned.command]);
+      // Adjacent capabilities can resolve to the same exact command (for example
+      // test and test:unit). Execute it once, but assess and report each
+      // capability's discovery/scope evidence independently. Do not cache across
+      // intervening commands, which may change the worktree or test inputs.
+      const prior = previousInvocation === invocation ? previousProcess : undefined;
+      const cwd = planned.path === "." ? root : join(root, planned.path);
+      const startedAt = Date.now();
+      const process =
+        prior?.result ?? runCommand(planned.command[0], planned.command.slice(1), cwd);
+      const completed = executePlannedCheck(
+        root,
+        planned,
+        componentPaths,
+        process,
+        prior?.capability,
+        startedAt,
+      );
       results.push(completed);
       diagnostics.push(...testEvidenceDiagnostics(completed));
       if (completed.status !== "passed") break;
+      previousInvocation = invocation;
+      previousProcess = { result: process, capability: prior?.capability ?? planned.capability };
     }
     const status = executionStatus(
       results,
