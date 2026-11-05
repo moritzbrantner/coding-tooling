@@ -33,7 +33,6 @@ checkout run:
 ```bash
 ./toolbox/install-global.sh --install
 ./toolbox/install-global.sh --check
-mise exec -- bash toolbox/agent-tools-check.sh
 ```
 
 `--check` is read-only and checks whether the global configuration matches this
@@ -46,10 +45,37 @@ still take precedence. Rerun `--install` when this list changes. If
 `MISE_GLOBAL_CONFIG_FILE` is set, this installer refuses to write because mise
 would ignore the global `conf.d/` file.
 
-To make ordinary shell commands find the tools, enable `mise activate bash` in
-your shell startup (or configure mise shims for non-interactive agents and IDEs).
-Without shell activation or shims, run commands via `mise exec -- rg ...`.
-Installing does not itself modify the already-running shell's `PATH`.
+### Noninteractive agent sessions
+
+Installing registers the tools with mise. A launcher must also pass a suitable
+`PATH` to the agent. From any project directory, prefix the agent command with
+the absolute path to the wrapper in your Coding Tooling checkout:
+
+```bash
+/path/to/coding-tooling/toolbox/with-agent-tools.sh codex exec 'Your task'
+```
+
+The wrapper adds mise's shim directory to the end of the launch environment's
+`PATH` and starts the command in the current directory. Child shells inherit
+the path without reading interactive startup files. Existing PATH entries take
+priority. When a shim is used, mise resolves the tool in the invocation
+directory, including any trusted repository-specific version. Carry over any
+custom `MISE_SHIMS_DIR`, `MISE_DATA_DIR`, or `XDG_DATA_HOME` from install time.
+For externally managed agents, configure their launch command or environment
+with the same shim directory so it reaches the agent process.
+
+Interactive terminals can use `mise activate bash`, which refreshes the
+environment at shell hooks. For a single scripted invocation, use
+`mise exec -- rg ...` to resolve tools and environment at that invocation's
+starting directory. Shims suit agents that change repositories after startup.
+
+From a directory outside the Coding Tooling checkout, verify host discovery
+and execution in a noninteractive shell:
+
+```bash
+/path/to/coding-tooling/toolbox/with-agent-tools.sh \
+  bash --noprofile --norc /path/to/coding-tooling/toolbox/agent-tools-check.sh
+```
 
 ## Disposable Docker toolbox
 

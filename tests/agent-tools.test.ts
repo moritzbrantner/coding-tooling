@@ -15,6 +15,7 @@ import { describe, expect, test } from "bun:test";
 const root = resolve(import.meta.dir, "..");
 const miseToml = readFileSync(join(root, "mise.toml"), "utf8");
 const installer = join(root, "toolbox", "install-global.sh");
+const launcher = join(root, "toolbox", "with-agent-tools.sh");
 const smoke = join(root, "toolbox", "agent-tools-check.sh");
 
 const executables: Record<string, string> = {
@@ -87,6 +88,54 @@ describe("shared agent tools", () => {
       rmSync(join(bin, "uv"));
       expect(run().status).toBe(1);
       expect(run().stderr).toContain("agent tool unavailable: uv");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("the opt-in launcher exposes all tools to a clean child shell and preserves PATH precedence", () => {
+    const directory = temporaryRoot();
+    try {
+      const bin = join(directory, "project bin");
+      const data = join(directory, "mise data");
+      const shims = join(data, "shims");
+      mkdirSync(bin);
+      mkdirSync(shims, { recursive: true });
+      for (const executable of Object.values(executables)) {
+        fakeCommand(join(shims, executable), 'test "$1" = --version');
+      }
+      fakeCommand(join(shims, "node"), "exit 1");
+      fakeCommand(join(bin, "node"), 'printf "%s\\n" "$1"');
+      const options = {
+        encoding: "utf8" as const,
+        cwd: directory,
+        env: { PATH: bin, MISE_DATA_DIR: data },
+      };
+      const shellFlags = ["--noprofile", "--norc"];
+      expect(spawnSync("/bin/bash", [...shellFlags, smoke], options).status).toBe(1);
+      const launched = spawnSync(
+        "/bin/bash",
+        [
+          launcher,
+          "/bin/bash",
+          ...shellFlags,
+          "-ec",
+          '/bin/bash "$1"; node "$2"; exit 7',
+          "agent",
+          smoke,
+          "project tool",
+        ],
+        options,
+      );
+      expect(launched.stdout).toBe("12 agent tools ready\nproject tool\n");
+      expect(launched.status).toBe(7);
+
+      const customShims = spawnSync("/bin/bash", [launcher, "/bin/bash", ...shellFlags, smoke], {
+        ...options,
+        env: { PATH: bin, MISE_SHIMS_DIR: shims },
+      });
+      expect(customShims.stdout).toBe("12 agent tools ready\n");
+      expect(customShims.status).toBe(0);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

@@ -107,6 +107,8 @@ directly forwards to the router.
 The repository's `mise.toml` also defines a compact set of common CLI utilities
 for agents. To make them available in **all** local repositories, install the
 managed global mise fragment with `./toolbox/install-global.sh --install`.
+For noninteractive agents, prefix the launch command with
+`/path/to/coding-tooling/toolbox/with-agent-tools.sh`.
 Alternatively, build the optional Docker toolbox to use the same utilities in
 a disposable container. Neither option changes the repository's CI toolchains.
 See [common coding-agent CLI tools](docs/agent-tools.md) for the list, setup,
