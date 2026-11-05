@@ -102,6 +102,16 @@ ln -sfn "$PWD/src/router.ts" ~/.bun/bin/coding-tooling
 link that still points at `src/cli.ts` keeps working because running `cli.ts`
 directly forwards to the router.
 
+### Coding-agent utilities
+
+The repository's `mise.toml` also defines a compact set of common CLI utilities
+for agents. To make them available in **all** local repositories, install the
+managed global mise fragment with `./toolbox/install-global.sh --install`.
+Alternatively, build the optional Docker toolbox to use the same utilities in
+a disposable container. Neither option changes the repository's CI toolchains.
+See [common coding-agent CLI tools](docs/agent-tools.md) for the list, setup,
+verification, and Docker commands.
+
 ## Installed conventions
 
 Shared engineering policy is authored in `coding-agent-conventions`. Consumer repositories explicitly select only the modules they use; that selection does not pin a convention revision.
