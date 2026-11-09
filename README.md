@@ -56,6 +56,7 @@ coding-tooling findings [--new|--baseline] [--all] [--json]
 coding-tooling remediation plan [--include-baseline] [--json]
 coding-tooling hotspots [--root <path>] [--days 21] [--min-commits 5] [--min-lines 800] [--json]
 coding-tooling ci durations [--repo owner/name] [--workflow <name|file>] [--runs 10] [--branch <name> | --any-branch] [--event <name>] [--json]
+coding-tooling ci reliability [--repo owner/name] [--workflow <name|file>] [--days 14 | --since <date> [--until <date>]] [--max-runs 300] [--branch <name>] [--event <name>] [--annotations <path>] [--json]
 coding-tooling performance size [--root <path>] [--baseline <path>] [--report <path>] [--json]
 coding-tooling performance applicability [--root <path>] [--json]
 coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
@@ -73,6 +74,52 @@ against summed runner time, the most common critical path (inferred from
 timestamps, since the API does not expose `needs`), and the slowest jobs and
 steps. `--repo` defaults to the repository `gh` resolves from `--root`; without
 `--json` it prints a table.
+
+`ci reliability` is read-only evidence over a time window, not a gate and not a
+fleet-wide rate. It groups every attempt by workflow, event and exact head SHA,
+so a rerun stays on its head and a later green head never recovers an earlier
+one. It reports first-attempt success among completed, applicable heads (with
+the denominator, split by pull request or default branch and bot or human);
+queued, in-progress, skipped and cancelled first attempts are excluded and
+counted. It also reports first-red-to-green delay per head and, separately, per
+pull request across heads; heads still red; runner time per merged pull request
+(job timestamps, not billing); and failure incidents with their first failing
+job and step, normalized fingerprint, URLs, attempts and timestamps.
+
+Categories follow `AGENT-011`: `candidate-regression`, `pre-existing-baseline`,
+`test-harness`, `environment-infrastructure`, `noisy-performance` and
+`unavailable-unknown`. Check annotations and the failed step's log only propose
+a hypothesis. It is confirmed by independent support:
+
+| Hypothesis                   | Confirmed by                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| `environment-infrastructure` | green same-head retry, same failure on the default branch, GitHub billing report |
+| `noisy-performance`          | green same-head retry, same failure on the default branch                        |
+| `test-harness`               | same failure on the default branch                                               |
+| `pre-existing-baseline`      | same failure on the default branch                                               |
+| `candidate-regression`       | passing default branch and the failure reproduced on the same head               |
+
+A maintainer annotation confirms any category. Pass a file with
+`--annotations`; each entry needs `runId` or `fingerprint`, plus `category` and
+`annotator`:
+
+```json
+{
+  "schemaVersion": "coding-tooling/ci-failure-annotations/v1",
+  "annotations": [
+    { "runId": 123, "category": "test-harness", "annotator": "maintainer", "reference": "#396" }
+  ]
+}
+```
+
+A confirmed category attributes one failure; it does not prove the code free of
+defects, and a green rerun never waives a deterministic gate (`TEST-012`).
+Recurring causes rank confirmed categories only, by wasted runner time and then
+red-to-green delay. Coverage warnings report truncated history, inaccessible
+logs, missing jobs, no completed attempts and unavailable merge metadata.
+`--branch` and `--event` narrow the report while default-branch runs are still
+read for base comparison. `--since` and `--until` take `YYYY-MM-DD`, so a report
+can be reproduced for a fixed window.
 
 `--report` keeps the requested file as the latest result and retains immutable
 copies in its sibling `<filename>.history/` directory. Retrying a failed run at

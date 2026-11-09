@@ -29,6 +29,8 @@ import {
 import { repositoryRoot } from "./shared.ts";
 import { formatHotspots, hotspotEvidence } from "./hotspots.ts";
 import { ciDurations, formatCiDurations } from "./ci-durations.ts";
+import { ciReliability } from "./ci-reliability.ts";
+import { formatCiReliability } from "./ci-reliability-format.ts";
 import { formatSizeEvidence, sizeEvidence } from "./size-evidence.ts";
 import { formatWorkComplexity, workComplexityEvidence } from "./work-complexity.ts";
 import { workContractBindings } from "./work-contract-bindings.ts";
@@ -75,6 +77,7 @@ function usage(): number {
   coding-tooling repository contract [--root <path>] [--execute] [--json]
   coding-tooling hotspots [--root <path>] [--days <n>] [--min-commits <n>] [--min-lines <n>] [--json]
   coding-tooling ci durations [--repo owner/name] [--workflow <name>] [--runs <n>] [--branch <name> | --any-branch] [--event <name>] [--json]
+  coding-tooling ci reliability [--repo owner/name] [--workflow <name>] [--days <n> | --since <date> [--until <date>]] [--max-runs <n>] [--branch <name>] [--event <name>] [--annotations <path>] [--json]
   coding-tooling performance size [--root <path>] [--baseline <path>] [--report <path>] [--json]
   coding-tooling performance applicability [--root <path>] [--json]
   coding-tooling performance work [--root <path>] [--evidence <path>] [--json]
@@ -275,6 +278,63 @@ export function routerMain(argv = process.argv.slice(2)): number {
     if (compact) return print(result, compact);
     console.log(formatCiDurations(result.data));
     for (const diagnostic of result.diagnostics) console.error(diagnostic.message);
+    return exitCode(result.status);
+  }
+
+  if (argv[0] === "ci" && argv[1] === "reliability") {
+    if (
+      !validFlags(
+        argv,
+        2,
+        new Set([
+          "--root",
+          "--repo",
+          "--workflow",
+          "--days",
+          "--since",
+          "--until",
+          "--max-runs",
+          "--branch",
+          "--event",
+          "--annotations",
+        ]),
+        new Set(),
+        true,
+      )
+    )
+      return usage();
+    const repo = option(argv, "repo");
+    const workflow = option(argv, "workflow");
+    const days = option(argv, "days");
+    const since = option(argv, "since");
+    const until = option(argv, "until");
+    const maxRuns = option(argv, "max-runs");
+    const branch = option(argv, "branch");
+    const event = option(argv, "event");
+    const annotationsPath = option(argv, "annotations");
+    const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+    if (repo !== undefined && !/^[\w.-]+\/[\w.-]+$/.test(repo)) return usage();
+    if (days !== undefined && !(/^[1-9]\d*$/.test(days) && Number(days) <= 365)) return usage();
+    if (maxRuns !== undefined && !(/^[1-9]\d*$/.test(maxRuns) && Number(maxRuns) <= 1000))
+      return usage();
+    if (days !== undefined && since !== undefined) return usage();
+    if (until !== undefined && since === undefined) return usage();
+    if ((since !== undefined && !isDate(since)) || (until !== undefined && !isDate(until)))
+      return usage();
+    const result = ciReliability(root, {
+      ...(repo === undefined ? {} : { repo }),
+      ...(workflow === undefined ? {} : { workflow }),
+      ...(days === undefined ? {} : { days: Number(days) }),
+      ...(since === undefined ? {} : { since }),
+      ...(until === undefined ? {} : { until }),
+      ...(maxRuns === undefined ? {} : { maxRuns: Number(maxRuns) }),
+      ...(branch === undefined ? {} : { branch }),
+      ...(event === undefined ? {} : { event }),
+      ...(annotationsPath === undefined ? {} : { annotationsPath }),
+    });
+    if (compact) return print(result, compact);
+    if (result.status === "passed") console.log(formatCiReliability(result.data));
+    else for (const diagnostic of result.diagnostics) console.error(diagnostic.message);
     return exitCode(result.status);
   }
 
