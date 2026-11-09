@@ -97,7 +97,7 @@ function percentile(values: number[], fraction: number): number {
   return sorted[Math.max(0, Math.ceil(fraction * sorted.length) - 1)]!;
 }
 
-function stats(values: number[]): DurationStats {
+export function stats(values: number[]): DurationStats {
   if (values.length === 0) return { median: 0, p90: 0, max: 0 };
   return {
     median: percentile(values, 0.5),
@@ -241,7 +241,7 @@ function summarize(
   };
 }
 
-function resolveRepo(root: string): string | undefined {
+export function resolveRepo(root: string): string | undefined {
   const result = runCommand(
     "gh",
     ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
