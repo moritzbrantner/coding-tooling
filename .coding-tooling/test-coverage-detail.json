@@ -3,9 +3,9 @@
   "kind": "coding-tooling-test-coverage-detail",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "8976c5718d91a7ed6ea5c60ea483ef1fc6587f8f"
+    "revision": "b6c645f60ff5ec0fb9452691f22de1e29dd3b97b"
   },
-  "generatedAt": "2026-11-09T02:19:12.000Z",
+  "generatedAt": "2026-11-09T04:39:50.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1
@@ -78000,7 +78000,7 @@
         },
         {
           "line": 245,
-          "hits": 177,
+          "hits": 195,
           "covered": true
         },
         {
