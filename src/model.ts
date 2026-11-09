@@ -66,6 +66,7 @@ export type ResultOperation =
   | "source-deps"
   | "dependencies"
   | "agent-capabilities"
+  | "agent-evals"
   | "agent-summary"
   | "agent-task-packet"
   | "agent-verification"
