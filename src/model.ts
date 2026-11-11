@@ -47,6 +47,7 @@ export type ResultOperation =
   | "size-evidence"
   | "hotspots"
   | "ci-durations"
+  | "ci-reliability"
   | "work-complexity"
   | "work-contract-bindings"
   | "performance-history"
