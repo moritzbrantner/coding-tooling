@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { validateContractBoundFlowConditions } from "./agent-contract-flow-validation.ts";
 import { normalizeAgentProcedureMetadata } from "./agent-procedure-metadata.ts";
@@ -228,7 +228,7 @@ function parseYamlSubset(source: string): JsonObject {
   return asObject(value, "frontmatter");
 }
 
-function parseFrontmatter(path: string): JsonObject {
+export function parseFrontmatter(path: string): JsonObject {
   const source = readFileSync(path, "utf8");
   const lines = source.split(/\r?\n/);
   if (lines[0]?.trim() !== "---") throw new Error(`${path}: missing opening frontmatter delimiter`);
@@ -470,6 +470,13 @@ function filesIn(root: string, directory: string, filename: string): string[] {
     .filter((entry) => entry.isDirectory() && existsSync(join(parent, entry.name, filename)))
     .map((entry) => join(parent, entry.name, filename))
     .sort();
+}
+
+export function agentCapabilitySourcePaths(root: string): Map<string, string> {
+  const paths = [...filesIn(root, "skills", "SKILL.md"), ...filesIn(root, "flows", "FLOW.md")];
+  return new Map(
+    paths.map((path) => [asString(parseFrontmatter(path).id, `${path}: id`), relative(root, path)]),
+  );
 }
 
 function detectedRevision(root: string): string {

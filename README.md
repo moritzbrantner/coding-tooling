@@ -46,6 +46,7 @@ coding-tooling source-deps deactivate [--config <path>] [--json]
 coding-tooling agent-capabilities validate [--root <path>] [--json]
 coding-tooling agent-capabilities catalog [--root <path>] [--json]
 coding-tooling agent-capabilities profile <profile> [--root <path>] [--json]
+coding-tooling agent-evals <validate|brief|criteria|report> [--case <id>] [--results <path>] [--root <path>] [--json]
 coding-tooling conventions init [module...] [--profile <name>] [--json]
 coding-tooling conventions add <module...> [--profile <name>] [--json]
 coding-tooling conventions check [--json]
@@ -298,6 +299,8 @@ External deterministic tools may be wired through `capabilityCommands`. `coding-
 The machine-readable capability catalog and family contracts describe validation tiers, artifact conventions, opt-in performance work, and baseline requirements.
 
 General coding-agent capabilities are sourced from `coding-agent-skills`. The `agent-capabilities` command family validates that source, derives its catalog, and resolves named profiles; it does not own or reinterpret reasoning procedures.
+
+The `agent-evals` command family handles the deterministic parts of behavioral evaluation for `evals/cases/*.md` and calls no model. `validate` checks case structure and capability references. `brief` emits only a case's task, given facts, and capability sources, so a caller's agent can attempt it blind. `criteria` gives a judge the indexed checklist and the case digest. `report` scores judged results and rejects results for a different case revision, incomplete judgments, or entries without evidence. The caller runs the agent, judges its answer, and keeps any run history.
 
 ## Design rules
 

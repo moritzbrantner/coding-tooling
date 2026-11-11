@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { agentCapabilitiesCommand } from "./agent-capabilities.ts";
+import { agentEvalsCommand } from "./agent-evals.ts";
 import { bootstrapRepository } from "./bootstrap.ts";
 import { conformanceReport } from "./conformance.ts";
 import { conventionRegistryCommand } from "./convention-registry.ts";
@@ -169,6 +170,7 @@ function usage(): never {
   coding-tooling dependencies inspect [--component <name>] [--config <path>] [--json]
   coding-tooling dependencies resolve [--static] [--strict] [--json]
   coding-tooling agent-capabilities <validate|catalog|profile> [profile-name] [--root <path>] [--contracts-root <path>] [--json]
+  coding-tooling agent-evals <validate|brief|criteria|report> [--case <id>] [--results <path>] [--root <path>] [--json]
   coding-tooling conventions init [module...] [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions add <module...> [--profile <name>] [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling conventions check [--root <path>] [--json]
@@ -346,6 +348,14 @@ export function main(argv = process.argv.slice(2)): number {
       positional[1],
       contractsRoot ? resolve(contractsRoot) : undefined,
     );
+  } else if (command === "agent-evals") {
+    const action = positional[0];
+    if (!action) return usage();
+    const resultsPath = stringOption(options, "results");
+    result = agentEvalsCommand(resolve(stringOption(options, "root") ?? root), action, {
+      caseId: stringOption(options, "case"),
+      resultsPath: resultsPath ? resolve(resultsPath) : undefined,
+    });
   } else if (command === "conventions") {
     const action = positional[0];
     const targetRoot = resolve(stringOption(options, "root") ?? root);
