@@ -50,5 +50,7 @@ describe("detector calibration", () => {
       precision: 1,
       recall: 1,
     });
-  });
+    // The corpus restores and builds a real .NET project; Bun's default 5 s
+    // timeout kills that child process on a cold runner and fails the case.
+  }, 45000);
 });
