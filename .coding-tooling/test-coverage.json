@@ -3,9 +3,9 @@
   "kind": "coding-tooling-test-coverage-snapshot",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "89064e8e7da1ab869cf77c5fc138c864fd822a97"
+    "revision": "5244ee8950b40dbe0a7e95ef375d4b73ec7af760"
   },
-  "generatedAt": "2026-11-14T00:02:23.000Z",
+  "generatedAt": "2026-11-15T00:37:51.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1
