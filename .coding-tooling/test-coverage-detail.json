@@ -3,9 +3,9 @@
   "kind": "coding-tooling-test-coverage-detail",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "5244ee8950b40dbe0a7e95ef375d4b73ec7af760"
+    "revision": "4bfcf8b8d8723c744c9daa6462a8631154970385"
   },
-  "generatedAt": "2026-11-15T00:37:51.000Z",
+  "generatedAt": "2026-11-16T04:31:38.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1
@@ -2875,22 +2875,22 @@
         },
         {
           "line": 16,
-          "hits": 20,
+          "hits": 21,
           "covered": true
         },
         {
           "line": 17,
-          "hits": 20,
+          "hits": 21,
           "covered": true
         },
         {
           "line": 18,
-          "hits": 19,
+          "hits": 20,
           "covered": true
         },
         {
           "line": 19,
-          "hits": 18,
+          "hits": 19,
           "covered": true
         },
         {
@@ -73353,12 +73353,12 @@
         },
         {
           "line": 384,
-          "hits": 43,
+          "hits": 45,
           "covered": true
         },
         {
           "line": 385,
-          "hits": 43,
+          "hits": 45,
           "covered": true
         },
         {
@@ -78732,17 +78732,17 @@
         },
         {
           "line": 236,
-          "hits": 227,
+          "hits": 226,
           "covered": true
         },
         {
           "line": 237,
-          "hits": 227,
+          "hits": 226,
           "covered": true
         },
         {
           "line": 238,
-          "hits": 227,
+          "hits": 226,
           "covered": true
         },
         {
@@ -79232,7 +79232,7 @@
         },
         {
           "line": 363,
-          "hits": 236,
+          "hits": 232,
           "covered": true
         },
         {
@@ -106165,7 +106165,7 @@
         },
         {
           "line": 37,
-          "hits": 1522,
+          "hits": 1524,
           "covered": true
         },
         {
@@ -115174,27 +115174,27 @@
         },
         {
           "line": 326,
-          "hits": 6,
+          "hits": 5,
           "covered": true
         },
         {
           "line": 327,
-          "hits": 6,
+          "hits": 5,
           "covered": true
         },
         {
           "line": 328,
-          "hits": 6,
+          "hits": 5,
           "covered": true
         },
         {
           "line": 329,
-          "hits": 6,
+          "hits": 5,
           "covered": true
         },
         {
           "line": 330,
-          "hits": 5,
+          "hits": 4,
           "covered": true
         },
         {
@@ -120258,17 +120258,17 @@
         },
         {
           "line": 138,
-          "hits": 20,
+          "hits": 24,
           "covered": true
         },
         {
           "line": 139,
-          "hits": 20,
+          "hits": 24,
           "covered": true
         },
         {
           "line": 140,
-          "hits": 20,
+          "hits": 24,
           "covered": true
         },
         {
@@ -125086,12 +125086,12 @@
         },
         {
           "line": 401,
-          "hits": 215,
+          "hits": 213,
           "covered": true
         },
         {
           "line": 402,
-          "hits": 215,
+          "hits": 213,
           "covered": true
         },
         {
@@ -152429,12 +152429,12 @@
         },
         {
           "line": 107,
-          "hits": 7,
+          "hits": 8,
           "covered": true
         },
         {
           "line": 108,
-          "hits": 7,
+          "hits": 8,
           "covered": true
         },
         {
@@ -187134,22 +187134,22 @@
         },
         {
           "line": 143,
-          "hits": 16500,
+          "hits": 16499,
           "covered": true
         },
         {
           "line": 144,
-          "hits": 16500,
+          "hits": 16499,
           "covered": true
         },
         {
           "line": 145,
-          "hits": 16500,
+          "hits": 16499,
           "covered": true
         },
         {
           "line": 146,
-          "hits": 14620,
+          "hits": 14619,
           "covered": true
         },
         {
