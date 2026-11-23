@@ -112,11 +112,18 @@ function toolchain(
 function bunToolchain(root: string): EnvironmentToolchain | null {
   const { packageManagerVersion, versionFileVersion } = bunDeclarations(root);
   const declaredVersion = packageManagerVersion ?? versionFileVersion;
-  if (declaredVersion === null) return null;
+  // BUN-001 (owner decision 2026-11-23): a committed Bun lockfile without any version
+  // declaration requires the latest stable Bun.
+  const lockfile = ["bun.lock", "bun.lockb"].find((name) => existsSync(join(root, name)));
+  if (declaredVersion === null && lockfile === undefined) return null;
   const observedVersion = commandVersion("bun", ["--version"], root, (value) => value || null);
   return toolchain(
     "bun",
-    packageManagerVersion !== null ? "package.json" : ".bun-version",
+    packageManagerVersion !== null
+      ? "package.json"
+      : versionFileVersion !== null
+        ? ".bun-version"
+        : (lockfile ?? "bun.lock"),
     declaredVersion,
     observedVersion,
   );
