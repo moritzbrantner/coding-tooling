@@ -39,6 +39,7 @@ type BuiltinEnforcement = {
   kind: "builtin";
   check:
     | "bun-default"
+    | "bun-latest"
     | "case-portability"
     | "csharp-explicit-control-flow"
     | "csharp-member-order"
@@ -151,6 +152,7 @@ const knownTextNames = new Set([
 ]);
 const builtinChecks = new Set([
   "bun-default",
+  "bun-latest",
   "case-portability",
   "csharp-explicit-control-flow",
   "csharp-member-order",
@@ -162,7 +164,9 @@ const builtinChecks = new Set([
   "todo-format",
   "vitest-kinds",
 ]);
-// BUN-001: `packageManager` names Bun with a minimum version; CI runs the latest stable Bun.
+// BUN-001 (owner decision 2026-11-23): repositories use the latest stable Bun and declare no
+// `packageManager`. `bun-latest` enforces that; `bun-default` serves convention snapshots
+// installed before the decision and only rejects a declaration naming another manager.
 const bunPackageManager = /^bun@\S+$/;
 const ambientEnvironmentKeys = new Set([
   "CI",
@@ -450,29 +454,40 @@ function builtinResult(ruleId: string, check: string, failures: string[]): Conve
   };
 }
 
-function bunDefault(root: string, components: Component[], ruleId: string): ConventionCheckResult {
+function bunDefault(
+  root: string,
+  components: Component[],
+  ruleId: string,
+  check: "bun-default" | "bun-latest",
+): ConventionCheckResult {
   const failures: string[] = [];
   const packages = components.filter((item) => item.kind === "package");
+  const declarations = new Map<string, string>();
   if (packages.length > 0) {
-    const rootManifest = readJson<{ packageManager?: string }>(join(root, "package.json"));
-    const rootManager = rootManifest?.packageManager;
-    if (!rootManager) {
-      failures.push("repository: package.json must declare packageManager as bun@<version>");
-    } else if (!bunPackageManager.test(rootManager)) {
+    const rootManager = readJson<{ packageManager?: string }>(
+      join(root, "package.json"),
+    )?.packageManager;
+    if (rootManager) declarations.set("repository", rootManager);
+  }
+  for (const component of packages) {
+    const componentRoot = component.path === "." ? root : join(root, component.path);
+    const manager = readJson<{ packageManager?: string }>(
+      join(componentRoot, "package.json"),
+    )?.packageManager;
+    if (manager && component.path !== ".") declarations.set(component.name, manager);
+  }
+  for (const [owner, manager] of declarations) {
+    if (check === "bun-latest") {
       failures.push(
-        `repository: packageManager must name Bun as bun@<version>, got ${rootManager}`,
+        `${owner}: remove packageManager (${manager}) from package.json; BUN-001 uses the latest stable Bun`,
       );
+    } else if (!bunPackageManager.test(manager)) {
+      failures.push(`${owner}: packageManager must name Bun, got ${manager}`);
     }
   }
 
   for (const component of packages) {
     const componentRoot = component.path === "." ? root : join(root, component.path);
-    const manifest = readJson<{ packageManager?: string }>(join(componentRoot, "package.json"));
-    if (manifest?.packageManager && !bunPackageManager.test(manifest.packageManager)) {
-      failures.push(
-        `${component.name}: packageManager must name Bun as bun@<version>, got ${manifest.packageManager}`,
-      );
-    }
 
     const hasBunLock = [componentRoot, root].some(
       (directory) =>
@@ -487,7 +502,7 @@ function bunDefault(root: string, components: Component[], ruleId: string): Conv
       failures.push(`${component.name}: conflicting lockfile(s): ${conflictingLocks.join(", ")}`);
     }
   }
-  return builtinResult(ruleId, "bun-default", failures);
+  return builtinResult(ruleId, check, failures);
 }
 
 function envKeysFromSource(content: string): string[] {
@@ -728,7 +743,8 @@ function runBuiltin(
 ): ConventionCheckResult {
   switch (check) {
     case "bun-default":
-      return bunDefault(root, components, ruleId);
+    case "bun-latest":
+      return bunDefault(root, components, ruleId, check);
     case "case-portability":
       return casePortability(root, ruleId);
     case "csharp-explicit-control-flow":
