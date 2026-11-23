@@ -114,6 +114,26 @@ describe("normalized package evidence", () => {
     );
   });
 
+  test("treats a committed Bun lock without packageManager as the latest stable Bun", () => {
+    const root = mkdtempSync(join(tmpdir(), "coding-tooling-normalized-latest-bun-"));
+    const { packageManager: _pin, ...manifest } = packageManifest();
+    writeJson(join(root, "package.json"), manifest);
+    writeFileSync(join(root, "bun.lock"), "fixture\n");
+
+    const [evidence] = collectLocalPackageEvidence(root);
+
+    expect(packageToolchainOutcome(evidence)).toEqual(
+      expect.objectContaining({
+        status: "satisfied",
+        manager: "bun",
+        runtime: "bun",
+        version: "latest",
+        reason: "bun-lockfile",
+      }),
+    );
+    expect(packageCommandManager(evidence)).toBe("bun");
+  });
+
   test("does not inherit a root Bun lock into an unrelated nested package", () => {
     const root = mkdtempSync(join(tmpdir(), "coding-tooling-normalized-nested-"));
     writeJson(join(root, "package.json"), {
