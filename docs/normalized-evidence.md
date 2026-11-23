@@ -33,7 +33,7 @@ Canonical capability outcomes are explicit:
 
 Package toolchain outcomes add the fourth state required for environment boundaries:
 
-- `satisfied` — the component declares a supported Bun or Node version fact in any form (`bun-version-declared` / `node-version-declared`); toolchains track the latest stable release, so declarations need not be exact;
+- `satisfied` — the component commits a Bun lockfile without a `packageManager` (`bun-lockfile`: the latest stable Bun, BUN-001), or declares a supported Bun or Node version fact in any form (`bun-version-declared` / `node-version-declared`); toolchains track the latest stable release, so declarations need not be exact;
 - `unsupported` — the component explicitly declares a package manager the current remote adapter does not model;
 - `incomplete` — no component-local supported version fact is available.
 

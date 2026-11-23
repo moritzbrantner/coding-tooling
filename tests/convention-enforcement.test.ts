@@ -40,13 +40,11 @@ describe("installed convention enforcement", () => {
     expect(failed.diagnostics[0]?.message).toContain("conflicting lockfile");
   });
 
-  test("requires a root Bun packageManager declaration and accepts loose versions", () => {
+  test("pre-2026-11-23 snapshots accept a Bun repository with or without packageManager", () => {
     const missing = repository();
     writeFileSync(join(missing, "bun.lock"), "");
     enforce(missing, "BUN-001", { kind: "builtin", check: "bun-default" });
-    expect(
-      runConventionChecks(missing, discoverComponents(missing)).diagnostics[0]?.message,
-    ).toContain("must declare packageManager as bun@<version>");
+    expect(runConventionChecks(missing, discoverComponents(missing)).status).toBe("passed");
 
     const loose = repository({ packageManager: "bun@1" });
     writeFileSync(join(loose, "bun.lock"), "");
@@ -57,8 +55,22 @@ describe("installed convention enforcement", () => {
     writeFileSync(join(other, "bun.lock"), "");
     enforce(other, "BUN-001", { kind: "builtin", check: "bun-default" });
     expect(runConventionChecks(other, discoverComponents(other)).diagnostics[0]?.message).toContain(
-      "must name Bun as bun@<version>",
+      "packageManager must name Bun",
     );
+  });
+
+  test("bun-latest accepts a Bun repository without packageManager and rejects any pin", () => {
+    const latest = repository();
+    writeFileSync(join(latest, "bun.lock"), "");
+    enforce(latest, "BUN-001", { kind: "builtin", check: "bun-latest" });
+    expect(runConventionChecks(latest, discoverComponents(latest)).status).toBe("passed");
+
+    const pinned = repository({ packageManager: "bun@1.4.0" });
+    writeFileSync(join(pinned, "bun.lock"), "");
+    enforce(pinned, "BUN-001", { kind: "builtin", check: "bun-latest" });
+    const failed = runConventionChecks(pinned, discoverComponents(pinned));
+    expect(failed.status).toBe("failed");
+    expect(failed.diagnostics[0]?.message).toContain("remove packageManager (bun@1.4.0)");
   });
 
   test("requires used environment variables in the nearest .env.example", () => {

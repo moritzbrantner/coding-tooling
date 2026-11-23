@@ -237,6 +237,23 @@ export function packageToolchainOutcome(evidence) {
     }
   }
 
+  // BUN-001 (owner decision 2026-11-23): a Bun repository declares no version and runs the
+  // latest stable Bun, so its committed Bun lockfile is the complete toolchain declaration.
+  if (
+    typeof packageManager !== "string" &&
+    (evidence.facts.lockfiles.value.includes("bun.lock") ||
+      evidence.facts.lockfiles.value.includes("bun.lockb"))
+  ) {
+    return {
+      status: "satisfied",
+      manager: "bun",
+      runtime: "bun",
+      version: "latest",
+      reason: "bun-lockfile",
+      provenance: evidence.facts.lockfiles.provenance,
+    };
+  }
+
   const nodeVersion = evidence.facts.nodeVersion.value;
   if (typeof nodeVersion === "string") {
     return {

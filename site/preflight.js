@@ -681,7 +681,7 @@ function findingsFor(snapshot, paths, components, validationEvidence) {
       `${nestedPrefix}${outcome.runtime === "bun" ? "Bun" : "Node"} toolchain declaration is missing`,
       `${component.name} has no component-local ${outcome.runtime === "bun" ? "Bun" : "Node"} version declaration.`,
       component.path === "."
-        ? `Declare ${outcome.runtime === "bun" ? "Bun in packageManager" : "Node in .node-version"} when this runtime participates in validation; any version or channel is accepted because toolchains track the latest stable release.`
+        ? "Commit bun.lock for a Bun component (it runs the latest stable Bun and declares no version), or declare Node in .node-version when Node participates in validation; any Node version or channel is accepted because toolchains track the latest stable release."
         : "Declare the nested component toolchain explicitly; remote preflight does not inherit unrelated root pins without a proven workspace relationship.",
     );
   }
