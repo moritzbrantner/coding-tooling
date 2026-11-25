@@ -3,9 +3,9 @@
   "kind": "coding-tooling-test-coverage-detail",
   "repository": {
     "fullName": "moritzbrantner/coding-tooling",
-    "revision": "1cfdaf049e804f8253634c941698f5404a1eadba"
+    "revision": "7b2869bb9c9da963caeb4eedd08d8b3c6b6b0ed7"
   },
-  "generatedAt": "2026-11-25T13:32:18.000Z",
+  "generatedAt": "2026-11-25T13:49:01.000Z",
   "producer": {
     "id": "coding-tooling",
     "protocolVersion": 1
@@ -106305,7 +106305,7 @@
         },
         {
           "line": 37,
-          "hits": 1523,
+          "hits": 1508,
           "covered": true
         },
         {
@@ -114304,27 +114304,27 @@
         },
         {
           "line": 99,
-          "hits": 101804,
+          "hits": 101805,
           "covered": true
         },
         {
           "line": 100,
-          "hits": 101804,
+          "hits": 101805,
           "covered": true
         },
         {
           "line": 101,
-          "hits": 203608,
+          "hits": 203610,
           "covered": true
         },
         {
           "line": 102,
-          "hits": 203592,
+          "hits": 203594,
           "covered": true
         },
         {
           "line": 103,
-          "hits": 101804,
+          "hits": 101805,
           "covered": true
         },
         {
@@ -114369,7 +114369,7 @@
         },
         {
           "line": 113,
-          "hits": 101786,
+          "hits": 101787,
           "covered": true
         },
         {
@@ -114379,7 +114379,7 @@
         },
         {
           "line": 116,
-          "hits": 101781,
+          "hits": 101782,
           "covered": true
         },
         {
@@ -123334,52 +123334,52 @@
         },
         {
           "line": 26,
-          "hits": 3081468,
+          "hits": 3081662,
           "covered": true
         },
         {
           "line": 27,
-          "hits": 3081468,
+          "hits": 3081662,
           "covered": true
         },
         {
           "line": 29,
-          "hits": 3081468,
+          "hits": 3081662,
           "covered": true
         },
         {
           "line": 30,
-          "hits": 68240,
+          "hits": 68408,
           "covered": true
         },
         {
           "line": 31,
-          "hits": 890,
+          "hits": 892,
           "covered": true
         },
         {
           "line": 32,
-          "hits": 890,
+          "hits": 892,
           "covered": true
         },
         {
           "line": 33,
-          "hits": 67350,
+          "hits": 67516,
           "covered": true
         },
         {
           "line": 34,
-          "hits": 67350,
+          "hits": 67516,
           "covered": true
         },
         {
           "line": 36,
-          "hits": 68240,
+          "hits": 68408,
           "covered": true
         },
         {
           "line": 39,
-          "hits": 3013228,
+          "hits": 3013254,
           "covered": true
         },
         {
@@ -123419,7 +123419,7 @@
         },
         {
           "line": 50,
-          "hits": 2973438,
+          "hits": 2973464,
           "covered": true
         },
         {
@@ -123509,32 +123509,32 @@
         },
         {
           "line": 75,
-          "hits": 2023556,
+          "hits": 2023582,
           "covered": true
         },
         {
           "line": 76,
-          "hits": 890,
+          "hits": 892,
           "covered": true
         },
         {
           "line": 77,
-          "hits": 890,
+          "hits": 892,
           "covered": true
         },
         {
           "line": 78,
-          "hits": 890,
+          "hits": 892,
           "covered": true
         },
         {
           "line": 79,
-          "hits": 890,
+          "hits": 892,
           "covered": true
         },
         {
           "line": 81,
-          "hits": 2022666,
+          "hits": 2022690,
           "covered": true
         },
         {
@@ -123559,7 +123559,7 @@
         },
         {
           "line": 87,
-          "hits": 2022602,
+          "hits": 2022626,
           "covered": true
         },
         {
@@ -123579,7 +123579,7 @@
         },
         {
           "line": 92,
-          "hits": 2021942,
+          "hits": 2021966,
           "covered": true
         },
         {
@@ -123599,7 +123599,7 @@
         },
         {
           "line": 97,
-          "hits": 1982078,
+          "hits": 1982102,
           "covered": true
         },
         {
@@ -123619,7 +123619,7 @@
         },
         {
           "line": 103,
-          "hits": 1980654,
+          "hits": 1980678,
           "covered": true
         },
         {
@@ -123649,12 +123649,12 @@
         },
         {
           "line": 113,
-          "hits": 87474,
+          "hits": 87476,
           "covered": true
         },
         {
           "line": 114,
-          "hits": 87474,
+          "hits": 87476,
           "covered": true
         },
         {
@@ -123669,12 +123669,12 @@
         },
         {
           "line": 118,
-          "hits": 87470,
+          "hits": 87472,
           "covered": true
         },
         {
           "line": 119,
-          "hits": 87470,
+          "hits": 87472,
           "covered": true
         },
         {
@@ -123689,12 +123689,12 @@
         },
         {
           "line": 123,
-          "hits": 87466,
+          "hits": 87468,
           "covered": true
         },
         {
           "line": 124,
-          "hits": 87466,
+          "hits": 87468,
           "covered": true
         },
         {
