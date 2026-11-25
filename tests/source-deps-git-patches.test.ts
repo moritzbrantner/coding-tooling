@@ -153,7 +153,8 @@ describe("Cargo source mode for git dependencies (#313)", () => {
     expect(core?.manifest_path).toBe(join(setup.source, "crates", "core", "Cargo.toml"));
 
     expect(sourceDependencies(setup.consumer, "deactivate").status).toBe("passed");
-  });
+    // Spawns cargo for activation and metadata; a cold CI runner exceeds the default 5s.
+  }, 60_000);
 
   test("a declared revision ahead of the consumer's pin is the point of source mode", () => {
     const setup = fixture();
