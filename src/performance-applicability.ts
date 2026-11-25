@@ -22,6 +22,7 @@ const families = [
   "hotspots",
   "memory",
   "browser-audit",
+  "browser-trace",
   "react-render-budget",
   "runtime",
   "load-smoke",
@@ -37,7 +38,9 @@ const familyCapabilities: Record<Family, readonly string[]> = {
   hotspots: ["profile:hotspots"],
   memory: ["profile:memory"],
   "browser-audit": ["web:audit"],
-  "react-render-budget": ["benchmark", "profile:runtime"],
+  "browser-trace": ["profile:runtime"],
+  // react-render-budget asserts its budgets inside Playwright specs run by the e2e capability.
+  "react-render-budget": ["benchmark", "profile:runtime", "test:e2e"],
   runtime: ["profile:runtime"],
   "load-smoke": ["load:smoke"],
   startup: ["profile:runtime"],
@@ -76,9 +79,11 @@ type FamilyResult = {
   state: "supported" | "applicable-missing" | "unsupported-environment" | "not-applicable";
   reason: string;
   command: string[] | null;
-  scenario: { path: string; sha256: string } | null;
+  scenario: { path: string; sha256: string; kind: EvidenceKind | null; id: string | null } | null;
   missingTools: string[];
 };
+/** Recognized evidence producers a declared scenario source structurally identifies. */
+type EvidenceKind = `runtime-profiler:${string}` | "react-render-budget:playwright";
 type AuditData = {
   schemaVersion: "coding-tooling/performance-applicability/v1";
   root: string;
@@ -275,7 +280,7 @@ function declaresWorkOperations(root: string, diagnostics: Diagnostic[]): boolea
 }
 const roleFamilies: Record<Role, readonly Family[]> = {
   "rust-kernel": ["benchmark-smoke", "hotspots", "memory", "size-budget"],
-  web: ["browser-audit", "runtime", "size-budget"],
+  web: ["browser-audit", "browser-trace", "runtime", "size-budget"],
   "react-interaction": ["react-render-budget"],
   "dotnet-service": ["benchmark-smoke", "runtime", "memory", "load-smoke"],
   service: ["runtime", "load-smoke"],
@@ -305,6 +310,65 @@ function executableAvailable(tool: string, cwd: string): boolean {
       return false;
     }
   });
+}
+/**
+ * Structural recognition of the evidence a scenario source produces: a runtime-profiler
+ * scenario document (JSON/YAML) or a Playwright spec importing react-render-budget's helpers.
+ * Nothing is executed; unrecognized sources stay repository-declared (kind null).
+ */
+function scenarioEvidence(
+  path: string,
+  bytes: Buffer,
+): { kind: EvidenceKind | null; id: string | null; collectors: string[] } {
+  const none = { kind: null, id: null, collectors: [] };
+  const source = bytes.toString("utf8");
+  if (/\.(json|ya?ml)$/.test(path)) {
+    let parsed: unknown;
+    try {
+      parsed = path.endsWith(".json") ? JSON.parse(source) : Bun.YAML.parse(source);
+    } catch {
+      return none;
+    }
+    if (
+      !record(parsed) ||
+      parsed.schema_version !== "runtime-profiler/scenario/v1" ||
+      !record(parsed.target) ||
+      !text(parsed.target.type)
+    )
+      return none;
+    return {
+      kind: `runtime-profiler:${parsed.target.type}`,
+      id: text(parsed.id) ? parsed.id : null,
+      collectors: texts(parsed.collectors) ? parsed.collectors : [],
+    };
+  }
+  return /\bfrom\s+["']react-render-budget\/playwright["']/.test(source)
+    ? { kind: "react-render-budget:playwright", id: null, collectors: [] }
+    : none;
+}
+/** Why a recognized/unrecognized scenario cannot provide this family's evidence, if it cannot. */
+function evidenceMismatch(
+  selected: Family,
+  capability: string,
+  evidence: ReturnType<typeof scenarioEvidence>,
+): string | null {
+  if (selected === "browser-trace")
+    return evidence.kind === "runtime-profiler:browser-journey" &&
+      evidence.collectors.includes("browser-chromium")
+      ? null
+      : "Browser trace evidence requires a runtime-profiler browser-journey scenario with the browser-chromium collector.";
+  if (selected === "react-render-budget" && capability === "test:e2e")
+    return evidence.kind === "react-render-budget:playwright"
+      ? null
+      : "React render-budget e2e evidence requires a Playwright spec importing react-render-budget/playwright.";
+  // runtime-profiler has no mobile adapter: its process/browser evidence describes a harness or
+  // Chromium, never device startup or frame stalls, so it cannot stand in for them.
+  if (
+    (selected === "startup" || selected === "frame-stall") &&
+    evidence.kind?.startsWith("runtime-profiler:")
+  )
+    return "runtime-profiler has no Expo/mobile adapter; its harness or browser evidence is not device startup or frame-stall evidence.";
+  return null;
 }
 function observeFamily(
   root: string,
@@ -362,6 +426,7 @@ function observeFamily(
   )?.[1];
   const absolute = resolve(root, scenario.path);
   let scenarioHash: string | null = null;
+  let evidence: ReturnType<typeof scenarioEvidence> | null = null;
   try {
     const resolved = realpathSync(absolute);
     const local = relative(realpathSync(root), resolved);
@@ -372,7 +437,9 @@ function observeFamily(
       !lstatSync(absolute).isFile()
     )
       throw new Error("scenario is not a regular in-repository file");
-    scenarioHash = hash(readFileSync(absolute));
+    const bytes = readFileSync(absolute);
+    scenarioHash = hash(bytes);
+    evidence = scenarioEvidence(scenario.path, bytes);
   } catch {
     diagnostics.push({
       code: "performance-scenario-unavailable",
@@ -381,17 +448,29 @@ function observeFamily(
         "Declared representative scenario is missing, unreadable, symlinked or outside the repository.",
     });
   }
-  if (!command || !scenarioHash)
+  const mismatch = evidence && evidenceMismatch(selected, scenario.capability, evidence);
+  if (mismatch) {
+    diagnostics.push({
+      code: "performance-scenario-evidence-mismatch",
+      path: scenario.path,
+      message: mismatch,
+    });
+    return { ...base, state: "applicable-missing", reason: mismatch };
+  }
+  if (!command || !scenarioHash || !evidence)
     return {
       ...base,
       state: "applicable-missing",
       reason: "Declared scenario lacks an available capability command or valid source file.",
     };
-  const evidence = { command, scenario: { path: scenario.path, sha256: scenarioHash } };
+  const wired = {
+    command,
+    scenario: { path: scenario.path, sha256: scenarioHash, kind: evidence.kind, id: evidence.id },
+  };
   if (scenario.platforms.length && !scenario.platforms.includes(process.platform))
     return {
       ...base,
-      ...evidence,
+      ...wired,
       state: "unsupported-environment",
       reason: `Declared collector does not support ${process.platform}.`,
     };
@@ -401,14 +480,14 @@ function observeFamily(
   if (missingTools.length)
     return {
       ...base,
-      ...evidence,
+      ...wired,
       missingTools,
       state: "unsupported-environment",
       reason: "Declared command/collector prerequisites are unavailable.",
     };
   return {
     ...base,
-    ...evidence,
+    ...wired,
     state: "supported",
     reason:
       "Representative scenario and capability are declared and structural environment prerequisites are available; measurement has not run.",

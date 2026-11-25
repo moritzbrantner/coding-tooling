@@ -307,6 +307,7 @@ describe("performance applicability", () => {
     });
     const report = performanceApplicability(root);
     expect(row(report, "browser-audit")?.state).toBe("applicable-missing");
+    expect(row(report, "browser-trace")?.state).toBe("applicable-missing");
     expect(row(report, "react-render-budget")?.state).toBe("applicable-missing");
     expect(row(report, "load-smoke")?.state).toBe("not-applicable");
     expect(report.data.execution).toBe("not-requested");
@@ -430,6 +431,127 @@ version = "0.1.0"
     declare(native, { roles: ["rust-kernel"] });
     for (const family of ["benchmark-smoke", "hotspots", "memory", "size-budget"])
       expect(row(performanceApplicability(native), family)?.state).toBe("applicable-missing");
+  });
+  test("browser trace requires a runtime-profiler browser-journey with the Chromium collector", () => {
+    const root = fixture({
+      dependencies: { react: "19.2.6" },
+      scripts: { "profile:runtime": "runtime-profiler capture" },
+    });
+    expect(row(performanceApplicability(root), "browser-trace")?.state).toBe("applicable-missing");
+    mkdirSync(join(root, "profiles"));
+    const journey = {
+      schema_version: "runtime-profiler/scenario/v1",
+      id: "dashboard-filter-v1",
+      target: { type: "browser-journey", module: "profiles/filter.mjs", working_directory: ".." },
+      collectors: ["browser-chromium"],
+    };
+    writeFileSync(join(root, "profiles/filter.json"), JSON.stringify(journey));
+    const scenario = {
+      family: "browser-trace",
+      capability: "profile:runtime",
+      path: "profiles/filter.json",
+      tools: ["runtime-profiler", "node"],
+      platforms: [],
+    };
+    declare(root, { scenarios: [scenario] });
+    const report = performanceApplicability(root, { available: () => true });
+    expect(report.status).toBe("passed");
+    expect(row(report, "browser-trace")).toMatchObject({
+      state: "supported",
+      scenario: { kind: "runtime-profiler:browser-journey", id: "dashboard-filter-v1" },
+    });
+    // The same YAML scenario document is recognized without executing anything.
+    writeFileSync(
+      join(root, "profiles/filter.yaml"),
+      "schema_version: runtime-profiler/scenario/v1\nid: filter-yaml\ntarget:\n  type: browser-journey\n  module: profiles/filter.mjs\ncollectors:\n  - browser-chromium\n",
+    );
+    declare(root, { scenarios: [{ ...scenario, path: "profiles/filter.yaml" }] });
+    expect(
+      row(performanceApplicability(root, { available: () => true }), "browser-trace")?.scenario?.id,
+    ).toBe("filter-yaml");
+    // A process-only command scenario or an arbitrary script is not browser trace evidence.
+    for (const [file, content] of [
+      [
+        "profiles/command.json",
+        JSON.stringify({ ...journey, target: { type: "command" }, collectors: ["process"] }),
+      ],
+      ["profiles/no-collector.json", JSON.stringify({ ...journey, collectors: ["process"] })],
+      ["profiles/script.mjs", "export async function run() {}\n"],
+    ] as const) {
+      writeFileSync(join(root, file), content);
+      declare(root, { scenarios: [{ ...scenario, path: file }] });
+      const mismatch = performanceApplicability(root, { available: () => true });
+      expect(mismatch.status).toBe("unavailable");
+      expect(row(mismatch, "browser-trace")).toMatchObject({
+        state: "applicable-missing",
+        command: null,
+        scenario: null,
+      });
+      expect(mismatch.diagnostics.map((value) => value.code)).toEqual([
+        "performance-scenario-evidence-mismatch",
+      ]);
+    }
+  });
+  test("React render-budget e2e evidence must be a Playwright spec using react-render-budget", () => {
+    const root = fixture({
+      dependencies: { react: "19.2.6" },
+      scripts: { "test:e2e": "playwright test" },
+    });
+    mkdirSync(join(root, "e2e"));
+    writeFileSync(
+      join(root, "e2e/budget.spec.ts"),
+      "import { expectRenderBudget } from 'react-render-budget/playwright';\n",
+    );
+    const scenario = {
+      family: "react-render-budget",
+      capability: "test:e2e",
+      path: "e2e/budget.spec.ts",
+      tools: [],
+      platforms: [],
+    };
+    declare(root, { scenarios: [scenario] });
+    expect(
+      row(performanceApplicability(root, { available: () => true }), "react-render-budget"),
+    ).toMatchObject({
+      state: "supported",
+      command: ["npm", "run", "test:e2e"],
+      scenario: { kind: "react-render-budget:playwright", id: null },
+    });
+    writeFileSync(join(root, "e2e/plain.spec.ts"), "import { test } from '@playwright/test';\n");
+    declare(root, { scenarios: [{ ...scenario, path: "e2e/plain.spec.ts" }] });
+    const plain = performanceApplicability(root, { available: () => true });
+    expect(row(plain, "react-render-budget")?.state).toBe("applicable-missing");
+    expect(plain.status).toBe("unavailable");
+  });
+  test("Expo startup and frame stalls refuse runtime-profiler harness evidence", () => {
+    const root = fixture({
+      dependencies: { expo: "55.0.0", react: "19.2.6" },
+      scripts: { "profile:runtime": "runtime-profiler capture" },
+    });
+    writeFileSync(
+      join(root, "startup.json"),
+      JSON.stringify({
+        schema_version: "runtime-profiler/scenario/v1",
+        id: "harness",
+        target: { type: "command" },
+        collectors: ["process"],
+      }),
+    );
+    writeFileSync(join(root, "startup.sh"), "#!/bin/sh\n");
+    for (const family of ["startup", "frame-stall"]) {
+      const scenario = { family, capability: "profile:runtime", tools: [], platforms: [] };
+      declare(root, { scenarios: [{ ...scenario, path: "startup.json" }] });
+      const refused = performanceApplicability(root, { available: () => true });
+      expect(row(refused, family)?.state).toBe("applicable-missing");
+      expect(refused.diagnostics[0]?.code).toBe("performance-scenario-evidence-mismatch");
+      // A repository-owned device collector script remains the owner's declared evidence.
+      declare(root, { scenarios: [{ ...scenario, path: "startup.sh" }] });
+      expect(row(performanceApplicability(root, { available: () => true }), family)).toMatchObject({
+        state: "supported",
+        scenario: { kind: null },
+      });
+    }
+    expect(row(performanceApplicability(root), "browser-trace")?.state).toBe("not-applicable");
   });
   test("fleet includes maintained repositories, excludes archived, and preserves per-repository failures", () => {
     const fleet = mkdtempSync(join(tmpdir(), "performance-fleet-"));
