@@ -18,7 +18,7 @@ The envelope reports successful _analysis_, not passing performance. Missing sce
 | Repository/workload shape                                                                    | Applicable families                                                                                   |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Rust kernels with an explicit role or authored native benches                                | deterministic benchmark smoke, hotspots, memory, distributable size                                   |
-| React/web                                                                                    | browser audit/trace, runtime, web size; React interactions additionally render budget                 |
+| React/web                                                                                    | browser audit, browser trace, runtime, web size; React interactions additionally render budget        |
 | ASP.NET Web/declared .NET service                                                            | benchmark smoke (e.g. BenchmarkDotNet), runtime (e.g. EventPipe), memory, load smoke                  |
 | Declared service or recognized Axum/Actix/Warp/Rocket/Express/Fastify/Hono/Koa/Nest boundary | runtime and HTTP load smoke                                                                           |
 | Expo/React Native                                                                            | startup, frame stalls, runtime memory and native bundle size; collector availability remains explicit |
@@ -62,11 +62,26 @@ Optional `.performance/applicability.json` links the existing capability and sce
 
 Selectors use component name or path, with no conflicting selector matches. Families and roles are closed v1 vocabularies. Duplicate/conflicting family declarations, unknown fields, empty exception reasons, path traversal and symlinked scenarios are refused. Source paths are relative to the repository root; no source content or environment values appear in the report. Scenario and declaration hashes, Git revision/dirty state, platform and architecture retain structural provenance.
 
-Family/capability relationships are explicit: benchmark smoke→`benchmark:smoke`; hotspots→`profile:hotspots`; memory→`profile:memory`; browser audit→`web:audit`; React render budget→`benchmark` or `profile:runtime`; runtime/startup/frame stalls→`profile:runtime`; load smoke→`load:smoke`; size budget→`size:budget`; work complexity→`performance:work`. Declared load commands and built-artifact size capture remain separately invokable capabilities. A build command cannot masquerade as a runtime collector.
+Family/capability relationships are explicit: benchmark smoke→`benchmark:smoke`; hotspots→`profile:hotspots`; memory→`profile:memory`; browser audit→`web:audit`; browser trace→`profile:runtime`; React render budget→`benchmark`, `profile:runtime` or `test:e2e`; runtime/startup/frame stalls→`profile:runtime`; load smoke→`load:smoke`; size budget→`size:budget`; work complexity→`performance:work`. Declared load commands and built-artifact size capture remain separately invokable capabilities. A build command cannot masquerade as a runtime collector.
 
 The declared capability is resolved through the normal component/config override machinery. Scenario commands must actually invoke the referenced workload; the read-only audit establishes the owned relationship, not execution or a dynamic call graph. Tools are checked for PATH/file availability without launching them. Exact version compatibility, elevated collector permissions, external devices and backend feature availability still require the declared command's own execution evidence. Never infer successful measurement from `supported` alone.
 
 Derived `.cache`, `.artifacts` and `.asset-tooling` trees cannot create production components. Explicitly selecting a disposable consumer directory as the audit root still inspects that consumer normally. Fixture/generated directories remain data rather than toolchains.
+
+## Recognized scenario evidence
+
+The audit structurally recognizes what a declared scenario source produces and reports it as `scenario.kind` (and `scenario.id` when the source names one). Nothing is executed; unrecognized sources report `kind: null` and remain the owner's declared evidence.
+
+| `kind`                           | Source                                                                                                    |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `runtime-profiler:<target type>` | A JSON/YAML document with `schema_version: runtime-profiler/scenario/v1`; `id` is the scenario identifier |
+| `react-render-budget:playwright` | A source importing `react-render-budget/playwright`                                                       |
+
+Some families require a specific kind. A mismatch reports `applicable-missing` with a `performance-scenario-evidence-mismatch` diagnostic (status `unavailable`):
+
+- `browser-trace` requires a `runtime-profiler:browser-journey` scenario whose `collectors` include `browser-chromium`. Lighthouse audits stay `browser-audit`; process-only runtime-profiler scenarios stay `runtime`.
+- `react-render-budget` wired through `test:e2e` requires a Playwright spec importing `react-render-budget/playwright`. Render counts are the library's budget assertions, not profiler metrics.
+- `startup` and `frame-stall` refuse every runtime-profiler scenario. runtime-profiler has no Expo/mobile adapter; its process or Chromium evidence describes a harness or browser, never device startup or frame stalls. A repository-owned device collector (for example a declared script with its own tools) remains declarable, and without one these families stay `applicable-missing`.
 
 ## Reproducibility boundary
 
