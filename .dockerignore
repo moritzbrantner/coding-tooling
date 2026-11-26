@@ -1,0 +1,7 @@
+# The optional agent toolbox must not send a checkout, credentials, or caches
+# to the Docker build daemon. Only its declarative inputs are needed.
+**
+!mise.toml
+!toolbox/
+!toolbox/Dockerfile
+!toolbox/agent-tools-check.sh

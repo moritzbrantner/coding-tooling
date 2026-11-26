@@ -1,3 +1,4 @@
+# Managed by coding-tooling agent tools; use toolbox/install-global.sh to refresh a global copy.
 # Recommended CLI utilities for coding agents and human contributors.
 # Optional: install them with `mise install`; builds and CI keep their existing toolchains.
 # These tools deliberately track the latest stable release because they are conveniences,
@@ -7,3 +8,11 @@ jq = "latest"
 ripgrep = "latest"
 fd = "latest"
 gh = "latest"
+yq = "latest"
+shellcheck = "latest"
+shfmt = "latest"
+actionlint = "latest"
+hyperfine = "latest"
+uv = "latest"
+just = "latest"
+bat = "latest"
