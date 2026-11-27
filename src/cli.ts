@@ -3,6 +3,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { adoptionCommand } from "./adoption.ts";
 import { agentCapabilitiesCommand } from "./agent-capabilities.ts";
 import { agentEvalsCommand } from "./agent-evals.ts";
 import { bootstrapRepository } from "./bootstrap.ts";
@@ -159,6 +160,8 @@ function usage(): never {
   coding-tooling doctor [--json]
   coding-tooling conformance [--config <path>] [--json]
   coding-tooling bootstrap <plan|apply> [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
+  coding-tooling adoption plan [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
+  coding-tooling adoption apply <group> --approval <hash> [--root <path>] [--conventions-root <path>] [--registry <path>] [--json]
   coding-tooling environment <fingerprint|verify> [--profile <default|source-development>] [--json]
   coding-tooling environment generate [--check] [--json]
   coding-tooling plan --tier <name> [--component <name>] [--config <path>] [--json]
@@ -240,6 +243,26 @@ export function main(argv = process.argv.slice(2)): number {
       root: resolve(stringOption(options, "root") ?? root),
       conventionsRoot: stringOption(options, "conventions-root"),
       registryPath: stringOption(options, "registry"),
+    });
+  } else if (command === "adoption") {
+    const action = positional[0];
+    const valueFlags = new Set(["root", "conventions-root", "registry", "approval"]);
+    if (
+      (action !== "plan" && action !== "apply") ||
+      Object.entries(options).some(
+        ([key, value]) =>
+          key === "json" ? value !== true : !valueFlags.has(key) || typeof value !== "string",
+      ) ||
+      (action === "plan" && (positional.length !== 1 || options.approval !== undefined)) ||
+      (action === "apply" && (positional.length !== 2 || !stringOption(options, "approval")))
+    )
+      return usage();
+    result = adoptionCommand(action, {
+      root: resolve(stringOption(options, "root") ?? root),
+      conventionsRoot: stringOption(options, "conventions-root"),
+      registryPath: stringOption(options, "registry"),
+      group: positional[1],
+      approval: stringOption(options, "approval"),
     });
   } else if (command === "environment") {
     const action = positional[0];

@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
 import { resolveConventionSource } from "./conventions.ts";
@@ -608,6 +616,144 @@ function sourceFor(options: RegistryOptions): { root: string; registry: Registry
     );
   }
   return { root: source.root, registry: loadRegistry(source.root) };
+}
+
+type AdoptionFileChange = {
+  path: string;
+  beforeSha256: string | null;
+  afterSha256: string | null;
+};
+
+function adoptionFileHash(path: string): string | null {
+  const entry = lstatSync(path, { throwIfNoEntry: false });
+  if (!entry) return null;
+  if (!entry.isFile() || entry.nlink !== 1) {
+    throw new Error(`Unsafe convention adoption file: ${path}`);
+  }
+  return hash(readFileSync(path, "utf8"));
+}
+
+function adoptionCacheHashes(root: string): Record<string, string> {
+  const files: Record<string, string> = {};
+  function visit(directory: string, depth: number): void {
+    const entry = lstatSync(directory, { throwIfNoEntry: false });
+    if (!entry) return;
+    if (!entry.isDirectory() || depth > 20) {
+      throw new Error(`Unsafe convention adoption directory: ${directory}`);
+    }
+    for (const name of readdirSync(directory).sort()) {
+      const path = join(directory, name);
+      if (lstatSync(path).isDirectory()) visit(path, depth + 1);
+      else {
+        const key = relative(root, path).split(sep).join("/");
+        if (!isManagedPath(key)) throw new Error(`Unsafe managed path: ${key}`);
+        const digest = adoptionFileHash(path);
+        if (digest === null) throw new Error(`Managed file disappeared: ${key}`);
+        files[key] = digest;
+      }
+    }
+  }
+  visit(root, 0);
+  return files;
+}
+
+export function prepareConventionAdoption(
+  candidates: { id: string; modules: string[] }[],
+  options: RegistryOptions,
+) {
+  const root = resolve(options.root);
+  const manifestPath = join(root, manifestName);
+  const lockPath = join(root, lockName);
+  const manifestHash = adoptionFileHash(manifestPath);
+  const lockHash = adoptionFileHash(lockPath);
+  const installRoot = join(root, installDirectory);
+  const current = adoptionCacheHashes(installRoot);
+  const existing = loadConsumer(root);
+  const lock = loadLock(root);
+  if (manifestHash !== null) {
+    const raw = readJson<unknown>(manifestPath);
+    if (
+      !existing ||
+      !isRecord(raw) ||
+      Object.keys(raw).some((key) => !["schemaVersion", "registry", "modules"].includes(key)) ||
+      !lock ||
+      JSON.stringify(existing.modules) !== JSON.stringify(lock.requestedModules) ||
+      hashDiff(lock.files, current).length > 0
+    ) {
+      throw new Error("Existing convention selection or cache needs manual reconciliation");
+    }
+  } else if (lockHash !== null || lstatSync(installRoot, { throwIfNoEntry: false })) {
+    throw new Error("Existing convention cache has no owning manifest");
+  }
+
+  const source = sourceFor(options);
+  const selected = existing?.modules ?? [];
+  const resolved = resolveDependencies(source.registry, selected);
+  const before: Record<string, string> = Object.fromEntries(
+    Object.entries(current).map(([path, digest]) => [`${installDirectory}/${path}`, digest]),
+  );
+  if (manifestHash !== null) before[manifestName] = manifestHash;
+  if (lockHash !== null) before[lockName] = lockHash;
+
+  const groups = [...candidates, { id: "refresh-conventions", modules: [] }].flatMap((candidate) => {
+    const additions = candidate.modules.filter((module) => !resolved.includes(module));
+    if (additions.length === 0 && (candidate.id !== "refresh-conventions" || !existing)) return [];
+    const requested = resolveRequestedModules(source.registry, [...selected, ...additions]);
+    const snapshot = buildSnapshot(source.root, source.registry, requested);
+    const consumer: ConsumerManifest = {
+      schemaVersion: 1,
+      registry: "coding-agent-conventions",
+      modules: requested,
+    };
+    const desiredLock: ConventionLock = {
+      schemaVersion: 2,
+      requestedModules: requested,
+      resolvedModules: snapshot.resolvedModules,
+      files: snapshotHashes(snapshot),
+    };
+    const after: Record<string, string> = Object.fromEntries(
+      Object.entries(desiredLock.files).map(([path, digest]) => [
+        `${installDirectory}/${path}`,
+        digest,
+      ]),
+    );
+    after[manifestName] =
+      additions.length === 0 && manifestHash !== null
+        ? manifestHash
+        : hash(`${JSON.stringify(consumer, null, 2)}\n`);
+    after[lockName] = hash(`${JSON.stringify(desiredLock, null, 2)}\n`);
+    const changes: AdoptionFileChange[] = hashDiff(before, after).map((path) => ({
+      path,
+      beforeSha256: before[path] ?? null,
+      afterSha256: after[path] ?? null,
+    }));
+    if (changes.length === 0) return [];
+    const preview = {
+      id: candidate.id,
+      additions,
+      requestedModules: requested,
+      resolvedModules: snapshot.resolvedModules,
+      sourceRoot: source.root,
+      sourceRevision: snapshot.sourceRevision,
+      changes,
+    };
+    return [
+      {
+        preview,
+        apply: () => {
+          const result = materialize(root, snapshot);
+          if (additions.length > 0) writeJson(manifestPath, consumer);
+          return materializationData(result);
+        },
+      },
+    ];
+  });
+  return {
+    selected,
+    installed: lock?.resolvedModules ?? [],
+    resolved,
+    groups,
+  };
 }
 
 export function conventionModuleReferences(sourceRoot: string, sourcePaths: string[]) {

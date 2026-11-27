@@ -59,6 +59,7 @@ export type ResultOperation =
   | "foundation"
   | "workflow-profile"
   | "bootstrap"
+  | "adoption"
   | "plan"
   | "remediation-plan"
   | "run"
