@@ -31,17 +31,20 @@ function fixture(run: (root: string, source: string) => void): void {
     write(source, "principles/README.md", "## PRINCIPLE-001 — Be explicit\n");
     write(source, "conventions/README.md", "## REPO-001 — Preserve local guidance\n");
     write(source, "technologies/rust/README.md", "## RUST-001 — Rust rule\n");
+    write(source, "conventions/dependencies.md", "## DEP-001 — Dependency rule\n");
+    write(source, "conventions/environment.md", "## ENV-001 — Environment rule\n");
+    write(source, "conventions/git.md", "## GIT-001 — Git rule\n");
     write(
       source,
       "registry/registry.json",
       JSON.stringify({
         schemaVersion: 1,
         modules: {
-          base: { sources: ["principles", "conventions"], dependencies: [] },
+          base: { sources: ["principles", "conventions/README.md"], dependencies: [] },
           rust: { sources: ["technologies/rust"], dependencies: ["base"] },
-          dependencies: { sources: [], dependencies: ["base"] },
-          environment: { sources: [], dependencies: ["base"] },
-          git: { sources: [], dependencies: ["base"] },
+          dependencies: { sources: ["conventions/dependencies.md"], dependencies: ["base"] },
+          environment: { sources: ["conventions/environment.md"], dependencies: ["base"] },
+          git: { sources: ["conventions/git.md"], dependencies: ["base"] },
         },
       }),
     );
@@ -119,8 +122,9 @@ describe("explicit repository adoption", () => {
   test("blocks managed cache drift and unsafe destination links", () => {
     fixture((root, source) => {
       write(root, "Cargo.toml", '[package]\nname = "pilot"\nversion = "0.1.0"\n');
-      expect(conventionRegistryCommand("init", ["rust"], { root, conventionsRoot: source }).status)
-        .toBe("passed");
+      expect(
+        conventionRegistryCommand("init", ["rust"], { root, conventionsRoot: source }).status,
+      ).toBe("passed");
       write(root, ".conventions/index.md", "Manual change\n");
       write(source, "outside.md", "Outside\n");
       symlinkSync(join(source, "outside.md"), join(root, "AGENTS.md"));
@@ -131,11 +135,35 @@ describe("explicit repository adoption", () => {
     });
   });
 
+  test("does not adopt into a symlinked convention cache", () => {
+    fixture((root, source) => {
+      write(root, "Cargo.toml", '[package]\nname = "pilot"\nversion = "0.1.0"\n');
+      symlinkSync(source, join(root, ".conventions"), "dir");
+      const result = adoptionCommand("plan", { root, conventionsRoot: source });
+      expect(result.data.conventions).toMatchObject({ status: "blocked" });
+      expect(existsSync(join(root, "conventions.json"))).toBe(false);
+      expect(existsSync(join(source, "index.md"))).toBe(false);
+    });
+  });
+
+  test("reports componentless repositories without inventing package instructions", () => {
+    fixture((root, source) => {
+      const result = adoptionCommand("plan", { root, conventionsRoot: source });
+      expect(result.status).toBe("passed");
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({ code: "adoption-agents-review", path: "AGENTS.md" }),
+      );
+      expect(result.data.groups).not.toContainEqual(expect.objectContaining({ id: "instructions" }));
+      expect(existsSync(join(root, "AGENTS.md"))).toBe(false);
+    });
+  });
+
   test("refresh is explicit and a changed authority invalidates an old approval", () => {
     fixture((root, source) => {
       write(root, "Cargo.toml", '[package]\nname = "pilot"\nversion = "0.1.0"\n');
-      expect(conventionRegistryCommand("init", ["rust"], { root, conventionsRoot: source }).status)
-        .toBe("passed");
+      expect(
+        conventionRegistryCommand("init", ["rust"], { root, conventionsRoot: source }).status,
+      ).toBe("passed");
       write(source, "technologies/rust/README.md", "## RUST-001 — New rule\n");
       const refresh = plan(root, source).find((item) => item.id === "refresh-conventions")!;
       write(source, "technologies/rust/README.md", "## RUST-001 — Revised rule\n");

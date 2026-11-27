@@ -8,7 +8,7 @@ import {
   rmSync,
   statSync,
 } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { resolveConventionSource } from "./conventions.ts";
 import type {
@@ -712,10 +712,7 @@ export function prepareConventionAdoption(
       files: snapshotHashes(snapshot),
     };
     const after: Record<string, string> = Object.fromEntries(
-      Object.entries(desiredLock.files).map(([path, digest]) => [
-        `${installDirectory}/${path}`,
-        digest,
-      ]),
+      Object.entries(desiredLock.files).map(([path, digest]) => [`${installDirectory}/${path}`, digest]),
     );
     after[manifestName] =
       additions.length === 0 && manifestHash !== null
@@ -741,6 +738,25 @@ export function prepareConventionAdoption(
       {
         preview,
         apply: () => {
+          if (
+            adoptionFileHash(manifestPath) !== manifestHash ||
+            adoptionFileHash(lockPath) !== lockHash ||
+            hashDiff(current, adoptionCacheHashes(installRoot)).length > 0
+          ) {
+            throw new Error("Convention destinations changed after planning");
+          }
+          for (const path of snapshot.files.keys()) {
+            const destination = managedDestination(installRoot, path);
+            adoptionFileHash(destination);
+            let parent = dirname(destination);
+            while (parent !== installRoot) {
+              const entry = lstatSync(parent, { throwIfNoEntry: false });
+              if (entry && !entry.isDirectory()) {
+                throw new Error(`Unsafe convention destination: ${parent}`);
+              }
+              parent = dirname(parent);
+            }
+          }
           const result = materialize(root, snapshot);
           if (additions.length > 0) writeJson(manifestPath, consumer);
           return materializationData(result);

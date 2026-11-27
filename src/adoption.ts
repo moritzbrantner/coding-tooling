@@ -117,10 +117,7 @@ function inspectInstructions(root: string) {
           message: "No local package manifest supplies guidance; author this scope explicitly",
         });
       }
-      if (
-        claude.content === null &&
-        (agents.content !== null || manifests.length > 0)
-      ) {
+      if (claude.content === null && (agents.content !== null || manifests.length > 0)) {
         edits.push({ path: path("CLAUDE.md"), beforeSha256: null, after: "@AGENTS.md\n" });
       }
     }
