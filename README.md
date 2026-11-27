@@ -52,6 +52,8 @@ coding-tooling conventions add <module...> [--profile <name>] [--json]
 coding-tooling conventions check [--json]
 coding-tooling conventions diff [--json]
 coding-tooling conventions update [--json]
+coding-tooling adoption plan [--root <path>] [--conventions-root <path>] [--json]
+coding-tooling adoption apply <group> --approval <hash> [--root <path>] [--conventions-root <path>] [--json]
 coding-tooling workflow-profile audit [--root <path>] [--json]
 coding-tooling findings [--new|--baseline] [--all] [--json]
 coding-tooling remediation plan [--include-baseline] [--json]
@@ -149,6 +151,23 @@ ln -sfn "$PWD/src/router.ts" ~/.bun/bin/coding-tooling
 `bun link` / `bun add -g` snapshot the `bin` path at install time. An older
 link that still points at `src/cli.ts` keeps working because running `cli.ts`
 directly forwards to the router.
+
+## Repository adoption (proof of concept)
+
+`coding-tooling adoption plan` is an explicitly invoked, read-only plan for one repository. It reuses bootstrap technology recommendations and the convention registry rather than changing bootstrap behavior. Technology-backed module candidates and discretionary module candidates are separate approval groups. An existing selection is never removed; current source changes are also exposed as an independent refresh group. Dependencies are shown in each group's resolved module list.
+
+The instruction group inventories existing guidance and package/crate manifests within the ordinary four-level component discovery depth. It creates only absent files: a minimal manifest-reference scaffold and a colocated `CLAUDE.md` containing `@AGENTS.md`. Existing instructions, including local exceptions and substantive Claude guidance, are not rewritten or relocated. Scopes without reliable local package evidence and ambiguous or unsafe files are review items.
+
+For example:
+
+```sh
+coding-tooling adoption plan --root ../example --json
+coding-tooling adoption apply instructions --approval <hash-from-plan> --root ../example
+```
+
+Review the selected group's exact file paths and SHA-256 changes (and the literal instruction text), then pass its approval hash. Apply recomputes the plan and rejects changed evidence, unknown groups, or stale approvals. Convention changes use the existing registry materializer with the reviewed snapshot. An invalid or modified cache blocks convention adoption until it is reconciled explicitly. Instruction creation is exclusive and never overwrites an existing file. Review actual changes with `git diff` and normal validation after applying. Each group is applied separately; replan after applying another group.
+
+Use an exclusively owned local workspace. This PoC does not promise atomic multi-file transactions if an I/O failure interrupts apply, does not interpret semantic conflicts or prove convention compliance, and does not run code fixes, tests, commits, fleet mutations, or scheduled migrations. Use existing findings, baselines and repository PRs for remaining migration work. The portfolio report, richer placement and semantic migration are follow-up work under [#422](https://github.com/moritzbrantner/coding-tooling/issues/422).
 
 ## Installed conventions
 
